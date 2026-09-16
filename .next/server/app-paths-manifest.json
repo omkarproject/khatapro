@@ -1,0 +1,20 @@
+{
+  "/api/cashfree/order/route": "app/api/cashfree/order/route.js",
+  "/api/cashfree/verify/route": "app/api/cashfree/verify/route.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/analytics/page": "app/analytics/page.js",
+  "/backup/page": "app/backup/page.js",
+  "/customers/page": "app/customers/page.js",
+  "/documents/page": "app/documents/page.js",
+  "/expenses/page": "app/expenses/page.js",
+  "/invoices/page": "app/invoices/page.js",
+  "/inventory/page": "app/inventory/page.js",
+  "/page": "app/page.js",
+  "/khata/page": "app/khata/page.js",
+  "/pay/[id]/page": "app/pay/[id]/page.js",
+  "/pay/page": "app/pay/page.js",
+  "/reminders/page": "app/reminders/page.js",
+  "/savings/page": "app/savings/page.js",
+  "/upi-collection/page": "app/upi-collection/page.js",
+  "/settings/page": "app/settings/page.js"
+}
