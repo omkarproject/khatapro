@@ -130,9 +130,9 @@ export default function SettingsPage() {
   const [cashfreeEnv, setCashfreeEnv] = useState<'sandbox' | 'production'>(() => {
     if (typeof window !== 'undefined') {
       const s = StorageService.getSettings();
-      return s.paymentSettings?.cashfreeEnv || settings.paymentSettings?.cashfreeEnv || 'sandbox';
+      return s.paymentSettings?.cashfreeEnv || settings.paymentSettings?.cashfreeEnv || 'production';
     }
-    return settings.paymentSettings?.cashfreeEnv || 'sandbox';
+    return settings.paymentSettings?.cashfreeEnv || 'production';
   });
 
   // Razorpay Gateway State
@@ -160,9 +160,9 @@ export default function SettingsPage() {
   const [razorpayEnv, setRazorpayEnv] = useState<'test' | 'live'>(() => {
     if (typeof window !== 'undefined') {
       const s = StorageService.getSettings();
-      return s.paymentSettings?.razorpayEnv || settings.paymentSettings?.razorpayEnv || 'test';
+      return s.paymentSettings?.razorpayEnv || settings.paymentSettings?.razorpayEnv || 'live';
     }
-    return settings.paymentSettings?.razorpayEnv || 'test';
+    return settings.paymentSettings?.razorpayEnv || 'live';
   });
 
   // UPI Payment Gateway State

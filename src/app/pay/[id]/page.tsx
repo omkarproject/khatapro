@@ -110,6 +110,45 @@ function CustomerPayInvoiceContent() {
       } else {
         setPaymentSuccess(false);
       }
+    } else if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      const paramAmount = parseFloat(sp.get('amount') || '0');
+      if (paramAmount > 0) {
+        const adhocInvoice: Invoice = {
+          id: invoiceId,
+          invoiceNumber: invoiceId.toUpperCase(),
+          type: 'sales',
+          customerId: sp.get('customerId') || 'cust_walkin',
+          customerName: sp.get('name') || 'Valued Customer',
+          customerPhone: sp.get('phone') || '',
+          issueDate: new Date().toISOString(),
+          dueDate: new Date().toISOString(),
+          items: [
+            {
+              id: 'item_1',
+              name: sp.get('note') || 'Online Payment Collection',
+              description: sp.get('note') || 'Direct online collection',
+              quantity: 1,
+              unitPrice: paramAmount,
+              discountPercent: 0,
+              taxPercent: 0,
+              total: paramAmount,
+            },
+          ],
+          subtotal: paramAmount,
+          discountAmount: 0,
+          taxAmount: 0,
+          cgst: 0,
+          sgst: 0,
+          igst: 0,
+          total: paramAmount,
+          paidAmount: 0,
+          status: 'unpaid',
+          notes: sp.get('note') || 'Direct online collection',
+          createdAt: new Date().toISOString(),
+        };
+        setInvoice(adhocInvoice);
+      }
     }
     const timer = setTimeout(() => {
       setIsLoading(false);
@@ -328,7 +367,7 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
 
     const appId = settings.paymentSettings?.cashfreeAppId?.trim();
     const secretKey = settings.paymentSettings?.cashfreeSecretKey?.trim();
-    const env = settings.paymentSettings?.cashfreeEnv || 'sandbox';
+    const env = settings.paymentSettings?.cashfreeEnv || 'production';
     const amountToPay = customAmount !== undefined ? customAmount : invoice.total;
 
     try {
@@ -351,10 +390,7 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
       const data = await res.json();
 
       if (!res.ok || !data.paymentSessionId) {
-        let errorMsg = data.error || 'Failed to initialize Cashfree checkout session.';
-        if (data.isSandboxLimit || (typeof errorMsg === 'string' && errorMsg.toLowerCase().includes('max order amount'))) {
-          errorMsg = `order amount cannot be greater than the max order amount set with Cashfree (Sandbox Limit: ₹${amountToPay.toLocaleString('en-IN')})`;
-        }
+        const errorMsg = data.error || 'Failed to initialize Cashfree checkout session.';
         setCfApiError(errorMsg);
         setIsCfLoading(false);
         return;
@@ -1083,24 +1119,6 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
                             </p>
                           </div>
                         </div>
-
-                        {/* If Sandbox Limit Error, provide instant Test Pay ₹1 option */}
-                        {(cfApiError.toLowerCase().includes('max order amount') || cfApiError.toLowerCase().includes('sandbox limit')) && (
-                          <div className="p-3 bg-purple-50 dark:bg-purple-950/50 rounded-xl border border-purple-200 dark:border-purple-800 space-y-2">
-                            <p className="text-[11px] text-purple-800 dark:text-purple-300 font-medium">
-                              💡 <strong>Testing in Sandbox?</strong> Cashfree Sandbox me max amount limit set hai. Checkout popup test karne ke liye ₹1 test payment karein:
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => executeCashfreeApiCheckout(1)}
-                              disabled={isCfLoading}
-                              className="w-full py-2.5 px-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-purple-600/20 active:scale-95 transition-all cursor-pointer"
-                            >
-                              <CreditCard className="w-3.5 h-3.5" />
-                              <span>⚡ Test Pay ₹1 (Sandbox Mode)</span>
-                            </button>
-                          </div>
-                        )}
 
                         {/* WhatsApp Button with Auto-Filled Error Details */}
                         <button

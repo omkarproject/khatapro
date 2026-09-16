@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     const serverConfig = getCashfreeConfig();
     const finalAppId = (appId || serverConfig.appId || process.env.CASHFREE_APP_ID || '').trim();
     const finalSecretKey = (secretKey || serverConfig.secretKey || process.env.CASHFREE_SECRET_KEY || '').trim();
-    const finalEnv = (env || serverConfig.env || process.env.CASHFREE_ENV || 'sandbox') as 'sandbox' | 'production';
+    const finalEnv = (env || serverConfig.env || process.env.CASHFREE_ENV || 'production') as 'sandbox' | 'production';
 
     if (!finalAppId || !finalSecretKey) {
       return NextResponse.json(

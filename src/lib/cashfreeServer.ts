@@ -45,7 +45,7 @@ export function getCashfreeConfig(): CashfreeConfig {
   const envConfig: CashfreeConfig = {
     appId: process.env.CASHFREE_APP_ID || '',
     secretKey: process.env.CASHFREE_SECRET_KEY || '',
-    env: (process.env.CASHFREE_ENV as 'sandbox' | 'production') || 'sandbox',
+    env: (process.env.CASHFREE_ENV as 'sandbox' | 'production') || 'production',
   };
 
   return envConfig;

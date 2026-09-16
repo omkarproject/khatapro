@@ -109,8 +109,21 @@ export const StorageService = {
           },
         });
       }
-      // Populate default mongodbUri if not yet set
+      // Auto-migrate gateway environment to production/live as test mode has been deprecated
       const currentSettings = StorageService.getSettings();
+      if (
+        currentSettings.paymentSettings?.cashfreeEnv === 'sandbox' ||
+        currentSettings.paymentSettings?.razorpayEnv === 'test'
+      ) {
+        setLocalItem(STORAGE_KEYS.SETTINGS, {
+          ...currentSettings,
+          paymentSettings: {
+            ...currentSettings.paymentSettings,
+            cashfreeEnv: 'production',
+            razorpayEnv: 'live',
+          },
+        });
+      }
       if (!currentSettings.mongodbUri) {
         setLocalItem(STORAGE_KEYS.SETTINGS, {
           ...currentSettings,
@@ -133,7 +146,18 @@ export const StorageService = {
   updateProfile: (profile: UserProfile): void => setLocalItem(STORAGE_KEYS.PROFILE, profile),
 
   // Settings & Persistent UPI / QR configuration
-  getSettings: (): SystemSettings => getLocalItem(STORAGE_KEYS.SETTINGS, initialSystemSettings),
+  getSettings: (): SystemSettings => {
+    const s = getLocalItem(STORAGE_KEYS.SETTINGS, initialSystemSettings);
+    if (s.paymentSettings) {
+      if (s.paymentSettings.cashfreeEnv === 'sandbox') {
+        s.paymentSettings.cashfreeEnv = 'production';
+      }
+      if (s.paymentSettings.razorpayEnv === 'test') {
+        s.paymentSettings.razorpayEnv = 'live';
+      }
+    }
+    return s;
+  },
   updateSettings: (settings: SystemSettings): void => setLocalItem(STORAGE_KEYS.SETTINGS, settings),
   
   // Custom UPI & QR quick save helper (as requested by user)
