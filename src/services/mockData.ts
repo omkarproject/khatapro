@@ -14,11 +14,11 @@ import {
 export const initialUserProfile: UserProfile = {
   id: 'usr_001',
   name: 'Anant Kumar Yadav',
-  email: 'contact@sharmatraders.in',
+  email: 'anantyadav8924@gmail.com',
   phone: '8371838314',
   role: 'business_owner',
   businessName: 'Sharma Traders & Enterprise',
-  businessGst: '27AABCS1429B1Z8',
+  businessGst: '',
   businessAddress: 'Plot 42, Apex Industrial Park, Andheri East, Mumbai, MH 400069',
   avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
   createdAt: '2025-01-10T10:00:00Z',
@@ -664,7 +664,7 @@ export const initialSystemSettings: SystemSettings = {
   businessName: 'Sharma Traders & Enterprise',
   businessTagline: 'Track Money, Manage Business, Grow Faster',
   businessPhone: '8371838314',
-  businessEmail: 'contact@sharmatraders.in',
+  businessEmail: 'anantyadav8924@gmail.com',
   businessAddress: 'Plot 42, Apex Industrial Park, Andheri East, Mumbai, MH 400069',
   paymentSettings: {
     collectionMode: 'direct_upi',
@@ -673,7 +673,7 @@ export const initialSystemSettings: SystemSettings = {
     // Realistic default QR code provided out of the box
     customQrUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi%3A%2F%2Fpay%3Fpa%3D8371838314%40upi%26pn%3DSharma%2BTraders%26cu%3DINR',
     isDefaultQrSaved: true,
-    businessGst: '27AABCS1429B1Z8',
+    businessGst: '',
     currency: 'INR',
     enableSoundAlerts: true,
     cashfreeAppId: '',

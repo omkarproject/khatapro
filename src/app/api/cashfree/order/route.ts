@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
       customer_details: {
         customer_id: `cust_${customerPhone ? customerPhone.replace(/\D/g, '').slice(-10) : Date.now()}`,
         customer_name: customerName || 'Valued Customer',
-        customer_email: customerEmail || 'billing@khatapro.in',
+        customer_email: customerEmail || 'anantyadav8924@gmail.com',
         customer_phone: customerPhone ? customerPhone.replace(/\D/g, '').slice(-10) : '9999999999',
       },
       order_meta: {

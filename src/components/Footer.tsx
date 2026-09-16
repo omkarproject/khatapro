@@ -9,9 +9,9 @@ export default function Footer() {
   const { settings, profile } = useApp();
   const businessName = settings.businessName || profile.businessName || 'Sharma Traders & Enterprise';
   const businessPhone = settings.businessPhone || profile.phone || '+91 8371838314';
-  const businessEmail = settings.businessEmail || profile.email || 'contact@sharmatraders.in';
-  const businessAddress = settings.businessAddress || profile.address || 'Plot 42, Apex Industrial Park, Andheri East, Mumbai, MH 400069';
-  const businessGst = settings.paymentSettings?.businessGst || '27AABCS1429B1Z8';
+  const businessEmail = settings.businessEmail || profile.email || 'anantyadav8924@gmail.com';
+  const businessAddress = settings.businessAddress || profile.businessAddress || 'Plot 42, Apex Industrial Park, Andheri East, Mumbai, MH 400069';
+  const businessGst = settings.paymentSettings?.businessGst || profile.businessGst || '';
 
   return (
     <footer className="w-full bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800/80 pt-10 pb-16 text-slate-600 dark:text-slate-400 text-xs">
@@ -33,9 +33,11 @@ export default function Footer() {
             <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
               SmartKhata Pro Fintech &amp; Digital Ledger Operating System. Track money, manage business invoices, inventory and automated online collections seamlessly.
             </p>
-            <div className="text-[10px] text-slate-400 font-mono">
-              GSTIN: <span className="font-bold text-slate-700 dark:text-slate-300">{businessGst}</span>
-            </div>
+            {businessGst ? (
+              <div className="text-[10px] text-slate-400 font-mono">
+                GSTIN: <span className="font-bold text-slate-700 dark:text-slate-300">{businessGst}</span>
+              </div>
+            ) : null}
           </div>
 
           {/* Col 2: Policy & Whitelisting Pages (Cashfree Required) */}

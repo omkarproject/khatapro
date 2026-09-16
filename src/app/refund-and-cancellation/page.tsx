@@ -9,8 +9,8 @@ export default function RefundAndCancellationPage() {
   const { settings, profile } = useApp();
   const businessName = settings.businessName || profile.businessName || 'Sharma Traders & Enterprise';
   const businessPhone = settings.businessPhone || profile.phone || '+91 8371838314';
-  const businessEmail = settings.businessEmail || profile.email || 'contact@sharmatraders.in';
-  const businessAddress = settings.businessAddress || profile.address || 'Plot 42, Apex Industrial Park, Andheri East, Mumbai, MH 400069';
+  const businessEmail = settings.businessEmail || profile.email || 'anantyadav8924@gmail.com';
+  const businessAddress = settings.businessAddress || profile.businessAddress || 'Plot 42, Apex Industrial Park, Andheri East, Mumbai, MH 400069';
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-200">

@@ -27,9 +27,9 @@ export default function ContactUsPage() {
 
   const businessName = settings.businessName || profile.businessName || 'Sharma Traders & Enterprise';
   const businessPhone = settings.businessPhone || profile.phone || '+91 8371838314';
-  const businessEmail = settings.businessEmail || profile.email || 'contact@sharmatraders.in';
-  const businessAddress = settings.businessAddress || profile.address || 'Plot 42, Apex Industrial Park, Andheri East, Mumbai, MH 400069';
-  const businessGst = settings.paymentSettings?.businessGst || '27AABCS1429B1Z8';
+  const businessEmail = settings.businessEmail || profile.email || 'anantyadav8924@gmail.com';
+  const businessAddress = settings.businessAddress || profile.businessAddress || 'Plot 42, Apex Industrial Park, Andheri East, Mumbai, MH 400069';
+  const businessGst = settings.paymentSettings?.businessGst || '';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,10 +136,12 @@ export default function ContactUsPage() {
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700/60">
-                <div className="text-[10px] uppercase font-bold text-slate-400">GST Registration Number</div>
-                <div className="font-mono font-bold text-xs text-slate-800 dark:text-slate-200 mt-0.5">{businessGst}</div>
-              </div>
+              {businessGst && (
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700/60">
+                  <div className="text-[10px] uppercase font-bold text-slate-400">GST Registration Number</div>
+                  <div className="font-mono font-bold text-xs text-slate-800 dark:text-slate-200 mt-0.5">{businessGst}</div>
+                </div>
+              )}
 
             </div>
           </div>

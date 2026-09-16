@@ -247,7 +247,7 @@ function CustomerPayInvoiceContent() {
         prefill: {
           name: invoice.customerName || '',
           contact: invoice.customerPhone || '',
-          email: profile.email || 'billing@khatapro.in',
+          email: profile.email || 'anantyadav8924@gmail.com',
         },
         notes: {
           invoice_number: invoice.invoiceNumber,
@@ -341,7 +341,7 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
           orderAmount: amountToPay,
           customerName: invoice.customerName || 'Customer',
           customerPhone: invoice.customerPhone || '9820111223',
-          customerEmail: profile.email || 'billing@khatapro.in',
+          customerEmail: profile.email || 'anantyadav8924@gmail.com',
           appId: appId || undefined,
           secretKey: secretKey || undefined,
           env,
