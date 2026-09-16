@@ -23,6 +23,7 @@ export interface ToastMessage {
   title: string;
   message: string;
   type: 'success' | 'info' | 'warning' | 'error';
+  transaction?: Transaction;
 }
 
 interface AppContextType {
@@ -82,8 +83,14 @@ interface AppContextType {
 
   // Global Toast Notifications
   toasts: ToastMessage[];
-  addToast: (title: string, message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
+  addToast: (title: string, message: string, type?: 'success' | 'info' | 'warning' | 'error', transaction?: Transaction) => void;
   removeToast: (id: string) => void;
+
+  // Payment Details Modal & Sound Notification
+  activePaymentDetail: Transaction | null;
+  openPaymentDetail: (txn: Transaction) => void;
+  closePaymentDetail: () => void;
+  playPaymentNotificationSound: () => void;
 
   // Refresh / Reload
   refreshData: () => void;
@@ -119,12 +126,68 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const addToast = (title: string, message: string, type: 'success' | 'info' | 'warning' | 'error' = 'info') => {
+  // Payment Details Modal
+  const [activePaymentDetail, setActivePaymentDetail] = useState<Transaction | null>(null);
+
+  const openPaymentDetail = (txn: Transaction) => {
+    setActivePaymentDetail(txn);
+  };
+
+  const closePaymentDetail = () => {
+    setActivePaymentDetail(null);
+  };
+
+  // Synthesize fintech chime using Web Audio API
+  const playPaymentNotificationSound = () => {
+    try {
+      if (typeof window === 'undefined') return;
+      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+
+      const now = ctx.currentTime;
+      // Tone 1: 587.33 Hz (D5)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(587.33, now);
+      gain1.gain.setValueAtTime(0.25, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.22);
+
+      // Tone 2: 880 Hz (A5)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(880, now + 0.12);
+      gain2.gain.setValueAtTime(0.3, now + 0.12);
+      gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.12);
+      osc2.stop(now + 0.5);
+    } catch (err) {
+      console.warn('Audio playback not permitted yet:', err);
+    }
+  };
+
+  const addToast = (
+    title: string,
+    message: string,
+    type: 'success' | 'info' | 'warning' | 'error' = 'info',
+    transaction?: Transaction
+  ) => {
     const id = Math.random().toString(36).substring(2, 9);
-    setToasts(prev => [...prev, { id, title, message, type }]);
+    setToasts(prev => [...prev, { id, title, message, type, transaction }]);
     setTimeout(() => {
       removeToast(id);
-    }, 4500);
+    }, transaction ? 8000 : 4500);
   };
 
   const removeToast = (id: string) => {
@@ -150,6 +213,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshData();
     setMounted(true);
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'skp_transactions' && e.newValue) {
+        try {
+          const freshTxns: Transaction[] = JSON.parse(e.newValue);
+          const oldTxns = StorageService.getTransactions();
+          if (freshTxns.length > oldTxns.length) {
+            const latest = freshTxns[0];
+            if (latest && (latest.type === 'collection' || latest.type === 'credit' || latest.type === 'income')) {
+              playPaymentNotificationSound();
+              addToast(
+                '💰 Payment Received!',
+                `₹${latest.amount.toLocaleString('en-IN')} received from ${latest.customerName || 'Customer'}. Click to view details.`,
+                'success',
+                latest
+              );
+            }
+          }
+          refreshData();
+        } catch {
+          refreshData();
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   useEffect(() => {
@@ -216,7 +306,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const updatedTxns = StorageService.addTransaction(txn);
     setTransactions(updatedTxns);
     setCustomers(StorageService.getCustomers()); // balance changed
-    addToast('Transaction Recorded', `${txn.type.toUpperCase()}: ₹${txn.amount.toLocaleString('en-IN')} added.`, 'success');
+
+    if (txn.type === 'collection' || txn.type === 'credit' || txn.type === 'income') {
+      playPaymentNotificationSound();
+      addToast(
+        '💰 Payment Received!',
+        `₹${txn.amount.toLocaleString('en-IN')} received from ${txn.customerName || 'Customer'}. Click to view details.`,
+        'success',
+        txn
+      );
+    } else {
+      addToast('Transaction Recorded', `${txn.type.toUpperCase()}: ₹${txn.amount.toLocaleString('en-IN')} added.`, 'success');
+    }
   };
 
   const updateTransaction = (txn: Transaction) => {
@@ -344,6 +445,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toasts,
         addToast,
         removeToast,
+        activePaymentDetail,
+        openPaymentDetail,
+        closePaymentDetail,
+        playPaymentNotificationSound,
         refreshData,
       }}
     >

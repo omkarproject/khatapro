@@ -8,6 +8,8 @@ import MobileNav from './MobileNav';
 import QuickUPICollectModal from './QuickUPICollectModal';
 import ToastContainer from './ToastContainer';
 import Footer from './Footer';
+import MaintenanceNoticeModal from './MaintenanceNoticeModal';
+import PaymentDetailsModal from './PaymentDetailsModal';
 
 export default function LayoutShell({ children }: { children: React.ReactNode }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -22,6 +24,8 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
         </main>
         <Footer />
         <ToastContainer />
+        <MaintenanceNoticeModal />
+        <PaymentDetailsModal />
       </div>
     );
   }
@@ -44,6 +48,8 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
       <Footer />
       <MobileNav />
       <QuickUPICollectModal />
+      <PaymentDetailsModal />
+      <MaintenanceNoticeModal />
       <ToastContainer />
     </div>
   );

@@ -21,7 +21,18 @@ import {
   Loader2,
   AlertCircle,
   Lock,
-  Zap
+  Zap,
+  History,
+  Search,
+  Calendar,
+  Filter,
+  ArrowUpDown,
+  RefreshCw,
+  Eye,
+  FileText,
+  Clock,
+  ArrowDownLeft,
+  ArrowUpRight
 } from 'lucide-react';
 
 export default function QuickUPICollectModal() {
@@ -35,12 +46,14 @@ export default function QuickUPICollectModal() {
     addTransaction,
     customers,
     addToast,
+    transactions,
+    openPaymentDetail,
   } = useApp();
 
   const paymentSettings = settings.paymentSettings;
 
   // Active gateway tab
-  const [activeTab, setActiveTab] = useState<'direct_upi' | 'cashfree' | 'razorpay' | 'upi_gateway'>('direct_upi');
+  const [activeTab, setActiveTab] = useState<'direct_upi' | 'cashfree' | 'razorpay' | 'upi_gateway' | 'history'>('direct_upi');
   const [serverCfConfigured, setServerCfConfigured] = useState(false);
 
   // Form State
@@ -59,6 +72,90 @@ export default function QuickUPICollectModal() {
   const [gatewayError, setGatewayError] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // History & Filter States
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyDateRange, setHistoryDateRange] = useState<'all' | 'today' | 'yesterday' | '7days' | '30days'>('all');
+  const [historyGateway, setHistoryGateway] = useState<'all' | 'cashfree' | 'upi' | 'razorpay' | 'cash' | 'bank'>('all');
+  const [historyCustomer, setHistoryCustomer] = useState<'all' | string>('all');
+  const [historyType, setHistoryType] = useState<'all' | 'collection' | 'payment'>('all');
+
+  // Filtered transactions for History view
+  const filteredTransactions = transactions.filter((txn) => {
+    // 1. Search Query
+    if (historySearch.trim()) {
+      const q = historySearch.toLowerCase().trim();
+      const matchName = (txn.customerName || '').toLowerCase().includes(q);
+      const matchRef = (txn.referenceNo || '').toLowerCase().includes(q);
+      const matchNote = (txn.note || '').toLowerCase().includes(q);
+      const matchCategory = (txn.category || '').toLowerCase().includes(q);
+      const matchMode = (txn.paymentMode || '').toLowerCase().includes(q);
+      const matchAmt = txn.amount.toString().includes(q);
+      if (!matchName && !matchRef && !matchNote && !matchCategory && !matchMode && !matchAmt) {
+        return false;
+      }
+    }
+
+    // 2. Date Filter
+    if (historyDateRange !== 'all') {
+      const txnDate = new Date(txn.date);
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      if (historyDateRange === 'today') {
+        if (txnDate < todayStart) return false;
+      } else if (historyDateRange === 'yesterday') {
+        const yestStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
+        if (txnDate < yestStart || txnDate >= todayStart) return false;
+      } else if (historyDateRange === '7days') {
+        const sevenDaysAgo = new Date(todayStart.getTime() - 7 * 24 * 60 * 1000);
+        if (txnDate < sevenDaysAgo) return false;
+      } else if (historyDateRange === '30days') {
+        const thirtyDaysAgo = new Date(todayStart.getTime() - 30 * 24 * 60 * 1000);
+        if (txnDate < thirtyDaysAgo) return false;
+      }
+    }
+
+    // 3. Gateway / Mode Filter
+    if (historyGateway !== 'all') {
+      const mode = (txn.paymentMode || '').toLowerCase();
+      const cat = (txn.category || '').toLowerCase();
+      if (historyGateway === 'cashfree') {
+        if (!cat.includes('cashfree') && !mode.includes('cashfree')) return false;
+      } else if (historyGateway === 'upi') {
+        if (!cat.includes('upi') && !mode.includes('upi')) return false;
+      } else if (historyGateway === 'razorpay') {
+        if (!cat.includes('razorpay') && !mode.includes('razorpay')) return false;
+      } else if (historyGateway === 'cash') {
+        if (!cat.includes('cash') && !mode.includes('cash')) return false;
+      } else if (historyGateway === 'bank') {
+        if (!cat.includes('bank') && !mode.includes('bank') && !cat.includes('neft') && !cat.includes('rtgs')) return false;
+      }
+    }
+
+    // 4. Customer Filter
+    if (historyCustomer !== 'all') {
+      if (txn.customerId !== historyCustomer) return false;
+    }
+
+    // 5. Type Filter
+    if (historyType !== 'all') {
+      if (historyType === 'collection') {
+        if (txn.type !== 'collection' && txn.type !== 'credit' && txn.type !== 'income') return false;
+      } else if (historyType === 'payment') {
+        if (txn.type !== 'payment' && txn.type !== 'debit' && txn.type !== 'expense') return false;
+      }
+    }
+
+    return true;
+  });
+
+  const totalFilteredCollection = filteredTransactions
+    .filter((t) => t.type === 'collection' || t.type === 'credit' || t.type === 'income')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const totalFilteredCount = filteredTransactions.length;
+
 
   // Check which methods are configured/active
   const isCashfreeConfigured = !!(
@@ -466,12 +563,30 @@ export default function QuickUPICollectModal() {
               </p>
             </div>
           </div>
-          <button
-            onClick={closeCollectModal}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab(activeTab === 'history' ? 'direct_upi' : 'history')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'history'
+                  ? 'bg-amber-600 text-white shadow-md shadow-amber-500/25'
+                  : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/60'
+              }`}
+              title="View Filterable Transaction History"
+            >
+              <History className="w-4 h-4" />
+              <span className="hidden sm:inline">{activeTab === 'history' ? 'Back to Collect' : 'History'}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/20 dark:bg-amber-900/50 font-mono">
+                {transactions.length}
+              </span>
+            </button>
+            <button
+              onClick={closeCollectModal}
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Dynamic Active Gateways Tab Bar */}
