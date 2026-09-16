@@ -19,7 +19,12 @@ import {
   CloudUpload,
   Settings,
   ShieldCheck,
-  Zap
+  Zap,
+  Tag,
+  PhoneCall,
+  Scale,
+  RotateCcw,
+  FileText
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -45,6 +50,14 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
     { label: 'Financial Analytics', href: '/analytics', icon: LineChart },
     { label: 'Cloud Backup', href: '/backup', icon: CloudUpload },
     { label: 'Settings', href: '/settings', icon: Settings },
+  ];
+
+  const complianceItems = [
+    { label: 'Products & Pricing (INR)', href: '/pricing', icon: Tag, badge: 'INR ₹' },
+    { label: 'Contact Us', href: '/contact-us', icon: PhoneCall },
+    { label: 'Terms & Conditions', href: '/terms-and-conditions', icon: Scale },
+    { label: 'Refunds & Cancellations', href: '/refund-and-cancellation', icon: RotateCcw },
+    { label: 'Privacy Policy', href: '/privacy-policy', icon: FileText },
   ];
 
   const sidebarContent = (
@@ -93,6 +106,44 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
             </Link>
           );
         })}
+
+        {/* Compliance & Policy Links (Mandatory for Cashfree Whitelisting) */}
+        <div className="pt-4 pb-1 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+          Policy &amp; Compliance
+        </div>
+
+        {complianceItems.map((item) => {
+          const isActive = pathname === item.href;
+          const Icon = item.icon;
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={onCloseMobile}
+              className={`flex items-center justify-between px-3.5 py-2 rounded-2xl text-xs font-medium transition-all group ${
+                isActive
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/60 dark:hover:bg-slate-800/40'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Icon
+                  className={`w-3.5 h-3.5 transition-transform group-hover:scale-110 ${
+                    isActive ? 'text-white' : 'text-slate-400 group-hover:text-indigo-500'
+                  }`}
+                />
+                <span>{item.label}</span>
+              </div>
+
+              {item.badge && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
+                  {item.badge}
+                </span>
+              )}
+            </Link>
+          );
+        })}
       </div>
 
       {/* Bottom Section: Merchant Info & Backend Pill */}
@@ -118,7 +169,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
         <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
           <span className="flex items-center gap-1">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            256-Bit Encrypted
+            Cashfree Verified
           </span>
           <span className="text-[10px] font-mono">v1.0 Pro</span>
         </div>

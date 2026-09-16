@@ -7,6 +7,7 @@ import Sidebar from './Sidebar';
 import MobileNav from './MobileNav';
 import QuickUPICollectModal from './QuickUPICollectModal';
 import ToastContainer from './ToastContainer';
+import Footer from './Footer';
 
 export default function LayoutShell({ children }: { children: React.ReactNode }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -19,6 +20,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
         <main className="flex-1 min-w-0">
           {children}
         </main>
+        <Footer />
         <ToastContainer />
       </div>
     );
@@ -34,11 +36,12 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
           onCloseMobile={() => setMobileSidebarOpen(false)}
         />
 
-        <main className="flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-6 pb-24 md:pb-12 overflow-x-hidden">
+        <main className="flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-6 pb-12 overflow-x-hidden">
           {children}
         </main>
       </div>
 
+      <Footer />
       <MobileNav />
       <QuickUPICollectModal />
       <ToastContainer />
