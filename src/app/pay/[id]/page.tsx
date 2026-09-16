@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { StorageService } from '@/services/storage';
@@ -32,7 +32,7 @@ import {
   MessageCircle
 } from 'lucide-react';
 
-export default function CustomerPayInvoicePage() {
+function CustomerPayInvoiceContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const invoiceId = params?.id as string;
@@ -1344,5 +1344,21 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
       )}
 
     </div>
+  );
+}
+
+export default function CustomerPayInvoicePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#070B14] flex flex-col items-center justify-center p-4">
+          <div className="text-center text-xs text-slate-400 font-mono animate-pulse">
+            INITIALIZING SECURE SESSION...
+          </div>
+        </div>
+      }
+    >
+      <CustomerPayInvoiceContent />
+    </Suspense>
   );
 }

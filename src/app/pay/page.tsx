@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 
-export default function PayRedirectPage() {
+function PayRedirectContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -17,10 +17,24 @@ export default function PayRedirectPage() {
   }, [id, gw, router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="text-center text-xs text-slate-500 font-medium animate-pulse">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[#070B14]">
+      <div className="text-center text-xs text-slate-400 font-medium animate-pulse">
         Loading payment portal...
       </div>
     </div>
+  );
+}
+
+export default function PayRedirectPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center p-4 bg-[#070B14]">
+        <div className="text-center text-xs text-slate-400 font-medium animate-pulse">
+          Loading payment portal...
+        </div>
+      </div>
+    }>
+      <PayRedirectContent />
+    </Suspense>
   );
 }
