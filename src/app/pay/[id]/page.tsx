@@ -184,12 +184,19 @@ export default function CustomerPayInvoicePage() {
     // Also record in KhataBook ledger
     if (invoice.customerId) {
       addTransaction({
+        id: `txn_${Date.now()}`,
         customerId: invoice.customerId,
-        type: 'received',
+        customerName: invoice.customerName || 'Customer',
+        type: 'collection',
         amount: invoice.total,
         date: new Date().toISOString(),
-        description: `Online Payment received for Tax Invoice #${invoice.invoiceNumber} (${methodUsed}) [Ref: ${generatedTxn}]`,
-        paymentMode: 'online',
+        category: 'Online Payment Collection',
+        note: `Online Payment received for Tax Invoice #${invoice.invoiceNumber} (${methodUsed}) [Ref: ${generatedTxn}]`,
+        paymentMode: methodUsed.toLowerCase().includes('card') ? 'card' : 'upi',
+        referenceNo: generatedTxn,
+        status: 'completed',
+        createdBy: profile.businessName || 'System Online Checkout',
+        createdAt: new Date().toISOString(),
       });
     }
 
