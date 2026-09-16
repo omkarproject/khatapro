@@ -88,13 +88,15 @@ export const StorageService = {
           businessName: initialUserProfile.businessName,
         });
       }
-      // Migrate legacy settings if needed
+      // Migrate legacy settings if needed (only if user hasn't saved custom settings)
       const existingSettings = StorageService.getSettings();
       if (
-        existingSettings.paymentSettings?.payeeName === 'Sharma Traders Enterprise' ||
-        existingSettings.paymentSettings?.upiId === 'sharma.traders@okaxis' ||
-        existingSettings.businessPhone === '8924024859' ||
-        existingSettings.paymentSettings?.upiId === '8924024859@upi'
+        !existingSettings.paymentSettings?.isDefaultQrSaved &&
+        !existingSettings.paymentSettings?.cashfreeAppId &&
+        (existingSettings.paymentSettings?.payeeName === 'Sharma Traders Enterprise' ||
+          existingSettings.paymentSettings?.upiId === 'sharma.traders@okaxis' ||
+          existingSettings.businessPhone === '8924024859' ||
+          existingSettings.paymentSettings?.upiId === '8924024859@upi')
       ) {
         setLocalItem(STORAGE_KEYS.SETTINGS, {
           ...existingSettings,

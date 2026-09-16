@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
+import { StorageService } from '@/services/storage';
 import { BackendProvider, SystemSettings, PaymentSettings, PaymentCollectionMode } from '@/types';
 import { LocalAdapter, SupabaseAdapter, FirebaseAdapter, MongoAdapter } from '@/services/backendManager';
 import {
@@ -38,47 +39,203 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<'business' | 'upi' | 'backend' | 'roles'>('business');
 
   // Business Profile State
-  const [bName, setBName] = useState(settings.businessName);
-  const [bTagline, setBTagline] = useState(settings.businessTagline);
-  const [bPhone, setBPhone] = useState(settings.businessPhone);
-  const [bEmail, setBEmail] = useState(settings.businessEmail);
-  const [bAddress, setBAddress] = useState(settings.businessAddress);
-  const [bGst, setBGst] = useState(settings.paymentSettings.businessGst || '');
+  const [bName, setBName] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.businessName || settings.businessName;
+    }
+    return settings.businessName;
+  });
+  const [bTagline, setBTagline] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.businessTagline || settings.businessTagline;
+    }
+    return settings.businessTagline;
+  });
+  const [bPhone, setBPhone] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.businessPhone || settings.businessPhone;
+    }
+    return settings.businessPhone;
+  });
+  const [bEmail, setBEmail] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.businessEmail || settings.businessEmail;
+    }
+    return settings.businessEmail;
+  });
+  const [bAddress, setBAddress] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.businessAddress || settings.businessAddress;
+    }
+    return settings.businessAddress;
+  });
+  const [bGst, setBGst] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.paymentSettings?.businessGst || settings.paymentSettings?.businessGst || '';
+    }
+    return settings.paymentSettings?.businessGst || '';
+  });
 
   // UPI & Payment Collection Modes (Direct UPI, Cashfree Gateway, UPI Gateway)
-  const [collectionMode, setCollectionMode] = useState<PaymentCollectionMode>(
-    settings.paymentSettings.collectionMode || 'direct_upi'
-  );
-  const [upiId, setUpiId] = useState(settings.paymentSettings.upiId);
-  const [payeeName, setPayeeName] = useState(settings.paymentSettings.payeeName);
-  const [customQrUrl, setCustomQrUrl] = useState<string | undefined>(settings.paymentSettings.customQrUrl);
+  const [collectionMode, setCollectionMode] = useState<PaymentCollectionMode>(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.paymentSettings?.collectionMode || settings.paymentSettings?.collectionMode || 'direct_upi';
+    }
+    return settings.paymentSettings?.collectionMode || 'direct_upi';
+  });
+  const [upiId, setUpiId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.paymentSettings?.upiId || settings.paymentSettings?.upiId;
+    }
+    return settings.paymentSettings?.upiId;
+  });
+  const [payeeName, setPayeeName] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.paymentSettings?.payeeName || settings.paymentSettings?.payeeName;
+    }
+    return settings.paymentSettings?.payeeName;
+  });
+  const [customQrUrl, setCustomQrUrl] = useState<string | undefined>(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.paymentSettings?.customQrUrl || settings.paymentSettings?.customQrUrl;
+    }
+    return settings.paymentSettings?.customQrUrl;
+  });
 
   // Cashfree Gateway State
-  const [cashfreeAppId, setCashfreeAppId] = useState(settings.paymentSettings.cashfreeAppId || '');
-  const [cashfreeSecretKey, setCashfreeSecretKey] = useState(settings.paymentSettings.cashfreeSecretKey || '');
-  const [cashfreeEnv, setCashfreeEnv] = useState<'sandbox' | 'production'>(
-    settings.paymentSettings.cashfreeEnv || 'sandbox'
-  );
+  const [cashfreeAppId, setCashfreeAppId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.paymentSettings?.cashfreeAppId || settings.paymentSettings?.cashfreeAppId || '';
+    }
+    return settings.paymentSettings?.cashfreeAppId || '';
+  });
+  const [cashfreeSecretKey, setCashfreeSecretKey] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.paymentSettings?.cashfreeSecretKey || settings.paymentSettings?.cashfreeSecretKey || '';
+    }
+    return settings.paymentSettings?.cashfreeSecretKey || '';
+  });
+  const [cashfreeEnv, setCashfreeEnv] = useState<'sandbox' | 'production'>(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.paymentSettings?.cashfreeEnv || settings.paymentSettings?.cashfreeEnv || 'sandbox';
+    }
+    return settings.paymentSettings?.cashfreeEnv || 'sandbox';
+  });
 
   // Razorpay Gateway State
-  const [razorpayKeyId, setRazorpayKeyId] = useState(settings.paymentSettings.razorpayKeyId || '');
-  const [razorpayKeySecret, setRazorpayKeySecret] = useState(settings.paymentSettings.razorpayKeySecret || '');
-  const [razorpayWebhookSecret, setRazorpayWebhookSecret] = useState(settings.paymentSettings.razorpayWebhookSecret || '');
-  const [razorpayEnv, setRazorpayEnv] = useState<'test' | 'live'>(
-    settings.paymentSettings.razorpayEnv || 'test'
-  );
+  const [razorpayKeyId, setRazorpayKeyId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.paymentSettings?.razorpayKeyId || settings.paymentSettings?.razorpayKeyId || '';
+    }
+    return settings.paymentSettings?.razorpayKeyId || '';
+  });
+  const [razorpayKeySecret, setRazorpayKeySecret] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.paymentSettings?.razorpayKeySecret || settings.paymentSettings?.razorpayKeySecret || '';
+    }
+    return settings.paymentSettings?.razorpayKeySecret || '';
+  });
+  const [razorpayWebhookSecret, setRazorpayWebhookSecret] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.paymentSettings?.razorpayWebhookSecret || settings.paymentSettings?.razorpayWebhookSecret || '';
+    }
+    return settings.paymentSettings?.razorpayWebhookSecret || '';
+  });
+  const [razorpayEnv, setRazorpayEnv] = useState<'test' | 'live'>(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.paymentSettings?.razorpayEnv || settings.paymentSettings?.razorpayEnv || 'test';
+    }
+    return settings.paymentSettings?.razorpayEnv || 'test';
+  });
 
   // UPI Payment Gateway State
-  const [upiGatewayProvider, setUpiGatewayProvider] = useState(
-    settings.paymentSettings.upiGatewayProvider || 'Cashfree UPI Gateway'
-  );
-  const [upiGatewayKey, setUpiGatewayKey] = useState(settings.paymentSettings.upiGatewayKey || '');
-  const [upiGatewaySecret, setUpiGatewaySecret] = useState(settings.paymentSettings.upiGatewaySecret || '');
-  const [upiGatewayWebhookUrl, setUpiGatewayWebhookUrl] = useState(
-    settings.paymentSettings.upiGatewayWebhookUrl || 'https://api.smartkhatapro.in/webhook/upi-payment'
-  );
+  const [upiGatewayProvider, setUpiGatewayProvider] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.paymentSettings?.upiGatewayProvider || settings.paymentSettings?.upiGatewayProvider || 'Cashfree UPI Gateway';
+    }
+    return settings.paymentSettings?.upiGatewayProvider || 'Cashfree UPI Gateway';
+  });
+  const [upiGatewayKey, setUpiGatewayKey] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.paymentSettings?.upiGatewayKey || settings.paymentSettings?.upiGatewayKey || '';
+    }
+    return settings.paymentSettings?.upiGatewayKey || '';
+  });
+  const [upiGatewaySecret, setUpiGatewaySecret] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.paymentSettings?.upiGatewaySecret || settings.paymentSettings?.upiGatewaySecret || '';
+    }
+    return settings.paymentSettings?.upiGatewaySecret || '';
+  });
+  const [upiGatewayWebhookUrl, setUpiGatewayWebhookUrl] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.paymentSettings?.upiGatewayWebhookUrl || settings.paymentSettings?.upiGatewayWebhookUrl || 'https://api.smartkhatapro.in/webhook/upi-payment';
+    }
+    return settings.paymentSettings?.upiGatewayWebhookUrl || 'https://api.smartkhatapro.in/webhook/upi-payment';
+  });
   const [pgTestResult, setPgTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [isPgTesting, setIsPgTesting] = useState(false);
+
+  // Sync settings when AppContext updates
+  useEffect(() => {
+    if (settings && settings.paymentSettings) {
+      if (settings.paymentSettings.collectionMode) setCollectionMode(settings.paymentSettings.collectionMode);
+      if (settings.paymentSettings.upiId) setUpiId(settings.paymentSettings.upiId);
+      if (settings.paymentSettings.payeeName) setPayeeName(settings.paymentSettings.payeeName);
+      if (settings.paymentSettings.customQrUrl !== undefined) setCustomQrUrl(settings.paymentSettings.customQrUrl);
+      if (settings.paymentSettings.cashfreeAppId) setCashfreeAppId(settings.paymentSettings.cashfreeAppId);
+      if (settings.paymentSettings.cashfreeSecretKey) setCashfreeSecretKey(settings.paymentSettings.cashfreeSecretKey);
+      if (settings.paymentSettings.cashfreeEnv) setCashfreeEnv(settings.paymentSettings.cashfreeEnv);
+      if (settings.paymentSettings.razorpayKeyId) setRazorpayKeyId(settings.paymentSettings.razorpayKeyId);
+      if (settings.paymentSettings.razorpayKeySecret) setRazorpayKeySecret(settings.paymentSettings.razorpayKeySecret);
+      if (settings.paymentSettings.razorpayWebhookSecret) setRazorpayWebhookSecret(settings.paymentSettings.razorpayWebhookSecret);
+      if (settings.paymentSettings.razorpayEnv) setRazorpayEnv(settings.paymentSettings.razorpayEnv);
+      if (settings.paymentSettings.upiGatewayProvider) setUpiGatewayProvider(settings.paymentSettings.upiGatewayProvider);
+      if (settings.paymentSettings.upiGatewayKey) setUpiGatewayKey(settings.paymentSettings.upiGatewayKey);
+      if (settings.paymentSettings.upiGatewaySecret) setUpiGatewaySecret(settings.paymentSettings.upiGatewaySecret);
+      if (settings.paymentSettings.upiGatewayWebhookUrl) setUpiGatewayWebhookUrl(settings.paymentSettings.upiGatewayWebhookUrl);
+    }
+    if (settings.businessName) setBName(settings.businessName);
+    if (settings.businessTagline) setBTagline(settings.businessTagline);
+    if (settings.businessPhone) setBPhone(settings.businessPhone);
+    if (settings.businessEmail) setBEmail(settings.businessEmail);
+    if (settings.businessAddress) setBAddress(settings.businessAddress);
+    if (settings.paymentSettings?.businessGst) setBGst(settings.paymentSettings.businessGst);
+  }, [settings]);
+
+  // Sync with server Cashfree config if available
+  useEffect(() => {
+    fetch('/api/cashfree/config')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.isConfigured) {
+          if (!cashfreeAppId && data.appId) setCashfreeAppId(data.appId);
+          if (data.env) setCashfreeEnv(data.env);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Payment Setup PDF Guide Modal State
   const [isPaymentGuideModalOpen, setIsPaymentGuideModalOpen] = useState(false);
@@ -157,6 +314,19 @@ export default function SettingsPage() {
       ...settings,
       paymentSettings: updatedPaymentSettings,
     });
+
+    if (cashfreeAppId.trim() && cashfreeSecretKey.trim()) {
+      fetch('/api/cashfree/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appId: cashfreeAppId.trim(),
+          secretKey: cashfreeSecretKey.trim(),
+          env: cashfreeEnv,
+        }),
+      }).catch((err) => console.error('Failed to sync Cashfree config with server:', err));
+    }
+
     addToast(
       'Payment Settings Saved!',
       `Active Mode: ${

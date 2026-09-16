@@ -1,21 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCashfreeConfig } from '@/lib/cashfreeServer';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { orderId, orderAmount, customerName, customerPhone, customerEmail, appId, secretKey, env } = body;
 
-    if (!appId || !secretKey) {
+    const serverConfig = getCashfreeConfig();
+    const finalAppId = (appId || serverConfig.appId || process.env.CASHFREE_APP_ID || '').trim();
+    const finalSecretKey = (secretKey || serverConfig.secretKey || process.env.CASHFREE_SECRET_KEY || '').trim();
+    const finalEnv = (env || serverConfig.env || process.env.CASHFREE_ENV || 'sandbox') as 'sandbox' | 'production';
+
+    if (!finalAppId || !finalSecretKey) {
       return NextResponse.json(
-        { error: 'Cashfree API credentials (App ID & Secret Key) are missing.' },
+        { error: 'Merchant Cashfree API credentials not configured yet. Please enter Cashfree App ID & Secret Key in Settings.' },
         { status: 400 }
       );
     }
 
-    const host = env === 'production' ? 'https://api.cashfree.com' : 'https://sandbox.cashfree.com';
+    const host = finalEnv === 'production' ? 'https://api.cashfree.com' : 'https://sandbox.cashfree.com';
 
     // Cashfree API strictly enforces https:// for return_url
-    const returnUrl = `https://smartkhatapro.in/pay/${orderId}?order_id={order_id}`;
+    const origin = req.headers.get('origin') || req.headers.get('referer') || 'https://smartkhatapro.in';
+    const cleanOrigin = origin.startsWith('https://') ? origin.replace(/\/$/, '') : 'https://smartkhatapro.in';
+    const returnUrl = `${cleanOrigin}/pay/${orderId}?order_id={order_id}`;
 
     const payload = {
       order_id: orderId || `order_${Date.now()}`,
@@ -24,7 +32,7 @@ export async function POST(req: NextRequest) {
       customer_details: {
         customer_id: `cust_${customerPhone ? customerPhone.replace(/\D/g, '').slice(-10) : Date.now()}`,
         customer_name: customerName || 'Valued Customer',
-        customer_email: customerEmail || 'customer@example.com',
+        customer_email: customerEmail || 'billing@khatapro.in',
         customer_phone: customerPhone ? customerPhone.replace(/\D/g, '').slice(-10) : '9999999999',
       },
       order_meta: {
@@ -36,8 +44,8 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       headers: {
         'x-api-version': '2023-08-01',
-        'x-client-id': appId,
-        'x-client-secret': secretKey,
+        'x-client-id': finalAppId,
+        'x-client-secret': finalSecretKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
@@ -46,8 +54,13 @@ export async function POST(req: NextRequest) {
     const data = await response.json();
 
     if (!response.ok) {
+      const isSandboxLimit = typeof data.message === 'string' && data.message.toLowerCase().includes('max order amount');
       return NextResponse.json(
-        { error: data.message || 'Failed to create Cashfree order.' },
+        { 
+          error: data.message || 'Failed to create Cashfree order.',
+          code: data.code,
+          isSandboxLimit,
+        },
         { status: response.status }
       );
     }
@@ -56,6 +69,7 @@ export async function POST(req: NextRequest) {
       paymentSessionId: data.payment_session_id,
       orderId: data.order_id,
       orderStatus: data.order_status,
+      env: finalEnv,
     });
   } catch (error: any) {
     console.error('Cashfree Order Error:', error);

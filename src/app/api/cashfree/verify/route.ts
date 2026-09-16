@@ -1,25 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCashfreeConfig } from '@/lib/cashfreeServer';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { orderId, appId, secretKey, env } = body;
 
-    if (!orderId || !appId || !secretKey) {
+    if (!orderId) {
       return NextResponse.json(
-        { error: 'Missing required parameters (orderId, appId, secretKey).' },
+        { error: 'Missing required parameter: orderId.' },
         { status: 400 }
       );
     }
 
-    const host = env === 'production' ? 'https://api.cashfree.com' : 'https://sandbox.cashfree.com';
+    const serverConfig = getCashfreeConfig();
+    const finalAppId = (appId || serverConfig.appId || process.env.CASHFREE_APP_ID || '').trim();
+    const finalSecretKey = (secretKey || serverConfig.secretKey || process.env.CASHFREE_SECRET_KEY || '').trim();
+    const finalEnv = (env || serverConfig.env || process.env.CASHFREE_ENV || 'sandbox') as 'sandbox' | 'production';
+
+    if (!finalAppId || !finalSecretKey) {
+      return NextResponse.json(
+        { error: 'Merchant Cashfree credentials missing for verification.' },
+        { status: 400 }
+      );
+    }
+
+    const host = finalEnv === 'production' ? 'https://api.cashfree.com' : 'https://sandbox.cashfree.com';
 
     const response = await fetch(`${host}/pg/orders/${encodeURIComponent(orderId)}/payments`, {
       method: 'GET',
       headers: {
         'x-api-version': '2023-08-01',
-        'x-client-id': appId,
-        'x-client-secret': secretKey,
+        'x-client-id': finalAppId,
+        'x-client-secret': finalSecretKey,
         'Content-Type': 'application/json',
       },
     });
@@ -58,7 +71,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error('Cashfree Verify Error:', error);
     return NextResponse.json(
-      { error: error.message || 'Internal error verifying payment.' },
+      { error: error.message || 'Internal server error while verifying payment.' },
       { status: 500 }
     );
   }

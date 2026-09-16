@@ -67,12 +67,6 @@ function CustomerPayInvoiceContent() {
   const [utrError, setUtrError] = useState('');
 
   // Cashfree API Integration States
-  const [isCfSetupModalOpen, setIsCfSetupModalOpen] = useState(false);
-  const [tempCfAppId, setTempCfAppId] = useState(settings.paymentSettings?.cashfreeAppId || '');
-  const [tempCfSecretKey, setTempCfSecretKey] = useState(settings.paymentSettings?.cashfreeSecretKey || '');
-  const [tempCfEnv, setTempCfEnv] = useState<'sandbox' | 'production'>(
-    settings.paymentSettings?.cashfreeEnv || 'sandbox'
-  );
   const [cfApiError, setCfApiError] = useState('');
   const [isCfLoading, setIsCfLoading] = useState(false);
 
@@ -322,9 +316,7 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
 
   // REAL CASHFREE API EXECUTION FUNCTION
   const executeCashfreeApiCheckout = async (
-    appId: string,
-    secretKey: string,
-    env: 'sandbox' | 'production',
+    customAmount?: number,
     target: '_modal' | '_self' = '_modal'
   ) => {
     if (!invoice) return;
@@ -334,6 +326,11 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
     const newOrderId = `INV_${invoice.invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}`;
     setLastOrderId(newOrderId);
 
+    const appId = settings.paymentSettings?.cashfreeAppId?.trim();
+    const secretKey = settings.paymentSettings?.cashfreeSecretKey?.trim();
+    const env = settings.paymentSettings?.cashfreeEnv || 'sandbox';
+    const amountToPay = customAmount !== undefined ? customAmount : invoice.total;
+
     try {
       // 1. Create order on Cashfree server via our API route
       const res = await fetch('/api/cashfree/order', {
@@ -341,12 +338,12 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderId: newOrderId,
-          orderAmount: invoice.total,
+          orderAmount: amountToPay,
           customerName: invoice.customerName || 'Customer',
           customerPhone: invoice.customerPhone || '9820111223',
           customerEmail: profile.email || 'billing@khatapro.in',
-          appId,
-          secretKey,
+          appId: appId || undefined,
+          secretKey: secretKey || undefined,
           env,
         }),
       });
@@ -354,9 +351,11 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
       const data = await res.json();
 
       if (!res.ok || !data.paymentSessionId) {
-        const errorMsg = data.error || 'Failed to initialize Cashfree order session. Please check your App ID & Secret Key.';
+        let errorMsg = data.error || 'Failed to initialize Cashfree checkout session.';
+        if (data.isSandboxLimit || (typeof errorMsg === 'string' && errorMsg.toLowerCase().includes('max order amount'))) {
+          errorMsg = `order amount cannot be greater than the max order amount set with Cashfree (Sandbox Limit: ₹${amountToPay.toLocaleString('en-IN')})`;
+        }
         setCfApiError(errorMsg);
-        setIsCfSetupModalOpen(true);
         setIsCfLoading(false);
         return;
       }
@@ -366,13 +365,13 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
       if (!sdkLoaded || !(window as any).Cashfree) {
         const errorMsg = 'Unable to load Cashfree checkout SDK. Please check your internet connection.';
         setCfApiError(errorMsg);
-        setIsCfSetupModalOpen(true);
         setIsCfLoading(false);
         return;
       }
 
       // 3. Launch official Cashfree Checkout Modal / Redirect
-      const cashfree = new (window as any).Cashfree({ mode: env === 'production' ? 'production' : 'sandbox' });
+      const checkoutEnv = data.env || env;
+      const cashfree = new (window as any).Cashfree({ mode: checkoutEnv === 'production' ? 'production' : 'sandbox' });
       
       cashfree.checkout({
         paymentSessionId: data.paymentSessionId,
@@ -380,7 +379,7 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
       }).then(async (result: any) => {
         setIsCfLoading(false);
         if (result.error) {
-          const errorMsg = result.error.message || 'Broken Link! http://localhost:3000/ is not enabled or approved. Please whitelist domain in Cashfree Dashboard or connect to Admin on WhatsApp.';
+          const errorMsg = result.error.message || 'Payment was cancelled or closed.';
           setCfApiError(errorMsg);
           addToast('Payment Notice', errorMsg, 'info');
           return;
@@ -394,9 +393,9 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 orderId: data.orderId,
-                appId,
-                secretKey,
-                env,
+                appId: appId || undefined,
+                secretKey: secretKey || undefined,
+                env: checkoutEnv,
               }),
             });
             const verifyData = await verifyRes.json();
@@ -414,52 +413,13 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
       console.error('Cashfree API Error:', err);
       const errMsg = err.message || 'Error communicating with Cashfree API.';
       setCfApiError(errMsg);
-      setIsCfSetupModalOpen(true);
       setIsCfLoading(false);
     }
   };
 
   // Main Handler when clicking "Proceed to Cashfree Checkout"
   const handleOpenCashfreeCheckout = () => {
-    const appId = settings.paymentSettings?.cashfreeAppId?.trim();
-    const secretKey = settings.paymentSettings?.cashfreeSecretKey?.trim();
-    const env = settings.paymentSettings?.cashfreeEnv || 'sandbox';
-
-    if (!appId || !secretKey) {
-      // Prompt user to enter Cashfree API credentials so real Cashfree API can be called!
-      setIsCfSetupModalOpen(true);
-      return;
-    }
-
-    // Call Real Cashfree API
-    executeCashfreeApiCheckout(appId, secretKey, env);
-  };
-
-  // Save Credentials & Launch Real Cashfree Checkout
-  const handleSaveAndLaunchCashfree = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tempCfAppId.trim() || !tempCfSecretKey.trim()) {
-      setCfApiError('Please enter both Cashfree App ID and Secret Key.');
-      return;
-    }
-    setCfApiError('');
-
-    // Save to App settings
-    const updatedSettings = {
-      ...settings,
-      paymentSettings: {
-        ...settings.paymentSettings,
-        cashfreeAppId: tempCfAppId.trim(),
-        cashfreeSecretKey: tempCfSecretKey.trim(),
-        cashfreeEnv: tempCfEnv,
-      },
-    };
-    updateSettings(updatedSettings);
-    setIsCfSetupModalOpen(false);
-    addToast('Credentials Saved', 'Connecting to Cashfree Payment Gateway...', 'info');
-
-    // Launch Cashfree API with new credentials
-    executeCashfreeApiCheckout(tempCfAppId.trim(), tempCfSecretKey.trim(), tempCfEnv);
+    executeCashfreeApiCheckout();
   };
 
   // Standalone UPI UTR Manual Confirmation
@@ -1109,20 +1069,38 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
                 {selectedMethod === 'cashfree' && (
                   <div className="space-y-4 pt-1 animate-in fade-in duration-150">
                     
-                    {/* Error Alert with Direct WhatsApp Admin Connect */}
+                    {/* Error Alert with Direct WhatsApp Admin Connect and Test Pay ₹1 button */}
                     {cfApiError && (
                       <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-xs text-rose-700 dark:text-rose-300 space-y-3 animate-in fade-in">
                         <div className="flex items-start gap-2.5">
                           <AlertCircle className="w-5 h-5 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
                           <div className="space-y-1">
                             <p className="font-extrabold text-xs text-rose-900 dark:text-rose-200">
-                              Payment Gateway Alert / Whitelisting Required
+                              Payment Gateway Alert
                             </p>
                             <p className="text-[11px] text-rose-700 dark:text-rose-300 leading-relaxed font-mono bg-rose-100/60 dark:bg-rose-900/30 p-2.5 rounded-xl border border-rose-200/60 dark:border-rose-800/60">
                               {cfApiError}
                             </p>
                           </div>
                         </div>
+
+                        {/* If Sandbox Limit Error, provide instant Test Pay ₹1 option */}
+                        {(cfApiError.toLowerCase().includes('max order amount') || cfApiError.toLowerCase().includes('sandbox limit')) && (
+                          <div className="p-3 bg-purple-50 dark:bg-purple-950/50 rounded-xl border border-purple-200 dark:border-purple-800 space-y-2">
+                            <p className="text-[11px] text-purple-800 dark:text-purple-300 font-medium">
+                              💡 <strong>Testing in Sandbox?</strong> Cashfree Sandbox me max amount limit set hai. Checkout popup test karne ke liye ₹1 test payment karein:
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => executeCashfreeApiCheckout(1)}
+                              disabled={isCfLoading}
+                              className="w-full py-2.5 px-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-purple-600/20 active:scale-95 transition-all cursor-pointer"
+                            >
+                              <CreditCard className="w-3.5 h-3.5" />
+                              <span>⚡ Test Pay ₹1 (Sandbox Mode)</span>
+                            </button>
+                          </div>
+                        )}
 
                         {/* WhatsApp Button with Auto-Filled Error Details */}
                         <button
@@ -1132,25 +1110,6 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
                         >
                           <MessageCircle className="w-4 h-4 fill-white" />
                           <span>Connect to Admin on WhatsApp (Send Error Details)</span>
-                        </button>
-
-                        {/* Direct Hosted Checkout Option if Modal Whitelist blocks localhost */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const appId = settings.paymentSettings?.cashfreeAppId?.trim();
-                            const secretKey = settings.paymentSettings?.cashfreeSecretKey?.trim();
-                            const env = settings.paymentSettings?.cashfreeEnv || 'sandbox';
-                            if (appId && secretKey) {
-                              executeCashfreeApiCheckout(appId, secretKey, env, '_self');
-                            } else {
-                              setIsCfSetupModalOpen(true);
-                            }
-                          }}
-                          className="w-full py-2.5 px-3 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 border border-purple-200 dark:border-purple-800 font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          <span>Try Direct Hosted Checkout (Bypasses Domain Whitelist)</span>
                         </button>
                       </div>
                     )}
@@ -1188,7 +1147,7 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
                         onClick={() =>
                           handleConnectAdminWhatsApp(
                             cfApiError ||
-                              'Broken Link! http://localhost:3000/ is not enabled or approved in Cashfree. Please whitelist domain in Cashfree Merchant Dashboard or share alternate UPI QR.'
+                              'Payment Gateway inquiry: Please share alternate payment method or direct UPI QR.'
                           )
                         }
                         className="w-full py-2.5 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
@@ -1209,139 +1168,6 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
         </div>
 
       </div>
-
-      {/* MODAL 1: CASHFREE API CREDENTIALS SETUP (SHOWN IF NO CASHFREE KEYS IN SETTINGS) */}
-      {isCfSetupModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4 animate-in fade-in print:hidden">
-          <div className="bg-white dark:bg-slate-900 rounded-[28px] max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-7 space-y-5">
-            
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-purple-600 text-white font-black text-xs flex items-center justify-center">
-                  CF
-                </div>
-                <div>
-                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                    Connect Cashfree API
-                  </h3>
-                  <p className="text-[10px] text-slate-500">
-                    Real Cashfree Gateway Checkout
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsCfSetupModalOpen(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-              Real Cashfree Payment Checkout open karne ke liye apne <strong>Cashfree Merchant Dashboard</strong> se <strong>App ID</strong> aur <strong>Secret Key</strong> yahan enter karein:
-            </p>
-
-            {cfApiError && (
-              <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs space-y-2.5">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
-                  <span className="font-semibold leading-relaxed">{cfApiError}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleConnectAdminWhatsApp(cfApiError)}
-                  className="w-full py-2 px-3 rounded-lg bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                >
-                  <MessageCircle className="w-3.5 h-3.5 fill-white" />
-                  <span>Send Error to Admin on WhatsApp</span>
-                </button>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveAndLaunchCashfree} className="space-y-3 text-xs">
-              <div>
-                <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
-                  Cashfree App ID (Client ID) *
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. TEST1038491... or 482934..."
-                  value={tempCfAppId}
-                  onChange={(e) => setTempCfAppId(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-xs outline-none focus:ring-2 focus:ring-purple-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
-                  Cashfree Secret Key *
-                </label>
-                <input
-                  type="password"
-                  placeholder="cfsk_ma_test_..."
-                  value={tempCfSecretKey}
-                  onChange={(e) => setTempCfSecretKey(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-xs outline-none focus:ring-2 focus:ring-purple-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
-                  Environment Mode
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setTempCfEnv('sandbox')}
-                    className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      tempCfEnv === 'sandbox'
-                        ? 'bg-purple-50 border-purple-600 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300'
-                        : 'border-slate-200 dark:border-slate-700 text-slate-600'
-                    }`}
-                  >
-                    Sandbox (Test Mode)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTempCfEnv('production')}
-                    className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      tempCfEnv === 'production'
-                        ? 'bg-emerald-50 border-emerald-600 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                        : 'border-slate-200 dark:border-slate-700 text-slate-600'
-                    }`}
-                  >
-                    Production (Live Mode)
-                  </button>
-                </div>
-              </div>
-
-              <div className="pt-2 space-y-2">
-                <button
-                  type="submit"
-                  disabled={isCfLoading}
-                  className="w-full py-3.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-purple-600/20 active:scale-95 transition-all"
-                >
-                  <Key className="w-4 h-4" />
-                  <span>Connect Cashfree &amp; Open Checkout</span>
-                </button>
-
-                <a
-                  href="https://merchant.cashfree.com/"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block text-center text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline py-1"
-                >
-                  Open Cashfree Merchant Dashboard ↗
-                </a>
-              </div>
-            </form>
-
-          </div>
-        </div>
-      )}
 
     </div>
   );
