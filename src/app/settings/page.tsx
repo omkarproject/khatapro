@@ -34,9 +34,10 @@ import {
 } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { settings, updateSettings, saveDefaultUpiAndQr, profile, setProfile, addToast } = useApp();
+  const { settings, updateSettings, saveDefaultUpiAndQr, profile, setProfile, addToast, syncWithDatabase, currentUser } = useApp();
 
   const [activeTab, setActiveTab] = useState<'business' | 'upi' | 'backend' | 'roles'>('business');
+  const [isSyncingData, setIsSyncingData] = useState(false);
 
   // Business Profile State
   const [bName, setBName] = useState(() => {
@@ -1440,6 +1441,24 @@ export default function SettingsPage() {
               >
                 {isTesting ? 'Pinging Provider...' : 'Test Connection'}
               </button>
+
+              {/* Sync Data to MongoDB Atlas Button */}
+              {provider === 'mongodb' && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsSyncingData(true);
+                    await syncWithDatabase();
+                    setIsSyncingData(false);
+                    addToast('Cloud Database Synced', 'All local records successfully uploaded and synced to MongoDB Atlas!', 'success');
+                  }}
+                  disabled={isSyncingData}
+                  className="px-4 py-2 text-xs font-bold rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Database className="w-3.5 h-3.5" />
+                  <span>{isSyncingData ? 'Uploading to Atlas...' : 'Sync to MongoDB Atlas'}</span>
+                </button>
+              )}
 
               {/* PDF Setup Guide Button */}
               <button

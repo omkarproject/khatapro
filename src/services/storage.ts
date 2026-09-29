@@ -39,8 +39,31 @@ const STORAGE_KEYS = {
   INITIALIZED: 'skp_db_v1_initialized',
 };
 
+
+// Current Active User & Scoping Helper for strict multi-user isolation
+export function getActiveUserId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem('skp_auth_user');
+    if (!raw) return null;
+    const u = JSON.parse(raw);
+    return u?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+export function getScopedKey(baseKey: string): string {
+  const userId = getActiveUserId();
+  if (userId) {
+    return `${baseKey}_${userId}`;
+  }
+  return baseKey;
+}
+
 // Safe localStorage helper for SSR
-function getLocalItem<T>(key: string, defaultValue: T): T {
+function getLocalItem<T>(rawKey: string, defaultValue: T): T {
+  const key = getScopedKey(rawKey);
   if (typeof window === 'undefined') return defaultValue;
   try {
     const item = localStorage.getItem(key);
@@ -51,7 +74,8 @@ function getLocalItem<T>(key: string, defaultValue: T): T {
   }
 }
 
-function setLocalItem<T>(key: string, value: T): void {
+function setLocalItem<T>(rawKey: string, value: T): void {
+  const key = getScopedKey(rawKey);
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(key, JSON.stringify(value));
@@ -61,6 +85,51 @@ function setLocalItem<T>(key: string, value: T): void {
 }
 
 export const StorageService = {
+  // Auth User Session (Per-User Isolation)
+  getCurrentUser: (): UserProfile | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem('skp_auth_user');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  },
+  setCurrentUser: (user: UserProfile | null): void => {
+    if (typeof window === 'undefined') return;
+    if (user) {
+      localStorage.setItem('skp_auth_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('skp_auth_user');
+    }
+  },
+
+  // Bulk set all user data from cloud MongoDB Atlas
+  setAllUserData: (data: {
+    customers?: Customer[];
+    transactions?: Transaction[];
+    products?: Product[];
+    invoices?: Invoice[];
+    expenses?: Expense[];
+    savingsGoals?: SavingsGoal[];
+    reminders?: PaymentReminder[];
+    documents?: DocumentItem[];
+    settings?: SystemSettings;
+    user?: UserProfile;
+  }) => {
+    if (typeof window === 'undefined') return;
+    if (data.customers) setLocalItem(STORAGE_KEYS.CUSTOMERS, data.customers);
+    if (data.transactions) setLocalItem(STORAGE_KEYS.TRANSACTIONS, data.transactions);
+    if (data.products) setLocalItem(STORAGE_KEYS.PRODUCTS, data.products);
+    if (data.invoices) setLocalItem(STORAGE_KEYS.INVOICES, data.invoices);
+    if (data.expenses) setLocalItem(STORAGE_KEYS.EXPENSES, data.expenses);
+    if (data.savingsGoals) setLocalItem(STORAGE_KEYS.SAVINGS, data.savingsGoals);
+    if (data.reminders) setLocalItem(STORAGE_KEYS.REMINDERS, data.reminders);
+    if (data.documents) setLocalItem(STORAGE_KEYS.DOCUMENTS, data.documents);
+    if (data.settings) setLocalItem(STORAGE_KEYS.SETTINGS, data.settings);
+    if (data.user) setLocalItem(STORAGE_KEYS.PROFILE, data.user);
+  },
+
   // Initialize default data if not already present
   initializeDefaults: () => {
     if (typeof window === 'undefined') return;

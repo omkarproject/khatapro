@@ -10,6 +10,7 @@ import ToastContainer from './ToastContainer';
 import Footer from './Footer';
 import MaintenanceNoticeModal from './MaintenanceNoticeModal';
 import PaymentDetailsModal from './PaymentDetailsModal';
+import AuthModal from './AuthModal';
 
 export default function LayoutShell({ children }: { children: React.ReactNode }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -50,6 +51,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
       <QuickUPICollectModal />
       <PaymentDetailsModal />
       <MaintenanceNoticeModal />
+      <AuthModal />
       <ToastContainer />
     </div>
   );

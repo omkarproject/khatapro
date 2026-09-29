@@ -86,6 +86,17 @@ interface AppContextType {
   addToast: (title: string, message: string, type?: 'success' | 'info' | 'warning' | 'error', transaction?: Transaction) => void;
   removeToast: (id: string) => void;
 
+  // Cloud Auth & Per-User Isolation
+  currentUser: UserProfile | null;
+  isAuthModalOpen: boolean;
+  openAuthModal: () => void;
+  closeAuthModal: () => void;
+  login: (email: string, password: string) => Promise<void>;
+  register: (data: { name: string; email: string; password: string; businessName?: string; phone?: string; role?: UserRole }) => Promise<void>;
+  logout: () => void;
+  cloudSyncStatus: 'synced' | 'syncing' | 'offline' | 'error';
+  syncWithDatabase: () => Promise<void>;
+
   // Payment Details Modal & Sound Notification
   activePaymentDetail: Transaction | null;
   openPaymentDetail: (txn: Transaction) => void;
@@ -122,6 +133,156 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     amount?: number;
     note?: string;
   }>({});
+
+  // Current Auth User & Cloud Sync
+  const [currentUser, setCurrentUserState] = useState<UserProfile | null>(() => {
+    return StorageService.getCurrentUser();
+  });
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
+
+  const openAuthModal = () => setIsAuthModalOpen(true);
+  const closeAuthModal = () => setIsAuthModalOpen(false);
+
+  // Sync all in-memory data to MongoDB Atlas
+  const syncWithDatabase = async (targetUser?: UserProfile | null) => {
+    const activeU = targetUser !== undefined ? targetUser : currentUser;
+    const userId = activeU?.id || 'usr_001';
+
+    try {
+      setCloudSyncStatus('syncing');
+      const payload = {
+        userId,
+        data: {
+          customers,
+          transactions,
+          products,
+          invoices,
+          expenses,
+          savingsGoals,
+          reminders,
+          documents,
+          settings,
+          profile,
+        },
+      };
+
+      const res = await fetch('/api/db/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        setCloudSyncStatus('synced');
+      } else {
+        setCloudSyncStatus('error');
+      }
+    } catch (e) {
+      console.warn('MongoDB background sync deferred:', e);
+      setCloudSyncStatus('offline');
+    }
+  };
+
+  // Load user data from MongoDB Atlas
+  const loadUserDataFromCloud = async (userId: string) => {
+    try {
+      setCloudSyncStatus('syncing');
+      const res = await fetch(`/api/db/sync?userId=${userId}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          const d = json.data;
+          // If user has existing records in cloud MongoDB Atlas, load them
+          if (d.customers && d.customers.length > 0) setCustomers(d.customers);
+          if (d.transactions && d.transactions.length > 0) setTransactions(d.transactions);
+          if (d.products && d.products.length > 0) setProducts(d.products);
+          if (d.invoices && d.invoices.length > 0) setInvoices(d.invoices);
+          if (d.expenses && d.expenses.length > 0) setExpenses(d.expenses);
+          if (d.savingsGoals && d.savingsGoals.length > 0) setSavingsGoals(d.savingsGoals);
+          if (d.reminders && d.reminders.length > 0) setReminders(d.reminders);
+          if (d.documents && d.documents.length > 0) setDocuments(d.documents);
+          if (d.settings) setSettingsState(d.settings);
+          if (d.user) setProfileState(d.user);
+
+          // Update local cache for 0ms offline availability
+          StorageService.setAllUserData(d);
+          setCloudSyncStatus('synced');
+          return;
+        }
+      }
+      setCloudSyncStatus('synced');
+    } catch (err) {
+      console.warn('Could not load user data from cloud:', err);
+      setCloudSyncStatus('offline');
+    }
+  };
+
+  // Login handler
+  const login = async (loginEmail: string, loginPass: string) => {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: loginEmail, password: loginPass }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Login failed. Please check your credentials.');
+    }
+
+    const user: UserProfile = data.user;
+    setCurrentUserState(user);
+    StorageService.setCurrentUser(user);
+
+    // Refresh profile in memory
+    setProfileState(user);
+    if (user.role) setActiveRole(user.role);
+
+    // Load isolated data from MongoDB Atlas for this user
+    await loadUserDataFromCloud(user.id);
+    addToast('Signed In Successfully', `Welcome back, ${user.name}! Your MongoDB Atlas ledger is loaded.`, 'success');
+  };
+
+  // Register handler
+  const register = async (userData: {
+    name: string;
+    email: string;
+    password: string;
+    businessName?: string;
+    phone?: string;
+    role?: UserRole;
+  }) => {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userData),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Registration failed.');
+    }
+
+    const user: UserProfile = data.user;
+    setCurrentUserState(user);
+    StorageService.setCurrentUser(user);
+
+    setProfileState(user);
+    if (user.role) setActiveRole(user.role);
+
+    // Load user's fresh database records from MongoDB Atlas
+    await loadUserDataFromCloud(user.id);
+    addToast('Account Created & Database Initialized', `Welcome, ${user.name}! Your isolated cloud ledger is active.`, 'success');
+  };
+
+  // Logout handler
+  const logout = () => {
+    setCurrentUserState(null);
+    StorageService.setCurrentUser(null);
+    refreshData();
+    addToast('Signed Out', 'You have logged out of your account.', 'info');
+  };
 
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -269,6 +430,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSettingsState(newSettings);
     StorageService.updateSettings(newSettings);
     addToast('Settings Saved', 'System configurations updated successfully.', 'success');
+    syncWithDatabase();
   };
 
   // Dedicated Save Default UPI & QR
@@ -294,18 +456,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const updated = StorageService.saveCustomer(cust);
     setCustomers(updated);
     addToast('Customer Saved', `${cust.name} record has been saved.`, 'success');
+    syncWithDatabase();
   };
 
   const deleteCustomer = (id: string) => {
     const updated = StorageService.deleteCustomer(id);
     setCustomers(updated);
     addToast('Customer Deleted', 'Customer was removed from records.', 'info');
+    syncWithDatabase();
   };
 
   const addTransaction = (txn: Transaction) => {
     const updatedTxns = StorageService.addTransaction(txn);
     setTransactions(updatedTxns);
     setCustomers(StorageService.getCustomers()); // balance changed
+    syncWithDatabase();
 
     if (txn.type === 'collection' || txn.type === 'credit' || txn.type === 'income') {
       playPaymentNotificationSound();
@@ -344,12 +509,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const updated = StorageService.saveInvoice(inv);
     setInvoices(updated);
     addToast('Invoice Saved', `Invoice #${inv.invoiceNumber} has been updated.`, 'success');
+    syncWithDatabase();
   };
 
   const saveProduct = (prod: Product) => {
     const updated = StorageService.saveProduct(prod);
     setProducts(updated);
     addToast('Inventory Updated', `${prod.name} saved to stock.`, 'success');
+    syncWithDatabase();
   };
 
   const adjustStock = (productId: string, delta: number) => {
@@ -362,6 +529,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const updated = StorageService.addExpense(exp);
     setExpenses(updated);
     addToast('Expense Logged', `₹${exp.amount.toLocaleString('en-IN')} logged under ${exp.category}.`, 'success');
+    syncWithDatabase();
   };
 
   const deleteExpense = (id: string) => {
@@ -449,6 +617,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         openPaymentDetail,
         closePaymentDetail,
         playPaymentNotificationSound,
+        currentUser,
+        isAuthModalOpen,
+        openAuthModal,
+        closeAuthModal,
+        login,
+        register,
+        logout,
+        cloudSyncStatus,
+        syncWithDatabase,
         refreshData,
       }}
     >

@@ -211,7 +211,7 @@ export class FirebaseAdapter implements IBackendAdapter {
   }
 }
 
-// MongoDB Atlas / Cloud Document DB Adapter
+// MongoDB Atlas / Cloud Document DB Adapter (Live API connected)
 export class MongoAdapter implements IBackendAdapter {
   providerName: BackendProvider = 'mongodb';
   private uri: string;
@@ -226,7 +226,7 @@ export class MongoAdapter implements IBackendAdapter {
     if (!this.uri) {
       return {
         success: false,
-        message: 'MongoDB Connection URI is missing. Please enter your MongoDB Atlas or connection string in Settings.',
+        message: 'MongoDB Connection URI is missing. Please enter your MongoDB Atlas connection string in Settings.',
       };
     }
     const cleanUri = this.uri.trim();
@@ -236,19 +236,26 @@ export class MongoAdapter implements IBackendAdapter {
         message: 'Invalid MongoDB connection string. Must start with "mongodb://" or "mongodb+srv://".',
       };
     }
+
     try {
-      // Parse host / cluster name for informative feedback
-      let host = 'Atlas Cluster';
-      const atSplit = cleanUri.split('@');
-      if (atSplit.length > 1) {
-        host = atSplit[1].split('/')[0].split('?')[0];
+      const res = await fetch('/api/db/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uri: cleanUri, dbName: this.dbName }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return {
+          success: true,
+          message: `Connected to MongoDB Atlas live! (${data.latency}ms latency) Database: '${data.database}'. Ready to store all records.`,
+        };
       }
       return {
-        success: true,
-        message: `Successfully validated connection parameters to MongoDB (${host}) on database '${this.dbName}'.`,
+        success: false,
+        message: data.message || 'Could not connect to MongoDB Atlas cluster.',
       };
     } catch (e: any) {
-      return { success: false, message: `Could not parse MongoDB connection string: ${e.message}` };
+      return { success: false, message: `Network error reaching MongoDB API: ${e.message}` };
     }
   }
 
