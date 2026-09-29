@@ -79,6 +79,10 @@ export async function POST(req: NextRequest) {
       if (!Array.isArray(items)) return;
       const col = db.collection(colName);
       
+      const activeIds = items.map(i => i.id).filter(Boolean);
+      // Delete any items from MongoDB that are no longer in the active list (e.g. deleted by user)
+      await col.deleteMany({ userId, id: { $nin: activeIds } });
+
       for (const item of items) {
         if (!item.id) continue;
         const docToSave = { ...item, userId };

@@ -6,14 +6,19 @@ export interface IBackendAdapter {
   testConnection(): Promise<{ success: boolean; message: string }>;
   fetchCustomers(): Promise<Customer[]>;
   saveCustomer(customer: Customer): Promise<Customer[]>;
+  deleteCustomer(id: string): Promise<Customer[]>;
   fetchTransactions(): Promise<Transaction[]>;
   addTransaction(txn: Transaction): Promise<Transaction[]>;
+  deleteTransaction(id: string): Promise<Transaction[]>;
   fetchInvoices(): Promise<Invoice[]>;
   saveInvoice(invoice: Invoice): Promise<Invoice[]>;
+  deleteInvoice(id: string): Promise<Invoice[]>;
   fetchProducts(): Promise<Product[]>;
   saveProduct(product: Product): Promise<Product[]>;
+  deleteProduct(id: string): Promise<Product[]>;
   fetchExpenses(): Promise<Expense[]>;
   addExpense(expense: Expense): Promise<Expense[]>;
+  deleteExpense(id: string): Promise<Expense[]>;
 }
 
 // Local Storage & Offline-First Implementation (Default)
@@ -32,12 +37,20 @@ export class LocalAdapter implements IBackendAdapter {
     return StorageService.saveCustomer(customer);
   }
 
+  async deleteCustomer(id: string): Promise<Customer[]> {
+    return StorageService.deleteCustomer(id);
+  }
+
   async fetchTransactions(): Promise<Transaction[]> {
     return StorageService.getTransactions();
   }
 
   async addTransaction(txn: Transaction): Promise<Transaction[]> {
     return StorageService.addTransaction(txn);
+  }
+
+  async deleteTransaction(id: string): Promise<Transaction[]> {
+    return StorageService.deleteTransaction(id);
   }
 
   async fetchInvoices(): Promise<Invoice[]> {
@@ -48,6 +61,10 @@ export class LocalAdapter implements IBackendAdapter {
     return StorageService.saveInvoice(invoice);
   }
 
+  async deleteInvoice(id: string): Promise<Invoice[]> {
+    return StorageService.deleteInvoice(id);
+  }
+
   async fetchProducts(): Promise<Product[]> {
     return StorageService.getProducts();
   }
@@ -56,12 +73,20 @@ export class LocalAdapter implements IBackendAdapter {
     return StorageService.saveProduct(product);
   }
 
+  async deleteProduct(id: string): Promise<Product[]> {
+    return StorageService.deleteProduct(id);
+  }
+
   async fetchExpenses(): Promise<Expense[]> {
     return StorageService.getExpenses();
   }
 
   async addExpense(expense: Expense): Promise<Expense[]> {
     return StorageService.addExpense(expense);
+  }
+
+  async deleteExpense(id: string): Promise<Expense[]> {
+    return StorageService.deleteExpense(id);
   }
 }
 
@@ -105,12 +130,20 @@ export class SupabaseAdapter implements IBackendAdapter {
     return StorageService.saveCustomer(customer);
   }
 
+  async deleteCustomer(id: string): Promise<Customer[]> {
+    return StorageService.deleteCustomer(id);
+  }
+
   async fetchTransactions(): Promise<Transaction[]> {
     return StorageService.getTransactions();
   }
 
   async addTransaction(txn: Transaction): Promise<Transaction[]> {
     return StorageService.addTransaction(txn);
+  }
+
+  async deleteTransaction(id: string): Promise<Transaction[]> {
+    return StorageService.deleteTransaction(id);
   }
 
   async fetchInvoices(): Promise<Invoice[]> {
@@ -121,6 +154,10 @@ export class SupabaseAdapter implements IBackendAdapter {
     return StorageService.saveInvoice(invoice);
   }
 
+  async deleteInvoice(id: string): Promise<Invoice[]> {
+    return StorageService.deleteInvoice(id);
+  }
+
   async fetchProducts(): Promise<Product[]> {
     return StorageService.getProducts();
   }
@@ -129,12 +166,20 @@ export class SupabaseAdapter implements IBackendAdapter {
     return StorageService.saveProduct(product);
   }
 
+  async deleteProduct(id: string): Promise<Product[]> {
+    return StorageService.deleteProduct(id);
+  }
+
   async fetchExpenses(): Promise<Expense[]> {
     return StorageService.getExpenses();
   }
 
   async addExpense(expense: Expense): Promise<Expense[]> {
     return StorageService.addExpense(expense);
+  }
+
+  async deleteExpense(id: string): Promise<Expense[]> {
+    return StorageService.deleteExpense(id);
   }
 }
 
@@ -178,12 +223,20 @@ export class FirebaseAdapter implements IBackendAdapter {
     return StorageService.saveCustomer(customer);
   }
 
+  async deleteCustomer(id: string): Promise<Customer[]> {
+    return StorageService.deleteCustomer(id);
+  }
+
   async fetchTransactions(): Promise<Transaction[]> {
     return StorageService.getTransactions();
   }
 
   async addTransaction(txn: Transaction): Promise<Transaction[]> {
     return StorageService.addTransaction(txn);
+  }
+
+  async deleteTransaction(id: string): Promise<Transaction[]> {
+    return StorageService.deleteTransaction(id);
   }
 
   async fetchInvoices(): Promise<Invoice[]> {
@@ -194,6 +247,10 @@ export class FirebaseAdapter implements IBackendAdapter {
     return StorageService.saveInvoice(invoice);
   }
 
+  async deleteInvoice(id: string): Promise<Invoice[]> {
+    return StorageService.deleteInvoice(id);
+  }
+
   async fetchProducts(): Promise<Product[]> {
     return StorageService.getProducts();
   }
@@ -202,12 +259,20 @@ export class FirebaseAdapter implements IBackendAdapter {
     return StorageService.saveProduct(product);
   }
 
+  async deleteProduct(id: string): Promise<Product[]> {
+    return StorageService.deleteProduct(id);
+  }
+
   async fetchExpenses(): Promise<Expense[]> {
     return StorageService.getExpenses();
   }
 
   async addExpense(expense: Expense): Promise<Expense[]> {
     return StorageService.addExpense(expense);
+  }
+
+  async deleteExpense(id: string): Promise<Expense[]> {
+    return StorageService.deleteExpense(id);
   }
 }
 
@@ -267,12 +332,20 @@ export class MongoAdapter implements IBackendAdapter {
     return StorageService.saveCustomer(customer);
   }
 
+  async deleteCustomer(id: string): Promise<Customer[]> {
+    return StorageService.deleteCustomer(id);
+  }
+
   async fetchTransactions(): Promise<Transaction[]> {
     return StorageService.getTransactions();
   }
 
   async addTransaction(txn: Transaction): Promise<Transaction[]> {
     return StorageService.addTransaction(txn);
+  }
+
+  async deleteTransaction(id: string): Promise<Transaction[]> {
+    return StorageService.deleteTransaction(id);
   }
 
   async fetchInvoices(): Promise<Invoice[]> {
@@ -283,6 +356,10 @@ export class MongoAdapter implements IBackendAdapter {
     return StorageService.saveInvoice(invoice);
   }
 
+  async deleteInvoice(id: string): Promise<Invoice[]> {
+    return StorageService.deleteInvoice(id);
+  }
+
   async fetchProducts(): Promise<Product[]> {
     return StorageService.getProducts();
   }
@@ -291,12 +368,20 @@ export class MongoAdapter implements IBackendAdapter {
     return StorageService.saveProduct(product);
   }
 
+  async deleteProduct(id: string): Promise<Product[]> {
+    return StorageService.deleteProduct(id);
+  }
+
   async fetchExpenses(): Promise<Expense[]> {
     return StorageService.getExpenses();
   }
 
   async addExpense(expense: Expense): Promise<Expense[]> {
     return StorageService.addExpense(expense);
+  }
+
+  async deleteExpense(id: string): Promise<Expense[]> {
+    return StorageService.deleteExpense(id);
   }
 }
 

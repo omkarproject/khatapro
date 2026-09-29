@@ -51,13 +51,18 @@ interface AppContextType {
   deleteTransaction: (id: string) => void;
   updateTransactionAttachments: (transactionId: string, attachments: string[]) => void;
   saveInvoice: (inv: Invoice) => void;
+  deleteInvoice: (id: string) => void;
   saveProduct: (prod: Product) => void;
+  deleteProduct: (id: string) => void;
   adjustStock: (productId: string, delta: number) => void;
   addExpense: (exp: Expense) => void;
   deleteExpense: (id: string) => void;
   saveSavingsGoal: (goal: SavingsGoal) => void;
+  deleteSavingsGoal: (id: string) => void;
   saveReminder: (rem: PaymentReminder) => void;
+  deleteReminder: (id: string) => void;
   addDocument: (doc: DocumentItem) => void;
+  deleteDocument: (id: string) => void;
   updateSettings: (settings: SystemSettings) => void;
   
   // UPI and QR Default Persistence (Key User Requirement)
@@ -144,26 +149,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const openAuthModal = () => setIsAuthModalOpen(true);
   const closeAuthModal = () => setIsAuthModalOpen(false);
 
-  // Sync all in-memory data to MongoDB Atlas
+  // Sync all in-memory and local data to MongoDB Atlas or active database
   const syncWithDatabase = async (targetUser?: UserProfile | null) => {
+    const curSettings = StorageService.getSettings();
+    // In Local/Offline mode, keep data purely local (no cloud sync overhead)
+    if (curSettings.backendProvider === 'local') {
+      setCloudSyncStatus('synced');
+      return;
+    }
+
     const activeU = targetUser !== undefined ? targetUser : currentUser;
     const userId = activeU?.id || 'usr_001';
 
     try {
       setCloudSyncStatus('syncing');
+      // Read latest data synchronously from StorageService to avoid React closure lag
       const payload = {
         userId,
         data: {
-          customers,
-          transactions,
-          products,
-          invoices,
-          expenses,
-          savingsGoals,
-          reminders,
-          documents,
-          settings,
-          profile,
+          customers: StorageService.getCustomers(),
+          transactions: StorageService.getTransactions(),
+          products: StorageService.getProducts(),
+          invoices: StorageService.getInvoices(),
+          expenses: StorageService.getExpenses(),
+          savingsGoals: StorageService.getSavingsGoals(),
+          reminders: StorageService.getReminders(),
+          documents: StorageService.getDocuments(),
+          settings: StorageService.getSettings(),
+          profile: StorageService.getProfile(),
         },
       };
 
@@ -179,33 +192,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setCloudSyncStatus('error');
       }
     } catch (e) {
-      console.warn('MongoDB background sync deferred:', e);
+      console.warn('Database background sync deferred:', e);
       setCloudSyncStatus('offline');
     }
   };
 
-  // Load user data from MongoDB Atlas
+  // Load user data from MongoDB Atlas / Cloud DB
   const loadUserDataFromCloud = async (userId: string) => {
     try {
+      const curSettings = StorageService.getSettings();
+      if (curSettings.backendProvider === 'local') {
+        setCloudSyncStatus('synced');
+        return;
+      }
+
       setCloudSyncStatus('syncing');
       const res = await fetch(`/api/db/sync?userId=${userId}`);
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
           const d = json.data;
-          // If user has existing records in cloud MongoDB Atlas, load them
-          if (d.customers && d.customers.length > 0) setCustomers(d.customers);
-          if (d.transactions && d.transactions.length > 0) setTransactions(d.transactions);
-          if (d.products && d.products.length > 0) setProducts(d.products);
-          if (d.invoices && d.invoices.length > 0) setInvoices(d.invoices);
-          if (d.expenses && d.expenses.length > 0) setExpenses(d.expenses);
-          if (d.savingsGoals && d.savingsGoals.length > 0) setSavingsGoals(d.savingsGoals);
-          if (d.reminders && d.reminders.length > 0) setReminders(d.reminders);
-          if (d.documents && d.documents.length > 0) setDocuments(d.documents);
+          // Accurately reflect cloud state (even if empty after deletions)
+          if (Array.isArray(d.customers)) setCustomers(d.customers);
+          if (Array.isArray(d.transactions)) setTransactions(d.transactions);
+          if (Array.isArray(d.products)) setProducts(d.products);
+          if (Array.isArray(d.invoices)) setInvoices(d.invoices);
+          if (Array.isArray(d.expenses)) setExpenses(d.expenses);
+          if (Array.isArray(d.savingsGoals)) setSavingsGoals(d.savingsGoals);
+          if (Array.isArray(d.reminders)) setReminders(d.reminders);
+          if (Array.isArray(d.documents)) setDocuments(d.documents);
           if (d.settings) setSettingsState(d.settings);
           if (d.user) setProfileState(d.user);
 
-          // Update local cache for 0ms offline availability
+          // Update local cache
           StorageService.setAllUserData(d);
           setCloudSyncStatus('synced');
           return;
@@ -375,6 +394,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     refreshData();
     setMounted(true);
 
+    const activeU = StorageService.getCurrentUser();
+    const curSettings = StorageService.getSettings();
+
+    // If cloud database is enabled (mongodb) or active user is logged in, sync with database
+    if (curSettings.backendProvider === 'mongodb' || activeU) {
+      const uId = activeU?.id || 'usr_001';
+      loadUserDataFromCloud(uId);
+    }
+
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'skp_transactions' && e.newValue) {
         try {
@@ -462,6 +490,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const deleteCustomer = (id: string) => {
     const updated = StorageService.deleteCustomer(id);
     setCustomers(updated);
+    setTransactions(StorageService.getTransactions());
     addToast('Customer Deleted', 'Customer was removed from records.', 'info');
     syncWithDatabase();
   };
@@ -490,6 +519,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setTransactions(updatedTxns);
     setCustomers(StorageService.getCustomers()); // balance updated
     addToast('Transaction Updated', `₹${txn.amount.toLocaleString('en-IN')} updated successfully.`, 'success');
+    syncWithDatabase();
   };
 
   const deleteTransaction = (id: string) => {
@@ -497,18 +527,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setTransactions(updatedTxns);
     setCustomers(StorageService.getCustomers()); // balance updated
     addToast('Transaction Deleted', 'Transaction was removed from the ledger.', 'info');
+    syncWithDatabase();
   };
 
   const updateTransactionAttachments = (transactionId: string, attachments: string[]) => {
     const updatedTxns = StorageService.updateTransactionAttachments(transactionId, attachments);
     setTransactions(updatedTxns);
     addToast('Attachment Removed', 'File was removed from the bill record.', 'info');
+    syncWithDatabase();
   };
 
   const saveInvoice = (inv: Invoice) => {
     const updated = StorageService.saveInvoice(inv);
     setInvoices(updated);
     addToast('Invoice Saved', `Invoice #${inv.invoiceNumber} has been updated.`, 'success');
+    syncWithDatabase();
+  };
+
+  const deleteInvoice = (id: string) => {
+    const updated = StorageService.deleteInvoice(id);
+    setInvoices(updated);
+    addToast('Invoice Deleted', 'Invoice removed.', 'info');
     syncWithDatabase();
   };
 
@@ -519,10 +558,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     syncWithDatabase();
   };
 
+  const deleteProduct = (id: string) => {
+    const updated = StorageService.deleteProduct(id);
+    setProducts(updated);
+    addToast('Product Deleted', 'Item removed from inventory.', 'info');
+    syncWithDatabase();
+  };
+
   const adjustStock = (productId: string, delta: number) => {
     const updated = StorageService.adjustStock(productId, delta);
     setProducts(updated);
     addToast('Stock Adjusted', `Stock quantity modified by ${delta > 0 ? '+' : ''}${delta}.`, 'info');
+    syncWithDatabase();
   };
 
   const addExpense = (exp: Expense) => {
@@ -536,24 +583,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const updated = StorageService.deleteExpense(id);
     setExpenses(updated);
     addToast('Expense Removed', 'Expense item deleted.', 'info');
+    syncWithDatabase();
   };
 
   const saveSavingsGoal = (goal: SavingsGoal) => {
     const updated = StorageService.saveSavingsGoal(goal);
     setSavingsGoals(updated);
     addToast('Savings Goal Saved', `${goal.title} updated.`, 'success');
+    syncWithDatabase();
+  };
+
+  const deleteSavingsGoal = (id: string) => {
+    const updated = StorageService.deleteSavingsGoal(id);
+    setSavingsGoals(updated);
+    addToast('Goal Removed', 'Savings goal deleted.', 'info');
+    syncWithDatabase();
   };
 
   const saveReminder = (rem: PaymentReminder) => {
     const updated = StorageService.saveReminder(rem);
     setReminders(updated);
     addToast('Reminder Scheduled', `Reminder for ${rem.customerName} saved.`, 'info');
+    syncWithDatabase();
+  };
+
+  const deleteReminder = (id: string) => {
+    const updated = StorageService.deleteReminder(id);
+    setReminders(updated);
+    addToast('Reminder Removed', 'Reminder deleted.', 'info');
+    syncWithDatabase();
   };
 
   const addDocument = (doc: DocumentItem) => {
     const updated = StorageService.addDocument(doc);
     setDocuments(updated);
     addToast('Document Uploaded', `${doc.title} uploaded successfully.`, 'success');
+    syncWithDatabase();
+  };
+
+  const deleteDocument = (id: string) => {
+    const updated = StorageService.deleteDocument(id);
+    setDocuments(updated);
+    addToast('Document Deleted', 'Document removed.', 'info');
+    syncWithDatabase();
   };
 
   const openCollectModal = (data: {
@@ -597,13 +669,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteTransaction,
         updateTransactionAttachments,
         saveInvoice,
+        deleteInvoice,
         saveProduct,
+        deleteProduct,
         adjustStock,
         addExpense,
         deleteExpense,
         saveSavingsGoal,
+        deleteSavingsGoal,
         saveReminder,
+        deleteReminder,
         addDocument,
+        deleteDocument,
         updateSettings,
         saveDefaultUpiAndQr,
         isCollectModalOpen,

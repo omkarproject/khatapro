@@ -35,6 +35,7 @@ export default function InvoicesPage() {
   const {
     invoices,
     saveInvoice,
+    deleteInvoice,
     customers,
     products,
     settings,
@@ -429,6 +430,17 @@ export default function InvoicesPage() {
                           <QrCode className="w-4 h-4" />
                         </button>
                       )}
+                      <button
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to delete Invoice #${inv.invoiceNumber}?`)) {
+                            deleteInvoice(inv.id);
+                          }
+                        }}
+                        className="p-1.5 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/60 text-slate-400 hover:text-rose-600 transition-colors"
+                        title="Delete Invoice"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </td>
                 </tr>

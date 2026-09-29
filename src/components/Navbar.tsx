@@ -260,7 +260,13 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                       </div>
                       <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-semibold flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        MongoDB
+                        {settings.backendProvider === 'mongodb'
+                          ? 'MongoDB'
+                          : settings.backendProvider === 'supabase'
+                          ? 'Supabase'
+                          : settings.backendProvider === 'firebase'
+                          ? 'Firebase'
+                          : 'Local Storage'}
                       </div>
                     </div>
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 hidden sm:block" />
@@ -292,10 +298,20 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                           <Database className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                           <div>
                             <div className="text-[11px] font-bold text-emerald-900 dark:text-emerald-300">
-                              MongoDB Atlas DB
+                              {settings.backendProvider === 'mongodb'
+                                ? 'MongoDB Atlas DB'
+                                : settings.backendProvider === 'supabase'
+                                ? 'Supabase PostgreSQL'
+                                : settings.backendProvider === 'firebase'
+                                ? 'Firebase Firestore'
+                                : 'Local / Offline DB'}
                             </div>
                             <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">
-                              {cloudSyncStatus === 'syncing' ? 'Syncing records...' : 'Cloud Synced (Live)'}
+                              {settings.backendProvider === 'local'
+                                ? '0ms Instant Storage'
+                                : cloudSyncStatus === 'syncing'
+                                ? 'Syncing records...'
+                                : 'Cloud Synced (Live)'}
                             </div>
                           </div>
                         </div>

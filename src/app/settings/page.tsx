@@ -407,7 +407,7 @@ export default function SettingsPage() {
   };
 
   // Handle Backend Provider Save & Test
-  const handleSaveBackend = (e: React.FormEvent) => {
+  const handleSaveBackend = async (e: React.FormEvent) => {
     e.preventDefault();
     const updated: SystemSettings = {
       ...settings,
@@ -420,6 +420,33 @@ export default function SettingsPage() {
       mongodbDbName: mongodbDbName.trim(),
     };
     updateSettings(updated);
+
+    if (provider === 'mongodb') {
+      await syncWithDatabase();
+      addToast(
+        'MongoDB Atlas Activated!',
+        'Database provider switched to MongoDB Atlas. Full website is now synced live to the database!',
+        'success'
+      );
+    } else if (provider === 'local') {
+      addToast(
+        'Local / Offline Mode Activated!',
+        'All actions are saved locally with 0ms speed and instant persistence.',
+        'info'
+      );
+    } else if (provider === 'supabase') {
+      addToast(
+        'Supabase Activated!',
+        'Switched to Supabase PostgreSQL cloud backend.',
+        'success'
+      );
+    } else if (provider === 'firebase') {
+      addToast(
+        'Firebase Activated!',
+        'Switched to Firebase Firestore cloud database.',
+        'success'
+      );
+    }
   };
 
   const handleTestConnection = async () => {

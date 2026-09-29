@@ -133,7 +133,7 @@ export const StorageService = {
   // Initialize default data if not already present
   initializeDefaults: () => {
     if (typeof window === 'undefined') return;
-    const isInit = localStorage.getItem(STORAGE_KEYS.INITIALIZED);
+    const isInit = localStorage.getItem(getScopedKey(STORAGE_KEYS.INITIALIZED));
     if (!isInit) {
       setLocalItem(STORAGE_KEYS.PROFILE, initialUserProfile);
       setLocalItem(STORAGE_KEYS.CUSTOMERS, initialCustomers);
@@ -145,7 +145,7 @@ export const StorageService = {
       setLocalItem(STORAGE_KEYS.REMINDERS, initialReminders);
       setLocalItem(STORAGE_KEYS.DOCUMENTS, initialDocuments);
       setLocalItem(STORAGE_KEYS.SETTINGS, initialSystemSettings);
-      localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
+      localStorage.setItem(getScopedKey(STORAGE_KEYS.INITIALIZED), 'true');
     } else {
       // Migrate legacy "Rajesh Sharma" profile to "Anant Kumar Yadav"
       const existing = StorageService.getProfile();
@@ -246,16 +246,7 @@ export const StorageService = {
 
   // Customers
   getCustomers: (): Customer[] => {
-    const list = getLocalItem(STORAGE_KEYS.CUSTOMERS, initialCustomers);
-    if (!list.some(c => c.id === 'cust_datta_more')) {
-      const datta = initialCustomers.find(c => c.id === 'cust_datta_more');
-      if (datta) {
-        const merged = [datta, ...list];
-        setLocalItem(STORAGE_KEYS.CUSTOMERS, merged);
-        return merged;
-      }
-    }
-    return list;
+    return getLocalItem(STORAGE_KEYS.CUSTOMERS, initialCustomers);
   },
   saveCustomer: (customer: Customer): Customer[] => {
     const customers = StorageService.getCustomers();
@@ -273,21 +264,15 @@ export const StorageService = {
   deleteCustomer: (id: string): Customer[] => {
     const customers = StorageService.getCustomers().filter(c => c.id !== id);
     setLocalItem(STORAGE_KEYS.CUSTOMERS, customers);
+    // Also remove ledger transactions linked to this customer
+    const txns = StorageService.getTransactions().filter(t => t.customerId !== id);
+    setLocalItem(STORAGE_KEYS.TRANSACTIONS, txns);
     return customers;
   },
 
   // Transactions / Ledger Entries
   getTransactions: (): Transaction[] => {
-    const list = getLocalItem(STORAGE_KEYS.TRANSACTIONS, initialTransactions);
-    if (!list.some(t => t.customerId === 'cust_datta_more')) {
-      const dattaTxns = initialTransactions.filter(t => t.customerId === 'cust_datta_more');
-      if (dattaTxns.length > 0) {
-        const merged = [...dattaTxns, ...list];
-        setLocalItem(STORAGE_KEYS.TRANSACTIONS, merged);
-        return merged;
-      }
-    }
-    return list;
+    return getLocalItem(STORAGE_KEYS.TRANSACTIONS, initialTransactions);
   },
   addTransaction: (transaction: Transaction): Transaction[] => {
     const list = StorageService.getTransactions();
@@ -403,6 +388,11 @@ export const StorageService = {
     setLocalItem(STORAGE_KEYS.INVOICES, updated);
     return updated;
   },
+  deleteInvoice: (id: string): Invoice[] => {
+    const list = StorageService.getInvoices().filter(i => i.id !== id);
+    setLocalItem(STORAGE_KEYS.INVOICES, list);
+    return list;
+  },
 
   // Products & Inventory
   getProducts: (): Product[] => getLocalItem(STORAGE_KEYS.PRODUCTS, initialProducts),
@@ -418,6 +408,11 @@ export const StorageService = {
     }
     setLocalItem(STORAGE_KEYS.PRODUCTS, updated);
     return updated;
+  },
+  deleteProduct: (id: string): Product[] => {
+    const list = StorageService.getProducts().filter(p => p.id !== id);
+    setLocalItem(STORAGE_KEYS.PRODUCTS, list);
+    return list;
   },
   adjustStock: (productId: string, quantityChange: number): Product[] => {
     const list = StorageService.getProducts();
@@ -464,6 +459,11 @@ export const StorageService = {
     setLocalItem(STORAGE_KEYS.SAVINGS, updated);
     return updated;
   },
+  deleteSavingsGoal: (id: string): SavingsGoal[] => {
+    const list = StorageService.getSavingsGoals().filter(g => g.id !== id);
+    setLocalItem(STORAGE_KEYS.SAVINGS, list);
+    return list;
+  },
 
   // Payment Reminders
   getReminders: (): PaymentReminder[] => getLocalItem(STORAGE_KEYS.REMINDERS, initialReminders),
@@ -480,6 +480,11 @@ export const StorageService = {
     setLocalItem(STORAGE_KEYS.REMINDERS, updated);
     return updated;
   },
+  deleteReminder: (id: string): PaymentReminder[] => {
+    const list = StorageService.getReminders().filter(r => r.id !== id);
+    setLocalItem(STORAGE_KEYS.REMINDERS, list);
+    return list;
+  },
 
   // Documents
   getDocuments: (): DocumentItem[] => getLocalItem(STORAGE_KEYS.DOCUMENTS, initialDocuments),
@@ -488,6 +493,11 @@ export const StorageService = {
     const updated = [doc, ...list];
     setLocalItem(STORAGE_KEYS.DOCUMENTS, updated);
     return updated;
+  },
+  deleteDocument: (id: string): DocumentItem[] => {
+    const list = StorageService.getDocuments().filter(d => d.id !== id);
+    setLocalItem(STORAGE_KEYS.DOCUMENTS, list);
+    return list;
   },
 
   // Full Database JSON Export / Import

@@ -18,11 +18,12 @@ import {
   X,
   Sparkles,
   TrendingUp,
-  Tag
+  Tag,
+  Trash2
 } from 'lucide-react';
 
 export default function InventoryPage() {
-  const { products, saveProduct, adjustStock, addToast } = useApp();
+  const { products, saveProduct, deleteProduct, adjustStock, addToast } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStock, setFilterStock] = useState<'all' | 'low'>('all');
@@ -278,6 +279,17 @@ export default function InventoryPage() {
                           className="px-2 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 text-rose-700 dark:text-rose-400 font-bold text-[10px] flex items-center gap-1"
                         >
                           <ArrowUp className="w-3 h-3" /> Out
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Are you sure you want to delete ${p.name}?`)) {
+                              deleteProduct(p.id);
+                            }
+                          }}
+                          className="p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/60 text-slate-400 hover:text-rose-600 transition-colors ml-1"
+                          title="Delete Product"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>
