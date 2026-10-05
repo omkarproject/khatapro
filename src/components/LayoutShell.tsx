@@ -12,7 +12,6 @@ import MaintenanceNoticeModal from './MaintenanceNoticeModal';
 import PaymentDetailsModal from './PaymentDetailsModal';
 import AuthModal from './AuthModal';
 import { useApp } from '@/context/AppContext';
-import LoginPage from '@/app/login/page';
 import { Loader2 } from 'lucide-react';
 
 export default function LayoutShell({ children }: { children: React.ReactNode }) {

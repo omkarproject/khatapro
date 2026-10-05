@@ -152,9 +152,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }>({});
 
   // Current Auth User & Cloud Sync
-  const [currentUser, setCurrentUserState] = useState<UserProfile | null>(() => {
-    return StorageService.getCurrentUser();
-  });
+  const [currentUser, setCurrentUserState] = useState<UserProfile | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
 
@@ -438,10 +436,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    const activeU = StorageService.getCurrentUser();
+    setCurrentUserState(activeU);
     refreshData();
     setMounted(true);
 
-    const activeU = StorageService.getCurrentUser();
     const curSettings = StorageService.getSettings();
 
     if (typeof document !== 'undefined') {

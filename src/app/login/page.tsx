@@ -26,7 +26,7 @@ import {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { currentUser, login, register, syncWithDatabase, logout } = useApp();
+  const { currentUser, isMounted, login, register, syncWithDatabase, logout } = useApp();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [showPassword, setShowPassword] = useState(false);
@@ -42,10 +42,10 @@ export default function LoginPage() {
   const [role, setRole] = useState<UserRole>('business_owner');
 
   React.useEffect(() => {
-    if (currentUser) {
+    if (isMounted && currentUser) {
       router.replace('/');
     }
-  }, [currentUser, router]);
+  }, [isMounted, currentUser, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
