@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { UserRole } from '@/types';
 import {
   X,
   Mail,
@@ -48,7 +47,6 @@ export default function AuthModal() {
   const [name, setName] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<UserRole>('business_owner');
 
   if (!isAuthModalOpen) return null;
 
@@ -77,7 +75,7 @@ export default function AuthModal() {
           password,
           businessName: businessName.trim() || `${name.trim()}'s Business`,
           phone: phone.trim(),
-          role,
+          role: 'super_admin',
         });
         closeAuthModal();
       }
@@ -203,7 +201,7 @@ export default function AuthModal() {
                   <div className="p-2 rounded-xl bg-white dark:bg-slate-800/50">
                     <span className="text-slate-400 block text-[10px]">Assigned Role</span>
                     <span className="font-bold text-indigo-400 capitalize mt-0.5 block truncate">
-                      {currentUser.role.replace('_', ' ')}
+                      Super Admin
                     </span>
                   </div>
                 </div>
@@ -344,25 +342,6 @@ export default function AuthModal() {
                   </button>
                 </div>
               </div>
-
-              {/* Role Picker (on Sign Up) */}
-              {mode === 'signup' && (
-                <div>
-                  <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
-                    Your Role in Business
-                  </label>
-                  <select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value as UserRole)}
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="business_owner">Business Owner (Full Access)</option>
-                    <option value="accountant">Accountant (Ledgers & Invoices)</option>
-                    <option value="manager">Manager (Inventory & Staff)</option>
-                    <option value="staff">Staff (Basic Billing)</option>
-                  </select>
-                </div>
-              )}
 
               {/* Submit Button */}
               <button

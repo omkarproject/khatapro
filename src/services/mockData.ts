@@ -16,7 +16,7 @@ export const initialUserProfile: UserProfile = {
   name: 'Anant Kumar Yadav',
   email: 'anantyadav8924@gmail.com',
   phone: '8371838314',
-  role: 'business_owner',
+  role: 'super_admin',
   businessName: 'Sharma Traders & Enterprise',
   businessGst: '',
   businessAddress: 'Plot 42, Apex Industrial Park, Andheri East, Mumbai, MH 400069',

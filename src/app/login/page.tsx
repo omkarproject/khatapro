@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
-import { UserRole } from '@/types';
 import {
   Mail,
   Lock,
@@ -39,7 +38,6 @@ export default function LoginPage() {
   const [name, setName] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<UserRole>('business_owner');
 
 
 
@@ -65,7 +63,7 @@ export default function LoginPage() {
           password,
           businessName: businessName.trim() || `${name.trim()}'s Business`,
           phone: phone.trim(),
-          role,
+          role: 'super_admin',
         });
         router.replace('/');
       }
@@ -296,24 +294,6 @@ export default function LoginPage() {
                     </button>
                   </div>
                 </div>
-
-                {mode === 'signup' && (
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
-                      Business Role
-                    </label>
-                    <select
-                      value={role}
-                      onChange={(e) => setRole(e.target.value as UserRole)}
-                      className="w-full px-3 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value="business_owner">Business Owner (Full Access)</option>
-                      <option value="accountant">Accountant (Ledgers & Invoices)</option>
-                      <option value="manager">Manager (Inventory & Staff)</option>
-                      <option value="staff">Staff (Basic Billing)</option>
-                    </select>
-                  </div>
-                )}
 
                 <button
                   type="submit"

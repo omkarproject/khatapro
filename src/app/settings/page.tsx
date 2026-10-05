@@ -36,7 +36,7 @@ import {
 export default function SettingsPage() {
   const { settings, updateSettings, saveDefaultUpiAndQr, profile, setProfile, addToast, syncWithDatabase, currentUser } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'business' | 'upi' | 'backend' | 'roles'>('business');
+  const [activeTab, setActiveTab] = useState<'business' | 'upi' | 'backend'>('business');
   const [isSyncingData, setIsSyncingData] = useState(false);
 
   // Business Profile State
@@ -519,18 +519,6 @@ export default function SettingsPage() {
         >
           <Database className="w-4 h-4" />
           Database & Cloud Auth
-        </button>
-
-        <button
-          onClick={() => setActiveTab('roles')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-            activeTab === 'roles'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Shield className="w-4 h-4" />
-          Role Permissions (RBAC)
         </button>
       </div>
 
@@ -1511,54 +1499,6 @@ export default function SettingsPage() {
             </button>
           </div>
         </form>
-      )}
-
-      {/* Tab 4: Roles & RBAC Matrix */}
-      {activeTab === 'roles' && (
-        <div className="glass-card p-6 space-y-4 max-w-3xl">
-          <div>
-            <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-              <Shield className="w-4 h-4 text-indigo-500" />
-              Role-Based Access Control (RBAC) Matrix
-            </h3>
-            <p className="text-xs text-slate-400 mt-1">
-              Permission hierarchy configured across staff tiers
-            </p>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800 text-slate-400 uppercase text-[10px]">
-                <tr>
-                  <th className="py-2.5 px-3">Role</th>
-                  <th className="py-2.5 px-2 text-center">Khata Entries</th>
-                  <th className="py-2.5 px-2 text-center">UPI Collections</th>
-                  <th className="py-2.5 px-2 text-center">Invoicing</th>
-                  <th className="py-2.5 px-2 text-center">Inventory</th>
-                  <th className="py-2.5 px-2 text-center">Cloud Backup</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {[
-                  { role: 'Super Admin', khata: true, upi: true, inv: true, stock: true, backup: true },
-                  { role: 'Business Owner', khata: true, upi: true, inv: true, stock: true, backup: true },
-                  { role: 'Manager', khata: true, upi: true, inv: true, stock: true, backup: false },
-                  { role: 'Accountant', khata: true, upi: true, inv: true, stock: false, backup: false },
-                  { role: 'Staff', khata: false, upi: true, inv: false, stock: true, backup: false },
-                ].map((row) => (
-                  <tr key={row.role}>
-                    <td className="py-3 px-3 font-bold text-slate-900 dark:text-white">{row.role}</td>
-                    <td className="py-3 px-2 text-center">{row.khata ? '✅' : '❌'}</td>
-                    <td className="py-3 px-2 text-center">{row.upi ? '✅' : '❌'}</td>
-                    <td className="py-3 px-2 text-center">{row.inv ? '✅' : '❌'}</td>
-                    <td className="py-3 px-2 text-center">{row.stock ? '✅' : '❌'}</td>
-                    <td className="py-3 px-2 text-center">{row.backup ? '✅' : '❌'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
       )}
 
       {/* ================= MODAL: DATABASE CONNECTION STEP-BY-STEP PDF SETUP GUIDE ================= */}

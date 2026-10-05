@@ -139,7 +139,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [settings, setSettingsState] = useState<SystemSettings>(() => getCleanDefaultSettings());
   const [darkMode, setDarkMode] = useState(false);
-  const [activeRole, setActiveRole] = useState<UserRole>('business_owner');
+  const [activeRole, setActiveRole] = useState<UserRole>('super_admin');
 
   // Collect Modal
   const [isCollectModalOpen, setIsCollectModalOpen] = useState(false);
@@ -269,7 +269,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Refresh profile in memory
     setProfileState(user);
-    if (user.role) setActiveRole(user.role);
+    setActiveRole('super_admin');
 
     // Load isolated data from MongoDB Atlas for this user
     await loadUserDataFromCloud(user.id);
@@ -304,7 +304,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     setProfileState(user);
-    if (user.role) setActiveRole(user.role);
+    setActiveRole('super_admin');
 
     // Load user's fresh database records from MongoDB Atlas
     await loadUserDataFromCloud(user.id);

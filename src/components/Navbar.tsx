@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
-import { UserRole } from '@/types';
 import {
   Search,
   Sun,
@@ -11,7 +10,6 @@ import {
   QrCode,
   Bell,
   Shield,
-  Check,
   ChevronDown,
   Sparkles,
   AlertTriangle,
@@ -35,8 +33,6 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     profile,
     darkMode,
     toggleDarkMode,
-    activeRole,
-    setActiveRole,
     openCollectModal,
     products,
     reminders,
@@ -53,20 +49,11 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
 
   // Compute notifications count (low stock + overdue reminders)
   const lowStockCount = products.filter(p => p.currentStock <= p.minStock).length;
   const overdueCount = reminders.filter(r => r.reminderType === 'overdue' && r.status === 'pending').length;
   const totalAlerts = lowStockCount + overdueCount;
-
-  const roles: { id: UserRole; label: string; desc: string }[] = [
-    { id: 'super_admin', label: 'Super Admin', desc: 'Full Enterprise Access' },
-    { id: 'business_owner', label: 'Business Owner', desc: 'Manage All Finances & Staff' },
-    { id: 'manager', label: 'Manager', desc: 'Operations & Stock Control' },
-    { id: 'accountant', label: 'Accountant', desc: 'Books, Ledgers & Invoices' },
-    { id: 'staff', label: 'Staff', desc: 'Restricted POS & Quick Entry' },
-  ];
 
   return (
     <>
@@ -128,46 +115,10 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
               <span className="sm:hidden">Collect</span>
             </button>
 
-            {/* Role Switcher */}
-            <div className="relative">
-              <button
-                onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
-                className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/70 dark:hover:bg-slate-700/70 rounded-xl border border-slate-200/80 dark:border-slate-700 transition-colors"
-              >
-                <Shield className="w-3.5 h-3.5 text-indigo-500" />
-                <span className="capitalize">{activeRole.replace('_', ' ')}</span>
-                <ChevronDown className="w-3 h-3 text-slate-400" />
-              </button>
-
-              {isRoleDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-64 p-2 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 z-50 animate-in fade-in zoom-in-95 duration-100">
-                  <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                    Switch Active Role
-                  </div>
-                  {roles.map((r) => (
-                    <button
-                      key={r.id}
-                      onClick={() => {
-                        setActiveRole(r.id);
-                        setIsRoleDropdownOpen(false);
-                      }}
-                      className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition-colors"
-                    >
-                      <div>
-                        <div className="text-xs font-bold text-slate-900 dark:text-white">
-                          {r.label}
-                        </div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                          {r.desc}
-                        </div>
-                      </div>
-                      {activeRole === r.id && (
-                        <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
+            {/* Super Admin Badge (All users have full Super Admin enterprise access) */}
+            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 rounded-xl border border-indigo-200/80 dark:border-indigo-800/80 shadow-xs">
+              <Shield className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Super Admin</span>
             </div>
 
             {/* Notification Bell */}
@@ -283,7 +234,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                             {currentUser.name}
                           </span>
                           <span className="text-[9px] uppercase px-1.5 py-0.5 rounded font-bold font-mono bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
-                            {currentUser.role?.replace('_', ' ')}
+                            Super Admin
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-500 truncate font-mono">{currentUser.email}</p>

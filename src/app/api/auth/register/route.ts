@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       password: password, // In production, hash with bcrypt
       businessName: (businessName || `${name}'s Business`).trim(),
       phone: (phone || '').trim(),
-      role: role || 'business_owner',
+      role: 'super_admin',
       createdAt: new Date().toISOString(),
     };
 
