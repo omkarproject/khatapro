@@ -120,6 +120,7 @@ export interface Expense {
   paymentMode: PaymentMode;
   notes?: string;
   receiptUrl?: string;
+  receiptUrls?: string[];
   isRecurring: boolean;
   recurringFrequency?: 'weekly' | 'monthly' | 'yearly';
   tags: string[];
@@ -211,5 +212,6 @@ export interface SystemSettings {
   businessEmail: string;
   businessAddress: string;
   paymentSettings: PaymentSettings;
+  monthlyBudgetCap?: number;
   darkMode: boolean;
 }

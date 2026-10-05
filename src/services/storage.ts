@@ -103,6 +103,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
     upiGatewaySecret: '',
     upiGatewayWebhookUrl: '',
   },
+  monthlyBudgetCap: 150000,
   darkMode: false,
 });
 
