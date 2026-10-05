@@ -74,31 +74,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickDemo = async (demoEmail: string, demoPass: string, demoName: string, demoBiz: string) => {
-    setIsLoading(true);
-    setErrorMsg('');
-    try {
-      try {
-        await login(demoEmail, demoPass);
-        router.push('/');
-        return;
-      } catch {
-        await register({
-          name: demoName,
-          email: demoEmail,
-          password: demoPass,
-          businessName: demoBiz,
-          phone: '9820111223',
-          role: 'business_owner',
-        });
-        router.push('/');
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Demo login failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#070B14] flex flex-col justify-center items-center p-4 sm:p-6 text-slate-900 dark:text-slate-100 relative overflow-hidden">
@@ -107,15 +83,21 @@ export default function LoginPage() {
       <div className="absolute top-1/4 -left-20 w-96 h-96 bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-indigo-600/10 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* Back to Home Button */}
+      {/* Top Bar Branding */}
       <div className="w-full max-w-md mb-4 flex items-center justify-between">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Dashboard</span>
-        </Link>
+        {currentUser ? (
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Go to Dashboard</span>
+          </Link>
+        ) : (
+          <div className="flex items-center gap-2 text-xs font-black tracking-wider uppercase bg-gradient-to-r from-cyan-500 to-indigo-600 bg-clip-text text-transparent">
+            SmartKhata Pro
+          </div>
+        )}
         <span className="text-[11px] font-mono font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
           MongoDB Cloud Connected
@@ -350,35 +332,7 @@ export default function LoginPage() {
                 </button>
               </form>
 
-              {/* Quick Demo Logins */}
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
-                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block text-center">
-                  Quick 1-Click Demo Accounts
-                </span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickDemo('anantyadav8924@gmail.com', 'admin123', 'Anant Kumar Yadav', 'Sharma Traders & Enterprise')}
-                    className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/60 hover:bg-indigo-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/60 text-left transition-all cursor-pointer group"
-                  >
-                    <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200 group-hover:text-indigo-500">
-                      Anant Yadav
-                    </div>
-                    <div className="text-[9px] text-slate-400 truncate">Owner (Sharma Traders)</div>
-                  </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleQuickDemo('merchant.demo@smartkhata.in', 'demo1234', 'Ramesh Patel', 'Patel Supermarket & Mart')}
-                    className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/60 hover:bg-purple-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/60 text-left transition-all cursor-pointer group"
-                  >
-                    <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200 group-hover:text-purple-500">
-                      Ramesh Patel
-                    </div>
-                    <div className="text-[9px] text-slate-400 truncate">Demo Multi-User 2</div>
-                  </button>
-                </div>
-              </div>
             </>
           )}
 

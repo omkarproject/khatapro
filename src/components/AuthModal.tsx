@@ -88,34 +88,7 @@ export default function AuthModal() {
     }
   };
 
-  // Demo Quick-Login
-  const handleQuickDemo = async (demoEmail: string, demoPass: string, demoName: string, demoBiz: string) => {
-    setIsLoading(true);
-    setErrorMsg('');
-    try {
-      // Try login first
-      try {
-        await login(demoEmail, demoPass);
-        closeAuthModal();
-        return;
-      } catch {
-        // If not registered yet, auto-register the demo user
-        await register({
-          name: demoName,
-          email: demoEmail,
-          password: demoPass,
-          businessName: demoBiz,
-          phone: '9820111223',
-          role: 'business_owner',
-        });
-        closeAuthModal();
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Demo login failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
@@ -410,35 +383,7 @@ export default function AuthModal() {
                 )}
               </button>
 
-              {/* Quick Demo Logins */}
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
-                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block text-center">
-                  Quick 1-Click Demo Accounts
-                </span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickDemo('anantyadav8924@gmail.com', 'admin123', 'Anant Kumar Yadav', 'Sharma Traders & Enterprise')}
-                    className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800/60 hover:bg-indigo-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/60 text-left transition-all cursor-pointer group"
-                  >
-                    <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200 group-hover:text-indigo-500">
-                      Anant Yadav
-                    </div>
-                    <div className="text-[9px] text-slate-400 truncate">Owner (Sharma Traders)</div>
-                  </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleQuickDemo('merchant.demo@smartkhata.in', 'demo1234', 'Ramesh Patel', 'Patel Supermarket & Mart')}
-                    className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800/60 hover:bg-purple-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/60 text-left transition-all cursor-pointer group"
-                  >
-                    <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200 group-hover:text-purple-500">
-                      Ramesh Patel
-                    </div>
-                    <div className="text-[9px] text-slate-400 truncate">Demo Multi-User 2</div>
-                  </button>
-                </div>
-              </div>
 
             </form>
           )}

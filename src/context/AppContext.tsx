@@ -15,8 +15,19 @@ import {
   PaymentSettings,
   UserRole
 } from '@/types';
-import { StorageService } from '@/services/storage';
-import { initialUserProfile, initialSystemSettings } from '@/services/mockData';
+import { StorageService, getCleanDefaultSettings } from '@/services/storage';
+
+export const defaultEmptyProfile: UserProfile = {
+  id: '',
+  name: '',
+  email: '',
+  phone: '',
+  role: 'business_owner',
+  businessName: '',
+  businessGst: '',
+  businessAddress: '',
+  createdAt: new Date().toISOString(),
+};
 
 export interface ToastMessage {
   id: string;
@@ -27,6 +38,7 @@ export interface ToastMessage {
 }
 
 interface AppContextType {
+  isMounted: boolean;
   profile: UserProfile;
   setProfile: (p: UserProfile) => void;
   customers: Customer[];
@@ -116,7 +128,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
-  const [profile, setProfileState] = useState<UserProfile>(initialUserProfile);
+  const [profile, setProfileState] = useState<UserProfile>(defaultEmptyProfile);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -125,7 +137,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
   const [reminders, setReminders] = useState<PaymentReminder[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  const [settings, setSettingsState] = useState<SystemSettings>(initialSystemSettings);
+  const [settings, setSettingsState] = useState<SystemSettings>(() => getCleanDefaultSettings());
   const [darkMode, setDarkMode] = useState(false);
   const [activeRole, setActiveRole] = useState<UserRole>('business_owner');
 
@@ -299,7 +311,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setCurrentUserState(null);
     StorageService.setCurrentUser(null);
-    refreshData();
+    setProfileState(defaultEmptyProfile);
+    setCustomers([]);
+    setTransactions([]);
+    setProducts([]);
+    setInvoices([]);
+    setExpenses([]);
+    setSavingsGoals([]);
+    setReminders([]);
+    setDocuments([]);
+    setSettingsState(getCleanDefaultSettings());
     addToast('Signed Out', 'You have logged out of your account.', 'info');
   };
 
@@ -375,6 +396,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshData = () => {
+    const curUser = StorageService.getCurrentUser();
+    if (!curUser) {
+      setProfileState(defaultEmptyProfile);
+      setCustomers([]);
+      setTransactions([]);
+      setProducts([]);
+      setInvoices([]);
+      setExpenses([]);
+      setSavingsGoals([]);
+      setReminders([]);
+      setDocuments([]);
+      setSettingsState(getCleanDefaultSettings());
+      return;
+    }
     StorageService.initializeDefaults();
     setProfileState(StorageService.getProfile());
     setCustomers(StorageService.getCustomers());
@@ -704,6 +739,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         cloudSyncStatus,
         syncWithDatabase,
         refreshData,
+        isMounted: mounted,
       }}
     >
       {children}

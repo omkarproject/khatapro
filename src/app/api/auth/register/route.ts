@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
-import { initialCustomers, initialTransactions, initialProducts, initialInvoices, initialExpenses } from '@/services/mockData';
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,30 +34,46 @@ export async function POST(req: NextRequest) {
 
     await usersCol.insertOne(newUser as any);
 
-    // Seed starter data scoped to this brand new user
-    const now = new Date().toISOString();
-    
-    // Seed initial customers with this user's ID
-    const userCustomers = initialCustomers.slice(0, 3).map((c, i) => ({
-      ...c,
-      id: `cust_${userId}_${i + 1}`,
-      userId: userId,
-      createdAt: now,
-    }));
-    if (userCustomers.length > 0) {
-      await db.collection('customers').insertMany(userCustomers as any[]);
-    }
+    // Initialize clean settings document scoped to this brand new user (clean slate)
+    const cleanSettings = {
+      userId,
+      backendProvider: 'mongodb',
+      mongodbUri: 'mongodb+srv://smartkhata:KhataPass%402026@cluster0.7evxtf6.mongodb.net/?appName=Cluster0',
+      mongodbDbName: 'smartkhata_db',
+      businessName: newUser.businessName,
+      businessTagline: 'Track Money, Manage Business, Grow Faster',
+      businessPhone: newUser.phone,
+      businessEmail: newUser.email,
+      businessAddress: '',
+      paymentSettings: {
+        collectionMode: 'direct_upi',
+        upiId: '', // Clean blank: user configures their own UPI ID
+        payeeName: newUser.businessName,
+        customQrUrl: '', // Clean blank: user uploads/sets their own QR
+        isDefaultQrSaved: false,
+        businessGst: '',
+        currency: 'INR',
+        enableSoundAlerts: true,
+        cashfreeAppId: '', // Clean blank: user sets their own API keys
+        cashfreeSecretKey: '',
+        cashfreeEnv: 'production',
+        razorpayKeyId: '',
+        razorpayKeySecret: '',
+        razorpayWebhookSecret: '',
+        razorpayEnv: 'live',
+        upiGatewayProvider: 'Cashfree UPI Gateway',
+        upiGatewayKey: '',
+        upiGatewaySecret: '',
+        upiGatewayWebhookUrl: '',
+      },
+      darkMode: false,
+    };
 
-    // Seed initial products
-    const userProducts = initialProducts.slice(0, 4).map((p, i) => ({
-      ...p,
-      id: `prod_${userId}_${i + 1}`,
-      userId: userId,
-      createdAt: now,
-    }));
-    if (userProducts.length > 0) {
-      await db.collection('products').insertMany(userProducts as any[]);
-    }
+    await db.collection('settings').updateOne(
+      { userId },
+      { $set: cleanSettings },
+      { upsert: true }
+    );
 
     const { password: _, ...safeUser } = newUser;
 

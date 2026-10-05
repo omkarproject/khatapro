@@ -12,18 +12,7 @@ import {
   PaymentSettings
 } from '@/types';
 
-import {
-  initialUserProfile,
-  initialCustomers,
-  initialTransactions,
-  initialProducts,
-  initialInvoices,
-  initialExpenses,
-  initialSavingsGoals,
-  initialReminders,
-  initialDocuments,
-  initialSystemSettings
-} from './mockData';
+
 
 const STORAGE_KEYS = {
   PROFILE: 'skp_user_profile',
@@ -84,6 +73,39 @@ function setLocalItem<T>(rawKey: string, value: T): void {
   }
 }
 
+export const getCleanDefaultSettings = (businessName: string = '', phone: string = '', email: string = ''): SystemSettings => ({
+  backendProvider: 'mongodb',
+  mongodbUri: 'mongodb+srv://smartkhata:KhataPass%402026@cluster0.7evxtf6.mongodb.net/?appName=Cluster0',
+  mongodbDbName: 'smartkhata_db',
+  businessName: businessName || '',
+  businessTagline: 'Track Money, Manage Business, Grow Faster',
+  businessPhone: phone || '',
+  businessEmail: email || '',
+  businessAddress: '',
+  paymentSettings: {
+    collectionMode: 'direct_upi',
+    upiId: '', // Clean blank: user sets their own UPI ID
+    payeeName: businessName || '',
+    customQrUrl: '', // Clean blank: user sets/uploads their own QR
+    isDefaultQrSaved: false,
+    businessGst: '',
+    currency: 'INR',
+    enableSoundAlerts: true,
+    cashfreeAppId: '', // Clean blank: user sets their own API keys
+    cashfreeSecretKey: '',
+    cashfreeEnv: 'production',
+    razorpayKeyId: '',
+    razorpayKeySecret: '',
+    razorpayWebhookSecret: '',
+    razorpayEnv: 'live',
+    upiGatewayProvider: 'Cashfree UPI Gateway',
+    upiGatewayKey: '',
+    upiGatewaySecret: '',
+    upiGatewayWebhookUrl: '',
+  },
+  darkMode: false,
+});
+
 export const StorageService = {
   // Auth User Session (Per-User Isolation)
   getCurrentUser: (): UserProfile | null => {
@@ -118,113 +140,70 @@ export const StorageService = {
     user?: UserProfile;
   }) => {
     if (typeof window === 'undefined') return;
-    if (data.customers) setLocalItem(STORAGE_KEYS.CUSTOMERS, data.customers);
-    if (data.transactions) setLocalItem(STORAGE_KEYS.TRANSACTIONS, data.transactions);
-    if (data.products) setLocalItem(STORAGE_KEYS.PRODUCTS, data.products);
-    if (data.invoices) setLocalItem(STORAGE_KEYS.INVOICES, data.invoices);
-    if (data.expenses) setLocalItem(STORAGE_KEYS.EXPENSES, data.expenses);
-    if (data.savingsGoals) setLocalItem(STORAGE_KEYS.SAVINGS, data.savingsGoals);
-    if (data.reminders) setLocalItem(STORAGE_KEYS.REMINDERS, data.reminders);
-    if (data.documents) setLocalItem(STORAGE_KEYS.DOCUMENTS, data.documents);
-    if (data.settings) setLocalItem(STORAGE_KEYS.SETTINGS, data.settings);
-    if (data.user) setLocalItem(STORAGE_KEYS.PROFILE, data.user);
+    if (data.customers !== undefined) setLocalItem(STORAGE_KEYS.CUSTOMERS, data.customers);
+    if (data.transactions !== undefined) setLocalItem(STORAGE_KEYS.TRANSACTIONS, data.transactions);
+    if (data.products !== undefined) setLocalItem(STORAGE_KEYS.PRODUCTS, data.products);
+    if (data.invoices !== undefined) setLocalItem(STORAGE_KEYS.INVOICES, data.invoices);
+    if (data.expenses !== undefined) setLocalItem(STORAGE_KEYS.EXPENSES, data.expenses);
+    if (data.savingsGoals !== undefined) setLocalItem(STORAGE_KEYS.SAVINGS, data.savingsGoals);
+    if (data.reminders !== undefined) setLocalItem(STORAGE_KEYS.REMINDERS, data.reminders);
+    if (data.documents !== undefined) setLocalItem(STORAGE_KEYS.DOCUMENTS, data.documents);
+    if (data.settings !== undefined) setLocalItem(STORAGE_KEYS.SETTINGS, data.settings);
+    if (data.user !== undefined) setLocalItem(STORAGE_KEYS.PROFILE, data.user);
   },
 
-  // Initialize default data if not already present
+  // Initialize clean user data if not already present (No pre-filled mock records)
   initializeDefaults: () => {
     if (typeof window === 'undefined') return;
+    const curUser = StorageService.getCurrentUser();
     const isInit = localStorage.getItem(getScopedKey(STORAGE_KEYS.INITIALIZED));
     if (!isInit) {
-      setLocalItem(STORAGE_KEYS.PROFILE, initialUserProfile);
-      setLocalItem(STORAGE_KEYS.CUSTOMERS, initialCustomers);
-      setLocalItem(STORAGE_KEYS.TRANSACTIONS, initialTransactions);
-      setLocalItem(STORAGE_KEYS.PRODUCTS, initialProducts);
-      setLocalItem(STORAGE_KEYS.INVOICES, initialInvoices);
-      setLocalItem(STORAGE_KEYS.EXPENSES, initialExpenses);
-      setLocalItem(STORAGE_KEYS.SAVINGS, initialSavingsGoals);
-      setLocalItem(STORAGE_KEYS.REMINDERS, initialReminders);
-      setLocalItem(STORAGE_KEYS.DOCUMENTS, initialDocuments);
-      setLocalItem(STORAGE_KEYS.SETTINGS, initialSystemSettings);
+      if (curUser) {
+        setLocalItem(STORAGE_KEYS.PROFILE, curUser);
+        setLocalItem(STORAGE_KEYS.SETTINGS, getCleanDefaultSettings(curUser.businessName, curUser.phone, curUser.email));
+      }
+      setLocalItem(STORAGE_KEYS.CUSTOMERS, []);
+      setLocalItem(STORAGE_KEYS.TRANSACTIONS, []);
+      setLocalItem(STORAGE_KEYS.PRODUCTS, []);
+      setLocalItem(STORAGE_KEYS.INVOICES, []);
+      setLocalItem(STORAGE_KEYS.EXPENSES, []);
+      setLocalItem(STORAGE_KEYS.SAVINGS, []);
+      setLocalItem(STORAGE_KEYS.REMINDERS, []);
+      setLocalItem(STORAGE_KEYS.DOCUMENTS, []);
       localStorage.setItem(getScopedKey(STORAGE_KEYS.INITIALIZED), 'true');
-    } else {
-      // Migrate legacy "Rajesh Sharma" profile to "Anant Kumar Yadav"
-      const existing = StorageService.getProfile();
-      if (existing.name === 'Rajesh Sharma') {
-        setLocalItem(STORAGE_KEYS.PROFILE, {
-          ...existing,
-          name: initialUserProfile.name,
-          phone: initialUserProfile.phone,
-          businessName: initialUserProfile.businessName,
-        });
-      }
-      // Migrate legacy settings if needed (only if user hasn't saved custom settings)
-      const existingSettings = StorageService.getSettings();
-      if (
-        !existingSettings.paymentSettings?.isDefaultQrSaved &&
-        !existingSettings.paymentSettings?.cashfreeAppId &&
-        (existingSettings.paymentSettings?.payeeName === 'Sharma Traders Enterprise' ||
-          existingSettings.paymentSettings?.upiId === 'sharma.traders@okaxis' ||
-          existingSettings.businessPhone === '8924024859' ||
-          existingSettings.paymentSettings?.upiId === '8924024859@upi')
-      ) {
-        setLocalItem(STORAGE_KEYS.SETTINGS, {
-          ...existingSettings,
-          businessPhone: initialSystemSettings.businessPhone,
-          paymentSettings: {
-            ...existingSettings.paymentSettings,
-            upiId: initialSystemSettings.paymentSettings.upiId,
-            payeeName: initialSystemSettings.paymentSettings.payeeName,
-            customQrUrl: initialSystemSettings.paymentSettings.customQrUrl,
-          },
-        });
-      }
-      // Auto-migrate gateway environment to production/live as test mode has been deprecated
-      const currentSettings = StorageService.getSettings();
-      if (
-        currentSettings.paymentSettings?.cashfreeEnv === 'sandbox' ||
-        currentSettings.paymentSettings?.razorpayEnv === 'test'
-      ) {
-        setLocalItem(STORAGE_KEYS.SETTINGS, {
-          ...currentSettings,
-          paymentSettings: {
-            ...currentSettings.paymentSettings,
-            cashfreeEnv: 'production',
-            razorpayEnv: 'live',
-          },
-        });
-      }
-      if (!currentSettings.mongodbUri) {
-        setLocalItem(STORAGE_KEYS.SETTINGS, {
-          ...currentSettings,
-          mongodbUri: initialSystemSettings.mongodbUri,
-          mongodbDbName: initialSystemSettings.mongodbDbName,
-        });
-      }
     }
   },
 
-  // Reset to default sample data
+  // Reset to clean user data
   resetDefaults: () => {
     if (typeof window === 'undefined') return;
-    localStorage.removeItem(STORAGE_KEYS.INITIALIZED);
+    localStorage.removeItem(getScopedKey(STORAGE_KEYS.INITIALIZED));
     StorageService.initializeDefaults();
   },
 
   // Profile
-  getProfile: (): UserProfile => getLocalItem(STORAGE_KEYS.PROFILE, initialUserProfile),
+  getProfile: (): UserProfile => {
+    const cur = StorageService.getCurrentUser();
+    if (cur) return cur;
+    return getLocalItem(STORAGE_KEYS.PROFILE, {
+      id: 'guest',
+      name: '',
+      email: '',
+      phone: '',
+      role: 'business_owner',
+      businessName: '',
+      businessGst: '',
+      businessAddress: '',
+      createdAt: new Date().toISOString(),
+    });
+  },
   updateProfile: (profile: UserProfile): void => setLocalItem(STORAGE_KEYS.PROFILE, profile),
 
   // Settings & Persistent UPI / QR configuration
   getSettings: (): SystemSettings => {
-    const s = getLocalItem(STORAGE_KEYS.SETTINGS, initialSystemSettings);
-    if (s.paymentSettings) {
-      if (s.paymentSettings.cashfreeEnv === 'sandbox') {
-        s.paymentSettings.cashfreeEnv = 'production';
-      }
-      if (s.paymentSettings.razorpayEnv === 'test') {
-        s.paymentSettings.razorpayEnv = 'live';
-      }
-    }
+    const curUser = StorageService.getCurrentUser();
+    const defaults = getCleanDefaultSettings(curUser?.businessName, curUser?.phone, curUser?.email);
+    const s = getLocalItem(STORAGE_KEYS.SETTINGS, defaults);
     return s;
   },
   updateSettings: (settings: SystemSettings): void => setLocalItem(STORAGE_KEYS.SETTINGS, settings),
@@ -246,7 +225,7 @@ export const StorageService = {
 
   // Customers
   getCustomers: (): Customer[] => {
-    return getLocalItem(STORAGE_KEYS.CUSTOMERS, initialCustomers);
+    return getLocalItem(STORAGE_KEYS.CUSTOMERS, []);
   },
   saveCustomer: (customer: Customer): Customer[] => {
     const customers = StorageService.getCustomers();
@@ -272,7 +251,7 @@ export const StorageService = {
 
   // Transactions / Ledger Entries
   getTransactions: (): Transaction[] => {
-    return getLocalItem(STORAGE_KEYS.TRANSACTIONS, initialTransactions);
+    return getLocalItem(STORAGE_KEYS.TRANSACTIONS, []);
   },
   addTransaction: (transaction: Transaction): Transaction[] => {
     const list = StorageService.getTransactions();
@@ -374,7 +353,7 @@ export const StorageService = {
   },
 
   // Invoices
-  getInvoices: (): Invoice[] => getLocalItem(STORAGE_KEYS.INVOICES, initialInvoices),
+  getInvoices: (): Invoice[] => getLocalItem(STORAGE_KEYS.INVOICES, []),
   saveInvoice: (invoice: Invoice): Invoice[] => {
     const list = StorageService.getInvoices();
     const idx = list.findIndex(i => i.id === invoice.id);
@@ -395,7 +374,7 @@ export const StorageService = {
   },
 
   // Products & Inventory
-  getProducts: (): Product[] => getLocalItem(STORAGE_KEYS.PRODUCTS, initialProducts),
+  getProducts: (): Product[] => getLocalItem(STORAGE_KEYS.PRODUCTS, []),
   saveProduct: (product: Product): Product[] => {
     const list = StorageService.getProducts();
     const idx = list.findIndex(p => p.id === product.id);
@@ -431,7 +410,7 @@ export const StorageService = {
   },
 
   // Expenses
-  getExpenses: (): Expense[] => getLocalItem(STORAGE_KEYS.EXPENSES, initialExpenses),
+  getExpenses: (): Expense[] => getLocalItem(STORAGE_KEYS.EXPENSES, []),
   addExpense: (expense: Expense): Expense[] => {
     const list = StorageService.getExpenses();
     const updated = [expense, ...list];
@@ -445,7 +424,7 @@ export const StorageService = {
   },
 
   // Savings Goals
-  getSavingsGoals: (): SavingsGoal[] => getLocalItem(STORAGE_KEYS.SAVINGS, initialSavingsGoals),
+  getSavingsGoals: (): SavingsGoal[] => getLocalItem(STORAGE_KEYS.SAVINGS, []),
   saveSavingsGoal: (goal: SavingsGoal): SavingsGoal[] => {
     const list = StorageService.getSavingsGoals();
     const idx = list.findIndex(g => g.id === goal.id);
@@ -466,7 +445,7 @@ export const StorageService = {
   },
 
   // Payment Reminders
-  getReminders: (): PaymentReminder[] => getLocalItem(STORAGE_KEYS.REMINDERS, initialReminders),
+  getReminders: (): PaymentReminder[] => getLocalItem(STORAGE_KEYS.REMINDERS, []),
   saveReminder: (reminder: PaymentReminder): PaymentReminder[] => {
     const list = StorageService.getReminders();
     const idx = list.findIndex(r => r.id === reminder.id);
@@ -487,7 +466,7 @@ export const StorageService = {
   },
 
   // Documents
-  getDocuments: (): DocumentItem[] => getLocalItem(STORAGE_KEYS.DOCUMENTS, initialDocuments),
+  getDocuments: (): DocumentItem[] => getLocalItem(STORAGE_KEYS.DOCUMENTS, []),
   addDocument: (doc: DocumentItem): DocumentItem[] => {
     const list = StorageService.getDocuments();
     const updated = [doc, ...list];
