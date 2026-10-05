@@ -24,12 +24,20 @@ export async function POST(req: NextRequest) {
 
     const { password: _, ...safeUser } = user;
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       message: `Welcome back, ${user.name}!`,
       user: safeUser,
       token: `token_${user.id || user._id}_${Date.now()}`,
     });
+
+    res.cookies.set('skp_auth_session', String(user.id || user._id), {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      sameSite: 'lax',
+    });
+
+    return res;
   } catch (error: any) {
     console.error('Login error:', error);
     return NextResponse.json({ success: false, message: error.message || 'Failed to authenticate' }, { status: 500 });

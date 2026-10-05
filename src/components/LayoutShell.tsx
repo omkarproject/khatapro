@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { usePathname } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
 import MobileNav from './MobileNav';
@@ -16,6 +16,7 @@ import LoginPage from '@/app/login/page';
 import { Loader2 } from 'lucide-react';
 
 export default function LayoutShell({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const pathname = usePathname();
   const { currentUser, isMounted } = useApp();
@@ -29,6 +30,15 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
     pathname === '/privacy-policy' ||
     pathname === '/terms-and-conditions' ||
     pathname === '/refund-and-cancellation';
+
+  // Redirect to /login if user is not authenticated and attempts to access protected routes
+  useEffect(() => {
+    if (!isMounted) return;
+    const isPublic = isPayRoute || isLoginPage || isPublicInfoPage;
+    if (!currentUser && !isPublic) {
+      router.replace('/login');
+    }
+  }, [isMounted, currentUser, isPayRoute, isLoginPage, isPublicInfoPage, router]);
 
   // 1. Wait for client-side storage hydration to avoid flashing
   if (!isMounted) {
@@ -87,17 +97,14 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
     );
   }
 
-  // 5. Strict Auth Guard: If not logged in, user CANNOT view the Dashboard or modules
+  // 5. Strict Auth Guard: If not logged in and accessing protected route, show clean transition loader
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-[#070B14] flex flex-col">
-        <main className="flex-1">
-          <LoginPage />
-        </main>
-        <Footer />
-        <ToastContainer />
-        <MaintenanceNoticeModal />
-        <PaymentDetailsModal />
+      <div className="min-h-screen bg-[#070B14] flex flex-col items-center justify-center text-white">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-xl shadow-indigo-600/30 mb-4 animate-pulse">
+          <Loader2 className="w-6 h-6 animate-spin" />
+        </div>
+        <p className="text-xs font-mono uppercase tracking-wider text-slate-400">Redirecting to Login...</p>
       </div>
     );
   }

@@ -41,6 +41,12 @@ export default function LoginPage() {
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<UserRole>('business_owner');
 
+  React.useEffect(() => {
+    if (currentUser) {
+      router.replace('/');
+    }
+  }, [currentUser, router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -52,7 +58,7 @@ export default function LoginPage() {
           throw new Error('Please enter both email and password.');
         }
         await login(email.trim(), password);
-        router.push('/');
+        router.replace('/');
       } else {
         if (!name.trim() || !email.trim() || !password) {
           throw new Error('Please fill in your Name, Email, and Password.');
@@ -65,7 +71,7 @@ export default function LoginPage() {
           phone: phone.trim(),
           role,
         });
-        router.push('/');
+        router.replace('/');
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Authentication failed. Please check your credentials.');

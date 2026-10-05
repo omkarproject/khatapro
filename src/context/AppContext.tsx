@@ -265,6 +265,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const user: UserProfile = data.user;
     setCurrentUserState(user);
     StorageService.setCurrentUser(user);
+    if (typeof document !== 'undefined') {
+      document.cookie = `skp_auth_session=${user.id || (user as any)._id}; Path=/; Max-Age=2592000; SameSite=Lax;`;
+    }
 
     // Refresh profile in memory
     setProfileState(user);
@@ -298,6 +301,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const user: UserProfile = data.user;
     setCurrentUserState(user);
     StorageService.setCurrentUser(user);
+    if (typeof document !== 'undefined') {
+      document.cookie = `skp_auth_session=${user.id || (user as any)._id}; Path=/; Max-Age=2592000; SameSite=Lax;`;
+    }
 
     setProfileState(user);
     if (user.role) setActiveRole(user.role);
@@ -311,6 +317,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setCurrentUserState(null);
     StorageService.setCurrentUser(null);
+    if (typeof document !== 'undefined') {
+      document.cookie = 'skp_auth_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
+    }
     setProfileState(defaultEmptyProfile);
     setCustomers([]);
     setTransactions([]);
@@ -322,6 +331,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setDocuments([]);
     setSettingsState(getCleanDefaultSettings());
     addToast('Signed Out', 'You have logged out of your account.', 'info');
+    if (typeof window !== 'undefined') {
+      window.location.replace('/login');
+    }
   };
 
   // Toasts
@@ -431,6 +443,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const activeU = StorageService.getCurrentUser();
     const curSettings = StorageService.getSettings();
+
+    if (typeof document !== 'undefined') {
+      if (activeU) {
+        document.cookie = `skp_auth_session=${activeU.id || (activeU as any)._id}; Path=/; Max-Age=2592000; SameSite=Lax;`;
+      } else {
+        document.cookie = 'skp_auth_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
+      }
+    }
 
     // If cloud database is enabled (mongodb) or active user is logged in, sync with database
     if (curSettings.backendProvider === 'mongodb' || activeU) {

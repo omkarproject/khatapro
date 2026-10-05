@@ -77,12 +77,20 @@ export async function POST(req: NextRequest) {
 
     const { password: _, ...safeUser } = newUser;
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       message: 'Account created and initialized successfully in MongoDB Atlas!',
       user: safeUser,
       token: `token_${userId}_${Date.now()}`,
     });
+
+    res.cookies.set('skp_auth_session', String(userId), {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      sameSite: 'lax',
+    });
+
+    return res;
   } catch (error: any) {
     console.error('Registration error:', error);
     return NextResponse.json({ success: false, message: error.message || 'Failed to register account' }, { status: 500 });
