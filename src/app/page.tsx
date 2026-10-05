@@ -138,14 +138,14 @@ export default function DashboardPage() {
                 Live Business Pulse
               </span>
               <span className="text-xs text-slate-400" suppressHydrationWarning>
-                {profile.businessName}
+                {profile?.businessName || 'SmartKhata'}
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight" suppressHydrationWarning>
-              Good day, {profile.name}
+              Good day, {profile?.name || 'Merchant'}
             </h1>
             <p className="text-sm text-slate-300 max-w-xl" suppressHydrationWarning>
-              &ldquo;{settings.businessTagline}&rdquo; • All systems running securely on {settings.backendProvider.toUpperCase()} storage.
+              &ldquo;{settings?.businessTagline || 'Track Money, Manage Business, Grow Faster'}&rdquo; • All systems running securely on {(settings?.backendProvider || 'mongodb').toUpperCase()} storage.
             </p>
           </div>
 

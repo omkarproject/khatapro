@@ -93,7 +93,6 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
           <Loader2 className="w-6 h-6 animate-spin" />
         </div>
         <p className="text-xs font-mono uppercase tracking-wider text-slate-400">Redirecting to Login...</p>
-        <div className="hidden" aria-hidden="true">{children}</div>
       </div>
     );
   }

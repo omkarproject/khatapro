@@ -41,11 +41,7 @@ export default function LoginPage() {
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<UserRole>('business_owner');
 
-  React.useEffect(() => {
-    if (isMounted && currentUser) {
-      router.replace('/');
-    }
-  }, [isMounted, currentUser, router]);
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
