@@ -115,11 +115,6 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
               <span className="sm:hidden">Collect</span>
             </button>
 
-            {/* Super Admin Badge (All users have full Super Admin enterprise access) */}
-            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 rounded-xl border border-indigo-200/80 dark:border-indigo-800/80 shadow-xs">
-              <Shield className="w-3.5 h-3.5 text-indigo-500" />
-              <span>Super Admin</span>
-            </div>
 
             {/* Notification Bell */}
             <div className="relative">
@@ -233,8 +228,8 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                           <span className="text-xs font-black text-slate-900 dark:text-white truncate">
                             {currentUser.name}
                           </span>
-                          <span className="text-[9px] uppercase px-1.5 py-0.5 rounded font-bold font-mono bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
-                            Super Admin
+                          <span className="text-[9px] uppercase px-1.5 py-0.5 rounded font-bold font-mono bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                            Active
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-500 truncate font-mono">{currentUser.email}</p>

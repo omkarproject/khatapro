@@ -199,9 +199,9 @@ export default function AuthModal() {
                     </span>
                   </div>
                   <div className="p-2 rounded-xl bg-white dark:bg-slate-800/50">
-                    <span className="text-slate-400 block text-[10px]">Assigned Role</span>
+                    <span className="text-slate-400 block text-[10px]">Account Status</span>
                     <span className="font-bold text-indigo-400 capitalize mt-0.5 block truncate">
-                      Super Admin
+                      Verified
                     </span>
                   </div>
                 </div>

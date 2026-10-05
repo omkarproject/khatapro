@@ -30,14 +30,75 @@ import {
   ChevronRight,
   BookOpen,
   CreditCard,
-  Wallet
+  Wallet,
+  Eye,
+  EyeOff,
+  Loader2,
+  KeyRound
 } from 'lucide-react';
 
 export default function SettingsPage() {
   const { settings, updateSettings, saveDefaultUpiAndQr, profile, setProfile, addToast, syncWithDatabase, currentUser } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'business' | 'upi' | 'backend'>('business');
+  const [activeTab, setActiveTab] = useState<'business' | 'upi' | 'backend' | 'security'>('business');
   const [isSyncingData, setIsSyncingData] = useState(false);
+
+  // Security & Password Update State
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (!newPassword || newPassword.trim().length < 4) {
+      setPasswordError('New password must be at least 4 characters long.');
+      return;
+    }
+
+    if (newPassword.trim() !== confirmPassword.trim()) {
+      setPasswordError('New password and confirm password do not match.');
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      const res = await fetch('/api/auth/update-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser?.id || profile?.id || 'usr_001',
+          email: currentUser?.email || profile?.email || 'anantyadav8924@gmail.com',
+          currentPassword: currentPassword ? currentPassword.trim() : undefined,
+          newPassword: newPassword.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to update password.');
+      }
+
+      setPasswordSuccess('Password updated and saved successfully in MongoDB Atlas!');
+      addToast('Password Changed', 'Your new password has been saved to MongoDB Atlas.', 'success');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      setPasswordError(err.message || 'Could not update password. Please check your credentials.');
+      addToast('Password Update Error', err.message || 'Failed to update password.', 'error');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
 
   // Business Profile State
   const [bName, setBName] = useState(() => {
@@ -519,6 +580,18 @@ export default function SettingsPage() {
         >
           <Database className="w-4 h-4" />
           Database & Cloud Auth
+        </button>
+
+        <button
+          onClick={() => setActiveTab('security')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+            activeTab === 'security'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <KeyRound className="w-4 h-4" />
+          Security & Password
         </button>
       </div>
 
@@ -1496,6 +1569,154 @@ export default function SettingsPage() {
             >
               <Save className="w-4 h-4" />
               Save Backend Provider
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Tab 4: Account Security & Password Update */}
+      {activeTab === 'security' && (
+        <form onSubmit={handleUpdatePassword} className="glass-card p-6 sm:p-8 space-y-6 max-w-2xl">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-200/80 dark:border-slate-800">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                <Lock className="w-4 h-4 text-indigo-500" />
+                Change &amp; Update Password
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Update your login password securely saved in MongoDB Atlas database
+              </p>
+            </div>
+            <span className="self-start sm:self-auto text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+              MongoDB Atlas
+            </span>
+          </div>
+
+          {/* Current User Summary Box */}
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-black text-sm flex items-center justify-center border border-indigo-200/80 dark:border-indigo-800">
+                {(currentUser?.name || profile?.name || 'A').charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                  {currentUser?.name || profile?.name || 'Anant Kumar Yadav'}
+                </p>
+                <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400 truncate">
+                  {currentUser?.email || profile?.email || 'anantyadav8924@gmail.com'}
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800">
+              Active User
+            </span>
+          </div>
+
+          {/* Status Banners */}
+          {passwordError && (
+            <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 flex items-start gap-2.5 text-xs text-rose-700 dark:text-rose-300 animate-in fade-in">
+              <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+              <span>{passwordError}</span>
+            </div>
+          )}
+
+          {passwordSuccess && (
+            <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-start gap-2.5 text-xs text-emerald-700 dark:text-emerald-300 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+              <span>{passwordSuccess}</span>
+            </div>
+          )}
+
+          {/* Input Fields */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Current Password <span className="text-slate-400 font-normal text-[11px]">(Optional if already logged in)</span>
+              </label>
+              <div className="relative">
+                <input
+                  type={showCurrentPass ? 'text' : 'password'}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="w-full px-3.5 py-2.5 pr-10 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPass(!showCurrentPass)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  {showCurrentPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                New Password *
+              </label>
+              <div className="relative">
+                <input
+                  type={showNewPass ? 'text' : 'password'}
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new strong password (min 4 characters)"
+                  className="w-full px-3.5 py-2.5 pr-10 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPass(!showNewPass)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Confirm New Password *
+              </label>
+              <div className="relative">
+                <input
+                  type={showConfirmPass ? 'text' : 'password'}
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-type new password"
+                  className="w-full px-3.5 py-2.5 pr-10 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPass(!showConfirmPass)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  {showConfirmPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Form Action */}
+          <div className="pt-2 flex items-center justify-end">
+            <button
+              type="submit"
+              disabled={isUpdatingPassword}
+              className="px-6 py-3 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-lg shadow-indigo-500/25 flex items-center gap-2 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
+            >
+              {isUpdatingPassword ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Updating in MongoDB Atlas...</span>
+                </>
+              ) : (
+                <>
+                  <KeyRound className="w-4 h-4" />
+                  <span>Update Password Now</span>
+                </>
+              )}
             </button>
           </div>
         </form>
