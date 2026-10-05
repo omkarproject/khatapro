@@ -451,10 +451,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // If cloud database is enabled (mongodb) or active user is logged in, sync with database
-    if (curSettings.backendProvider === 'mongodb' || activeU) {
-      const uId = activeU?.id || 'usr_001';
-      loadUserDataFromCloud(uId);
+    // If user is logged in, sync with database
+    if (activeU) {
+      loadUserDataFromCloud(activeU.id);
     }
 
     const handleStorageChange = (e: StorageEvent) => {
