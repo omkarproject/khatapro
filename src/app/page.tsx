@@ -84,12 +84,16 @@ export default function DashboardPage() {
     // Low stock count
     const lowStockItems = products.filter(p => p.currentStock <= p.minStock);
 
+    // Real Profit Margin %
+    const profitMargin = totalIncome > 0 ? Math.round((netProfit / totalIncome) * 100) : 0;
+
     return {
       totalCredit,
       totalDebit,
       totalIncome,
       totalExpense,
       netProfit,
+      profitMargin,
       totalSavings,
       inventoryVal,
       totalUPICollections,
@@ -147,6 +151,14 @@ export default function DashboardPage() {
       collection: dayMap[day].collection,
     }));
   }, [transactions, expenses]);
+
+  // Max cashflow value to properly format Y-Axis ticks
+  const maxCashFlowVal = useMemo(() => {
+    return Math.max(
+      ...cashFlowData.map(d => Math.max(d.income, d.expense, d.collection)),
+      0
+    );
+  }, [cashFlowData]);
 
   // Top Customers by outstanding credit
   const topCreditors = useMemo(() => {
@@ -232,11 +244,11 @@ export default function DashboardPage() {
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         
-        {/* Total Credit (You'll Receive) */}
+        {/* Total Credit */}
         <div className="glass-card p-5 relative overflow-hidden group">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              You&apos;ll Receive (Credit)
+              CREDIT
             </span>
             <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
               <ArrowDownLeft className="w-4 h-4" />
@@ -253,11 +265,11 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Total Debit (You'll Pay / Advance) */}
+        {/* Total Debit */}
         <div className="glass-card p-5 relative overflow-hidden group">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              You&apos;ll Pay (Debit)
+              DEBIT
             </span>
             <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center">
               <ArrowUpRight className="w-4 h-4" />
@@ -268,7 +280,9 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-2">
             <span>Supplier & advance credits</span>
-            <span className="text-emerald-600 font-semibold">Under Limit</span>
+            <span className={`font-semibold ${metrics.totalDebit === 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+              {metrics.totalDebit === 0 ? 'Clear' : 'Pending'}
+            </span>
           </div>
         </div>
 
@@ -276,18 +290,28 @@ export default function DashboardPage() {
         <div className="glass-card p-5 relative overflow-hidden group">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Net Profit (Month)
+              NET PROFIT
             </span>
             <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
-          <div className={`text-2xl font-extrabold ${metrics.netProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600'}`}>
+          <div className={`text-2xl font-extrabold ${metrics.netProfit > 0 ? 'text-emerald-600 dark:text-emerald-400' : metrics.netProfit < 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>
             {formatINR(metrics.netProfit)}
           </div>
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-2">
             <span>Revenue: {formatINR(metrics.totalIncome)}</span>
-            <span className="text-xs font-bold text-emerald-500">+14.2%</span>
+            <span className={`text-xs font-bold ${
+              metrics.totalIncome > 0 && metrics.netProfit > 0
+                ? 'text-emerald-500'
+                : metrics.netProfit < 0
+                ? 'text-rose-500'
+                : 'text-slate-400'
+            }`}>
+              {metrics.totalIncome > 0
+                ? `${metrics.profitMargin >= 0 ? '+' : ''}${metrics.profitMargin}%`
+                : '0% Margin'}
+            </span>
           </div>
         </div>
 
@@ -295,7 +319,7 @@ export default function DashboardPage() {
         <div className="glass-card p-5 relative overflow-hidden group">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              UPI Collections
+              UPI COLLECTIONS
             </span>
             <div className="w-8 h-8 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
               <QrCode className="w-4 h-4" />
@@ -306,7 +330,9 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-2">
             <span>Direct Merchant QR</span>
-            <span className="text-cyan-600 dark:text-cyan-400 font-semibold">Instant Bank Credit</span>
+            <span className="text-cyan-600 dark:text-cyan-400 font-semibold">
+              {metrics.totalUPICollections > 0 ? 'Received' : 'Instant Bank Credit'}
+            </span>
           </div>
         </div>
 
@@ -357,7 +383,18 @@ export default function DashboardPage() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.15)" />
                 <XAxis dataKey="day" stroke="#94A3B8" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="#94A3B8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val / 1000}k`} />
+                <YAxis
+                  stroke="#94A3B8"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  domain={maxCashFlowVal === 0 ? [0, 1000] : [0, 'auto']}
+                  tickFormatter={(val) => {
+                    if (val === 0) return '₹0';
+                    if (val >= 1000) return `₹${Math.round(val / 1000)}k`;
+                    return `₹${val}`;
+                  }}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: 'rgba(15, 23, 42, 0.9)',
