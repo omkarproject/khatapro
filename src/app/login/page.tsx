@@ -230,7 +230,7 @@ export default function LoginPage() {
                           type="text"
                           value={businessName}
                           onChange={(e) => setBusinessName(e.target.value)}
-                          placeholder="e.g. Sharma Traders & Enterprise"
+                          placeholder="e.g. Apex Enterprises / My Store"
                           className="w-full pl-10 pr-3 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
                         />
                       </div>
@@ -265,7 +265,7 @@ export default function LoginPage() {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="e.g. anantyadav8924@gmail.com"
+                      placeholder="e.g. business@gmail.com"
                       className="w-full pl-10 pr-3 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
                     />
                   </div>

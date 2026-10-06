@@ -21,10 +21,10 @@ import {
 } from 'lucide-react';
 
 export default function PricingAndProductsPage() {
-  const { settings, profile, addToast } = useApp();
+  const { settings, profile, currentUser, addToast } = useApp();
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'software' | 'hardware'>('all');
 
-  const businessName = settings.businessName || profile.businessName || 'Sharma Traders & Enterprise';
+  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || 'SmartKhata Pro';
 
   // Digital Software Plans (Prices in INR)
   const softwarePlans = [

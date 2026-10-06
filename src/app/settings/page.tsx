@@ -391,7 +391,7 @@ export default function SettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: currentUser?.id || profile?.id || 'usr_001',
-          email: currentUser?.email || profile?.email || 'anantyadav8924@gmail.com',
+          email: currentUser?.email || profile?.email || '',
           currentPassword: currentPassword ? currentPassword.trim() : undefined,
           newPassword: newPassword.trim(),
         }),
@@ -429,44 +429,49 @@ export default function SettingsPage() {
   const [bName, setBName] = useState(() => {
     if (typeof window !== 'undefined') {
       const s = StorageService.getSettings();
-      return s.businessName || settings.businessName;
+      const p = StorageService.getProfile();
+      return s.businessName || p?.businessName || settings.businessName || profile?.businessName || currentUser?.businessName || '';
     }
-    return settings.businessName;
+    return settings.businessName || profile?.businessName || currentUser?.businessName || '';
   });
   const [bTagline, setBTagline] = useState(() => {
     if (typeof window !== 'undefined') {
       const s = StorageService.getSettings();
-      return s.businessTagline || settings.businessTagline;
+      return s.businessTagline || settings.businessTagline || 'Track Money, Manage Business, Grow Faster';
     }
-    return settings.businessTagline;
+    return settings.businessTagline || 'Track Money, Manage Business, Grow Faster';
   });
   const [bPhone, setBPhone] = useState(() => {
     if (typeof window !== 'undefined') {
       const s = StorageService.getSettings();
-      return s.businessPhone || settings.businessPhone;
+      const p = StorageService.getProfile();
+      return s.businessPhone || p?.phone || settings.businessPhone || profile?.phone || currentUser?.phone || '';
     }
-    return settings.businessPhone;
+    return settings.businessPhone || profile?.phone || currentUser?.phone || '';
   });
   const [bEmail, setBEmail] = useState(() => {
     if (typeof window !== 'undefined') {
       const s = StorageService.getSettings();
-      return s.businessEmail || settings.businessEmail;
+      const p = StorageService.getProfile();
+      return s.businessEmail || p?.email || settings.businessEmail || profile?.email || currentUser?.email || '';
     }
-    return settings.businessEmail;
+    return settings.businessEmail || profile?.email || currentUser?.email || '';
   });
   const [bAddress, setBAddress] = useState(() => {
     if (typeof window !== 'undefined') {
       const s = StorageService.getSettings();
-      return s.businessAddress || settings.businessAddress;
+      const p = StorageService.getProfile();
+      return s.businessAddress || p?.businessAddress || settings.businessAddress || profile?.businessAddress || '';
     }
-    return settings.businessAddress;
+    return settings.businessAddress || profile?.businessAddress || '';
   });
   const [bGst, setBGst] = useState(() => {
     if (typeof window !== 'undefined') {
       const s = StorageService.getSettings();
-      return s.paymentSettings?.businessGst || settings.paymentSettings?.businessGst || '';
+      const p = StorageService.getProfile();
+      return s.paymentSettings?.businessGst || p?.businessGst || settings.paymentSettings?.businessGst || profile?.businessGst || '';
     }
-    return settings.paymentSettings?.businessGst || '';
+    return settings.paymentSettings?.businessGst || profile?.businessGst || '';
   });
 
   // UPI & Payment Collection Modes (Direct UPI, Cashfree Gateway, UPI Gateway)
@@ -604,6 +609,7 @@ export default function SettingsPage() {
       if (settings.paymentSettings.upiGatewayWebhookUrl) setUpiGatewayWebhookUrl(settings.paymentSettings.upiGatewayWebhookUrl);
     }
     if (settings.businessName) setBName(settings.businessName);
+    if (settings.businessLogo) setBLogo(settings.businessLogo);
     if (settings.businessTagline) setBTagline(settings.businessTagline);
     if (settings.businessPhone) setBPhone(settings.businessPhone);
     if (settings.businessEmail) setBEmail(settings.businessEmail);
@@ -696,36 +702,47 @@ export default function SettingsPage() {
   // Handle Business Save
   const handleSaveBusiness = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanBName = bName.trim();
+    const cleanBTagline = bTagline.trim();
+    const cleanBPhone = bPhone.trim();
+    const cleanBEmail = bEmail.trim();
+    const cleanBAddress = bAddress.trim();
+    const cleanBGst = bGst.trim();
+
     const updated: SystemSettings = {
       ...settings,
-      businessName: bName.trim(),
+      businessName: cleanBName,
       businessLogo: bLogo,
-      businessTagline: bTagline.trim(),
-      businessPhone: bPhone.trim(),
-      businessEmail: bEmail.trim(),
-      businessAddress: bAddress.trim(),
+      businessTagline: cleanBTagline,
+      businessPhone: cleanBPhone,
+      businessEmail: cleanBEmail,
+      businessAddress: cleanBAddress,
       paymentSettings: {
         ...settings.paymentSettings,
-        businessGst: bGst.trim(),
+        businessGst: cleanBGst,
+        payeeName: cleanBName || settings.paymentSettings?.payeeName || '',
       },
     };
     updateSettings(updated);
     setProfile({
       ...profile,
-      businessName: bName.trim(),
+      businessName: cleanBName,
       avatarUrl: bLogo,
-      businessGst: bGst.trim(),
-      businessAddress: bAddress.trim(),
-      phone: bPhone.trim(),
-      email: bEmail.trim(),
+      businessGst: cleanBGst,
+      businessAddress: cleanBAddress,
+      phone: cleanBPhone,
+      email: cleanBEmail,
     });
+    if (cleanBName) {
+      setPayeeName(cleanBName);
+    }
   };
 
   // Handle Payment Collection Settings Save
   const handleSaveUpi = (e: React.FormEvent) => {
     e.preventDefault();
     if (collectionMode === 'direct_upi' && (!upiId.trim() || !upiId.includes('@'))) {
-      addToast('Invalid UPI ID', 'Please enter a valid VPA format (e.g. sharma.traders@okaxis)', 'error');
+      addToast('Invalid UPI ID', 'Please enter a valid VPA format (e.g. yourstore@okhdfcbank)', 'error');
       return;
     }
     const updatedPaymentSettings: PaymentSettings = {
@@ -1359,7 +1376,7 @@ export default function SettingsPage() {
                     required={collectionMode === 'direct_upi'}
                     value={upiId}
                     onChange={(e) => setUpiId(e.target.value)}
-                    placeholder="e.g. sharma.traders@okaxis"
+                    placeholder="e.g. yourstore@okhdfcbank"
                     className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
                   />
                   <p className="text-[10px] text-slate-400 mt-1">Google Pay, PhonePe, Paytm or BHIM merchant UPI ID</p>
@@ -1374,7 +1391,7 @@ export default function SettingsPage() {
                     required={collectionMode === 'direct_upi'}
                     value={payeeName}
                     onChange={(e) => setPayeeName(e.target.value)}
-                    placeholder="e.g. Sharma Traders"
+                    placeholder="e.g. My Business / Store Name"
                     className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
                   />
                   <p className="text-[10px] text-slate-400 mt-1">Business name appearing on customer payment screen</p>
@@ -2050,10 +2067,10 @@ export default function SettingsPage() {
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                  {currentUser?.name || profile?.name || 'Anant Kumar Yadav'}
+                  {currentUser?.name || profile?.name || 'Administrator'}
                 </p>
                 <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400 truncate">
-                  {currentUser?.email || profile?.email || 'anantyadav8924@gmail.com'}
+                  {currentUser?.email || profile?.email || ''}
                 </p>
               </div>
             </div>
@@ -3234,8 +3251,8 @@ export default function SettingsPage() {
                     </div>
                     <div className="pl-9 space-y-1.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                       <p>1. Apne phone me Google Pay for Business, PhonePe Business, Paytm Business ya BHIM app kholein.</p>
-                      <p>2. Profile ya QR settings me jakar apna <strong>Merchant UPI ID</strong> dekhein (Jaise: <code className="bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded font-mono font-bold text-slate-900 dark:text-white">8371838314@upi</code> ya <code className="bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded font-mono font-bold text-slate-900 dark:text-white">sharma.traders@okaxis</code>).</p>
-                      <p>3. Is UPI ID ko copy kar lein aur apna <strong>Payee / Dukaan ka Naam</strong> (e.g. <em>Sharma Traders</em>) note karein.</p>
+                      <p>2. Profile ya QR settings me jakar apna <strong>Merchant UPI ID</strong> dekhein (Jaise: <code className="bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded font-mono font-bold text-slate-900 dark:text-white">yourname@okhdfcbank</code> ya <code className="bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded font-mono font-bold text-slate-900 dark:text-white">yourstore@okaxis</code>).</p>
+                      <p>3. Is UPI ID ko copy kar lein aur apna <strong>Payee / Dukaan ka Naam</strong> (e.g. <em>Apna Business Name</em>) note karein.</p>
                     </div>
                   </div>
 

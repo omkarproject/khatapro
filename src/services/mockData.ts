@@ -13,14 +13,14 @@ import {
 
 export const initialUserProfile: UserProfile = {
   id: 'usr_001',
-  name: 'Anant Kumar Yadav',
-  email: 'anantyadav8924@gmail.com',
-  phone: '8371838314',
+  name: 'Store Owner',
+  email: '',
+  phone: '',
   role: 'super_admin',
-  businessName: 'Sharma Traders & Enterprise',
+  businessName: '',
   businessGst: '',
-  businessAddress: 'Plot 42, Apex Industrial Park, Andheri East, Mumbai, MH 400069',
-  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+  businessAddress: '',
+  avatarUrl: '',
   createdAt: '2025-01-10T10:00:00Z',
 };
 
@@ -207,7 +207,7 @@ export const initialTransactions: Transaction[] = [
     referenceNo: 'UPI/5060708090',
     note: 'Payment received via SmartKhata UPI QR',
     status: 'completed',
-    createdBy: 'Rajesh Sharma',
+    createdBy: 'Admin',
     createdAt: '2025-03-01T11:00:00Z',
   },
   {
@@ -221,7 +221,7 @@ export const initialTransactions: Transaction[] = [
     paymentMode: 'cheque',
     note: 'Supplied high-density networking cables & switches',
     status: 'completed',
-    createdBy: 'Rajesh Sharma',
+    createdBy: 'Admin',
     createdAt: '2025-03-02T15:30:00Z',
   },
   {
@@ -234,7 +234,7 @@ export const initialTransactions: Transaction[] = [
     referenceNo: 'NEFT-889922001',
     note: 'March Maintenance & Warehouse Electricity Bill',
     status: 'completed',
-    createdBy: 'Rajesh Sharma',
+    createdBy: 'Admin',
     createdAt: '2025-03-03T10:15:00Z',
   },
   {
@@ -249,7 +249,7 @@ export const initialTransactions: Transaction[] = [
     referenceNo: 'IMPS-44332211',
     note: 'Bulk dispatch settlement',
     status: 'completed',
-    createdBy: 'Rajesh Sharma',
+    createdBy: 'Admin',
     createdAt: '2025-03-04T12:00:00Z',
   },
   {
@@ -264,7 +264,7 @@ export const initialTransactions: Transaction[] = [
     referenceNo: 'UPI/9988776655',
     note: 'Partial payment on overdue invoice',
     status: 'completed',
-    createdBy: 'Rajesh Sharma',
+    createdBy: 'Admin',
     createdAt: '2025-03-05T09:45:00Z',
   },
   {
@@ -277,7 +277,7 @@ export const initialTransactions: Transaction[] = [
     referenceNo: 'UPI/4455667788',
     note: 'Inter-state courier & transport freight charges',
     status: 'completed',
-    createdBy: 'Rajesh Sharma',
+    createdBy: 'Admin',
     createdAt: '2025-03-06T16:20:00Z',
   }
 ];
@@ -594,7 +594,7 @@ export const initialReminders: PaymentReminder[] = [
     reminderType: 'overdue',
     channels: ['whatsapp', 'sms'],
     status: 'pending',
-    messageTemplate: 'Dear Priya Sundaram, a friendly reminder that ₹82,000 against invoice #1042 was due on 02-Mar-2025. Kindly pay via our UPI ID: sharma.traders@okaxis or scan our QR code. Thank you, Sharma Traders.',
+    messageTemplate: 'Dear Priya Sundaram, a friendly reminder that ₹82,000 against invoice #1042 was due on 02-Mar-2025. Kindly pay at the earliest. Thank you.',
   },
   {
     id: 'rem_02',
@@ -607,7 +607,7 @@ export const initialReminders: PaymentReminder[] = [
     reminderType: 'upcoming',
     channels: ['whatsapp'],
     status: 'scheduled',
-    messageTemplate: 'Hello Deepak Patel, your invoice #1043 of ₹52,108 will be due on 20-Mar-2025. Thank you for choosing Sharma Traders.',
+    messageTemplate: 'Hello Deepak Patel, your invoice #1043 of ₹52,108 will be due on 20-Mar-2025. Thank you.',
   },
   {
     id: 'rem_03',
@@ -619,7 +619,7 @@ export const initialReminders: PaymentReminder[] = [
     reminderType: 'upcoming',
     channels: ['whatsapp', 'sms'],
     status: 'pending',
-    messageTemplate: 'Hello Neha Roy, your balance of ₹12,500 is due on 10-Mar-2025. Tap here to pay via UPI: upi://pay?pa=sharma.traders@okaxis&pn=Sharma+Traders&am=12500',
+    messageTemplate: 'Hello Neha Roy, your balance of ₹12,500 is due on 10-Mar-2025. Kindly settle at your earliest convenience.',
   }
 ];
 
@@ -636,7 +636,7 @@ export const initialDocuments: DocumentItem[] = [
   },
   {
     id: 'doc_02',
-    title: 'GST_Registration_Certificate_SharmaTraders.pdf',
+    title: 'GST_Registration_Certificate.pdf',
     category: 'tax',
     fileUrl: '/docs/gst_certificate.pdf',
     fileType: 'PDF',
@@ -661,18 +661,17 @@ export const initialSystemSettings: SystemSettings = {
   backendProvider: 'local',
   mongodbUri: 'mongodb+srv://smartkhata:KhataPass%402026@cluster0.7evxtf6.mongodb.net/?appName=Cluster0',
   mongodbDbName: 'smartkhata_db',
-  businessName: 'Sharma Traders & Enterprise',
+  businessName: '',
   businessTagline: 'Track Money, Manage Business, Grow Faster',
-  businessPhone: '8371838314',
-  businessEmail: 'anantyadav8924@gmail.com',
-  businessAddress: 'Plot 42, Apex Industrial Park, Andheri East, Mumbai, MH 400069',
+  businessPhone: '',
+  businessEmail: '',
+  businessAddress: '',
   paymentSettings: {
     collectionMode: 'direct_upi',
-    upiId: '8371838314@upi',
-    payeeName: 'Sharma Traders & Enterprise',
-    // Realistic default QR code provided out of the box
-    customQrUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi%3A%2F%2Fpay%3Fpa%3D8371838314%40upi%26pn%3DSharma%2BTraders%26cu%3DINR',
-    isDefaultQrSaved: true,
+    upiId: '',
+    payeeName: '',
+    customQrUrl: '',
+    isDefaultQrSaved: false,
     businessGst: '',
     currency: 'INR',
     enableSoundAlerts: true,

@@ -33,7 +33,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
-  const { settings, profile } = useApp();
+  const { settings, profile, currentUser } = useApp();
 
   const navItems = [
     { label: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -157,10 +157,10 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
             </span>
           </div>
           <div className="text-xs font-bold text-slate-900 dark:text-white truncate" suppressHydrationWarning>
-            {profile.businessName}
+            {settings.businessName || profile?.businessName || currentUser?.businessName || 'SmartKhata Merchant'}
           </div>
           <div className="text-[11px] text-slate-500 truncate font-mono" suppressHydrationWarning>
-            {settings.paymentSettings.upiId}
+            {settings.paymentSettings?.upiId || settings.businessPhone || profile?.phone || currentUser?.phone || 'Configure in Settings'}
           </div>
         </div>
 

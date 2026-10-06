@@ -39,6 +39,7 @@ export default function QuickUPICollectModal() {
   const {
     settings,
     profile,
+    currentUser,
     saveDefaultUpiAndQr,
     isCollectModalOpen,
     closeCollectModal,
@@ -57,8 +58,8 @@ export default function QuickUPICollectModal() {
   const [serverCfConfigured, setServerCfConfigured] = useState(false);
 
   // Form State
-  const [upiId, setUpiId] = useState(paymentSettings.upiId || '8371838314@upi');
-  const [payeeName, setPayeeName] = useState(paymentSettings.payeeName || profile.businessName || 'Sharma Traders & Enterprise');
+  const [upiId, setUpiId] = useState(paymentSettings.upiId || '');
+  const [payeeName, setPayeeName] = useState(paymentSettings.payeeName || settings.businessName || profile.businessName || currentUser?.businessName || '');
   const [amount, setAmount] = useState<string>('');
   const [note, setNote] = useState<string>('');
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
@@ -184,8 +185,8 @@ export default function QuickUPICollectModal() {
   // Sync state when modal opens or settings change
   useEffect(() => {
     if (isCollectModalOpen) {
-      setUpiId(paymentSettings.upiId || '8371838314@upi');
-      setPayeeName(paymentSettings.payeeName || profile.businessName || 'Sharma Traders & Enterprise');
+      setUpiId(paymentSettings.upiId || '');
+      setPayeeName(paymentSettings.payeeName || settings.businessName || profile.businessName || currentUser?.businessName || '');
       setCustomQrUrl(paymentSettings.customQrUrl);
       setRecordedSuccess(false);
       setGatewayError('');
@@ -360,7 +361,7 @@ export default function QuickUPICollectModal() {
           orderAmount: numAmount,
           customerName: customerDisplayName,
           customerPhone: customerPhone || '9820111223',
-          customerEmail: profile.email || 'anantyadav8924@gmail.com',
+          customerEmail: settings.businessEmail || profile.email || currentUser?.email || 'customer@smartkhatapro.in',
           appId: appId || undefined,
           secretKey: secretKey || undefined,
           env,
@@ -491,7 +492,7 @@ export default function QuickUPICollectModal() {
         prefill: {
           name: customerDisplayName,
           contact: customerPhone,
-          email: profile.email || 'anantyadav8924@gmail.com',
+          email: settings.businessEmail || profile.email || currentUser?.email || '',
         },
         theme: {
           color: '#4F46E5',
@@ -1385,7 +1386,7 @@ export default function QuickUPICollectModal() {
                         type="text"
                         value={upiId}
                         onChange={(e) => setUpiId(e.target.value)}
-                        placeholder="e.g. sharma.traders@okaxis"
+                        placeholder="e.g. yourstore@okhdfcbank"
                         className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-slate-900 dark:text-white"
                       />
                     </div>
@@ -1397,7 +1398,7 @@ export default function QuickUPICollectModal() {
                         type="text"
                         value={payeeName}
                         onChange={(e) => setPayeeName(e.target.value)}
-                        placeholder="e.g. Sharma Traders"
+                        placeholder="e.g. My Business / Store Name"
                         className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
                       />
                     </div>

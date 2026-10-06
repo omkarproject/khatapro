@@ -160,7 +160,13 @@ export const StorageService = {
     if (data.reminders !== undefined) setLocalItem(STORAGE_KEYS.REMINDERS, data.reminders);
     if (data.documents !== undefined) setLocalItem(STORAGE_KEYS.DOCUMENTS, data.documents);
     if (data.settings !== undefined) setLocalItem(STORAGE_KEYS.SETTINGS, data.settings);
-    if (data.user !== undefined) setLocalItem(STORAGE_KEYS.PROFILE, data.user);
+    if (data.user !== undefined) {
+      setLocalItem(STORAGE_KEYS.PROFILE, data.user);
+      const cur = StorageService.getCurrentUser();
+      if (cur) {
+        StorageService.setCurrentUser({ ...cur, ...data.user });
+      }
+    }
   },
 
   // Initialize clean user data if not already present (No pre-filled mock records)
@@ -195,8 +201,12 @@ export const StorageService = {
   // Profile
   getProfile: (): UserProfile => {
     const cur = StorageService.getCurrentUser();
+    const stored = getLocalItem<UserProfile | null>(STORAGE_KEYS.PROFILE, null as any);
+    if (stored && (stored.businessName || stored.name || stored.email)) {
+      return cur ? { ...cur, ...stored } : stored;
+    }
     if (cur) return cur;
-    return getLocalItem(STORAGE_KEYS.PROFILE, {
+    return {
       id: 'guest',
       name: '',
       email: '',
@@ -206,9 +216,15 @@ export const StorageService = {
       businessGst: '',
       businessAddress: '',
       createdAt: new Date().toISOString(),
-    });
+    };
   },
-  updateProfile: (profile: UserProfile): void => setLocalItem(STORAGE_KEYS.PROFILE, profile),
+  updateProfile: (profile: UserProfile): void => {
+    setLocalItem(STORAGE_KEYS.PROFILE, profile);
+    const cur = StorageService.getCurrentUser();
+    if (cur) {
+      StorageService.setCurrentUser({ ...cur, ...profile });
+    }
+  },
 
   // Settings & Persistent UPI / QR configuration
   getSettings: (): SystemSettings => {

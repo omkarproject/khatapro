@@ -41,7 +41,7 @@ function CustomerPayInvoiceContent() {
     gwParam && ['direct_upi', 'cashfree', 'razorpay', 'upi_gateway'].includes(gwParam)
   );
 
-  const { invoices, saveInvoice, settings, updateSettings, profile, addTransaction, addToast } = useApp();
+  const { invoices, saveInvoice, settings, updateSettings, profile, currentUser, addTransaction, addToast } = useApp();
 
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -156,20 +156,27 @@ function CustomerPayInvoiceContent() {
     return () => clearTimeout(timer);
   }, [invoiceId, invoices]);
 
-  // Payment settings from business profile
-  const upiId = settings.paymentSettings.upiId || '8371838314@upi';
-  const payeeName = settings.paymentSettings.payeeName || profile.businessName;
+  // Dynamic business & payment details resolved from Enterprise Information
+  const merchantName = (settings.businessName || profile.businessName || currentUser?.businessName || 'Merchant').trim();
+  const payeeName = (settings.paymentSettings?.payeeName || settings.businessName || profile.businessName || currentUser?.businessName || 'Merchant').trim();
+  const merchantPhone = (settings.businessPhone || profile.phone || currentUser?.phone || '').trim();
+  const merchantEmail = (settings.businessEmail || profile.email || currentUser?.email || '').trim();
+  const merchantGst = (settings.paymentSettings?.businessGst || profile.businessGst || '').trim();
+  const merchantAddress = (settings.businessAddress || profile.businessAddress || '').trim();
+  const merchantLogo = settings.businessLogo || profile.avatarUrl || currentUser?.avatarUrl || '';
+  const upiId = (settings.paymentSettings.upiId || (merchantPhone ? `${merchantPhone}@upi` : '')).trim();
 
   // Build deep links
   const upiDeepLink = useMemo(() => {
-    if (!invoice) return '';
+    if (!invoice || !upiId) return '';
     return buildUpiUri(upiId, payeeName, invoice.total, `Invoice_${invoice.invoiceNumber}`);
   }, [upiId, payeeName, invoice]);
 
   const qrCodeUrl = useMemo(() => {
+    if (settings.paymentSettings.customQrUrl) return settings.paymentSettings.customQrUrl;
     if (!upiDeepLink) return '';
     return getQrCodeUrl(upiDeepLink, 320);
-  }, [upiDeepLink]);
+  }, [upiDeepLink, settings.paymentSettings.customQrUrl]);
 
   // Load Razorpay Checkout Script
   const loadRazorpayScript = (): Promise<boolean> => {
@@ -275,9 +282,9 @@ function CustomerPayInvoiceContent() {
         key: razorpayKey,
         amount: Math.round(invoice.total * 100), // amount in paise
         currency: 'INR',
-        name: profile.businessName || 'KhataPro Merchant',
+        name: merchantName || 'KhataPro Merchant',
         description: `Payment for Tax Invoice #${invoice.invoiceNumber}`,
-        image: 'https://cdn-icons-png.flaticon.com/512/9131/9131529.png',
+        image: merchantLogo || 'https://cdn-icons-png.flaticon.com/512/9131/9131529.png',
         handler: function (response: any) {
           setIsRazorpayLoading(false);
           const paymentId = response.razorpay_payment_id || `pay_rzp_${Date.now()}`;
@@ -286,7 +293,7 @@ function CustomerPayInvoiceContent() {
         prefill: {
           name: invoice.customerName || '',
           contact: invoice.customerPhone || '',
-          email: profile.email || 'anantyadav8924@gmail.com',
+          email: merchantEmail || (invoice as any).customerEmail || '',
         },
         notes: {
           invoice_number: invoice.invoiceNumber,
@@ -319,21 +326,21 @@ function CustomerPayInvoiceContent() {
   // Connect to Admin on WhatsApp with Error Details
   const handleConnectAdminWhatsApp = (customError?: string) => {
     if (!invoice) return;
-    const adminPhone = (profile.phone || '8371838314').replace(/\D/g, '').slice(-10);
+    const adminPhone = (merchantPhone || profile.phone || currentUser?.phone || '').replace(/\D/g, '').slice(-10);
     const orderRef = lastOrderId || `INV_${invoice.invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}`;
     const invoiceUrl = typeof window !== 'undefined' ? window.location.href : '';
     const errText =
       customError ||
       cfApiError ||
-      'Broken Link! http://localhost:3000/ is not enabled or approved in Cashfree. Please whitelist domain in Cashfree Merchant Dashboard or provide alternate payment method.';
+      'Broken Link! localhost/domain is not enabled in Cashfree. Please whitelist domain or provide alternate payment method.';
 
-    const message = `🚨 *Khatapro Payment Assistance / Error Report*
+    const message = `🚨 *Payment Assistance / Error Report*
 ------------------------------------------------
 📄 *Invoice:* #${invoice.invoiceNumber}
 💰 *Total Payable:* ${formatINR(invoice.total)}
 👤 *Customer:* ${invoice.customerName || 'Customer'}
 📱 *Customer Phone:* ${invoice.customerPhone || 'N/A'}
-🏢 *Merchant:* ${profile.businessName}
+🏢 *Merchant:* ${merchantName}
 
 ⚠️ *Error Encountered:*
 "${errText}"
@@ -341,7 +348,7 @@ function CustomerPayInvoiceContent() {
 🆔 *Order Reference:* ${orderRef}
 🔗 *Payment URL:* ${invoiceUrl}
 ------------------------------------------------
-_Hello Admin, I encountered this error while trying to pay. Please whitelist the domain or assist with alternate payment._`;
+_Hello, I encountered this error while trying to pay. Please assist._`;
 
     // Copy to clipboard for easy paste with screenshot image
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -349,8 +356,10 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
     }
     addToast('Connecting WhatsApp', 'Error details copied to clipboard & WhatsApp opened!', 'success');
 
-    const waUrl = `https://wa.me/91${adminPhone}?text=${encodeURIComponent(message)}`;
-    window.open(waUrl, '_blank');
+    if (adminPhone) {
+      const waUrl = `https://wa.me/91${adminPhone}?text=${encodeURIComponent(message)}`;
+      window.open(waUrl, '_blank');
+    }
   };
 
   // REAL CASHFREE API EXECUTION FUNCTION
@@ -380,7 +389,7 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
           orderAmount: amountToPay,
           customerName: invoice.customerName || 'Customer',
           customerPhone: invoice.customerPhone || '9820111223',
-          customerEmail: profile.email || 'anantyadav8924@gmail.com',
+          customerEmail: (invoice as any).customerEmail || merchantEmail || 'customer@smartkhatapro.in',
           appId: appId || undefined,
           secretKey: secretKey || undefined,
           env,
@@ -560,20 +569,28 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
         {/* Top Trust & Branding Bar - HIDDEN IN PRINT */}
         <div className="glass-card p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 border border-slate-200 dark:border-slate-800 shadow-sm print:hidden">
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl fintech-gradient-primary text-white flex items-center justify-center font-black text-lg shadow-md shadow-indigo-500/20">
-              {profile.businessName.charAt(0) || 'S'}
-            </div>
+            {merchantLogo ? (
+              <img
+                src={merchantLogo}
+                alt={merchantName}
+                className="w-12 h-12 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-md"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-2xl fintech-gradient-primary text-white flex items-center justify-center font-black text-lg shadow-md shadow-indigo-500/20">
+                {merchantName.charAt(0) || 'M'}
+              </div>
+            )}
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base font-extrabold text-slate-900 dark:text-white">
-                  {profile.businessName}
+                  {merchantName}
                 </h1>
                 <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3" /> Verified Merchant
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {profile.phone} • {profile.email} {profile.businessGst ? `• GSTIN: ${profile.businessGst}` : ''}
+                {[merchantPhone, merchantEmail, merchantGst ? `GSTIN: ${merchantGst}` : ''].filter(Boolean).join(' • ')}
               </p>
             </div>
           </div>
@@ -603,12 +620,12 @@ _Hello Admin, I encountered this error while trying to pay. Please whitelist the
               {/* PRINT ONLY MERCHANT HEADER - Only visible when printing */}
               <div className="hidden print:flex justify-between items-start pb-4 border-b border-slate-300">
                 <div>
-                  <h1 className="text-xl font-black text-slate-900">{profile.businessName}</h1>
+                  <h1 className="text-xl font-black text-slate-900">{merchantName}</h1>
                   <p className="text-xs text-slate-600 mt-1">
-                    {profile.phone} • {profile.email} {profile.businessGst ? `• GSTIN: ${profile.businessGst}` : ''}
+                    {[merchantPhone, merchantEmail, merchantGst ? `GSTIN: ${merchantGst}` : ''].filter(Boolean).join(' • ')}
                   </p>
-                  {profile.businessAddress && (
-                    <p className="text-xs text-slate-500 mt-0.5">{profile.businessAddress}</p>
+                  {merchantAddress && (
+                    <p className="text-xs text-slate-500 mt-0.5">{merchantAddress}</p>
                   )}
                 </div>
                 <div className="text-right">

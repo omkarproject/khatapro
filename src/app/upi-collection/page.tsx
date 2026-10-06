@@ -80,7 +80,7 @@ export default function UpiCollectionPage() {
   // Save Default UPI & QR (Requested User Feature)
   const handleSaveDefault = () => {
     if (!upiId.includes('@')) {
-      addToast('Invalid UPI ID', 'Please enter a valid UPI VPA (e.g. sharma.traders@okaxis)', 'error');
+      addToast('Invalid UPI ID', 'Please enter a valid UPI VPA (e.g. yourstore@okhdfcbank)', 'error');
       return;
     }
 
@@ -259,7 +259,7 @@ export default function UpiCollectionPage() {
                   type="text"
                   value={upiId}
                   onChange={(e) => setUpiId(e.target.value)}
-                  placeholder="e.g. sharma.traders@okaxis"
+                  placeholder="e.g. yourstore@okhdfcbank"
                   className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
@@ -272,7 +272,7 @@ export default function UpiCollectionPage() {
                   type="text"
                   value={payeeName}
                   onChange={(e) => setPayeeName(e.target.value)}
-                  placeholder="e.g. Sharma Traders Enterprise"
+                  placeholder="e.g. My Business / Store Name"
                   className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>

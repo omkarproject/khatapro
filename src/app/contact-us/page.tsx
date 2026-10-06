@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 export default function ContactUsPage() {
-  const { settings, profile, addToast } = useApp();
+  const { settings, profile, currentUser, addToast } = useApp();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -25,11 +25,11 @@ export default function ContactUsPage() {
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  const businessName = settings.businessName || profile.businessName || 'Sharma Traders & Enterprise';
-  const businessPhone = settings.businessPhone || profile.phone || '+91 8371838314';
-  const businessEmail = settings.businessEmail || profile.email || 'anantyadav8924@gmail.com';
-  const businessAddress = settings.businessAddress || profile.businessAddress || 'Plot 42, Apex Industrial Park, Andheri East, Mumbai, MH 400069';
-  const businessGst = settings.paymentSettings?.businessGst || '';
+  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || 'SmartKhata Pro';
+  const businessPhone = settings.businessPhone || profile.phone || currentUser?.phone || '';
+  const businessEmail = settings.businessEmail || profile.email || currentUser?.email || 'support@smartkhatapro.in';
+  const businessAddress = settings.businessAddress || profile.businessAddress || '';
+  const businessGst = settings.paymentSettings?.businessGst || profile.businessGst || '';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,7 +195,7 @@ export default function ContactUsPage() {
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Rajesh Sharma"
+                      placeholder="e.g. Customer Name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"

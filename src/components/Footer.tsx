@@ -6,11 +6,11 @@ import { useApp } from '@/context/AppContext';
 import { ShieldCheck, Lock, Heart, Phone, Mail, MapPin } from 'lucide-react';
 
 export default function Footer() {
-  const { settings, profile } = useApp();
-  const businessName = settings.businessName || profile.businessName || 'Sharma Traders & Enterprise';
-  const businessPhone = settings.businessPhone || profile.phone || '+91 8371838314';
-  const businessEmail = settings.businessEmail || profile.email || 'anantyadav8924@gmail.com';
-  const businessAddress = settings.businessAddress || profile.businessAddress || 'Plot 42, Apex Industrial Park, Andheri East, Mumbai, MH 400069';
+  const { settings, profile, currentUser } = useApp();
+  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || 'SmartKhata Pro';
+  const businessPhone = settings.businessPhone || profile.phone || currentUser?.phone || '';
+  const businessEmail = settings.businessEmail || profile.email || currentUser?.email || 'support@smartkhatapro.in';
+  const businessAddress = settings.businessAddress || profile.businessAddress || '';
   const businessGst = settings.paymentSettings?.businessGst || profile.businessGst || '';
 
   return (

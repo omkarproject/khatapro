@@ -82,6 +82,7 @@ function KhataPageInner() {
     openCollectModal,
     settings,
     profile,
+    currentUser,
     addToast,
   } = useApp();
 
@@ -1925,9 +1926,9 @@ interface AttachedBill {
       const formattedDue = formatINR(numDue);
 
       // Sender Business Profile & Official Phone (from Settings / Enterprise Profile)
-      const businessName = (settings.businessName || profile?.businessName || 'Sharma Traders & Enterprise').trim();
-      const officialPhone = (settings.businessPhone || profile?.phone || '8371838314').trim();
-      const upiId = (settings.paymentSettings?.upiId || `${officialPhone}@upi`).trim();
+      const businessName = (settings.businessName || profile?.businessName || currentUser?.businessName || 'SmartKhata Merchant').trim();
+      const officialPhone = (settings.businessPhone || profile?.phone || currentUser?.phone || '').trim();
+      const upiId = (settings.paymentSettings?.upiId || (officialPhone ? `${officialPhone}@upi` : '')).trim();
       const payeeName = (settings.paymentSettings?.payeeName || businessName).trim();
 
       const upiUri = buildUpiUri(
@@ -2017,9 +2018,9 @@ interface AttachedBill {
         : 3000;
       const formattedDue = formatINR(numDue);
 
-      const businessName = (settings.businessName || profile?.businessName || 'Sharma Traders & Enterprise').trim();
-      const officialPhone = (settings.businessPhone || profile?.phone || '8371838314').trim();
-      const upiId = (settings.paymentSettings?.upiId || `${officialPhone}@upi`).trim();
+      const businessName = (settings.businessName || profile?.businessName || currentUser?.businessName || 'SmartKhata Merchant').trim();
+      const officialPhone = (settings.businessPhone || profile?.phone || currentUser?.phone || '').trim();
+      const upiId = (settings.paymentSettings?.upiId || (officialPhone ? `${officialPhone}@upi` : '')).trim();
       const payeeName = (settings.paymentSettings?.payeeName || businessName).trim();
 
       const upiUri = buildUpiUri(
@@ -2111,9 +2112,9 @@ interface AttachedBill {
       ? Math.abs(activeCustomer.outstandingBalance) 
       : 3000;
 
-    const businessName = (settings.businessName || profile?.businessName || 'Sharma Traders & Enterprise').trim();
-    const officialPhone = (settings.businessPhone || profile?.phone || '8371838314').trim();
-    const upiId = (settings.paymentSettings?.upiId || `${officialPhone}@upi`).trim();
+    const businessName = (settings.businessName || profile?.businessName || currentUser?.businessName || 'SmartKhata Merchant').trim();
+    const officialPhone = (settings.businessPhone || profile?.phone || currentUser?.phone || '').trim();
+    const upiId = (settings.paymentSettings?.upiId || (officialPhone ? `${officialPhone}@upi` : '')).trim();
     const payeeName = (settings.paymentSettings?.payeeName || businessName).trim();
 
     const upiUri = buildUpiUri(
@@ -4078,9 +4079,9 @@ interface AttachedBill {
           ? Math.abs(activeCustomer.outstandingBalance) 
           : 3000;
         const modalFormattedDue = formatINR(modalDueAmount);
-        const modalBusinessName = (settings.businessName || profile?.businessName || 'Sharma Traders & Enterprise').trim();
-        const modalOfficialPhone = (settings.businessPhone || profile?.phone || '8371838314').trim();
-        const modalUpiId = (settings.paymentSettings?.upiId || `${modalOfficialPhone}@upi`).trim();
+        const modalBusinessName = (settings.businessName || profile?.businessName || currentUser?.businessName || 'SmartKhata Merchant').trim();
+        const modalOfficialPhone = (settings.businessPhone || profile?.phone || currentUser?.phone || '').trim();
+        const modalUpiId = (settings.paymentSettings?.upiId || (modalOfficialPhone ? `${modalOfficialPhone}@upi` : '')).trim();
         const modalPayeeName = (settings.paymentSettings?.payeeName || modalBusinessName).trim();
         const modalUpiUri = buildUpiUri(
           modalUpiId,
@@ -4088,7 +4089,7 @@ interface AttachedBill {
           modalDueAmount > 0 ? modalDueAmount : undefined,
           `Payment from ${activeCustomer.name}`
         );
-        const modalShareText = `Your balance of ${modalFormattedDue} is Due.\nPlease pay at the earliest.\n—\n${modalBusinessName}  (${modalOfficialPhone})`;
+        const modalShareText = `Your balance of ${modalFormattedDue} is Due.\nPlease pay at the earliest.\n—\n${modalBusinessName}${modalOfficialPhone ? `  (${modalOfficialPhone})` : ''}`;
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
