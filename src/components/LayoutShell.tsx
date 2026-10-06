@@ -48,7 +48,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0B0F19]">
       {currentUser && <Navbar onToggleSidebar={() => setMobileSidebarOpen(prev => !prev)} />}
 
-      <div className="flex-1 flex max-w-[1600px] w-full mx-auto">
+      <div className="flex-1 flex w-full">
         {currentUser && (
           <Sidebar
             isOpenMobile={mobileSidebarOpen}
@@ -56,7 +56,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
           />
         )}
 
-        <main className="flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-6 pb-12 overflow-x-hidden">
+        <main className="flex-1 min-w-0 px-3 sm:px-6 lg:px-8 2xl:px-10 py-4 sm:py-6 pb-24 md:pb-12 overflow-x-hidden">
           {isPublicRoute ? (
             children
           ) : (

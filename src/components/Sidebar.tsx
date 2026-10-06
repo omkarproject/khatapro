@@ -178,13 +178,13 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
   return (
     <>
       {/* Desktop Persistent Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 shrink-0 h-[calc(100vh-4rem)] sticky top-16 border-r border-slate-200/80 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl">
+      <aside className="hidden lg:flex flex-col w-64 shrink-0 h-[calc(100vh-4rem)] sticky top-16 border-r border-slate-200/80 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl">
         {sidebarContent}
       </aside>
 
-      {/* Mobile Drawer */}
+      {/* Mobile & Tablet Drawer */}
       {isOpenMobile && (
-        <div className="fixed inset-0 z-50 md:hidden flex">
+        <div className="fixed inset-0 z-50 lg:hidden flex">
           <div
             className="fixed inset-0 bg-black/60 backdrop-blur-sm"
             onClick={onCloseMobile}

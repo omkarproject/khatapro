@@ -233,9 +233,9 @@ export default function DashboardPage() {
     <div className="space-y-6">
       
       {/* Top Banner: Welcome & Quick Action Bar */}
-      <div className="relative overflow-hidden rounded-[28px] p-6 sm:p-8 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-xl border border-slate-800">
+      <div className="relative overflow-hidden rounded-[24px] sm:rounded-[28px] p-5 sm:p-7 lg:p-8 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-xl border border-slate-800">
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <span className="text-xs px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
@@ -246,33 +246,33 @@ export default function DashboardPage() {
                 {profile?.businessName || 'SmartKhata'}
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight" suppressHydrationWarning>
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight" suppressHydrationWarning>
               Good day, {profile?.name || 'Merchant'}
             </h1>
-            <p className="text-sm text-slate-300 max-w-xl" suppressHydrationWarning>
+            <p className="text-xs sm:text-sm text-slate-300 max-w-xl" suppressHydrationWarning>
               &ldquo;{settings?.businessTagline || 'Track Money, Manage Business, Grow Faster'}&rdquo; • All systems running securely on {(settings?.backendProvider || 'mongodb').toUpperCase()} storage.
             </p>
           </div>
 
           {/* Action Hub Buttons */}
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
             <button
               onClick={() => openCollectModal()}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-cyan-500 hover:opacity-95 shadow-lg shadow-indigo-500/30 active:scale-95 transition-all"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-cyan-500 hover:opacity-95 shadow-lg shadow-indigo-500/30 active:scale-95 transition-all whitespace-nowrap"
             >
               <QrCode className="w-4 h-4" />
               Collect UPI Payment
             </button>
             <Link
               href="/invoices?action=new"
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-semibold text-slate-200 bg-white/10 hover:bg-white/15 border border-white/10 backdrop-blur-sm transition-all"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs font-semibold text-slate-200 bg-white/10 hover:bg-white/15 border border-white/10 backdrop-blur-sm transition-all whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
               New Invoice
             </Link>
             <Link
               href="/khata"
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-semibold text-slate-200 bg-white/10 hover:bg-white/15 border border-white/10 backdrop-blur-sm transition-all"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs font-semibold text-slate-200 bg-white/10 hover:bg-white/15 border border-white/10 backdrop-blur-sm transition-all whitespace-nowrap"
             >
               <Users className="w-4 h-4" />
               Khata Entry
@@ -282,11 +282,11 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 lg:gap-6">
         
         {/* Total Credit - Money In / Received */}
-        <div className="glass-card p-5 relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-3">
+        <div className="glass-card p-4 sm:p-5 lg:p-6 relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-2.5 sm:mb-3">
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
               CREDIT
             </span>
@@ -294,7 +294,7 @@ export default function DashboardPage() {
               <ArrowDownLeft className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
+          <div className="text-2xl sm:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400">
             {formatINR(metrics.totalCredit)}
           </div>
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-2">
@@ -306,8 +306,8 @@ export default function DashboardPage() {
         </div>
 
         {/* Total Debit - Money Out / Pending Receivables */}
-        <div className="glass-card p-5 relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-3">
+        <div className="glass-card p-4 sm:p-5 lg:p-6 relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-2.5 sm:mb-3">
             <span className="text-xs font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
               DEBIT
             </span>
@@ -315,20 +315,20 @@ export default function DashboardPage() {
               <ArrowUpRight className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-rose-600 dark:text-rose-400">
+          <div className="text-2xl sm:text-3xl font-extrabold text-rose-600 dark:text-rose-400">
             {formatINR(metrics.totalDebit)}
           </div>
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-2">
-            <span>Khata: {formatINR(metrics.khataDue)} + Inv: {formatINR(metrics.invoiceDue)}</span>
-            <span className={`font-semibold ${metrics.totalDebit === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            <span className="truncate mr-1">Khata: {formatINR(metrics.khataDue)} + Inv: {formatINR(metrics.invoiceDue)}</span>
+            <span className={`font-semibold shrink-0 ${metrics.totalDebit === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {metrics.totalDebit === 0 ? 'Clear' : 'Pending'}
             </span>
           </div>
         </div>
 
         {/* Net Business Profit */}
-        <div className="glass-card p-5 relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-3">
+        <div className="glass-card p-4 sm:p-5 lg:p-6 relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-2.5 sm:mb-3">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               NET PROFIT
             </span>
@@ -336,7 +336,7 @@ export default function DashboardPage() {
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
-          <div className={`text-2xl font-extrabold ${metrics.netProfit > 0 ? 'text-emerald-600 dark:text-emerald-400' : metrics.netProfit < 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>
+          <div className={`text-2xl sm:text-3xl font-extrabold ${metrics.netProfit > 0 ? 'text-emerald-600 dark:text-emerald-400' : metrics.netProfit < 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>
             {formatINR(metrics.netProfit)}
           </div>
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-2">
@@ -356,8 +356,8 @@ export default function DashboardPage() {
         </div>
 
         {/* UPI Direct Collections */}
-        <div className="glass-card p-5 relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-3">
+        <div className="glass-card p-4 sm:p-5 lg:p-6 relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-2.5 sm:mb-3">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               UPI COLLECTIONS
             </span>
@@ -365,7 +365,7 @@ export default function DashboardPage() {
               <QrCode className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-slate-900 dark:text-white">
+          <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
             {formatINR(metrics.totalUPICollections)}
           </div>
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-2">
@@ -379,10 +379,10 @@ export default function DashboardPage() {
       </div>
 
       {/* Second Row: Charts & Visual Analytics */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
         
         {/* Cash Flow Velocity Chart */}
-        <div className="lg:col-span-8 glass-card p-6 flex flex-col justify-between">
+        <div className="lg:col-span-8 glass-card p-4 sm:p-6 flex flex-col justify-between">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -395,7 +395,7 @@ export default function DashboardPage() {
                 Daily comparison of collections, general sales, and operational expenses
               </p>
             </div>
-            <div className="flex items-center gap-4 text-xs font-semibold">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs font-semibold">
               <span className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
                 <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" /> Collection
               </span>
@@ -408,7 +408,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="w-full h-72">
+          <div className="w-full h-64 sm:h-72 lg:h-80">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={cashFlowData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                 <defs>
@@ -453,7 +453,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Expense Category Breakdown */}
-        <div className="lg:col-span-4 glass-card p-6 flex flex-col justify-between">
+        <div className="lg:col-span-4 glass-card p-4 sm:p-6 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-bold text-slate-900 dark:text-white">
@@ -516,10 +516,10 @@ export default function DashboardPage() {
       </div>
 
       {/* Third Row: Top Outstanding Customers & Low Stock Alerts */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
         
         {/* Top Outstanding Customers */}
-        <div className="lg:col-span-7 glass-card p-6">
+        <div className="lg:col-span-7 glass-card p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -596,7 +596,7 @@ export default function DashboardPage() {
         <div className="lg:col-span-5 space-y-6">
           
           {/* Low Stock Alerts */}
-          <div className="glass-card p-6">
+          <div className="glass-card p-4 sm:p-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-500" />
@@ -636,7 +636,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Savings & Emergency Goal Snapshot */}
-          <div className="glass-card p-6">
+          <div className="glass-card p-4 sm:p-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <PiggyBank className="w-4 h-4 text-emerald-500" />

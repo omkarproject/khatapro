@@ -14,8 +14,8 @@ export default function Footer() {
   const businessGst = settings.paymentSettings?.businessGst || profile.businessGst || '';
 
   return (
-    <footer className="w-full bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800/80 pt-10 pb-16 text-slate-600 dark:text-slate-400 text-xs">
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+    <footer className="w-full bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800/80 pt-10 pb-28 md:pb-16 text-slate-600 dark:text-slate-400 text-xs">
+      <div className="w-full px-4 sm:px-6 lg:px-8 2xl:px-10 space-y-8">
         
         {/* Top Footer Section */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">

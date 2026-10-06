@@ -2190,7 +2190,7 @@ interface AttachedBill {
     <div className="space-y-4">
       
       {/* Main Container Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-[calc(100vh-6.5rem)] min-h-[680px]">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 h-[calc(100dvh-8rem)] sm:h-[calc(100vh-6.5rem)] min-h-[520px] sm:min-h-[640px]">
         
         {/* ================= LEFT COLUMN: CUSTOMER DIRECTORY ================= */}
         <div className={`lg:col-span-4 glass-card p-3 flex flex-col h-full ${
