@@ -55,31 +55,69 @@ export default function DashboardPage() {
 
   // Financial Metrics Computations
   const metrics = useMemo(() => {
-    // Total Credit (Customers owe us)
-    const totalCredit = customers.reduce((sum, c) => (c.outstandingBalance > 0 ? sum + c.outstandingBalance : sum), 0);
-    // Total Debit (We owe customers / advance received)
-    const totalDebit = customers.reduce((sum, c) => (c.outstandingBalance < 0 ? sum + Math.abs(c.outstandingBalance) : sum), 0);
+    // 1. Money In / Received (Khata customer payments + Collections + Incomes)
+    const khataReceived = transactions
+      .filter(
+        t =>
+          (t.type === 'debit' && (t.category === 'Payment Received' || t.note?.toLowerCase().includes('payment received'))) ||
+          t.type === 'collection' ||
+          t.type === 'income'
+      )
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
-    // Monthly Income
-    const incomeTxns = transactions.filter(t => t.type === 'income' || t.type === 'collection');
-    const totalIncome = incomeTxns.reduce((sum, t) => sum + t.amount, 0);
+    // 2. Invoice Paid amounts (avoid double-counting if an invoice collection txn is already recorded)
+    const invoicePaid = invoices.reduce((sum, inv) => {
+      const paid = Number(inv.paidAmount) || (inv.status === 'paid' ? Number(inv.total) : 0);
+      if (paid <= 0) return sum;
+      const alreadyInTxns = transactions.some(
+        t =>
+          (t.type === 'collection' || t.type === 'income' || t.category === 'Online Payment Collection') &&
+          (t.note?.includes(inv.invoiceNumber) || (t.referenceNo && t.referenceNo === inv.id))
+      );
+      return alreadyInTxns ? sum : sum + paid;
+    }, 0);
 
-    // Monthly Expense
-    const totalExpense = expenses.reduce((sum, e) => sum + e.amount, 0);
+    // Total CREDIT: All Money In / Received into business (Khata payments received + Invoice paid amounts)
+    const totalCredit = khataReceived + invoicePaid;
+
+    // 3. Khata Market Outstanding / Due (Customer owes us)
+    const khataDue = customers.reduce(
+      (sum, c) => (c.outstandingBalance > 0 ? sum + c.outstandingBalance : sum),
+      0
+    );
+
+    // 4. Invoices Pending / Unpaid amount (from Billing & Invoicing)
+    const invoiceDue = invoices.reduce((sum, inv) => {
+      if (inv.status === 'paid') return sum;
+      const total = Number(inv.total) || 0;
+      const paid = Number(inv.paidAmount) || 0;
+      return sum + Math.max(0, total - paid);
+    }, 0);
+
+    // Total DEBIT: Total Money Out / Pending receivables (Khata pending balance + Unpaid invoices)
+    const totalDebit = khataDue + invoiceDue;
+
+    // Monthly Income & Expenses
+    const totalIncome = totalCredit;
+    const totalExpense = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
     // Net Profit
     const netProfit = totalIncome - totalExpense;
 
     // Savings Total
-    const totalSavings = savingsGoals.reduce((sum, s) => sum + s.currentAmount, 0);
+    const totalSavings = savingsGoals.reduce((sum, s) => sum + (Number(s.currentAmount) || 0), 0);
 
     // Inventory Value
-    const inventoryVal = products.reduce((sum, p) => sum + (p.purchasePrice * p.currentStock), 0);
+    const inventoryVal = products.reduce((sum, p) => sum + ((Number(p.purchasePrice) || 0) * (Number(p.currentStock) || 0)), 0);
 
     // UPI Collections Total
     const totalUPICollections = transactions
-      .filter(t => t.type === 'collection' && t.paymentMode === 'upi')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .filter(
+        t =>
+          ((t.type === 'collection' || (t.type === 'debit' && t.category === 'Payment Received')) &&
+            t.paymentMode === 'upi')
+      )
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
     // Low stock count
     const lowStockItems = products.filter(p => p.currentStock <= p.minStock);
@@ -90,6 +128,8 @@ export default function DashboardPage() {
     return {
       totalCredit,
       totalDebit,
+      khataDue,
+      invoiceDue,
       totalIncome,
       totalExpense,
       netProfit,
@@ -99,7 +139,7 @@ export default function DashboardPage() {
       totalUPICollections,
       lowStockItems,
     };
-  }, [customers, transactions, expenses, savingsGoals, products]);
+  }, [customers, transactions, expenses, savingsGoals, products, invoices]);
 
   // Cash flow chart data - dynamically calculated from actual transactions & expenses
   const cashFlowData = useMemo(() => {
@@ -122,7 +162,7 @@ export default function DashboardPage() {
         if (!isNaN(d.getTime())) {
           const day = dayNames[d.getDay()];
           if (dayMap[day]) {
-            if (t.type === 'collection') {
+            if (t.type === 'collection' || (t.type === 'debit' && t.category === 'Payment Received')) {
               dayMap[day].collection += Number(t.amount) || 0;
             } else if (t.type === 'income') {
               dayMap[day].income += Number(t.amount) || 0;
@@ -244,43 +284,43 @@ export default function DashboardPage() {
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         
-        {/* Total Credit */}
+        {/* Total Credit - Money In / Received */}
         <div className="glass-card p-5 relative overflow-hidden group">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
               CREDIT
             </span>
             <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
               <ArrowDownLeft className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-slate-900 dark:text-white">
+          <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
             {formatINR(metrics.totalCredit)}
           </div>
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-2">
-            <span>From {topCreditors.length} active clients</span>
-            <Link href="/khata" className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold">
+            <span>Money In & Received</span>
+            <Link href="/khata" className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold">
               View Khata →
             </Link>
           </div>
         </div>
 
-        {/* Total Debit */}
+        {/* Total Debit - Money Out / Pending Receivables */}
         <div className="glass-card p-5 relative overflow-hidden group">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <span className="text-xs font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
               DEBIT
             </span>
             <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center">
               <ArrowUpRight className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-slate-900 dark:text-white">
+          <div className="text-2xl font-extrabold text-rose-600 dark:text-rose-400">
             {formatINR(metrics.totalDebit)}
           </div>
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-2">
-            <span>Supplier & advance credits</span>
-            <span className={`font-semibold ${metrics.totalDebit === 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+            <span>Khata: {formatINR(metrics.khataDue)} + Inv: {formatINR(metrics.invoiceDue)}</span>
+            <span className={`font-semibold ${metrics.totalDebit === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {metrics.totalDebit === 0 ? 'Clear' : 'Pending'}
             </span>
           </div>
