@@ -97,16 +97,56 @@ export default function DashboardPage() {
     };
   }, [customers, transactions, expenses, savingsGoals, products]);
 
-  // Cash flow chart data
-  const cashFlowData = [
-    { day: 'Mon', income: 42000, expense: 12000, collection: 25000 },
-    { day: 'Tue', income: 68000, expense: 28000, collection: 45000 },
-    { day: 'Wed', income: 35000, expense: 14500, collection: 18000 },
-    { day: 'Thu', income: 85000, expense: 65000, collection: 52000 },
-    { day: 'Fri', income: 94000, expense: 22000, collection: 61000 },
-    { day: 'Sat', income: 51000, expense: 18000, collection: 38000 },
-    { day: 'Sun', income: 28000, expense: 8000, collection: 15000 },
-  ];
+  // Cash flow chart data - dynamically calculated from actual transactions & expenses
+  const cashFlowData = useMemo(() => {
+    const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const dayMap: Record<string, { income: number; expense: number; collection: number }> = {
+      Mon: { income: 0, expense: 0, collection: 0 },
+      Tue: { income: 0, expense: 0, collection: 0 },
+      Wed: { income: 0, expense: 0, collection: 0 },
+      Thu: { income: 0, expense: 0, collection: 0 },
+      Fri: { income: 0, expense: 0, collection: 0 },
+      Sat: { income: 0, expense: 0, collection: 0 },
+      Sun: { income: 0, expense: 0, collection: 0 },
+    };
+
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    transactions.forEach(t => {
+      try {
+        const d = new Date(t.date);
+        if (!isNaN(d.getTime())) {
+          const day = dayNames[d.getDay()];
+          if (dayMap[day]) {
+            if (t.type === 'collection') {
+              dayMap[day].collection += Number(t.amount) || 0;
+            } else if (t.type === 'income') {
+              dayMap[day].income += Number(t.amount) || 0;
+            }
+          }
+        }
+      } catch {}
+    });
+
+    expenses.forEach(e => {
+      try {
+        const d = new Date(e.date);
+        if (!isNaN(d.getTime())) {
+          const day = dayNames[d.getDay()];
+          if (dayMap[day]) {
+            dayMap[day].expense += Number(e.amount) || 0;
+          }
+        }
+      } catch {}
+    });
+
+    return weekDays.map(day => ({
+      day,
+      income: dayMap[day].income,
+      expense: dayMap[day].expense,
+      collection: dayMap[day].collection,
+    }));
+  }, [transactions, expenses]);
 
   // Top Customers by outstanding credit
   const topCreditors = useMemo(() => {
@@ -116,13 +156,26 @@ export default function DashboardPage() {
       .slice(0, 4);
   }, [customers]);
 
-  const expenseCategoryData = [
-    { name: 'Rent', value: 32000, color: '#4F46E5' },
-    { name: 'Salaries', value: 65000, color: '#06B6D4' },
-    { name: 'Transport', value: 4800, color: '#10B981' },
-    { name: 'Utilities', value: 2499, color: '#F59E0B' },
-    { name: 'Hospitality', value: 1850, color: '#EC4899' },
-  ];
+  const expenseCategoryColors = ['#4F46E5', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
+
+  // Expense Category Breakdown dynamically calculated from real expenses
+  const expenseCategoryData = useMemo(() => {
+    if (!expenses || expenses.length === 0) return [];
+    const map: Record<string, number> = {};
+    expenses.forEach(e => {
+      const cat = e.category || 'Other';
+      map[cat] = (map[cat] || 0) + (Number(e.amount) || 0);
+    });
+
+    return Object.entries(map)
+      .filter(([_, val]) => val > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value], idx) => ({
+        name,
+        value,
+        color: expenseCategoryColors[idx % expenseCategoryColors.length],
+      }));
+  }, [expenses]);
 
   return (
     <div className="space-y-6">
@@ -333,30 +386,46 @@ export default function DashboardPage() {
                 Details →
               </Link>
             </div>
-            <p className="text-xs text-slate-400 mb-4">
-              Top operational expense distribution for this month
-            </p>
-
-            <div className="space-y-3">
-              {expenseCategoryData.map((item) => {
-                const totalExp = expenseCategoryData.reduce((a, b) => a + b.value, 0);
-                const percent = Math.round((item.value / totalExp) * 100);
-                return (
-                  <div key={item.name} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs font-semibold">
-                      <span className="text-slate-700 dark:text-slate-300">{item.name}</span>
-                      <span className="font-mono text-slate-900 dark:text-white">₹{item.value.toLocaleString('en-IN')} ({percent}%)</span>
+            {expenseCategoryData.length === 0 ? (
+              <div className="py-10 text-center space-y-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 mx-auto flex items-center justify-center">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  No operational expenses logged
+                </p>
+                <p className="text-[11px] text-slate-400 max-w-[220px] mx-auto leading-relaxed">
+                  Log expenses in Expense Tracker to see your live category distribution
+                </p>
+                <Link
+                  href="/expenses"
+                  className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline pt-1"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Log First Expense
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {expenseCategoryData.map((item) => {
+                  const totalExp = metrics.totalExpense || expenseCategoryData.reduce((a, b) => a + b.value, 0);
+                  const percent = totalExp > 0 ? Math.round((item.value / totalExp) * 100) : 0;
+                  return (
+                    <div key={item.name} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs font-semibold">
+                        <span className="text-slate-700 dark:text-slate-300">{item.name}</span>
+                        <span className="font-mono text-slate-900 dark:text-white">₹{item.value.toLocaleString('en-IN')} ({percent}%)</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${percent}%`, backgroundColor: item.color }}
+                        />
+                      </div>
                     </div>
-                    <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${percent}%`, backgroundColor: item.color }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
@@ -395,7 +464,12 @@ export default function DashboardPage() {
           </div>
 
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {topCreditors.map((c) => (
+            {topCreditors.length === 0 ? (
+              <div className="py-8 text-center text-xs text-slate-400">
+                No pending customer dues. All khata accounts are settled!
+              </div>
+            ) : (
+              topCreditors.map((c) => (
               <div key={c.id} className="py-3.5 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold flex items-center justify-center shrink-0">
@@ -437,7 +511,7 @@ export default function DashboardPage() {
                   </button>
                 </div>
               </div>
-            ))}
+            )))}
           </div>
         </div>
 
