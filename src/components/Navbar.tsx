@@ -197,9 +197,17 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                     className="flex items-center gap-2 p-1 pl-1.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60 transition-all cursor-pointer group"
                     title="User Profile & Cloud Sync"
                   >
-                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 text-white font-extrabold text-xs flex items-center justify-center shadow-sm">
-                      {currentUser.name.charAt(0).toUpperCase()}
-                    </div>
+                    {currentUser.avatarUrl || profile.avatarUrl || settings.businessLogo ? (
+                      <img
+                        src={currentUser.avatarUrl || profile.avatarUrl || settings.businessLogo}
+                        alt="Profile Logo"
+                        className="w-8 h-8 rounded-xl object-cover shadow-sm border border-indigo-200 dark:border-indigo-800 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 text-white font-extrabold text-xs flex items-center justify-center shadow-sm">
+                        {currentUser.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     <div className="hidden xl:block text-left pr-1 min-w-0">
                       <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[110px]">
                         {currentUser.name}
@@ -223,16 +231,31 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                     <div className="absolute right-0 mt-2 w-72 p-3 bg-white dark:bg-[#0B101D] rounded-2xl shadow-2xl border border-slate-200 dark:border-indigo-500/30 z-50 animate-in fade-in zoom-in-95 duration-100">
                       
                       {/* User Info Header */}
-                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-black text-slate-900 dark:text-white truncate">
-                            {currentUser.name}
-                          </span>
-                          <span className="text-[9px] uppercase px-1.5 py-0.5 rounded font-bold font-mono bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-                            Active
-                          </span>
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 space-y-2">
+                        <div className="flex items-center gap-3">
+                          {currentUser.avatarUrl || profile.avatarUrl || settings.businessLogo ? (
+                            <img
+                              src={currentUser.avatarUrl || profile.avatarUrl || settings.businessLogo}
+                              alt="Profile Logo"
+                              className="w-10 h-10 rounded-xl object-cover border border-indigo-200 dark:border-indigo-800 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-black text-sm flex items-center justify-center shrink-0 border border-indigo-200 dark:border-indigo-800">
+                              {currentUser.name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-black text-slate-900 dark:text-white truncate">
+                                {currentUser.name}
+                              </span>
+                              <span className="text-[9px] uppercase px-1.5 py-0.5 rounded font-bold font-mono bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                                Active
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 truncate font-mono">{currentUser.email}</p>
+                          </div>
                         </div>
-                        <p className="text-[11px] text-slate-500 truncate font-mono">{currentUser.email}</p>
                         <p className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 truncate">
                           {currentUser.businessName}
                         </p>

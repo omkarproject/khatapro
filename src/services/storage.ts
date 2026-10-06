@@ -78,6 +78,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
   mongodbUri: 'mongodb+srv://smartkhata:KhataPass%402026@cluster0.7evxtf6.mongodb.net/?appName=Cluster0',
   mongodbDbName: 'smartkhata_db',
   businessName: businessName || '',
+  businessLogo: '',
   businessTagline: 'Track Money, Manage Business, Grow Faster',
   businessPhone: phone || '',
   businessEmail: email || '',

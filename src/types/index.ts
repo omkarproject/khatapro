@@ -207,6 +207,7 @@ export interface SystemSettings {
   mongodbUri?: string;
   mongodbDbName?: string;
   businessName: string;
+  businessLogo?: string;
   businessTagline: string;
   businessPhone: string;
   businessEmail: string;

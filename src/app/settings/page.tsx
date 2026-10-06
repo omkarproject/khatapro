@@ -34,7 +34,9 @@ import {
   Eye,
   EyeOff,
   Loader2,
-  KeyRound
+  KeyRound,
+  Camera,
+  Image as ImageIcon
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -101,6 +103,16 @@ export default function SettingsPage() {
   };
 
   // Business Profile State
+  const [bLogo, setBLogo] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      const p = StorageService.getProfile();
+      return s.businessLogo || p?.avatarUrl || settings.businessLogo || profile?.avatarUrl || '';
+    }
+    return settings.businessLogo || profile?.avatarUrl || '';
+  });
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
   const [bName, setBName] = useState(() => {
     if (typeof window !== 'undefined') {
       const s = StorageService.getSettings();
@@ -320,12 +332,61 @@ export default function SettingsPage() {
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const [guideActiveTab, setGuideActiveTab] = useState<BackendProvider>(settings.backendProvider);
 
+  // Handle Profile Logo Upload & Remove
+  const handleUploadLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        addToast('Invalid File', 'Please select a valid image file (PNG, JPG, WEBP).', 'error');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (result) {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            const maxDim = 500;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', 0.85);
+            setBLogo(compressed);
+            addToast('Logo Selected', 'Click "Save Business Details" to save your profile logo.', 'info');
+          };
+          img.src = result;
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+    e.target.value = '';
+  };
+
+  const handleRemoveLogo = () => {
+    setBLogo('');
+    addToast('Logo Removed', 'Click "Save Business Details" to apply changes.', 'info');
+  };
+
   // Handle Business Save
   const handleSaveBusiness = (e: React.FormEvent) => {
     e.preventDefault();
     const updated: SystemSettings = {
       ...settings,
       businessName: bName.trim(),
+      businessLogo: bLogo,
       businessTagline: bTagline.trim(),
       businessPhone: bPhone.trim(),
       businessEmail: bEmail.trim(),
@@ -339,6 +400,7 @@ export default function SettingsPage() {
     setProfile({
       ...profile,
       businessName: bName.trim(),
+      avatarUrl: bLogo,
       businessGst: bGst.trim(),
       businessAddress: bAddress.trim(),
       phone: bPhone.trim(),
@@ -602,6 +664,68 @@ export default function SettingsPage() {
             <Building className="w-4 h-4 text-indigo-500" />
             Enterprise Information
           </h3>
+
+          {/* Business & Profile Logo Upload */}
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-center sm:items-start gap-4">
+            <div className="relative group shrink-0">
+              {bLogo ? (
+                <div className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-indigo-500/40 shadow-md bg-white dark:bg-slate-800">
+                  <img src={bLogo} alt="Profile Logo" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={handleRemoveLogo}
+                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-lg transition-transform active:scale-90 cursor-pointer"
+                    title="Remove Logo"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-100/60 dark:bg-slate-800/40 flex flex-col items-center justify-center text-slate-400">
+                  <Camera className="w-7 h-7 text-slate-400" />
+                  <span className="text-[9px] mt-1 font-medium">No Logo</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 text-center sm:text-left space-y-1.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">Profile / Business Logo</h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Upload your profile or shop logo. Appears in the top navigation bar &amp; invoices.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 justify-center sm:justify-start">
+                  <input
+                    type="file"
+                    ref={logoInputRef}
+                    accept="image/*"
+                    onChange={handleUploadLogo}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => logoInputRef.current?.click()}
+                    className="px-3 py-1.5 text-xs font-bold rounded-xl bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 border border-indigo-200 dark:border-indigo-800/80 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{bLogo ? 'Change Logo' : 'Upload Logo'}</span>
+                  </button>
+                  {bLogo && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveLogo}
+                      className="px-2.5 py-1.5 text-xs font-medium rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 font-mono">Square PNG, JPG, or WEBP (Max 2MB)</p>
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>

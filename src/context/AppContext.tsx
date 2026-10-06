@@ -504,7 +504,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const setProfile = (p: UserProfile) => {
     setProfileState(p);
     StorageService.updateProfile(p);
+    if (currentUser) {
+      const updatedUser = { ...currentUser, ...p };
+      setCurrentUserState(updatedUser);
+      StorageService.setCurrentUser(updatedUser);
+    }
     addToast('Profile Updated', 'Business and merchant profile saved successfully.', 'success');
+    syncWithDatabase();
   };
 
   const updateSettings = (newSettings: SystemSettings) => {
