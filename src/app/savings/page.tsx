@@ -13,13 +13,18 @@ import {
   Calendar,
   CheckCircle2,
   X,
-  Sparkles
+  Sparkles,
+  Pencil,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 
 export default function SavingsPage() {
-  const { savingsGoals, saveSavingsGoal, addToast } = useApp();
+  const { savingsGoals, saveSavingsGoal, deleteSavingsGoal, addToast } = useApp();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
+  const [goalToDelete, setGoalToDelete] = useState<SavingsGoal | null>(null);
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [activeGoal, setActiveGoal] = useState<SavingsGoal | null>(null);
   const [depositAmount, setDepositAmount] = useState('');
@@ -38,6 +43,28 @@ export default function SavingsPage() {
   const totalTarget = savingsGoals.reduce((sum, g) => sum + g.targetAmount, 0);
   const overallProgress = totalTarget > 0 ? Math.round((totalSaved / totalTarget) * 100) : 0;
 
+  const handleOpenCreateModal = () => {
+    setEditingGoal(null);
+    setTitle('');
+    setTargetAmount('');
+    setCurrentAmount('');
+    setCategory('Emergency Fund');
+    setDeadline(new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    setNotes('');
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (goal: SavingsGoal) => {
+    setEditingGoal(goal);
+    setTitle(goal.title);
+    setTargetAmount(goal.targetAmount.toString());
+    setCurrentAmount(goal.currentAmount.toString());
+    setCategory(goal.category as any);
+    setDeadline(goal.deadline ? goal.deadline.split('T')[0] : '');
+    setNotes(goal.notes || '');
+    setIsModalOpen(true);
+  };
+
   const handleSaveGoal = (e: React.FormEvent) => {
     e.preventDefault();
     const tAmt = parseFloat(targetAmount);
@@ -46,23 +73,48 @@ export default function SavingsPage() {
       return;
     }
 
-    const newGoal: SavingsGoal = {
-      id: `goal_${Date.now()}`,
-      title: title.trim(),
-      targetAmount: tAmt,
-      currentAmount: parseFloat(currentAmount) || 0,
-      category,
-      deadline,
-      notes: notes.trim(),
-      createdAt: new Date().toISOString(),
-    };
+    if (editingGoal) {
+      const updatedGoal: SavingsGoal = {
+        ...editingGoal,
+        title: title.trim(),
+        targetAmount: tAmt,
+        currentAmount: parseFloat(currentAmount) || 0,
+        category,
+        deadline,
+        notes: notes.trim(),
+      };
 
-    saveSavingsGoal(newGoal);
+      saveSavingsGoal(updatedGoal);
+      addToast('Fund Updated', `${updatedGoal.title} has been updated successfully.`, 'success');
+    } else {
+      const newGoal: SavingsGoal = {
+        id: `goal_${Date.now()}`,
+        title: title.trim(),
+        targetAmount: tAmt,
+        currentAmount: parseFloat(currentAmount) || 0,
+        category,
+        deadline,
+        notes: notes.trim(),
+        createdAt: new Date().toISOString(),
+      };
+
+      saveSavingsGoal(newGoal);
+      addToast('Fund Created', `${newGoal.title} reserve fund created.`, 'success');
+    }
+
     setIsModalOpen(false);
+    setEditingGoal(null);
     setTitle('');
     setTargetAmount('');
     setCurrentAmount('');
     setNotes('');
+  };
+
+  const handleConfirmDelete = () => {
+    if (!goalToDelete) return;
+    deleteSavingsGoal(goalToDelete.id);
+    addToast('Fund Deleted', `${goalToDelete.title} has been removed from reserve funds.`, 'info');
+    setGoalToDelete(null);
   };
 
   const handleDeposit = (e: React.FormEvent) => {
@@ -101,7 +153,7 @@ export default function SavingsPage() {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={handleOpenCreateModal}
           className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
@@ -142,88 +194,161 @@ export default function SavingsPage() {
         </div>
       </div>
 
-      {/* Goals Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {savingsGoals.map((goal) => {
-          const progress = Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100));
+      {/* Goals Grid or Empty State */}
+      {savingsGoals.length === 0 ? (
+        <div className="glass-card p-12 text-center rounded-3xl border border-dashed border-slate-300 dark:border-slate-700">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+            <PiggyBank className="w-8 h-8" />
+          </div>
+          <h3 className="text-base font-bold text-slate-800 dark:text-white mb-1">
+            No Savings & Reserve Funds Yet
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mb-6">
+            Create an Emergency Fund, Tax Reserve, or Capital Expansion fund to protect and grow your business liquidity.
+          </p>
+          <button
+            onClick={handleOpenCreateModal}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-lg shadow-indigo-500/20 active:scale-95 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Create First Fund
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {savingsGoals.map((goal) => {
+            const progress = Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100));
 
-          return (
-            <div
-              key={goal.id}
-              className="glass-card p-6 space-y-4 flex flex-col justify-between hover:border-indigo-300 dark:hover:border-indigo-700 transition-all"
-            >
-              <div>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                    <ShieldCheck className="w-5 h-5" />
+            return (
+              <div
+                key={goal.id}
+                className="glass-card p-6 space-y-4 flex flex-col justify-between hover:border-indigo-300 dark:hover:border-indigo-700 transition-all relative group"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                        <ShieldCheck className="w-5 h-5" />
+                      </div>
+                      <span className="text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 truncate">
+                        {goal.category}
+                      </span>
+                    </div>
+
+                    {/* Quick Action Icons next to Category (Emergency Fund, etc.) */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleOpenEditModal(goal)}
+                        title="Edit Fund"
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setGoalToDelete(goal)}
+                        title="Delete Fund"
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                  <span className="text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                    {goal.category}
-                  </span>
+
+                  <div className="mt-4">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      {goal.title}
+                    </h3>
+                    {goal.notes && (
+                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                        {goal.notes}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="mt-5 space-y-2">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-xl font-black font-mono text-slate-900 dark:text-white">
+                        {formatINR(goal.currentAmount)}
+                      </span>
+                      <span className="text-xs font-mono text-slate-400">
+                        of {formatINR(goal.targetAmount)}
+                      </span>
+                    </div>
+
+                    <div className="w-full h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500 transition-all duration-500"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+
+                    <div className="flex justify-between text-[11px] text-slate-400">
+                      <span>{progress}% Completed</span>
+                      <span>Deadline: {formatDate(goal.deadline)}</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="mt-4">
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                    {goal.title}
-                  </h3>
-                  {goal.notes && (
-                    <p className="text-xs text-slate-400 mt-1 line-clamp-2">
-                      {goal.notes}
-                    </p>
-                  )}
-                </div>
-
-                <div className="mt-5 space-y-2">
-                  <div className="flex justify-between items-baseline">
-                    <span className="text-xl font-black font-mono text-slate-900 dark:text-white">
-                      {formatINR(goal.currentAmount)}
-                    </span>
-                    <span className="text-xs font-mono text-slate-400">
-                      of {formatINR(goal.targetAmount)}
-                    </span>
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleOpenEditModal(goal)}
+                      className="px-2.5 py-1.5 text-xs font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => setGoalToDelete(goal)}
+                      className="px-2.5 py-1.5 text-xs font-semibold rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete
+                    </button>
                   </div>
 
-                  <div className="w-full h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500 transition-all duration-500"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-
-                  <div className="flex justify-between text-[11px] text-slate-400">
-                    <span>{progress}% Completed</span>
-                    <span>Deadline: {formatDate(goal.deadline)}</span>
-                  </div>
+                  <button
+                    onClick={() => {
+                      setActiveGoal(goal);
+                      setIsDepositModalOpen(true);
+                    }}
+                    className="px-3.5 py-1.5 text-xs font-bold rounded-xl text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add Funds
+                  </button>
                 </div>
               </div>
+            );
+          })}
+        </div>
+      )}
 
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end">
-                <button
-                  onClick={() => {
-                    setActiveGoal(goal);
-                    setIsDepositModalOpen(true);
-                  }}
-                  className="px-3.5 py-1.5 text-xs font-bold rounded-xl text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 transition-colors flex items-center gap-1.5"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add Funds
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Modal: Create Goal */}
+      {/* Modal: Create / Edit Goal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                <PiggyBank className="w-5 h-5 text-emerald-500" />
-                New Savings Goal
+                {editingGoal ? (
+                  <>
+                    <Pencil className="w-5 h-5 text-indigo-500" />
+                    Edit Reserve Fund
+                  </>
+                ) : (
+                  <>
+                    <PiggyBank className="w-5 h-5 text-emerald-500" />
+                    New Savings Goal
+                  </>
+                )}
               </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setEditingGoal(null);
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -259,7 +384,7 @@ export default function SavingsPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    Initial Deposit (₹)
+                    {editingGoal ? 'Current Saved (₹)' : 'Initial Deposit (₹)'}
                   </label>
                   <input
                     type="number"
@@ -317,8 +442,11 @@ export default function SavingsPage() {
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setEditingGoal(null);
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
                   Cancel
                 </button>
@@ -326,10 +454,57 @@ export default function SavingsPage() {
                   type="submit"
                   className="px-5 py-2 rounded-xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20"
                 >
-                  Save Goal
+                  {editingGoal ? 'Update Fund' : 'Save Goal'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirm Delete Goal */}
+      {goalToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 max-w-sm w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400">
+              <div className="w-10 h-10 rounded-2xl bg-rose-50 dark:bg-rose-950/60 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Delete Reserve Fund</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Are you sure you want to delete this fund?</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-xs space-y-1">
+              <div className="font-bold text-slate-800 dark:text-slate-200">{goalToDelete.title}</div>
+              <div className="text-slate-500 dark:text-slate-400 flex justify-between">
+                <span>Category: {goalToDelete.category}</span>
+                <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{formatINR(goalToDelete.currentAmount)}</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              This will remove the reserve fund record from your cloud and local storage. This action cannot be undone.
+            </p>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setGoalToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/20 active:scale-95 transition-all flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete Fund
+              </button>
+            </div>
           </div>
         </div>
       )}
