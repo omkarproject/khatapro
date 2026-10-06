@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { StorageService } from '@/services/storage';
-import { BackendProvider, SystemSettings, PaymentSettings, PaymentCollectionMode } from '@/types';
+import { BackendProvider, SystemSettings, PaymentSettings, PaymentCollectionMode, TelegramBackupSettings, BackupFrequency, BackupDayOfWeek } from '@/types';
 import { LocalAdapter, SupabaseAdapter, FirebaseAdapter, MongoAdapter } from '@/services/backendManager';
 import {
   Settings,
@@ -41,7 +41,13 @@ import {
   Download,
   RotateCcw,
   FileJson,
-  RefreshCw
+  RefreshCw,
+  Send,
+  Calendar,
+  Clock,
+  Bot,
+  MessageSquare,
+  FileCheck
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -54,6 +60,33 @@ export default function SettingsPage() {
   const [isExportingBackup, setIsExportingBackup] = useState(false);
   const [lastBackupDate, setLastBackupDate] = useState<string>('Just now');
   const backupFileInputRef = useRef<HTMLInputElement>(null);
+  const [exportIncludeMedia, setExportIncludeMedia] = useState(true);
+
+  // Telegram Backup State
+  const [tgEnabled, setTgEnabled] = useState(() => settings.telegramBackup?.enabled || false);
+  const [tgBotToken, setTgBotToken] = useState(() => settings.telegramBackup?.botToken || '');
+  const [tgChatId, setTgChatId] = useState(() => settings.telegramBackup?.chatId || '');
+  const [tgFrequency, setTgFrequency] = useState<BackupFrequency>(() => settings.telegramBackup?.frequency || 'daily');
+  const [tgSelectedDay, setTgSelectedDay] = useState<BackupDayOfWeek>(() => settings.telegramBackup?.selectedDay || 'monday');
+  const [tgBackupTime, setTgBackupTime] = useState(() => settings.telegramBackup?.backupTime || '21:00');
+  const [tgIncludeMedia, setTgIncludeMedia] = useState(() => settings.telegramBackup?.includeMedia !== false);
+  const [isTestingTg, setIsTestingTg] = useState(false);
+  const [isSendingTgBackup, setIsSendingTgBackup] = useState(false);
+  const [isSavingTg, setIsSavingTg] = useState(false);
+  const [tgTestMessage, setTgTestMessage] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Keep local tg state in sync if settings update
+  useEffect(() => {
+    if (settings.telegramBackup) {
+      setTgEnabled(settings.telegramBackup.enabled || false);
+      setTgBotToken(settings.telegramBackup.botToken || '');
+      setTgChatId(settings.telegramBackup.chatId || '');
+      setTgFrequency(settings.telegramBackup.frequency || 'daily');
+      setTgSelectedDay(settings.telegramBackup.selectedDay || 'monday');
+      setTgBackupTime(settings.telegramBackup.backupTime || '21:00');
+      setTgIncludeMedia(settings.telegramBackup.includeMedia !== false);
+    }
+  }, [settings.telegramBackup]);
 
   // Read ?tab= from URL on load
   useEffect(() => {
@@ -67,22 +100,28 @@ export default function SettingsPage() {
   }, []);
 
   // 1-Click Backup Export
-  const handleExportBackup = () => {
+  const handleExportBackup = (includeMedia: boolean = exportIncludeMedia) => {
     setIsExportingBackup(true);
     try {
-      const jsonString = StorageService.exportFullDatabaseJSON();
+      const jsonString = StorageService.exportFullDatabaseJSON(includeMedia);
       const blob = new Blob([jsonString], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `SmartKhataPro_Backup_${new Date().toISOString().split('T')[0]}.json`;
+      const mediaTag = includeMedia ? 'Full_WithMedia' : 'Compact_NoMedia';
+      const activeDb = settings.backendProvider.toUpperCase();
+      link.download = `SmartKhataPro_${activeDb}_${mediaTag}_${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
       setLastBackupDate(new Date().toLocaleTimeString());
-      addToast('Backup Downloaded', 'Full database snapshot exported successfully.', 'success');
+      addToast(
+        'Backup Downloaded',
+        `Full JSON backup (${includeMedia ? 'With Images & PDFs' : 'Without Images/PDFs'}) exported successfully.`,
+        'success'
+      );
     } catch (e) {
       addToast('Export Failed', 'Unable to create backup snapshot.', 'error');
     } finally {
@@ -95,28 +134,229 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         const text = event.target?.result as string;
         const success = StorageService.restoreFullDatabaseJSON(text);
         if (success) {
           refreshData();
-          addToast('Database Restored', 'All ledgers, invoices, and settings restored!', 'success');
+          if (settings.backendProvider === 'mongodb') {
+            await syncWithDatabase();
+          }
+          addToast('Database Restored', 'All ledgers, invoices, customers, and settings restored and synced!', 'success');
         } else {
           addToast('Restore Failed', 'Invalid JSON backup format.', 'error');
         }
       };
       reader.readAsText(file);
     }
+    e.target.value = '';
   };
 
   // Reset to Demo Seed Data
-  const handleResetDemoData = () => {
+  const handleResetDemoData = async () => {
     if (confirm('Are you sure you want to reset all records back to default sample data?')) {
       StorageService.resetDefaults();
       refreshData();
+      if (settings.backendProvider === 'mongodb') {
+        await syncWithDatabase();
+      }
       addToast('Reset Complete', 'Loaded clean initial seed data.', 'info');
     }
   };
+
+  // Save Telegram Settings
+  const handleSaveTelegramSettings = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsSavingTg(true);
+    const updatedBackup: TelegramBackupSettings = {
+      enabled: tgEnabled,
+      botToken: tgBotToken.trim(),
+      chatId: tgChatId.trim(),
+      frequency: tgFrequency,
+      selectedDay: tgSelectedDay,
+      backupTime: tgBackupTime,
+      includeMedia: tgIncludeMedia,
+      lastBackupAt: settings.telegramBackup?.lastBackupAt,
+      lastBackupStatus: settings.telegramBackup?.lastBackupStatus,
+      lastBackupMessage: settings.telegramBackup?.lastBackupMessage,
+    };
+    const updatedSettings: SystemSettings = {
+      ...settings,
+      telegramBackup: updatedBackup,
+    };
+    updateSettings(updatedSettings);
+
+    if (settings.backendProvider === 'mongodb') {
+      await syncWithDatabase();
+    }
+    setIsSavingTg(false);
+    addToast('Telegram Settings Saved', 'Auto backup configuration updated and synced with active database.', 'success');
+  };
+
+  // Test Telegram Bot & Chat ID connection
+  const handleTestTelegramConnection = async () => {
+    if (!tgBotToken.trim()) {
+      addToast('Token Missing', 'Please enter your Telegram Bot Token.', 'error');
+      return;
+    }
+    if (!tgChatId.trim()) {
+      addToast('Chat ID Missing', 'Please enter your Telegram Chat ID.', 'error');
+      return;
+    }
+
+    setIsTestingTg(true);
+    setTgTestMessage(null);
+    try {
+      const res = await fetch('/api/backup/telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          botToken: tgBotToken.trim(),
+          chatId: tgChatId.trim(),
+          isTest: true,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTgTestMessage({ success: true, message: data.message });
+        addToast('Connection Verified', data.message, 'success');
+      } else {
+        setTgTestMessage({ success: false, message: data.message });
+        addToast('Telegram Test Failed', data.message, 'error');
+      }
+    } catch (err: any) {
+      setTgTestMessage({ success: false, message: err.message || 'Network error pinging Telegram.' });
+      addToast('Test Failed', err.message, 'error');
+    } finally {
+      setIsTestingTg(false);
+    }
+  };
+
+  // Send Backup to Telegram Now
+  const handleSendTelegramBackupNow = async () => {
+    if (!tgBotToken.trim() || !tgChatId.trim()) {
+      addToast('Incomplete Credentials', 'Please provide Telegram Bot Token and Chat ID first.', 'error');
+      return;
+    }
+
+    setIsSendingTgBackup(true);
+    try {
+      const backupJson = StorageService.exportFullDatabaseJSON(tgIncludeMedia);
+      const mediaLabel = tgIncludeMedia ? 'With Images & PDFs' : 'Without Images & PDFs (Data Only)';
+      const activeDbLabel = settings.backendProvider.toUpperCase();
+      const caption = `📦 *SmartKhata Pro - Database Backup*\n🏢 Business: ${settings.businessName || 'SmartKhata Pro'}\n🗄️ Active DB: ${activeDbLabel}\n📸 Media: ${mediaLabel}\n📅 Date: ${new Date().toLocaleString('en-IN')}\n\n✅ 100% Up-To-Date Snapshot`;
+
+      const res = await fetch('/api/backup/telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          botToken: tgBotToken.trim(),
+          chatId: tgChatId.trim(),
+          backupJson,
+          caption,
+          fileName: `SmartKhataPro_${activeDbLabel}_Backup_${new Date().toISOString().split('T')[0]}.json`,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        const updatedBackup: TelegramBackupSettings = {
+          enabled: tgEnabled,
+          botToken: tgBotToken.trim(),
+          chatId: tgChatId.trim(),
+          frequency: tgFrequency,
+          selectedDay: tgSelectedDay,
+          backupTime: tgBackupTime,
+          includeMedia: tgIncludeMedia,
+          lastBackupAt: new Date().toISOString(),
+          lastBackupStatus: 'success',
+          lastBackupMessage: 'Backup sent successfully',
+        };
+        updateSettings({ ...settings, telegramBackup: updatedBackup });
+        if (settings.backendProvider === 'mongodb') {
+          await syncWithDatabase();
+        }
+        addToast('Telegram Backup Sent', 'Full database JSON backup has been uploaded to your Telegram chat!', 'success');
+      } else {
+        addToast('Telegram Upload Failed', data.message, 'error');
+      }
+    } catch (err: any) {
+      addToast('Backup Failed', err.message || 'Failed to dispatch backup to Telegram.', 'error');
+    } finally {
+      setIsSendingTgBackup(false);
+    }
+  };
+
+  // Auto-schedule check on app mount
+  useEffect(() => {
+    const checkAndTriggerAutoBackup = async () => {
+      const tgConfig = settings.telegramBackup;
+      if (!tgConfig || !tgConfig.enabled || !tgConfig.botToken || !tgConfig.chatId) return;
+
+      const now = new Date();
+      const todayDateStr = now.toISOString().split('T')[0];
+      const lastBackupDateStr = tgConfig.lastBackupAt ? tgConfig.lastBackupAt.split('T')[0] : '';
+
+      const dayNames: BackupDayOfWeek[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const currentDayName = dayNames[now.getDay()];
+
+      let shouldRun = false;
+
+      if (tgConfig.frequency === 'daily') {
+        shouldRun = lastBackupDateStr !== todayDateStr;
+      } else if (tgConfig.frequency === 'weekly') {
+        const targetDay = tgConfig.selectedDay || 'monday';
+        shouldRun = currentDayName === targetDay && lastBackupDateStr !== todayDateStr;
+      } else if (tgConfig.frequency === 'every_2_days') {
+        if (!tgConfig.lastBackupAt) shouldRun = true;
+        else {
+          const diffDays = Math.floor((now.getTime() - new Date(tgConfig.lastBackupAt).getTime()) / (1000 * 60 * 60 * 24));
+          shouldRun = diffDays >= 2;
+        }
+      } else if (tgConfig.frequency === 'every_3_days') {
+        if (!tgConfig.lastBackupAt) shouldRun = true;
+        else {
+          const diffDays = Math.floor((now.getTime() - new Date(tgConfig.lastBackupAt).getTime()) / (1000 * 60 * 60 * 24));
+          shouldRun = diffDays >= 3;
+        }
+      }
+
+      if (shouldRun) {
+        try {
+          const backupJson = StorageService.exportFullDatabaseJSON(tgConfig.includeMedia);
+          const activeDbLabel = settings.backendProvider.toUpperCase();
+          const caption = `🤖 *SmartKhata Pro - Auto Scheduled Backup*\n🏢 Business: ${settings.businessName || 'SmartKhata Pro'}\n🗄️ Active DB: ${activeDbLabel}\n📸 Media: ${tgConfig.includeMedia ? 'With Images & PDFs' : 'Without Images (Data Only)'}\n📅 Scheduled Time: ${new Date().toLocaleString('en-IN')}`;
+
+          const res = await fetch('/api/backup/telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              botToken: tgConfig.botToken.trim(),
+              chatId: tgConfig.chatId.trim(),
+              backupJson,
+              caption,
+              fileName: `SmartKhataPro_AutoBackup_${todayDateStr}.json`,
+            }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            const updatedBackup: TelegramBackupSettings = {
+              ...tgConfig,
+              lastBackupAt: new Date().toISOString(),
+              lastBackupStatus: 'success',
+              lastBackupMessage: 'Auto-dispatched via schedule',
+            };
+            updateSettings({ ...settings, telegramBackup: updatedBackup });
+            addToast('Auto Backup Completed', 'Scheduled database JSON backup was sent to Telegram.', 'info');
+          }
+        } catch (e) {
+          console.error('Scheduled backup execution error:', e);
+        }
+      }
+    };
+
+    checkAndTriggerAutoBackup();
+  }, [settings.telegramBackup?.enabled, settings.telegramBackup?.lastBackupAt]);
 
   // Security & Password Update State
   const [currentPassword, setCurrentPassword] = useState('');
@@ -1931,148 +2171,181 @@ export default function SettingsPage() {
         </form>
       )}
 
-      {/* Tab 5: Cloud Backup & Disaster Recovery */}
+      {/* Tab 5: Cloud Backup & Automated Telegram Recovery */}
       {activeTab === 'backup' && (
         <div className="space-y-6 animate-in fade-in">
-          {/* Header Card */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-card p-6">
+          
+          {/* Active Database Banner */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-emerald-500/10 border border-indigo-200/80 dark:border-indigo-900/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2.5">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                  Active Database: {settings.backendProvider === 'mongodb' ? 'MongoDB Atlas (Live Sync)' : settings.backendProvider === 'supabase' ? 'Supabase PostgreSQL' : settings.backendProvider === 'firebase' ? 'Firebase Firestore' : 'Offline / Local Database'}
+                </span>
+              </div>
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                 <CloudUpload className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                Cloud Backup &amp; Disaster Recovery
+                Database Backup &amp; Telegram Auto-Sync
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                One-click database backups, cloud automated synchronization, and instant restore points
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Export full JSON backup, restore existing snapshots, or set up automated scheduled backups directly to your Telegram channel/bot.
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={handleExportBackup}
-              disabled={isExportingBackup}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all self-start sm:self-auto cursor-pointer disabled:opacity-50"
-            >
-              <Download className="w-4 h-4" />
-              {isExportingBackup ? 'Generating...' : 'Download Full Backup'}
-            </button>
-          </div>
-
-          {/* Cloud Status Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div className="glass-card p-5 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Backup Status</span>
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              </div>
-              <div className="text-lg font-extrabold text-slate-900 dark:text-white">
-                100% Up-To-Date
-              </div>
-              <div className="text-xs text-slate-400">
-                Last snapshot taken: {lastBackupDate}
-              </div>
-            </div>
-
-            <div className="glass-card p-5 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Active Storage Provider</span>
-                <Database className="w-4 h-4 text-indigo-500" />
-              </div>
-              <div className="text-lg font-extrabold text-slate-900 dark:text-white uppercase">
-                {settings.backendProvider} Database
-              </div>
-              <div className="text-xs text-slate-400">
-                Encrypted with AES-256 standards
-              </div>
-            </div>
-
-            <div className="glass-card p-5 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Auto Sync Frequency</span>
-                <RefreshCw className="w-4 h-4 text-cyan-500" />
-              </div>
-              <div className="text-lg font-extrabold text-slate-900 dark:text-white">
-                Every 6 Hours
-              </div>
-              <div className="text-xs text-slate-400">
-                Scheduled cloud background snapshot
-              </div>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <span className="text-[11px] text-slate-400 font-mono">Last Snapshot:</span>
+              <span className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-900 text-[11px] font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
+                {lastBackupDate}
+              </span>
             </div>
           </div>
 
-          {/* Backup Actions Box */}
+          {/* TWO CLEAN MANUAL OPTIONS: 1) EXPORT FULL JSON  2) IMPORT JSON */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Manual Export Box */}
-            <div className="glass-card p-6 space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold shrink-0">
-                  <FileJson className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="text-base font-extrabold text-slate-900 dark:text-white">
-                    Export JSON Archive
-                  </h4>
-                  <p className="text-xs text-slate-400">
-                    Exports all customers, khata balances, invoices, inventory, and payment settings to an encrypted portable JSON file.
-                  </p>
-                </div>
-              </div>
 
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 text-xs text-slate-500 space-y-1 font-mono">
-                <div>• customers.json</div>
-                <div>• transactions_ledger.json</div>
-                <div>• invoices_gst.json</div>
-                <div>• inventory_products.json</div>
-                <div>• default_upi_qr_settings.json</div>
+            {/* OPTION 1: EXPORT FULL DATABASE */}
+            <div className="glass-card p-6 sm:p-7 space-y-5 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold shrink-0 shadow-xs">
+                      <FileJson className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                        1. Export Full Database (.json)
+                      </h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Download complete system snapshot with all ledgers, invoices, customers &amp; settings
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Media Attachment Selector */}
+                <div className="space-y-2 pt-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Media &amp; Attachment Option:
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setExportIncludeMedia(true)}
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                        exportIncludeMedia
+                          ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-500 text-indigo-950 dark:text-indigo-200 shadow-xs'
+                          : 'bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold flex items-center gap-1.5">
+                          📸 With Images &amp; PDF
+                        </span>
+                        {exportIncludeMedia && <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />}
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                        Complete archive with receipt photos, QR codes, &amp; uploaded docs.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setExportIncludeMedia(false)}
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                        !exportIncludeMedia
+                          ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-500 text-indigo-950 dark:text-indigo-200 shadow-xs'
+                          : 'bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold flex items-center gap-1.5">
+                          📄 Without Images &amp; PDF
+                        </span>
+                        {!exportIncludeMedia && <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />}
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                        Lightweight compact JSON. Only ledgers, numbers, and profiles.
+                      </p>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 font-mono space-y-0.5">
+                  <div>✓ Customers &amp; Ledger Transactions</div>
+                  <div>✓ GST Billing, Invoices &amp; Products</div>
+                  <div>✓ Business Profile &amp; UPI QR Settings</div>
+                  <div>✓ Active DB Provider: <span className="font-bold text-indigo-600 dark:text-indigo-400 uppercase">{settings.backendProvider}</span></div>
+                </div>
               </div>
 
               <button
                 type="button"
-                onClick={handleExportBackup}
+                onClick={() => handleExportBackup(exportIncludeMedia)}
                 disabled={isExportingBackup}
-                className="w-full py-3 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
+                className="w-full py-3.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all disabled:opacity-50 mt-4"
               >
-                <Download className="w-4 h-4" />
-                Download Complete System Snapshot (.json)
+                {isExportingBackup ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Preparing JSON Backup...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <span>Export Full Database JSON ({exportIncludeMedia ? 'With Media' : 'Compact'})</span>
+                  </>
+                )}
               </button>
             </div>
 
-            {/* Restore From File */}
-            <div className="glass-card p-6 space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0">
-                  <Upload className="w-6 h-6" />
+            {/* OPTION 2: IMPORT / RESTORE DATABASE */}
+            <div className="glass-card p-6 sm:p-7 space-y-5 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0 shadow-xs">
+                      <Upload className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                        2. Import Database (.json)
+                      </h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Upload and restore any SmartKhata Pro JSON file into your active database
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-base font-extrabold text-slate-900 dark:text-white">
-                    Restore Database Point
-                  </h4>
-                  <p className="text-xs text-slate-400">
-                    Upload a previous SmartKhata Pro JSON backup to instantly restore your entire books, ledgers, and transactions.
-                  </p>
+
+                <input
+                  type="file"
+                  ref={backupFileInputRef}
+                  accept=".json"
+                  onChange={handleFileRestore}
+                  className="hidden"
+                />
+
+                <div
+                  onClick={() => backupFileInputRef.current?.click()}
+                  className="p-8 border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-emerald-500 dark:hover:border-emerald-500 rounded-3xl text-center cursor-pointer space-y-2.5 transition-all bg-slate-50/50 dark:bg-slate-900/30 hover:bg-emerald-50/20 dark:hover:bg-emerald-950/20 group"
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 text-slate-400 group-hover:text-emerald-600 flex items-center justify-center mx-auto shadow-xs transition-colors">
+                    <Upload className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Click to select &amp; import <span className="text-emerald-600 font-extrabold">.json backup file</span>
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">
+                      Instantly restores to active <span className="uppercase font-semibold">{settings.backendProvider}</span> database
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <input
-                type="file"
-                ref={backupFileInputRef}
-                accept=".json"
-                onChange={handleFileRestore}
-                className="hidden"
-              />
-
-              <div
-                onClick={() => backupFileInputRef.current?.click()}
-                className="p-6 border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-indigo-500 rounded-2xl text-center cursor-pointer space-y-2 transition-colors"
-              >
-                <Upload className="w-6 h-6 text-slate-400 mx-auto" />
-                <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Click to select and upload <span className="text-indigo-600 font-bold">.json backup</span>
-                </div>
-                <div className="text-[10px] text-slate-400">Instant verification and state hydration</div>
-              </div>
-
-              <div className="pt-2 flex justify-between items-center">
-                <span className="text-xs text-slate-400">Need a fresh start?</span>
+              <div className="pt-2 flex justify-between items-center border-t border-slate-200/80 dark:border-slate-800">
+                <span className="text-xs text-slate-400">Need a clean start?</span>
                 <button
                   type="button"
                   onClick={handleResetDemoData}
@@ -2082,7 +2355,274 @@ export default function SettingsPage() {
                 </button>
               </div>
             </div>
+
           </div>
+
+          {/* SECTION 3: AUTOMATED TELEGRAM BACKUP */}
+          <div className="glass-card p-6 sm:p-8 space-y-6">
+            
+            {/* Telegram Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-200/80 dark:border-slate-800">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-sky-50 dark:bg-sky-950/60 text-sky-500 dark:text-sky-400 flex items-center justify-center font-bold shrink-0 shadow-xs">
+                  <Send className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                      Automated Telegram Cloud Backup
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300">
+                      Telegram Bot API
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Automatically dispatch your active database JSON backup to Telegram chat or channel on scheduled days &amp; times
+                  </p>
+                </div>
+              </div>
+
+              {/* Master Enable/Disable Toggle */}
+              <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/80 p-2 px-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 self-start sm:self-auto">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  {tgEnabled ? 'Auto-Backup Enabled' : 'Auto-Backup Disabled'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setTgEnabled(!tgEnabled)}
+                  className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ease-in-out ${
+                    tgEnabled ? 'bg-sky-500' : 'bg-slate-300 dark:bg-slate-600'
+                  }`}
+                >
+                  <div
+                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
+                      tgEnabled ? 'translate-x-6' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* Telegram Configuration Form */}
+            <form onSubmit={handleSaveTelegramSettings} className="space-y-6">
+              
+              {/* Credentials Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Bot className="w-3.5 h-3.5 text-sky-500" />
+                      Telegram Bot Token *
+                    </span>
+                    <a
+                      href="https://t.me/BotFather"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 font-semibold"
+                    >
+                      Get Token from @BotFather <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  </label>
+                  <input
+                    type="password"
+                    value={tgBotToken}
+                    onChange={(e) => setTgBotToken(e.target.value)}
+                    placeholder="1234567890:ABCdefGhIJKlmNoPqRStUvWxYz..."
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Created via BotFather in Telegram. Keep this token confidential.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <MessageSquare className="w-3.5 h-3.5 text-sky-500" />
+                      Telegram Chat ID / Channel ID *
+                    </span>
+                    <a
+                      href="https://t.me/userinfobot"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 font-semibold"
+                    >
+                      Find Chat ID via @userinfobot <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  </label>
+                  <input
+                    type="text"
+                    value={tgChatId}
+                    onChange={(e) => setTgChatId(e.target.value)}
+                    placeholder="e.g. 987654321 or @MyChannelName or -10012345678"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Your personal chat ID, private group ID, or public/private channel username.
+                  </p>
+                </div>
+              </div>
+
+              {/* Schedule and Media Frequency Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800">
+                
+                {/* Frequency */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                    Backup Schedule Day
+                  </label>
+                  <select
+                    value={tgFrequency}
+                    onChange={(e) => setTgFrequency(e.target.value as BackupFrequency)}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-semibold focus:outline-none"
+                  >
+                    <option value="daily">Every Day (Daily Auto Backup)</option>
+                    <option value="every_2_days">Every 2 Days</option>
+                    <option value="every_3_days">Every 3 Days</option>
+                    <option value="weekly">Weekly (Select Specific Day)</option>
+                  </select>
+                </div>
+
+                {/* Day of Week (Visible if weekly) */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                    Specific Day {tgFrequency !== 'weekly' && <span className="text-slate-400 font-normal">(if weekly)</span>}
+                  </label>
+                  <select
+                    disabled={tgFrequency !== 'weekly'}
+                    value={tgSelectedDay}
+                    onChange={(e) => setTgSelectedDay(e.target.value as BackupDayOfWeek)}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-semibold focus:outline-none disabled:opacity-50"
+                  >
+                    <option value="monday">Every Monday</option>
+                    <option value="tuesday">Every Tuesday</option>
+                    <option value="wednesday">Every Wednesday</option>
+                    <option value="thursday">Every Thursday</option>
+                    <option value="friday">Every Friday</option>
+                    <option value="saturday">Every Saturday</option>
+                    <option value="sunday">Every Sunday</option>
+                  </select>
+                </div>
+
+                {/* Time of Day */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                    Backup Time
+                  </label>
+                  <input
+                    type="time"
+                    value={tgBackupTime}
+                    onChange={(e) => setTgBackupTime(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-semibold focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Media Option for Telegram */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <FileCheck className="w-4 h-4 text-emerald-500" />
+                    Telegram Backup Content Format:
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Choose whether Telegram JSON file should contain embedded receipt images &amp; PDFs or stay compact.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTgIncludeMedia(true)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      tgIncludeMedia
+                        ? 'bg-sky-500 text-white shadow-xs'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                    }`}
+                  >
+                    📸 With Images &amp; PDFs
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTgIncludeMedia(false)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      !tgIncludeMedia
+                        ? 'bg-sky-500 text-white shadow-xs'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                    }`}
+                  >
+                    📄 Without Images (Data Only)
+                  </button>
+                </div>
+              </div>
+
+              {/* Test Connection Banner */}
+              {tgTestMessage && (
+                <div
+                  className={`p-3.5 rounded-2xl text-xs flex items-center gap-2.5 ${
+                    tgTestMessage.success
+                      ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                      : 'bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                  }`}
+                >
+                  {tgTestMessage.success ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                  )}
+                  <span>{tgTestMessage.message}</span>
+                </div>
+              )}
+
+              {/* Last Dispatched Status */}
+              {settings.telegramBackup?.lastBackupAt && (
+                <div className="p-3 rounded-xl bg-slate-100/70 dark:bg-slate-800/40 text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                  <span>Last Telegram backup sent: <strong>{new Date(settings.telegramBackup.lastBackupAt).toLocaleString('en-IN')}</strong></span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">✓ Delivered</span>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={handleTestTelegramConnection}
+                    disabled={isTestingTg}
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {isTestingTg ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bot className="w-3.5 h-3.5" />}
+                    <span>{isTestingTg ? 'Testing...' : 'Test Telegram Bot Ping'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSendTelegramBackupNow}
+                    disabled={isSendingTgBackup}
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold bg-sky-50 dark:bg-sky-950/50 hover:bg-sky-100 dark:hover:bg-sky-900/50 text-sky-600 dark:text-sky-300 border border-sky-200 dark:border-sky-800 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {isSendingTgBackup ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    <span>{isSendingTgBackup ? 'Uploading to Telegram...' : 'Send Backup to Telegram Now'}</span>
+                  </button>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSavingTg}
+                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 shadow-md shadow-sky-500/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {isSavingTg ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span>Save Telegram Settings</span>
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+
         </div>
       )}
 

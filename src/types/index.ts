@@ -198,6 +198,22 @@ export interface PaymentSettings {
 
 export type BackendProvider = 'local' | 'supabase' | 'firebase' | 'mongodb';
 
+export type BackupFrequency = 'daily' | 'every_2_days' | 'every_3_days' | 'weekly';
+export type BackupDayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+export interface TelegramBackupSettings {
+  enabled: boolean;
+  botToken: string;
+  chatId: string;
+  frequency: BackupFrequency;
+  selectedDay?: BackupDayOfWeek;
+  backupTime: string; // e.g. "21:00"
+  includeMedia: boolean; // with images/pdf or without images/pdf
+  lastBackupAt?: string;
+  lastBackupStatus?: 'success' | 'failed';
+  lastBackupMessage?: string;
+}
+
 export interface SystemSettings {
   backendProvider: BackendProvider;
   supabaseUrl?: string;
@@ -215,4 +231,5 @@ export interface SystemSettings {
   paymentSettings: PaymentSettings;
   monthlyBudgetCap?: number;
   darkMode: boolean;
+  telegramBackup?: TelegramBackupSettings;
 }

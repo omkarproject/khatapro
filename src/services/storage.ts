@@ -106,6 +106,15 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
   },
   monthlyBudgetCap: 150000,
   darkMode: false,
+  telegramBackup: {
+    enabled: false,
+    botToken: '',
+    chatId: '',
+    frequency: 'daily',
+    selectedDay: 'monday',
+    backupTime: '21:00',
+    includeMedia: true,
+  },
 });
 
 export const StorageService = {
@@ -482,20 +491,44 @@ export const StorageService = {
   },
 
   // Full Database JSON Export / Import
-  exportFullDatabaseJSON: (): string => {
+  exportFullDatabaseJSON: (includeMedia: boolean = true): string => {
+    let expenses = StorageService.getExpenses();
+    let documents = StorageService.getDocuments();
+    let settings = StorageService.getSettings();
+    let profile = StorageService.getProfile();
+
+    if (!includeMedia) {
+      // Strip heavy base64 data URLs if user requested lightweight backup without images/PDF
+      expenses = expenses.map(e => ({ ...e, receiptImages: [] }));
+      documents = documents.map(d => ({ ...d, fileUrl: d.fileUrl?.startsWith('data:') ? '' : d.fileUrl }));
+      if (settings.businessLogo?.startsWith('data:')) {
+        settings = { ...settings, businessLogo: '' };
+      }
+      if (settings.paymentSettings?.customQrUrl?.startsWith('data:')) {
+        settings = {
+          ...settings,
+          paymentSettings: { ...settings.paymentSettings, customQrUrl: '' }
+        };
+      }
+      if (profile.avatarUrl?.startsWith('data:')) {
+        profile = { ...profile, avatarUrl: '' };
+      }
+    }
+
     const backup = {
       version: '1.0.0',
       exportedAt: new Date().toISOString(),
-      profile: StorageService.getProfile(),
-      settings: StorageService.getSettings(),
+      includeMedia,
+      profile,
+      settings,
       customers: StorageService.getCustomers(),
       transactions: StorageService.getTransactions(),
       invoices: StorageService.getInvoices(),
       products: StorageService.getProducts(),
-      expenses: StorageService.getExpenses(),
+      expenses,
       savings: StorageService.getSavingsGoals(),
       reminders: StorageService.getReminders(),
-      documents: StorageService.getDocuments(),
+      documents,
     };
     return JSON.stringify(backup, null, 2);
   },
