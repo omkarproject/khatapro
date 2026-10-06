@@ -16,7 +16,6 @@ import {
   BellRing,
   FolderLock,
   LineChart,
-  CloudUpload,
   Settings,
   ShieldCheck,
   Zap,
@@ -48,7 +47,6 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
     { label: 'Payment Reminders', href: '/reminders', icon: BellRing },
     { label: 'Document Vault', href: '/documents', icon: FolderLock },
     { label: 'Financial Analytics', href: '/analytics', icon: LineChart },
-    { label: 'Cloud Backup', href: '/backup', icon: CloudUpload },
     { label: 'Settings', href: '/settings', icon: Settings },
   ];
 
