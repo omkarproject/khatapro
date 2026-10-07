@@ -93,10 +93,28 @@ export interface Invoice {
   receiptName?: string;
   receiptType?: string;
   statusHistory?: InvoiceStatusHistoryEntry[];
+  appliedCharges?: InvoiceAppliedCharge[];
   notes?: string;
   terms?: string;
   upiPaymentQr?: string;
   createdAt: string;
+}
+
+export interface InvoiceChargeConfig {
+  id: string;
+  name: string;
+  type: 'percentage' | 'fixed';
+  value: number;
+  enabled: boolean;
+  isSystemTax?: boolean;
+}
+
+export interface InvoiceAppliedCharge {
+  id: string;
+  name: string;
+  type: 'percentage' | 'fixed';
+  rate: number;
+  amount: number;
 }
 
 export interface InvoiceStatusHistoryEntry {

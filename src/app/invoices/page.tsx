@@ -1,9 +1,16 @@
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
-import { Invoice, InvoiceItem, InvoiceStatusHistoryEntry, PaymentCollectionMode } from '@/types';
+import {
+  Invoice,
+  InvoiceItem,
+  InvoiceStatusHistoryEntry,
+  InvoiceChargeConfig,
+  InvoiceAppliedCharge,
+  PaymentCollectionMode,
+} from '@/types';
 import {
   FileSpreadsheet,
   Plus,
@@ -33,8 +40,19 @@ import {
   Upload,
   FileText,
   Image as ImageIcon,
-  Calendar
+  Calendar,
+  Settings,
+  Percent
 } from 'lucide-react';
+
+const DEFAULT_INVOICE_CHARGES: InvoiceChargeConfig[] = [
+  { id: 'cgst', name: 'CGST', type: 'percentage', value: 9, enabled: true, isSystemTax: true },
+  { id: 'sgst', name: 'SGST', type: 'percentage', value: 9, enabled: true, isSystemTax: true },
+  { id: 'igst', name: 'IGST', type: 'percentage', value: 18, enabled: false, isSystemTax: true },
+  { id: 'delivery', name: 'Delivery Charges', type: 'fixed', value: 50, enabled: false },
+  { id: 'packaging', name: 'Packaging Charges', type: 'fixed', value: 20, enabled: false },
+  { id: 'service', name: 'Service / Handling Fee', type: 'percentage', value: 2.5, enabled: false },
+];
 
 export default function InvoicesPage() {
   const {
@@ -189,38 +207,158 @@ export default function InvoicesPage() {
     ]);
   };
 
+  // Invoice Charges & Tax Configuration State
+  const [invoiceChargesConfig, setInvoiceChargesConfig] = useState<InvoiceChargeConfig[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('khatapro_invoice_charges_config');
+        if (saved) return JSON.parse(saved);
+      } catch (e) {
+        console.warn('Failed to load invoice charges config', e);
+      }
+    }
+    return DEFAULT_INVOICE_CHARGES;
+  });
+  const [isChargesConfigModalOpen, setIsChargesConfigModalOpen] = useState(false);
+
+  // New custom charge form in configuration modal
+  const [newChargeName, setNewChargeName] = useState('');
+  const [newChargeType, setNewChargeType] = useState<'percentage' | 'fixed'>('fixed');
+  const [newChargeValue, setNewChargeValue] = useState('');
+
+  // Selected Charges for current invoice creation
+  const [selectedCharges, setSelectedCharges] = useState<{
+    [id: string]: { enabled: boolean; value: number; type: 'percentage' | 'fixed' };
+  }>({});
+
+  // Sync selected charges whenever Create Modal opens or config changes
+  useEffect(() => {
+    if (isCreateModalOpen) {
+      const initial: { [id: string]: { enabled: boolean; value: number; type: 'percentage' | 'fixed' } } = {};
+      invoiceChargesConfig.forEach((chg) => {
+        initial[chg.id] = {
+          enabled: chg.enabled,
+          value: chg.value,
+          type: chg.type,
+        };
+      });
+      setSelectedCharges(initial);
+    }
+  }, [isCreateModalOpen, invoiceChargesConfig]);
+
+  const saveChargesConfig = (newConfig: InvoiceChargeConfig[]) => {
+    setInvoiceChargesConfig(newConfig);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('khatapro_invoice_charges_config', JSON.stringify(newConfig));
+      } catch (e) {
+        console.warn('Failed to save invoice charges config', e);
+      }
+    }
+  };
+
+  const handleAddCustomCharge = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newChargeName.trim()) {
+      addToast('Name Required', 'Enter a name for the charge.', 'error');
+      return;
+    }
+    const val = parseFloat(newChargeValue) || 0;
+    const newCharge: InvoiceChargeConfig = {
+      id: `chg_${Date.now()}`,
+      name: newChargeName.trim(),
+      type: newChargeType,
+      value: val,
+      enabled: false,
+      isSystemTax: false,
+    };
+    const updated = [...invoiceChargesConfig, newCharge];
+    saveChargesConfig(updated);
+    setNewChargeName('');
+    setNewChargeValue('');
+    addToast('Charge Added', `${newCharge.name} added to invoice charges.`, 'success');
+  };
+
+  const handleDeleteCharge = (id: string) => {
+    const updated = invoiceChargesConfig.filter((c) => c.id !== id);
+    saveChargesConfig(updated);
+    addToast('Charge Removed', 'Charge configuration removed.', 'info');
+  };
+
+  const handleUpdateChargeField = (id: string, field: keyof InvoiceChargeConfig, val: any) => {
+    const updated = invoiceChargesConfig.map((c) => (c.id === id ? { ...c, [field]: val } : c));
+    saveChargesConfig(updated);
+  };
+
   const removeItemRow = (index: number) => {
     if (items.length <= 1) return;
     setItems(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Calculations for current creation
+  // Calculations for current creation with dynamic checkboxes
   const calculatedTotals = useMemo(() => {
     let subtotal = 0;
     let discountAmount = 0;
-    let taxAmount = 0;
 
     items.forEach(item => {
-      const raw = (item.quantity || 0) * (item.unitPrice || 0);
+      const qty = item.quantity || 0;
+      const price = item.unitPrice || 0;
+      const raw = qty * price;
       const d = raw * ((item.discountPercent || 0) / 100);
-      const taxable = raw - d;
-      const t = taxable * ((item.taxPercent || 0) / 100);
-
       subtotal += raw;
       discountAmount += d;
-      taxAmount += t;
     });
 
-    const total = Math.round(subtotal - discountAmount + taxAmount);
+    const taxable = Math.max(0, subtotal - discountAmount);
+
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+    const appliedCharges: InvoiceAppliedCharge[] = [];
+
+    invoiceChargesConfig.forEach(chg => {
+      const state = selectedCharges[chg.id];
+      if (state && state.enabled) {
+        const val = state.value || 0;
+        const amt =
+          state.type === 'percentage'
+            ? Math.round((taxable * val) / 100)
+            : Math.round(val);
+
+        if (chg.id === 'cgst') {
+          cgst = amt;
+        } else if (chg.id === 'sgst') {
+          sgst = amt;
+        } else if (chg.id === 'igst') {
+          igst = amt;
+        } else {
+          appliedCharges.push({
+            id: chg.id,
+            name: chg.name,
+            type: state.type,
+            rate: val,
+            amount: amt,
+          });
+        }
+      }
+    });
+
+    const taxAmount = cgst + sgst + igst;
+    const otherChargesTotal = appliedCharges.reduce((sum, c) => sum + c.amount, 0);
+    const total = Math.round(taxable + taxAmount + otherChargesTotal);
+
     return {
       subtotal: Math.round(subtotal),
       discountAmount: Math.round(discountAmount),
-      taxAmount: Math.round(taxAmount),
-      cgst: Math.round(taxAmount / 2),
-      sgst: Math.round(taxAmount / 2),
+      taxable: Math.round(taxable),
+      taxAmount,
+      cgst,
+      sgst,
+      igst,
+      appliedCharges,
       total,
     };
-  }, [items]);
+  }, [items, invoiceChargesConfig, selectedCharges]);
 
   // Handle Save New Invoice
   const handleSaveInvoice = (e: React.FormEvent) => {
@@ -248,7 +386,8 @@ export default function InvoicesPage() {
       taxAmount: calculatedTotals.taxAmount,
       cgst: calculatedTotals.cgst,
       sgst: calculatedTotals.sgst,
-      igst: 0,
+      igst: calculatedTotals.igst,
+      appliedCharges: calculatedTotals.appliedCharges,
       total: calculatedTotals.total,
       paidAmount: 0,
       status: 'unpaid',
@@ -403,13 +542,23 @@ export default function InvoicesPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          Create Invoice
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setIsChargesConfigModalOpen(true)}
+            className="p-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-300 dark:hover:border-indigo-600 shadow-sm active:scale-95 transition-all cursor-pointer"
+            title="GST, Taxes & Additional Charges Settings"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Create Invoice
+          </button>
+        </div>
       </div>
 
       {/* Filter & Search */}
@@ -752,14 +901,30 @@ export default function InvoicesPage() {
                       <span className="font-mono font-semibold">-{formatINR(activeInvoice.discountAmount)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between">
-                    <span>CGST (9%):</span>
-                    <span className="font-mono">{formatINR(activeInvoice.cgst)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>SGST (9%):</span>
-                    <span className="font-mono">{formatINR(activeInvoice.sgst)}</span>
-                  </div>
+                  {activeInvoice.cgst > 0 && (
+                    <div className="flex justify-between">
+                      <span>CGST:</span>
+                      <span className="font-mono">+{formatINR(activeInvoice.cgst)}</span>
+                    </div>
+                  )}
+                  {activeInvoice.sgst > 0 && (
+                    <div className="flex justify-between">
+                      <span>SGST:</span>
+                      <span className="font-mono">+{formatINR(activeInvoice.sgst)}</span>
+                    </div>
+                  )}
+                  {activeInvoice.igst > 0 && (
+                    <div className="flex justify-between">
+                      <span>IGST:</span>
+                      <span className="font-mono">+{formatINR(activeInvoice.igst)}</span>
+                    </div>
+                  )}
+                  {activeInvoice.appliedCharges && activeInvoice.appliedCharges.map((chg) => (
+                    <div key={chg.id} className="flex justify-between text-indigo-700 dark:text-indigo-400">
+                      <span>{chg.name} ({chg.type === 'percentage' ? `${chg.rate}%` : 'Fixed'}):</span>
+                      <span className="font-mono font-semibold">+{formatINR(chg.amount)}</span>
+                    </div>
+                  ))}
                   <div className="flex justify-between text-base font-black text-slate-900 pt-2 border-t border-slate-200">
                     <span>Invoice Total:</span>
                     <span className="font-mono text-indigo-700">{formatINR(activeInvoice.total)}</span>
@@ -787,7 +952,7 @@ export default function InvoicesPage() {
             <div className="flex items-center justify-between">
               <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                 <Plus className="w-5 h-5 text-indigo-500" />
-                Create GST Tax Invoice
+                Create Invoice
               </h3>
               <button
                 onClick={() => setIsCreateModalOpen(false)}
@@ -907,12 +1072,94 @@ export default function InvoicesPage() {
                 </div>
               </div>
 
-              {/* Total Calculation Display */}
-              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 flex items-center justify-between text-xs">
-                <span className="text-slate-500">Taxable: {formatINR(calculatedTotals.subtotal)} | GST (18%): {formatINR(calculatedTotals.taxAmount)}</span>
-                <span className="text-base font-black text-slate-900 dark:text-white">
-                  Grand Total: {formatINR(calculatedTotals.total)}
-                </span>
+              {/* Taxes & Additional Charges Selection Section */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 space-y-3 text-xs">
+                <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-700/60 pb-2">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
+                    <Percent className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Taxes & Additional Charges</span>
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                    Taxable Subtotal: <strong className="text-slate-800 dark:text-slate-200">{formatINR(calculatedTotals.taxable)}</strong>
+                  </div>
+                </div>
+
+                {/* Checkbox Options Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                  {invoiceChargesConfig.map((chg) => {
+                    const state = selectedCharges[chg.id] || { enabled: false, value: chg.value, type: chg.type };
+                    const isChecked = state.enabled;
+                    const calcAmt = isChecked
+                      ? state.type === 'percentage'
+                        ? Math.round((calculatedTotals.taxable * state.value) / 100)
+                        : Math.round(state.value)
+                      : 0;
+
+                    return (
+                      <label
+                        key={chg.id}
+                        className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
+                          isChecked
+                            ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-700 text-slate-900 dark:text-white'
+                            : 'bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-500 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              setSelectedCharges((prev) => ({
+                                ...prev,
+                                [chg.id]: {
+                                  ...state,
+                                  enabled: e.target.checked,
+                                },
+                              }));
+                            }}
+                            className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          />
+                          <span className="truncate font-semibold text-[11px]">
+                            {chg.name}{' '}
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              ({state.type === 'percentage' ? `${state.value}%` : `₹${state.value}`})
+                            </span>
+                          </span>
+                        </div>
+
+                        <span
+                          className={`font-mono font-bold text-[11px] shrink-0 ml-1 ${
+                            isChecked ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'
+                          }`}
+                        >
+                          {isChecked ? `+${formatINR(calcAmt)}` : '₹0'}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                {/* Summary Total Bar */}
+                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                    <span>Taxable: {formatINR(calculatedTotals.taxable)}</span>
+                    <span>•</span>
+                    <span>GST / Taxes: {formatINR(calculatedTotals.taxAmount)}</span>
+                    {calculatedTotals.appliedCharges.length > 0 && (
+                      <>
+                        <span>•</span>
+                        <span>Other Charges: {formatINR(calculatedTotals.appliedCharges.reduce((s, c) => s + c.amount, 0))}</span>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500 uppercase font-bold">Grand Total:</span>
+                    <span className="text-lg font-black font-mono text-indigo-700 dark:text-indigo-400">
+                      {formatINR(calculatedTotals.total)}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* Submit Buttons */}
@@ -1612,6 +1859,167 @@ export default function InvoicesPage() {
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Invoice Charges & Tax Configuration (Gear Icon) */}
+      {isChargesConfigModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 sm:p-7 max-w-xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5 max-h-[92vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                  <Settings className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                    Invoice Charges & Tax Configuration
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Set GST rates & custom charges (Delivery, Packaging, etc.)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsChargesConfigModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Configured Charges List */}
+            <div className="space-y-3">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Active Taxes & Additional Charges
+              </span>
+
+              <div className="space-y-2">
+                {invoiceChargesConfig.map((chg) => (
+                  <div
+                    key={chg.id}
+                    className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between gap-3 text-xs"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <input
+                        type="checkbox"
+                        checked={chg.enabled}
+                        onChange={(e) => handleUpdateChargeField(chg.id, 'enabled', e.target.checked)}
+                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
+                        title="Enable by default when creating new invoice"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <span className="font-bold text-slate-800 dark:text-slate-200 block truncate">
+                          {chg.name}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {chg.isSystemTax ? 'Standard Tax' : 'Custom Charge'} • Default: {chg.enabled ? 'Active' : 'Optional'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Value & Type controls */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2 py-1">
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={chg.value}
+                          onChange={(e) =>
+                            handleUpdateChargeField(chg.id, 'value', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-14 text-xs font-mono font-bold bg-transparent text-slate-900 dark:text-white text-right focus:outline-none"
+                        />
+                        <select
+                          value={chg.type}
+                          onChange={(e) =>
+                            handleUpdateChargeField(chg.id, 'type', e.target.value as 'percentage' | 'fixed')
+                          }
+                          className="text-[11px] font-bold bg-transparent text-indigo-600 dark:text-indigo-400 cursor-pointer focus:outline-none"
+                        >
+                          <option value="percentage">%</option>
+                          <option value="fixed">₹ (Fixed)</option>
+                        </select>
+                      </div>
+
+                      {!chg.isSystemTax && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCharge(chg.id)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
+                          title="Delete Charge"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Add New Custom Charge Form */}
+            <form onSubmit={handleAddCustomCharge} className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 space-y-3">
+              <span className="text-xs font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+                <Plus className="w-3.5 h-3.5" />
+                Add New Charge (e.g. Delivery, Packaging, Handling)
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center text-xs">
+                <div className="sm:col-span-6">
+                  <input
+                    type="text"
+                    placeholder="Charge Name (e.g. Delivery Charge)"
+                    value={newChargeName}
+                    onChange={(e) => setNewChargeName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400"
+                  />
+                </div>
+                <div className="sm:col-span-3 flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-2.5 py-1.5">
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    placeholder="Value"
+                    value={newChargeValue}
+                    onChange={(e) => setNewChargeValue(e.target.value)}
+                    className="w-12 text-xs font-mono font-bold bg-transparent text-slate-900 dark:text-white text-right focus:outline-none"
+                  />
+                  <select
+                    value={newChargeType}
+                    onChange={(e) => setNewChargeType(e.target.value as 'percentage' | 'fixed')}
+                    className="text-[11px] font-bold bg-transparent text-indigo-600 dark:text-indigo-400 cursor-pointer focus:outline-none"
+                  >
+                    <option value="fixed">₹</option>
+                    <option value="percentage">%</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-3">
+                  <button
+                    type="submit"
+                    className="w-full py-2 px-3 rounded-xl text-xs font-bold text-white fintech-gradient-primary shadow-sm active:scale-95 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Charge</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            {/* Bottom Actions */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsChargesConfigModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold text-white fintech-gradient-primary shadow-md active:scale-95 transition-all cursor-pointer"
+              >
+                Save & Close
+              </button>
             </div>
           </div>
         </div>
