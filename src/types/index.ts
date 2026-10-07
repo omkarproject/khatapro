@@ -88,10 +88,27 @@ export interface Invoice {
   total: number;
   paidAmount: number;
   status: 'paid' | 'unpaid' | 'partially_paid' | 'overdue' | 'draft';
+  paymentDate?: string;
+  receiptUrl?: string;
+  receiptName?: string;
+  receiptType?: string;
+  statusHistory?: InvoiceStatusHistoryEntry[];
   notes?: string;
   terms?: string;
   upiPaymentQr?: string;
   createdAt: string;
+}
+
+export interface InvoiceStatusHistoryEntry {
+  id: string;
+  status: 'paid' | 'unpaid' | 'partially_paid' | 'overdue' | 'draft';
+  date: string;
+  amount?: number;
+  notes?: string;
+  receiptUrl?: string;
+  receiptName?: string;
+  receiptType?: string;
+  updatedAt: string;
 }
 
 export interface Product {

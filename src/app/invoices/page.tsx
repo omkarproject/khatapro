@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
-import { Invoice, InvoiceItem } from '@/types';
+import { Invoice, InvoiceItem, InvoiceStatusHistoryEntry, PaymentCollectionMode } from '@/types';
 import {
   FileSpreadsheet,
   Plus,
@@ -27,9 +27,14 @@ import {
   Wallet,
   Copy,
   Check,
-  ExternalLink
+  ExternalLink,
+  History,
+  Paperclip,
+  Upload,
+  FileText,
+  Image as ImageIcon,
+  Calendar
 } from 'lucide-react';
-import { PaymentCollectionMode } from '@/types';
 
 export default function InvoicesPage() {
   const {
@@ -48,6 +53,23 @@ export default function InvoicesPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [activeInvoice, setActiveInvoice] = useState<Invoice | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // Status Update Modal State
+  const [statusModalInvoice, setStatusModalInvoice] = useState<Invoice | null>(null);
+  const [statusModalStatus, setStatusModalStatus] = useState<'paid' | 'unpaid' | 'overdue'>('paid');
+  const [statusModalDate, setStatusModalDate] = useState(new Date().toISOString().split('T')[0]);
+  const [statusModalAmount, setStatusModalAmount] = useState('');
+  const [statusModalNotes, setStatusModalNotes] = useState('');
+  const [statusModalReceiptUrl, setStatusModalReceiptUrl] = useState<string | null>(null);
+  const [statusModalReceiptName, setStatusModalReceiptName] = useState('');
+  const [statusModalReceiptType, setStatusModalReceiptType] = useState('');
+  const statusFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Status History Modal State
+  const [historyModalInvoice, setHistoryModalInvoice] = useState<Invoice | null>(null);
+
+  // Preview Document Modal State
+  const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string; type: string } | null>(null);
 
   // Payment Link Generation State
   const [paymentLinkInvoice, setPaymentLinkInvoice] = useState<Invoice | null>(null);
@@ -249,6 +271,83 @@ export default function InvoicesPage() {
     openWhatsApp(inv.customerPhone, message);
   };
 
+  // Handle Open Status Update Modal
+  const handleOpenStatusModal = (inv: Invoice) => {
+    setStatusModalInvoice(inv);
+    setStatusModalStatus(inv.status === 'overdue' ? 'overdue' : inv.status === 'paid' ? 'paid' : 'paid');
+    setStatusModalDate(inv.paymentDate || new Date().toISOString().split('T')[0]);
+    setStatusModalAmount(inv.status === 'paid' ? inv.paidAmount.toString() : inv.total.toString());
+    setStatusModalNotes(inv.notes || '');
+    setStatusModalReceiptUrl(inv.receiptUrl || null);
+    setStatusModalReceiptName(inv.receiptName || '');
+    setStatusModalReceiptType(inv.receiptType || '');
+  };
+
+  const processInvoiceFile = (file: File) => {
+    const maxBytes = 25 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      addToast('File Too Large', 'Please select a file smaller than 25MB.', 'error');
+      return;
+    }
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const type = isPdf ? 'pdf' : file.type.startsWith('image/') ? 'image' : 'file';
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      setStatusModalReceiptUrl(result);
+      setStatusModalReceiptName(file.name);
+      setStatusModalReceiptType(type);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveStatusUpdate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!statusModalInvoice) return;
+
+    const newStatus = statusModalStatus;
+    const paymentDate = statusModalDate || new Date().toISOString().split('T')[0];
+    const enteredAmt = parseFloat(statusModalAmount);
+    const paidAmt =
+      newStatus === 'paid'
+        ? (!isNaN(enteredAmt) && enteredAmt > 0 ? enteredAmt : statusModalInvoice.total)
+        : newStatus === 'unpaid'
+        ? 0
+        : (!isNaN(enteredAmt) ? enteredAmt : statusModalInvoice.paidAmount);
+
+    const historyEntry: InvoiceStatusHistoryEntry = {
+      id: `hist_${Date.now()}`,
+      status: newStatus,
+      date: paymentDate,
+      amount: paidAmt,
+      notes: statusModalNotes.trim() || (newStatus === 'paid' ? 'Payment received' : `Marked as ${newStatus}`),
+      receiptUrl: statusModalReceiptUrl || undefined,
+      receiptName: statusModalReceiptName || undefined,
+      receiptType: statusModalReceiptType || undefined,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updatedInvoice: Invoice = {
+      ...statusModalInvoice,
+      status: newStatus,
+      paidAmount: paidAmt,
+      paymentDate: newStatus === 'paid' ? paymentDate : statusModalInvoice.paymentDate,
+      receiptUrl: statusModalReceiptUrl || statusModalInvoice.receiptUrl,
+      receiptName: statusModalReceiptName || statusModalInvoice.receiptName,
+      receiptType: statusModalReceiptType || statusModalInvoice.receiptType,
+      statusHistory: [historyEntry, ...(statusModalInvoice.statusHistory || [])],
+    };
+
+    saveInvoice(updatedInvoice);
+    addToast(
+      'Status Updated',
+      `Invoice #${statusModalInvoice.invoiceNumber} status set to ${newStatus.toUpperCase()}.`,
+      'success'
+    );
+    setStatusModalInvoice(null);
+  };
+
   // Open Send Payment Link Modal
   const handleOpenSendPaymentLink = (inv: Invoice) => {
     setPaymentLinkInvoice(inv);
@@ -377,17 +476,32 @@ export default function InvoicesPage() {
                     {formatINR(inv.total)}
                   </td>
                   <td className="py-3 px-3 text-center">
-                    <span
-                      className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
-                        inv.status === 'paid'
-                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
-                          : inv.status === 'overdue'
-                          ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400'
-                          : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
-                      }`}
-                    >
-                      {inv.status}
-                    </span>
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenStatusModal(inv)}
+                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase transition-all duration-150 cursor-pointer hover:scale-105 active:scale-95 shadow-xs flex items-center gap-1 ${
+                          inv.status === 'paid'
+                            ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-800'
+                            : inv.status === 'overdue'
+                            ? 'bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-950 dark:text-rose-400 dark:hover:bg-rose-900 border border-rose-300 dark:border-rose-800'
+                            : 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:hover:bg-amber-900 border border-amber-300 dark:border-amber-800'
+                        }`}
+                        title="Click to update status, date & attach receipt proof"
+                      >
+                        <span>{inv.status}</span>
+                        {inv.receiptUrl && <Paperclip className="w-2.5 h-2.5" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setHistoryModalInvoice(inv)}
+                        className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                        title="View Status & Payment History"
+                      >
+                        <History className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                   <td className="py-3 px-3 text-right">
                     <div className="flex items-center justify-end gap-1.5">
@@ -990,6 +1104,515 @@ export default function InvoicesPage() {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Update Invoice Status */}
+      {statusModalInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5 max-h-[92vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                  Update Invoice Status
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Invoice <span className="font-mono font-bold text-slate-800 dark:text-slate-200">#{statusModalInvoice.invoiceNumber}</span> • {statusModalInvoice.customerName}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStatusModalInvoice(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Quick Invoice Summary */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-xs">
+              <div>
+                <div className="text-slate-400 text-[10px] uppercase font-bold">Total Bill Amount</div>
+                <div className="text-base font-black font-mono text-slate-900 dark:text-white">
+                  {formatINR(statusModalInvoice.total)}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-slate-400 text-[10px] uppercase font-bold">Due Date</div>
+                <div className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                  {formatDate(statusModalInvoice.dueDate)}
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveStatusUpdate} className="space-y-4">
+              {/* Status Selector */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                  Select Status *
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatusModalStatus('paid');
+                      if (!statusModalAmount || parseFloat(statusModalAmount) === 0) {
+                        setStatusModalAmount(statusModalInvoice.total.toString());
+                      }
+                    }}
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                      statusModalStatus === 'paid'
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shadow-sm ring-2 ring-emerald-500/20'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>PAID</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStatusModalStatus('unpaid')}
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                      statusModalStatus === 'unpaid'
+                        ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 shadow-sm ring-2 ring-amber-500/20'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <Clock className="w-4 h-4 text-amber-500" />
+                    <span>UNPAID</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStatusModalStatus('overdue')}
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                      statusModalStatus === 'overdue'
+                        ? 'border-rose-500 bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 shadow-sm ring-2 ring-rose-500/20'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <AlertCircle className="w-4 h-4 text-rose-500" />
+                    <span>OVERDUE</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Date & Amount */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Status / Payment Date *
+                  </label>
+                  <div className="relative">
+                    <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+                    <input
+                      type="date"
+                      value={statusModalDate}
+                      onChange={(e) => setStatusModalDate(e.target.value)}
+                      required
+                      className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Settled / Paid Amount (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={statusModalAmount}
+                    onChange={(e) => setStatusModalAmount(e.target.value)}
+                    placeholder={statusModalStatus === 'paid' ? statusModalInvoice.total.toString() : '0'}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Receipt / Proof Image Attachment */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Paperclip className="w-3.5 h-3.5 text-indigo-500" />
+                    Attach Payment Proof / Receipt (Image or PDF)
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-normal">Optional • Max 25MB</span>
+                </label>
+
+                <input
+                  type="file"
+                  ref={statusFileInputRef}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) processInvoiceFile(f);
+                  }}
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                />
+
+                {statusModalReceiptUrl ? (
+                  <div className="p-3 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {statusModalReceiptType === 'pdf' ? (
+                        <div className="w-9 h-9 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center shrink-0">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                      ) : (
+                        <div className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 overflow-hidden shrink-0 flex items-center justify-center">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={statusModalReceiptUrl}
+                            alt="Preview"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                          {statusModalReceiptName || 'Attached Document'}
+                        </div>
+                        <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold uppercase">
+                          {statusModalReceiptType || 'FILE'} Attached
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPreviewDoc({
+                            url: statusModalReceiptUrl,
+                            name: statusModalReceiptName || 'Payment_Proof',
+                            type: statusModalReceiptType || 'image',
+                          })
+                        }
+                        className="px-2.5 py-1 rounded-lg text-xs font-bold text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 cursor-pointer"
+                      >
+                        Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStatusModalReceiptUrl(null);
+                          setStatusModalReceiptName('');
+                          setStatusModalReceiptType('');
+                        }}
+                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-950/60 cursor-pointer"
+                        title="Remove file"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => statusFileInputRef.current?.click()}
+                    className="w-full p-3.5 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-600 bg-slate-50/50 dark:bg-slate-800/40 text-slate-500 hover:text-indigo-600 flex items-center justify-center gap-2 transition-all cursor-pointer text-xs font-semibold"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Click to Upload Payment Screenshot, Receipt or PDF</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Notes / Remarks */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Payment / Status Notes (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={statusModalNotes}
+                  onChange={(e) => setStatusModalNotes(e.target.value)}
+                  placeholder="e.g. Paid via PhonePe UPI / Cheque #12345 / Cash collected"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setStatusModalInvoice(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl text-xs font-bold text-white fintech-gradient-primary shadow-md active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  Save Status
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Status & Payment History Timeline */}
+      {historyModalInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <History className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                  Status & Payment History
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Invoice <span className="font-mono font-bold text-slate-800 dark:text-slate-200">#{historyModalInvoice.invoiceNumber}</span> • {historyModalInvoice.customerName}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHistoryModalInvoice(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Current Snapshot */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-xs">
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Current Status</span>
+                <span
+                  className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full uppercase mt-1 ${
+                    historyModalInvoice.status === 'paid'
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800'
+                      : historyModalInvoice.status === 'overdue'
+                      ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400 border border-rose-300 dark:border-rose-800'
+                      : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
+                  }`}
+                >
+                  {historyModalInvoice.status}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Total Amount</span>
+                <span className="text-base font-black font-mono text-slate-900 dark:text-white">
+                  {formatINR(historyModalInvoice.total)}
+                </span>
+              </div>
+            </div>
+
+            {/* Timeline Entries */}
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+              {historyModalInvoice.statusHistory && historyModalInvoice.statusHistory.length > 0 ? (
+                historyModalInvoice.statusHistory.map((entry, idx) => (
+                  <div
+                    key={entry.id || idx}
+                    className="p-3.5 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 space-y-2 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                            entry.status === 'paid'
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
+                              : entry.status === 'overdue'
+                              ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400'
+                              : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
+                          }`}
+                        >
+                          {entry.status}
+                        </span>
+                        <span className="text-[11px] font-mono text-slate-500">
+                          {formatDate(entry.date)}
+                        </span>
+                      </div>
+                      {entry.amount !== undefined && entry.amount > 0 && (
+                        <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">
+                          {formatINR(entry.amount)}
+                        </span>
+                      )}
+                    </div>
+
+                    {entry.notes && (
+                      <p className="text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-100 dark:border-slate-700/60">
+                        {entry.notes}
+                      </p>
+                    )}
+
+                    {entry.receiptUrl && (
+                      <div className="flex items-center justify-between pt-1">
+                        <div className="flex items-center gap-1.5 text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold">
+                          <Paperclip className="w-3.5 h-3.5" />
+                          <span className="truncate max-w-[200px]">
+                            {entry.receiptName || 'Attached Receipt / Proof'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPreviewDoc({
+                              url: entry.receiptUrl!,
+                              name: entry.receiptName || 'Payment_Proof',
+                              type: entry.receiptType || 'image',
+                            })
+                          }
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 flex items-center gap-1 shadow-xs cursor-pointer"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>View Proof</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="space-y-3">
+                  {/* Synthesized Initial Record */}
+                  <div className="p-3.5 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                            historyModalInvoice.status === 'paid'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-amber-100 text-amber-700'
+                          }`}
+                        >
+                          {historyModalInvoice.status}
+                        </span>
+                        <span className="text-[11px] font-mono text-slate-500">
+                          {formatDate(historyModalInvoice.issueDate)}
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold text-xs text-slate-700 dark:text-slate-300">
+                        {formatINR(historyModalInvoice.total)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 italic">
+                      Invoice generated with initial status {historyModalInvoice.status.toUpperCase()}.
+                    </p>
+                    {historyModalInvoice.receiptUrl && (
+                      <div className="flex items-center justify-between pt-1">
+                        <div className="flex items-center gap-1.5 text-[11px] text-indigo-600 font-semibold">
+                          <Paperclip className="w-3.5 h-3.5" />
+                          <span>{historyModalInvoice.receiptName || 'Attached Proof'}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPreviewDoc({
+                              url: historyModalInvoice.receiptUrl!,
+                              name: historyModalInvoice.receiptName || 'Payment_Proof',
+                              type: historyModalInvoice.receiptType || 'image',
+                            })
+                          }
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-white bg-indigo-600 flex items-center gap-1"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>View Proof</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  const inv = historyModalInvoice;
+                  setHistoryModalInvoice(null);
+                  handleOpenStatusModal(inv);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white fintech-gradient-primary flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Update Status Now
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setHistoryModalInvoice(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Document / Image / PDF Fullscreen Preview */}
+      {previewDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-md animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-5 sm:p-6 max-w-2xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[94vh] flex flex-col">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 truncate">
+                <FileText className="w-5 h-5 text-indigo-500 shrink-0" />
+                <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white truncate">
+                  {previewDoc.name}
+                </h3>
+              </div>
+              <button
+                onClick={() => setPreviewDoc(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto rounded-2xl bg-slate-100 dark:bg-slate-950 flex items-center justify-center min-h-[300px]">
+              {previewDoc.url.startsWith('data:application/pdf') || previewDoc.type === 'pdf' ? (
+                <iframe
+                  src={previewDoc.url}
+                  title={previewDoc.name}
+                  className="w-full h-[65vh] border-0 rounded-2xl"
+                />
+              ) : previewDoc.url.startsWith('data:image/') || previewDoc.type === 'image' ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={previewDoc.url}
+                  alt={previewDoc.name}
+                  className="max-h-[65vh] max-w-full object-contain rounded-2xl shadow-sm"
+                />
+              ) : (
+                <div className="p-8 text-center space-y-2">
+                  <FileText className="w-12 h-12 text-slate-400 mx-auto" />
+                  <p className="text-xs text-slate-500">Document preview not directly renderable</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+              <span className="text-[11px] text-slate-400 uppercase font-bold">
+                {previewDoc.type} Preview
+              </span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewDoc.url}
+                  download={previewDoc.name}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white fintech-gradient-primary flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download
+                </a>
+                <button
+                  onClick={() => setPreviewDoc(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
