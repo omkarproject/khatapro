@@ -127,6 +127,17 @@ export interface Expense {
   createdAt: string;
 }
 
+export interface SavingsDeposit {
+  id: string;
+  amount: number;
+  date: string; // YYYY-MM-DD
+  notes?: string;
+  receiptUrl?: string; // Data URL for image or PDF
+  receiptName?: string;
+  receiptType?: string;
+  createdAt: string;
+}
+
 export interface SavingsGoal {
   id: string;
   title: string;
@@ -136,6 +147,10 @@ export interface SavingsGoal {
   deadline: string;
   notes?: string;
   icon?: string;
+  documentUrl?: string; // Data URL for image or PDF attached in Notes section
+  documentName?: string;
+  documentType?: string;
+  deposits?: SavingsDeposit[];
   createdAt: string;
 }
 
