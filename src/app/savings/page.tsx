@@ -913,28 +913,28 @@ export default function SavingsPage() {
         </button>
       </div>
 
-      {/* Overview Banner Card */}
-      <div className="glass-card p-6 sm:p-8 bg-gradient-to-br from-emerald-500/10 via-indigo-500/10 to-cyan-500/10 border border-emerald-500/20 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-2">
-          <div className="text-xs font-bold text-emerald-600 uppercase tracking-wider flex items-center gap-1.5">
+      {/* Overview Banner Card (Compact Sleek Height) */}
+      <div className="glass-card px-5 py-3.5 sm:px-6 sm:py-4 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-emerald-500/10 via-indigo-500/10 to-cyan-500/10 border border-emerald-500/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5" />
             Total Accumulated Business Reserves
           </div>
-          <div className="text-3xl sm:text-4xl font-black font-mono text-slate-900 dark:text-white">
+          <div className="text-2xl sm:text-3xl font-black font-mono text-slate-900 dark:text-white leading-tight">
             {formatINR(totalSaved)}
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
             Target Reserve: <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{formatINR(totalTarget)}</span> ({overallProgress}% Achieved)
           </p>
         </div>
 
-        {/* Circular Progress Display */}
-        <div className="w-full md:w-64 space-y-2">
+        {/* Capital Buffer Progress Display */}
+        <div className="w-full md:w-64 space-y-1.5">
           <div className="flex justify-between text-xs font-bold">
             <span className="text-slate-500">Capital Buffer</span>
             <span className="text-emerald-600 font-mono">{overallProgress}%</span>
           </div>
-          <div className="w-full h-3 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+          <div className="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
             <div
               className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 transition-all duration-700"
               style={{ width: `${overallProgress}%` }}
