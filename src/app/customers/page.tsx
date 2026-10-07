@@ -39,6 +39,8 @@ import {
   Check,
   LayoutGrid,
   List as ListIcon,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 
 function WindowsFolderIcon({ className = "w-12 h-12" }: { className?: string }) {
@@ -82,6 +84,10 @@ export default function CustomersPage() {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [driveSearch, setDriveSearch] = useState('');
   const [driveViewMode, setDriveViewMode] = useState<'grid' | 'list'>('grid');
+
+  // Multi-Select State
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
 
   // New folder modal
   const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
@@ -197,6 +203,14 @@ export default function CustomersPage() {
     setDriveFiles(data.files);
     setCurrentFolderId(null);
     setDriveSearch('');
+    setSelectedFileIds([]);
+    setSelectedFolderIds([]);
+  };
+
+  const handleNavigateFolder = (folderId: string | null) => {
+    setCurrentFolderId(folderId);
+    setSelectedFileIds([]);
+    setSelectedFolderIds([]);
   };
 
   const handleCreateFolder = (e: React.FormEvent) => {
@@ -366,6 +380,122 @@ export default function CustomersPage() {
     if (!driveSearch.trim()) return inCurrentScope;
     return inCurrentScope.filter(f => f.name.toLowerCase().includes(driveSearch.toLowerCase()));
   }, [driveFiles, currentFolderId, driveSearch]);
+
+  // Multi-Select Helpers & Handlers
+  const toggleSelectFile = (fileId: string) => {
+    setSelectedFileIds(prev =>
+      prev.includes(fileId) ? prev.filter(id => id !== fileId) : [...prev, fileId]
+    );
+  };
+
+  const toggleSelectFolder = (folderId: string) => {
+    setSelectedFolderIds(prev =>
+      prev.includes(folderId) ? prev.filter(id => id !== folderId) : [...prev, folderId]
+    );
+  };
+
+  const totalSelectedCount = selectedFileIds.length + selectedFolderIds.length;
+
+  const allVisibleFileIds = useMemo(() => displayedFiles.map(f => f.id), [displayedFiles]);
+  const allVisibleFolderIds = useMemo(
+    () => (currentFolderId === null ? displayedFolders.map(f => f.id) : []),
+    [currentFolderId, displayedFolders]
+  );
+
+  const isAllSelected = useMemo(() => {
+    const totalVisible = allVisibleFileIds.length + allVisibleFolderIds.length;
+    if (totalVisible === 0) return false;
+    const allFilesSelected = allVisibleFileIds.every(id => selectedFileIds.includes(id));
+    const allFoldersSelected = allVisibleFolderIds.every(id => selectedFolderIds.includes(id));
+    return allFilesSelected && allFoldersSelected;
+  }, [allVisibleFileIds, allVisibleFolderIds, selectedFileIds, selectedFolderIds]);
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedFileIds([]);
+      setSelectedFolderIds([]);
+    } else {
+      setSelectedFileIds(Array.from(new Set([...selectedFileIds, ...allVisibleFileIds])));
+      setSelectedFolderIds(Array.from(new Set([...selectedFolderIds, ...allVisibleFolderIds])));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedFileIds([]);
+    setSelectedFolderIds([]);
+  };
+
+  const handleBatchDownload = async () => {
+    if (!driveCustomer) return;
+
+    // Direct files selected
+    const directFiles = driveFiles.filter(f => selectedFileIds.includes(f.id));
+    // Files inside selected folders
+    const folderFiles = driveFiles.filter(f => f.folderId && selectedFolderIds.includes(f.folderId));
+
+    const filesMap = new Map<string, CustomerDriveFile>();
+    directFiles.forEach(f => filesMap.set(f.id, f));
+    folderFiles.forEach(f => filesMap.set(f.id, f));
+    const toDownload = Array.from(filesMap.values());
+
+    if (toDownload.length === 0) {
+      addToast('Download', 'No files found in selected items to download.', 'info');
+      return;
+    }
+
+    addToast('Downloading', `Starting download for ${toDownload.length} file(s)...`, 'info');
+    for (let i = 0; i < toDownload.length; i++) {
+      const file = toDownload[i];
+      const link = document.createElement('a');
+      link.href = file.dataUrl;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      if (i < toDownload.length - 1) {
+        await new Promise(res => setTimeout(res, 250));
+      }
+    }
+  };
+
+  const handleBatchDelete = () => {
+    if (!driveCustomer) return;
+    const totalCount = selectedFileIds.length + selectedFolderIds.length;
+    if (totalCount === 0) return;
+
+    const folderCount = selectedFolderIds.length;
+    const fileCount = selectedFileIds.length;
+
+    let confirmMsg = `Are you sure you want to delete ${totalCount} selected items?`;
+    if (folderCount > 0 && fileCount > 0) {
+      confirmMsg = `Are you sure you want to delete ${folderCount} folder(s) (including all documents inside) and ${fileCount} file(s)?`;
+    } else if (folderCount > 0) {
+      confirmMsg = `Are you sure you want to delete ${folderCount} folder(s) and all documents inside them?`;
+    } else {
+      confirmMsg = `Are you sure you want to delete ${fileCount} selected file(s)?`;
+    }
+
+    if (!confirm(confirmMsg)) return;
+
+    const updatedFolders = driveFolders.filter(f => !selectedFolderIds.includes(f.id));
+    const updatedFiles = driveFiles.filter(f => {
+      if (selectedFileIds.includes(f.id)) return false;
+      if (f.folderId && selectedFolderIds.includes(f.folderId)) return false;
+      return true;
+    });
+
+    setDriveFolders(updatedFolders);
+    setDriveFiles(updatedFiles);
+    setSelectedFileIds([]);
+    setSelectedFolderIds([]);
+
+    StorageService.saveCustomerDriveData(driveCustomer.id, {
+      folders: updatedFolders,
+      files: updatedFiles,
+    });
+
+    addToast('Deleted', `${totalCount} item(s) deleted successfully.`, 'info');
+  };
 
   // Active customer transactions
   const activeCustomerTxns = useMemo(() => {
@@ -927,11 +1057,11 @@ export default function CustomersPage() {
             {/* Windows Explorer Style Action Ribbon / Toolbar */}
             <div className="px-5 py-2.5 bg-slate-100/70 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
               
-              {/* Left: Navigation Breadcrumb */}
+              {/* Left: Navigation Breadcrumb & Select All */}
               <div className="flex items-center gap-2">
                 {currentFolderId ? (
                   <button
-                    onClick={() => setCurrentFolderId(null)}
+                    onClick={() => handleNavigateFolder(null)}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
                   >
                     <ArrowLeft className="w-3.5 h-3.5" />
@@ -939,9 +1069,32 @@ export default function CustomersPage() {
                   </button>
                 ) : null}
 
+                {/* Select All Toggle Button */}
+                <button
+                  type="button"
+                  onClick={handleToggleSelectAll}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border font-semibold transition-all shadow-sm cursor-pointer ${
+                    isAllSelected
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : totalSelectedCount > 0
+                      ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-400 text-indigo-700 dark:text-indigo-300'
+                      : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
+                  }`}
+                  title="Select or deselect all items in view"
+                >
+                  {isAllSelected ? (
+                    <CheckSquare className="w-3.5 h-3.5 text-white" />
+                  ) : totalSelectedCount > 0 ? (
+                    <CheckSquare className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  ) : (
+                    <Square className="w-3.5 h-3.5 text-slate-400" />
+                  )}
+                  <span>{isAllSelected ? 'Deselect All' : 'Select All'}</span>
+                </button>
+
                 <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
                   <span
-                    onClick={() => setCurrentFolderId(null)}
+                    onClick={() => handleNavigateFolder(null)}
                     className="hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer flex items-center gap-1"
                   >
                     <HardDrive className="w-3.5 h-3.5 text-slate-400" />
@@ -1029,6 +1182,51 @@ export default function CustomersPage() {
               </div>
             </div>
 
+            {/* Multi-Select Floating Action Banner (Shown when items are selected) */}
+            {totalSelectedCount > 0 && (
+              <div className="mx-5 my-2.5 px-4 py-2.5 rounded-2xl bg-indigo-600 dark:bg-indigo-700 text-white flex flex-wrap items-center justify-between gap-3 shadow-lg shadow-indigo-500/25 animate-fadeIn">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center font-extrabold text-xs">
+                    {totalSelectedCount}
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold">
+                      {totalSelectedCount} {totalSelectedCount === 1 ? 'item' : 'items'} selected
+                    </span>
+                    <span className="text-[11px] text-indigo-200 ml-2 hidden sm:inline">
+                      ({selectedFolderIds.length} folders, {selectedFileIds.length} files)
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleBatchDownload}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-indigo-700 hover:bg-indigo-50 text-xs font-bold transition-all shadow-sm cursor-pointer"
+                    title="Download all selected files"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download Selected</span>
+                  </button>
+                  <button
+                    onClick={handleBatchDelete}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+                    title="Delete all selected items"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Selected</span>
+                  </button>
+                  <button
+                    onClick={handleClearSelection}
+                    className="p-1.5 rounded-xl text-indigo-200 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                    title="Clear selection"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Drive Explorer Body */}
             <div className="p-5 overflow-y-auto flex-1 min-h-[380px] max-h-[62vh] space-y-6 bg-slate-50/50 dark:bg-slate-900/50">
               
@@ -1052,13 +1250,39 @@ export default function CustomersPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                       {displayedFolders.map((folder) => {
                         const folderFileCount = driveFiles.filter(f => f.folderId === folder.id).length;
+                        const isFolderSelected = selectedFolderIds.includes(folder.id);
                         return (
                           <div
                             key={folder.id}
-                            onDoubleClick={() => setCurrentFolderId(folder.id)}
-                            onClick={() => setCurrentFolderId(folder.id)}
-                            className="group relative p-4 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 hover:border-amber-400 dark:hover:border-amber-500 hover:shadow-lg hover:shadow-amber-500/10 transition-all flex flex-col items-center text-center cursor-pointer select-none"
+                            onDoubleClick={() => handleNavigateFolder(folder.id)}
+                            onClick={() => handleNavigateFolder(folder.id)}
+                            className={`group relative p-4 rounded-2xl bg-white dark:bg-slate-800/80 border transition-all flex flex-col items-center text-center cursor-pointer select-none ${
+                              isFolderSelected
+                                ? 'border-indigo-500 ring-2 ring-indigo-500/30 bg-indigo-50/40 dark:bg-indigo-950/30 shadow-md'
+                                : 'border-slate-200/90 dark:border-slate-700/80 hover:border-amber-400 dark:hover:border-amber-500 hover:shadow-lg hover:shadow-amber-500/10'
+                            }`}
                           >
+                            {/* Checkbox button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleSelectFolder(folder.id);
+                              }}
+                              className={`absolute top-2.5 left-2.5 z-10 p-1 rounded-lg transition-all ${
+                                isFolderSelected
+                                  ? 'opacity-100 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 shadow-sm'
+                                  : 'opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 bg-white/90 dark:bg-slate-900/90'
+                              }`}
+                              title={isFolderSelected ? 'Deselect folder' : 'Select folder'}
+                            >
+                              {isFolderSelected ? (
+                                <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                              ) : (
+                                <Square className="w-4 h-4" />
+                              )}
+                            </button>
+
                             {/* Action overlay buttons (Rename, Delete) */}
                             <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 dark:bg-slate-900/95 p-1 rounded-xl shadow-md border border-slate-200 dark:border-slate-700">
                               <button
@@ -1106,13 +1330,30 @@ export default function CustomersPage() {
                     <div className="bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700/60 overflow-hidden">
                       {displayedFolders.map((folder) => {
                         const folderFileCount = driveFiles.filter(f => f.folderId === folder.id).length;
+                        const isFolderSelected = selectedFolderIds.includes(folder.id);
                         return (
                           <div
                             key={folder.id}
-                            onClick={() => setCurrentFolderId(folder.id)}
-                            className="p-3 flex items-center justify-between hover:bg-amber-500/5 transition-colors cursor-pointer group"
+                            onClick={() => handleNavigateFolder(folder.id)}
+                            className={`p-3 flex items-center justify-between transition-colors cursor-pointer group ${
+                              isFolderSelected ? 'bg-indigo-50/50 dark:bg-indigo-950/30' : 'hover:bg-amber-500/5'
+                            }`}
                           >
                             <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleSelectFolder(folder.id);
+                                }}
+                                className="p-1 rounded-lg text-slate-400 hover:text-indigo-600"
+                              >
+                                {isFolderSelected ? (
+                                  <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                                ) : (
+                                  <Square className="w-4 h-4" />
+                                )}
+                              </button>
                               <WindowsFolderIcon className="w-8 h-8" />
                               <div>
                                 <div className="text-xs font-bold text-slate-900 dark:text-white uppercase">
@@ -1189,12 +1430,38 @@ export default function CustomersPage() {
                     {displayedFiles.map((file) => {
                       const isImage = file.type.startsWith('image/');
                       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                      const isFileSelected = selectedFileIds.includes(file.id);
 
                       return (
                         <div
                           key={file.id}
-                          className="group relative p-3 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-lg hover:shadow-indigo-500/10 transition-all flex flex-col justify-between"
+                          className={`group relative p-3 rounded-2xl bg-white dark:bg-slate-800/80 border transition-all flex flex-col justify-between ${
+                            isFileSelected
+                              ? 'border-indigo-500 ring-2 ring-indigo-500/30 bg-indigo-50/40 dark:bg-indigo-950/30 shadow-md'
+                              : 'border-slate-200/90 dark:border-slate-700/80 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-lg hover:shadow-indigo-500/10'
+                          }`}
                         >
+                          {/* Checkbox button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSelectFile(file.id);
+                            }}
+                            className={`absolute top-2.5 left-2.5 z-10 p-1 rounded-lg transition-all ${
+                              isFileSelected
+                                ? 'opacity-100 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 shadow-sm'
+                                : 'opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 bg-white/90 dark:bg-slate-900/90'
+                            }`}
+                            title={isFileSelected ? 'Deselect file' : 'Select file'}
+                          >
+                            {isFileSelected ? (
+                              <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                            ) : (
+                              <Square className="w-4 h-4" />
+                            )}
+                          </button>
+
                           {/* File Preview / Thumbnail Box */}
                           <div
                             onClick={() => setPreviewFile(file)}
@@ -1288,16 +1555,33 @@ export default function CustomersPage() {
                     {displayedFiles.map((file) => {
                       const isImage = file.type.startsWith('image/');
                       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                      const isFileSelected = selectedFileIds.includes(file.id);
 
                       return (
                         <div
                           key={file.id}
-                          className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group"
+                          className={`p-3 flex items-center justify-between transition-colors group ${
+                            isFileSelected ? 'bg-indigo-50/50 dark:bg-indigo-950/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                          }`}
                         >
                           <div
                             onClick={() => setPreviewFile(file)}
                             className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
                           >
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleSelectFile(file.id);
+                              }}
+                              className="p-1 rounded-lg text-slate-400 hover:text-indigo-600"
+                            >
+                              {isFileSelected ? (
+                                <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                              ) : (
+                                <Square className="w-4 h-4" />
+                              )}
+                            </button>
                             <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
                               {isImage ? (
                                 <ImageIcon className="w-4 h-4 text-emerald-500" />
@@ -1357,15 +1641,42 @@ export default function CustomersPage() {
 
             {/* Modal Footer Bar */}
             <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between text-xs text-slate-500">
-              <div>
-                Total Files: <strong className="text-slate-800 dark:text-slate-200">{driveFiles.length}</strong> | Total Folders: <strong className="text-slate-800 dark:text-slate-200">{driveFolders.length}</strong>
+              <div className="flex items-center gap-3">
+                <span>
+                  Total Files: <strong className="text-slate-800 dark:text-slate-200">{driveFiles.length}</strong> | Total Folders: <strong className="text-slate-800 dark:text-slate-200">{driveFolders.length}</strong>
+                </span>
+                {totalSelectedCount > 0 && (
+                  <span className="font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
+                    {totalSelectedCount} selected
+                  </span>
+                )}
               </div>
-              <button
-                onClick={() => setDriveCustomer(null)}
-                className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition-colors cursor-pointer"
-              >
-                Close Drive
-              </button>
+              <div className="flex items-center gap-2">
+                {totalSelectedCount > 0 && (
+                  <>
+                    <button
+                      onClick={handleBatchDownload}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Download ({totalSelectedCount})
+                    </button>
+                    <button
+                      onClick={handleBatchDelete}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete ({totalSelectedCount})
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => setDriveCustomer(null)}
+                  className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition-colors cursor-pointer"
+                >
+                  Close Drive
+                </button>
+              </div>
             </div>
           </div>
         </div>
