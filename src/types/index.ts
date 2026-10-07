@@ -217,6 +217,27 @@ export interface DocumentItem {
   uploadedAt: string;
 }
 
+export interface CustomerDriveFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  mimeType?: string;
+  url?: string;
+  dataUrl: string;
+  folderId?: string | null;
+  createdAt?: string;
+  uploadedAt: string;
+  updatedAt?: string;
+}
+
+export interface CustomerDriveFolder {
+  id: string;
+  name: string;
+  createdAt: string;
+  color?: string;
+}
+
 export type PaymentCollectionMode = 'direct_upi' | 'cashfree' | 'razorpay' | 'upi_gateway';
 
 export interface PaymentSettings {

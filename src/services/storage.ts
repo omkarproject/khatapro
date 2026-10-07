@@ -10,7 +10,9 @@ import {
   PaymentReminder,
   DocumentItem,
   SystemSettings,
-  PaymentSettings
+  PaymentSettings,
+  CustomerDriveFolder,
+  CustomerDriveFile,
 } from '@/types';
 
 
@@ -676,6 +678,38 @@ export const StorageService = {
     const list = StorageService.getDocuments().filter(d => d.id !== id);
     setLocalItem(STORAGE_KEYS.DOCUMENTS, list);
     return list;
+  },
+
+  // Customer Drive & Vault (Per-customer folders & documents)
+  getCustomerDriveData: (customerId: string): { folders: CustomerDriveFolder[]; files: CustomerDriveFile[] } => {
+    if (typeof window === 'undefined') return { folders: [], files: [] };
+    const key = `skp_cust_drive_${customerId}`;
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.warn('Failed to read customer drive', e);
+    }
+    // Default initial folders if none exist (matches Windows-style folders: AADHAR CARD, BILLS, DOCUMENTS)
+    const defaultFolders: CustomerDriveFolder[] = [
+      { id: 'fld_aadhar', name: 'AADHAR CARD', createdAt: new Date().toISOString() },
+      { id: 'fld_bills', name: 'BILLS', createdAt: new Date().toISOString() },
+      { id: 'fld_docs', name: 'DOCUMENTS', createdAt: new Date().toISOString() },
+    ];
+    const initial = { folders: defaultFolders, files: [] };
+    try {
+      localStorage.setItem(key, JSON.stringify(initial));
+    } catch (e) {}
+    return initial;
+  },
+  saveCustomerDriveData: (customerId: string, data: { folders: CustomerDriveFolder[]; files: CustomerDriveFile[] }): void => {
+    if (typeof window === 'undefined') return;
+    const key = `skp_cust_drive_${customerId}`;
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {
+      console.error('Failed to save customer drive', e);
+    }
   },
 
   // Full Database JSON Export / Import
