@@ -439,6 +439,60 @@ export default function SavingsPage() {
     return Array.from(tags).slice(0, 5);
   }, [historyGoal]);
 
+  // Helper: Ensure Image is compatible with ExcelJS (converts webp/avif/etc. to png/jpeg)
+  const ensureExcelCompatibleImage = async (
+    dataUrl: string
+  ): Promise<{ extension: 'jpeg' | 'png' | 'gif'; base64: string } | null> => {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+      return null;
+    }
+
+    if (dataUrl.startsWith('data:image/jpeg') || dataUrl.startsWith('data:image/jpg')) {
+      const parts = dataUrl.split(',');
+      return parts[1] ? { extension: 'jpeg', base64: parts[1] } : null;
+    }
+    if (dataUrl.startsWith('data:image/png')) {
+      const parts = dataUrl.split(',');
+      return parts[1] ? { extension: 'png', base64: parts[1] } : null;
+    }
+    if (dataUrl.startsWith('data:image/gif')) {
+      const parts = dataUrl.split(',');
+      return parts[1] ? { extension: 'gif', base64: parts[1] } : null;
+    }
+
+    // Convert other formats (WebP, etc.) via canvas
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth || img.width || 800;
+            canvas.height = img.naturalHeight || img.height || 600;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0);
+              const pngUrl = canvas.toDataURL('image/png');
+              const parts = pngUrl.split(',');
+              if (parts[1]) {
+                resolve({ extension: 'png', base64: parts[1] });
+                return;
+              }
+            }
+            resolve(null);
+          } catch {
+            resolve(null);
+          }
+        };
+        img.onerror = () => resolve(null);
+        img.src = dataUrl;
+      });
+    }
+
+    return null;
+  };
+
   // Export History to Excel (.xlsx)
   const handleExportHistoryExcel = async (goal: SavingsGoal) => {
     try {
@@ -459,7 +513,7 @@ export default function SavingsPage() {
         { key: 'date', width: 18 },
         { key: 'amount', width: 22 },
         { key: 'notes', width: 36 },
-        { key: 'receipt', width: 22 },
+        { key: 'receipt', width: 24 },
       ];
 
       // Palette
@@ -528,9 +582,26 @@ export default function SavingsPage() {
         };
       });
 
-      // Data Rows
-      let rowIndex = 11;
+      // Data Rows Setup
       const deposits = goal.deposits || [];
+      const attachedDeposits = deposits.filter((d) => Boolean(d.receiptUrl));
+      const hasAttachments = attachedDeposits.length > 0;
+
+      // Pre-calculate target rows in 'Attached Receipts' worksheet
+      const receiptTargetRowMap = new Map<string, number>();
+      let estRow = 5;
+      attachedDeposits.forEach((dep, aIdx) => {
+        const key = dep.id || aIdx.toString();
+        receiptTargetRowMap.set(key, estRow);
+        const isImg = dep.receiptType === 'image' || dep.receiptUrl?.startsWith('data:image/');
+        if (isImg) {
+          estRow += 16; // 1 header + 1 note + 13 image rows + 1 spacer
+        } else {
+          estRow += 5; // 1 header + 1 note + 2 doc info + 1 spacer
+        }
+      });
+
+      let rowIndex = 11;
       if (deposits.length === 0 && goal.currentAmount > 0) {
         const row = worksheet.getRow(rowIndex);
         row.values = [1, formatDate(goal.createdAt), goal.currentAmount, 'Initial Reserve Deposit', 'N/A'];
@@ -543,18 +614,36 @@ export default function SavingsPage() {
       } else {
         deposits.forEach((dep, idx) => {
           const row = worksheet.getRow(rowIndex);
+          const isImg = dep.receiptType === 'image' || dep.receiptUrl?.startsWith('data:image/');
+          const isPdf = dep.receiptType === 'pdf' || dep.receiptUrl?.startsWith('data:application/pdf');
+          const typeLabel = isImg ? 'IMAGE' : isPdf ? 'PDF' : (dep.receiptType?.toUpperCase() || 'FILE');
+
           row.values = [
             idx + 1,
             formatDate(dep.date || dep.createdAt),
             dep.amount,
             dep.notes || 'Reserve Fund Contribution',
-            dep.receiptName ? `Attached (${dep.receiptType?.toUpperCase() || 'FILE'})` : 'No Attachment',
+            dep.receiptUrl ? `Attached (${typeLabel})` : 'No Attachment',
           ];
           row.getCell(1).alignment = { horizontal: 'center' };
           row.getCell(2).alignment = { horizontal: 'center' };
           row.getCell(3).numFmt = '₹ #,##0.00';
           row.getCell(3).font = { bold: true, color: { argb: GREEN_TEXT } };
-          row.getCell(5).alignment = { horizontal: 'center' };
+
+          const receiptCell = row.getCell(5);
+          receiptCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+          if (dep.receiptUrl && hasAttachments) {
+            const key = dep.id || idx.toString();
+            const targetRow = receiptTargetRowMap.get(key) || 5;
+            receiptCell.value = {
+              text: `Attached (${typeLabel})`,
+              hyperlink: `#'Attached Receipts'!A${targetRow}`,
+            };
+            receiptCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: '2563EB' }, underline: true };
+          } else {
+            receiptCell.font = { name: 'Calibri', size: 10, color: { argb: '94A3B8' } };
+          }
 
           if (idx % 2 === 1) {
             ['A', 'B', 'C', 'D', 'E'].forEach((col) => {
@@ -597,6 +686,114 @@ export default function SavingsPage() {
             right: { style: 'thin', color: { argb: BORDER_COLOR } },
           };
         });
+      }
+
+      // Second Worksheet: Attached Receipts & Proof Gallery
+      if (hasAttachments) {
+        const receiptsSheet = workbook.addWorksheet('Attached Receipts', {
+          views: [{ showGridLines: true }],
+        });
+
+        receiptsSheet.columns = [
+          { key: 'colA', width: 6 },
+          { key: 'colB', width: 22 },
+          { key: 'colC', width: 25 },
+          { key: 'colD', width: 35 },
+          { key: 'colE', width: 24 },
+        ];
+
+        // Header Banner
+        receiptsSheet.mergeCells('A1:E2');
+        const recTitle = receiptsSheet.getCell('A1');
+        recTitle.value = 'SMARTKHATA PRO — ATTACHED RECEIPTS & PROOF VAULT';
+        recTitle.font = { name: 'Calibri', size: 13, bold: true, color: { argb: WHITE } };
+        recTitle.alignment = { horizontal: 'center', vertical: 'middle' };
+        recTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY_HEADER } };
+
+        receiptsSheet.mergeCells('A3:E3');
+        const recSub = receiptsSheet.getCell('A3');
+        recSub.value = `${settings.businessName || 'Business Enterprise'} • ${goal.title.toUpperCase()} • ${attachedDeposits.length} ATTACHED DOCUMENT(S)`;
+        recSub.font = { name: 'Calibri', size: 9, bold: true, color: { argb: WHITE } };
+        recSub.alignment = { horizontal: 'center', vertical: 'middle' };
+        recSub.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: SUB_BLUE } };
+
+        let rRow = 5;
+        for (let aIdx = 0; aIdx < attachedDeposits.length; aIdx++) {
+          const aDep = attachedDeposits[aIdx];
+          const origIndex = deposits.indexOf(aDep) + 1;
+          const historyRowNumber = 10 + origIndex;
+
+          // Header row
+          receiptsSheet.mergeCells(`A${rRow}:D${rRow}`);
+          const cardHead = receiptsSheet.getCell(`A${rRow}`);
+          cardHead.value = `#${origIndex} DEPOSIT PROOF — Date: ${formatDate(aDep.date || aDep.createdAt)} • Amount: ₹${aDep.amount.toLocaleString('en-IN')}`;
+          cardHead.font = { name: 'Calibri', size: 11, bold: true, color: { argb: WHITE } };
+          cardHead.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TH_SLATE } };
+          cardHead.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+
+          const backCell = receiptsSheet.getCell(`E${rRow}`);
+          backCell.value = { text: '⬅ Back to Statement', hyperlink: `#'Deposit History'!E${historyRowNumber}` };
+          backCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: '93C5FD' }, underline: true };
+          backCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TH_SLATE } };
+          backCell.alignment = { horizontal: 'center', vertical: 'middle' };
+          receiptsSheet.getRow(rRow).height = 24;
+          rRow++;
+
+          // Details row
+          receiptsSheet.mergeCells(`A${rRow}:E${rRow}`);
+          const noteCell = receiptsSheet.getCell(`A${rRow}`);
+          noteCell.value = `Particulars: ${aDep.notes || 'Reserve Fund Contribution'} | Attached File: ${aDep.receiptName || 'Receipt Proof'}`;
+          noteCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: '475569' } };
+          noteCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F1F5F9' } };
+          noteCell.alignment = { vertical: 'middle', indent: 1 };
+          receiptsSheet.getRow(rRow).height = 20;
+          rRow++;
+
+          // Image embedding or PDF display
+          const isImg = aDep.receiptType === 'image' || aDep.receiptUrl?.startsWith('data:image/');
+          if (isImg && aDep.receiptUrl) {
+            try {
+              const imgData = await ensureExcelCompatibleImage(aDep.receiptUrl);
+              if (imgData) {
+                const imgId = workbook.addImage({
+                  base64: imgData.base64,
+                  extension: imgData.extension,
+                });
+
+                const imageStartRow = rRow;
+                receiptsSheet.addImage(imgId, {
+                  tl: { col: 1, row: imageStartRow - 1 },
+                  ext: { width: 380, height: 240 },
+                });
+
+                for (let i = 0; i < 12; i++) {
+                  receiptsSheet.getRow(imageStartRow + i).height = 20;
+                }
+                rRow += 13;
+              } else {
+                receiptsSheet.mergeCells(`B${rRow}:D${rRow}`);
+                receiptsSheet.getCell(`B${rRow}`).value = 'Attached Image (Format could not be embedded)';
+                rRow += 2;
+              }
+            } catch (err) {
+              console.warn('Excel image embedding error', err);
+              receiptsSheet.mergeCells(`B${rRow}:D${rRow}`);
+              receiptsSheet.getCell(`B${rRow}`).value = 'Image attachment present in digital record';
+              rRow += 2;
+            }
+          } else if (aDep.receiptUrl) {
+            receiptsSheet.mergeCells(`B${rRow}:D${rRow}`);
+            const pdfCell = receiptsSheet.getCell(`B${rRow}`);
+            pdfCell.value = `📄 PDF Document: ${aDep.receiptName || 'receipt.pdf'} (Attached to transaction)`;
+            pdfCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: '1E293B' } };
+            pdfCell.alignment = { vertical: 'middle', indent: 1 };
+            receiptsSheet.getRow(rRow).height = 28;
+            rRow += 2;
+          }
+
+          receiptsSheet.getRow(rRow).height = 14;
+          rRow++;
+        }
       }
 
       // Buffer & Download
@@ -654,6 +851,7 @@ export default function SavingsPage() {
   <title>Reserve_Fund_Statement_${goal.title.replace(/[^a-zA-Z0-9]/g, '_')}</title>
   <style>
     @page { size: A4 portrait; margin: 15mm; }
+    html { scroll-behavior: smooth; }
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     body { margin: 0; padding: 0; color: #0f172a; background: #fff; }
     .page { width: 100%; max-width: 800px; margin: 0 auto; }
@@ -671,6 +869,10 @@ export default function SavingsPage() {
     tr:nth-child(even) td { background: #f8fafc; }
     .amount { font-weight: 800; color: #15803d; font-family: monospace; }
     .footer { margin-top: 30px; border-top: 1px solid #cbd5e1; padding-top: 10px; display: flex; justify-content: space-between; font-size: 10px; color: #64748b; }
+    a { color: #2563eb; }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
   </style>
 </head>
 <body>
@@ -684,7 +886,7 @@ export default function SavingsPage() {
     setTimeout(() => {
       printFrame.contentWindow?.focus();
       printFrame.contentWindow?.print();
-    }, 350);
+    }, 450);
   };
 
   return (
@@ -1555,7 +1757,7 @@ export default function SavingsPage() {
       {/* Hidden Container for Isolated PDF Printing */}
       {historyGoal && (
         <div id="printable-savings-statement" className="hidden">
-          <div className="header-bar">
+          <div id="top-statement" className="header-bar">
             <div>
               <div className="biz-name">{settings.businessName || 'Business Enterprise'}</div>
               <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
@@ -1607,7 +1809,7 @@ export default function SavingsPage() {
                 <th style={{ width: '110px' }}>Date</th>
                 <th style={{ width: '130px' }}>Amount</th>
                 <th>Particulars / Notes</th>
-                <th style={{ width: '120px', textAlign: 'center' }}>Receipt Status</th>
+                <th style={{ width: '130px', textAlign: 'center' }}>Receipt Status</th>
               </tr>
             </thead>
             <tbody>
@@ -1618,7 +1820,7 @@ export default function SavingsPage() {
                     <td>{formatDate(historyGoal.createdAt)}</td>
                     <td className="amount">+{formatINR(historyGoal.currentAmount)}</td>
                     <td>Initial Reserve Deposit</td>
-                    <td style={{ textAlign: 'center' }}>N/A</td>
+                    <td style={{ textAlign: 'center', color: '#94a3b8' }}>N/A</td>
                   </tr>
                 ) : (
                   <tr>
@@ -1628,20 +1830,182 @@ export default function SavingsPage() {
                   </tr>
                 )
               ) : (
-                historyGoal.deposits.map((dep, idx) => (
-                  <tr key={dep.id || idx}>
-                    <td style={{ textAlign: 'center' }}>{idx + 1}</td>
-                    <td>{formatDate(dep.date || dep.createdAt)}</td>
-                    <td className="amount">+{formatINR(dep.amount)}</td>
-                    <td>{dep.notes || 'Reserve Fund Contribution'}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      {dep.receiptUrl ? `Attached (${dep.receiptType?.toUpperCase() || 'FILE'})` : 'No Attachment'}
-                    </td>
-                  </tr>
-                ))
+                historyGoal.deposits.map((dep, idx) => {
+                  const isImg = dep.receiptType === 'image' || dep.receiptUrl?.startsWith('data:image/');
+                  const isPdf = dep.receiptType === 'pdf' || dep.receiptUrl?.startsWith('data:application/pdf');
+                  const typeLabel = isImg ? 'IMAGE' : isPdf ? 'PDF' : (dep.receiptType?.toUpperCase() || 'FILE');
+
+                  return (
+                    <tr key={dep.id || idx}>
+                      <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                      <td>{formatDate(dep.date || dep.createdAt)}</td>
+                      <td className="amount">+{formatINR(dep.amount)}</td>
+                      <td>{dep.notes || 'Reserve Fund Contribution'}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        {dep.receiptUrl ? (
+                          <a
+                            href={`#receipt-doc-${idx + 1}`}
+                            style={{
+                              color: '#2563eb',
+                              fontWeight: 700,
+                              textDecoration: 'underline',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Attached ({typeLabel})
+                          </a>
+                        ) : (
+                          <span style={{ color: '#94a3b8' }}>No Attachment</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
+
+          {/* Attached Receipts & Proof Documents Gallery in PDF */}
+          {historyGoal.deposits?.some((d) => Boolean(d.receiptUrl)) && (
+            <div style={{ marginTop: '36px', pageBreakBefore: 'always' }}>
+              <div
+                style={{
+                  borderBottom: '2px solid #2563eb',
+                  paddingBottom: '8px',
+                  marginBottom: '18px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#1e3a8a' }}>
+                  Attached Receipts & Proof Documents
+                </h3>
+                <a
+                  href="#top-statement"
+                  style={{ fontSize: '11px', color: '#2563eb', textDecoration: 'underline', fontWeight: 600 }}
+                >
+                  ↑ Return to Statement
+                </a>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+                {historyGoal.deposits.map((dep, idx) => {
+                  if (!dep.receiptUrl) return null;
+                  const isPdf = dep.receiptType === 'pdf' || dep.receiptUrl.startsWith('data:application/pdf');
+
+                  return (
+                    <div
+                      key={dep.id || idx}
+                      id={`receipt-doc-${idx + 1}`}
+                      style={{
+                        padding: '16px',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '12px',
+                        background: '#f8fafc',
+                        pageBreakInside: 'avoid',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          borderBottom: '1px solid #e2e8f0',
+                          paddingBottom: '8px',
+                          marginBottom: '10px',
+                        }}
+                      >
+                        <div>
+                          <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
+                            #{idx + 1} Deposit Receipt Proof
+                          </span>
+                          <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '10px' }}>
+                            Date: {formatDate(dep.date || dep.createdAt)}
+                          </span>
+                          {dep.receiptName && (
+                            <span
+                              style={{
+                                fontSize: '10px',
+                                color: '#4338ca',
+                                background: '#e0e7ff',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                marginLeft: '8px',
+                                fontWeight: 600,
+                              }}
+                            >
+                              {dep.receiptName}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '14px', fontWeight: 800, color: '#15803d', fontFamily: 'monospace' }}>
+                          +{formatINR(dep.amount)}
+                        </div>
+                      </div>
+
+                      {dep.notes && (
+                        <div style={{ fontSize: '11px', color: '#475569', marginBottom: '10px' }}>
+                          <strong>Particulars:</strong> {dep.notes}
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          textAlign: 'center',
+                          background: '#ffffff',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '8px',
+                          padding: '12px',
+                        }}
+                      >
+                        {isPdf ? (
+                          <div style={{ padding: '20px', textAlign: 'center' }}>
+                            <div style={{ fontSize: '32px', marginBottom: '4px' }}>📄</div>
+                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
+                              {dep.receiptName || 'PDF Document Receipt'}
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                              PDF attachment verified with deposit record
+                            </div>
+                          </div>
+                        ) : (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={dep.receiptUrl}
+                            alt={dep.receiptName || 'Deposit Receipt Proof'}
+                            style={{
+                              maxWidth: '100%',
+                              maxHeight: '480px',
+                              objectFit: 'contain',
+                              borderRadius: '6px',
+                              display: 'block',
+                              margin: '0 auto',
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: '10px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          fontSize: '10px',
+                          color: '#64748b',
+                        }}
+                      >
+                        <span>Verified Reserve Fund Deposit Proof</span>
+                        <a href="#top-statement" style={{ color: '#2563eb', textDecoration: 'underline', fontWeight: 600 }}>
+                          ↑ Return to Statement Table
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="footer">
             <span>SmartKhata Pro • Official Digital Reserve Fund Ledger</span>
