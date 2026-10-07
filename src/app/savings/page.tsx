@@ -235,21 +235,6 @@ export default function SavingsPage() {
     }
   };
 
-  // Sound & Toast Reminder alert when due goals exist on page load
-  useEffect(() => {
-    if (dueGoals.length > 0) {
-      const timer = setTimeout(() => {
-        playReminderChime();
-        addToast(
-          '🔔 Monthly Savings Due',
-          `${dueGoals.length} reserve fund deposit${dueGoals.length > 1 ? 's are' : ' is'} due this month. Click to deposit!`,
-          'warning'
-        );
-      }, 700);
-      return () => clearTimeout(timer);
-    }
-  }, []);
-
   // Process File helper (Image or PDF up to 25MB)
   const processUploadedFile = (file: File, onSuccess: (url: string, name: string, type: string) => void) => {
     const maxBytes = 25 * 1024 * 1024;
@@ -725,51 +710,6 @@ export default function SavingsPage() {
           Create Goal
         </button>
       </div>
-
-      {/* Monthly Reminder Notification Card with Sound & Details */}
-      {dueGoals.length > 0 && (
-        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-amber-500/15 border border-amber-500/35 shadow-lg shadow-amber-500/5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-fade-in">
-          <div className="flex items-start sm:items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/30">
-              <Bell className="w-6 h-6 animate-bounce" />
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/70 px-2.5 py-0.5 rounded-full">
-                  Monthly Reserve Reminder
-                </span>
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  {dueGoals.length} {dueGoals.length === 1 ? 'Fund' : 'Funds'} Due For Deposit
-                </span>
-              </div>
-              <p className="text-xs text-slate-600 dark:text-slate-300">
-                {dueGoals.map((g) => {
-                  const rem = getGoalReminderStatus(g);
-                  const remaining = Math.max(0, g.targetAmount - g.currentAmount);
-                  return `${g.title} (Target Day: ${rem.targetDay}${getDaySuffix(rem.targetDay)} of each month • Needed: ${formatINR(remaining)})`;
-                }).join(' • ')}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 self-stretch md:self-auto">
-            <button
-              onClick={playReminderChime}
-              title="Play Reminder Audio Chime"
-              className="p-2.5 rounded-xl bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-slate-700 border border-amber-200 dark:border-amber-800 transition-colors cursor-pointer shrink-0"
-            >
-              <Volume2 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => handleOpenDepositModal(dueGoals[0])}
-              className="flex-1 md:flex-initial px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-600/20 active:scale-95 transition-all text-center whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <span>Add Funds Now</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Overview Banner Card */}
       <div className="glass-card p-6 sm:p-8 bg-gradient-to-br from-emerald-500/10 via-indigo-500/10 to-cyan-500/10 border border-emerald-500/20 flex flex-col md:flex-row md:items-center justify-between gap-6">

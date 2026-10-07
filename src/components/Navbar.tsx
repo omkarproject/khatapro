@@ -20,8 +20,10 @@ import {
   LogOut,
   User,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  PiggyBank
 } from 'lucide-react';
+import { formatINR } from '@/lib/utils';
 import GlobalSearchModal from './GlobalSearchModal';
 
 interface NavbarProps {
@@ -36,12 +38,14 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     openCollectModal,
     products,
     reminders,
+    savingsGoals,
     settings,
     currentUser,
     openAuthModal,
     cloudSyncStatus,
     syncWithDatabase,
     logout,
+    playPaymentNotificationSound,
   } = useApp();
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -50,10 +54,40 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
-  // Compute notifications count (low stock + overdue reminders)
+  // Compute notifications count (low stock + overdue reminders + due savings goals)
   const lowStockCount = products.filter(p => p.currentStock <= p.minStock).length;
   const overdueCount = reminders.filter(r => r.reminderType === 'overdue' && r.status === 'pending').length;
-  const totalAlerts = lowStockCount + overdueCount;
+
+  const dueSavingsGoals = savingsGoals.filter(g => {
+    if (!g.deadline) return false;
+    const now = new Date();
+    const todayDay = now.getDate();
+    const todayYear = now.getFullYear();
+    const todayMonth = now.getMonth();
+
+    const parts = g.deadline.split('-');
+    const deadYear = parseInt(parts[0], 10);
+    const deadMonth = parseInt(parts[1], 10) - 1;
+    const targetDay = parseInt(parts[2], 10) || 1;
+    const deadlineDate = new Date(deadYear, deadMonth, targetDay, 23, 59, 59);
+
+    if (now.getTime() > deadlineDate.getTime()) return false;
+
+    const hasDeposited = g.deposits?.some(dep => {
+      if (!dep.date && !dep.createdAt) return false;
+      const d = new Date(dep.date || dep.createdAt);
+      return d.getFullYear() === todayYear && d.getMonth() === todayMonth;
+    });
+
+    if (hasDeposited) return false;
+
+    const maxDaysThisMonth = new Date(todayYear, todayMonth + 1, 0).getDate();
+    const effectiveDay = Math.min(targetDay, maxDaysThisMonth);
+
+    return todayDay >= effectiveDay;
+  });
+
+  const totalAlerts = lowStockCount + overdueCount + dueSavingsGoals.length;
 
   return (
     <>
@@ -118,8 +152,15 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
             {/* Notification Bell */}
             <div className="relative">
               <button
-                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className="relative p-2 sm:p-2.5 rounded-2xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                onClick={() => {
+                  const willOpen = !isNotificationsOpen;
+                  setIsNotificationsOpen(willOpen);
+                  if (willOpen && totalAlerts > 0) {
+                    playPaymentNotificationSound();
+                  }
+                }}
+                className="relative p-2 sm:p-2.5 rounded-2xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Notifications & Alerts"
               >
                 <Bell className="w-4 h-4" />
                 {totalAlerts > 0 && (
@@ -139,6 +180,38 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                   </div>
 
                   <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {dueSavingsGoals.length > 0 && (
+                      <div className="space-y-1.5">
+                        {dueSavingsGoals.map((goal) => {
+                          const targetDay = goal.deadline ? parseInt(goal.deadline.split('-')[2], 10) : 1;
+                          const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
+                          return (
+                            <Link
+                              key={goal.id}
+                              href="/savings"
+                              onClick={() => setIsNotificationsOpen(false)}
+                              className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex items-start gap-2.5 hover:bg-amber-100/70 dark:hover:bg-amber-900/50 transition-colors block"
+                            >
+                              <PiggyBank className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="text-xs font-bold text-amber-900 dark:text-amber-200 truncate">
+                                    {goal.title} Due
+                                  </span>
+                                  <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 font-mono shrink-0">
+                                    Day {targetDay}th
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-amber-700 dark:text-amber-300 truncate">
+                                  Monthly deposit due • {formatINR(remaining)} needed. Click to add funds.
+                                </div>
+                              </div>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+
                     {lowStockCount > 0 && (
                       <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex items-start gap-2.5">
                         <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
