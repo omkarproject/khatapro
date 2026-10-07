@@ -408,10 +408,36 @@ export const StorageService = {
     };
 
     if (invoice.type === 'sales') {
-      if (idx >= 0) {
-        const oldInv = list[idx];
-        // If the old invoice had already deducted stock, restore old quantities first
-        if (oldInv.stockDeducted) {
+      const oldInv = idx >= 0 ? list[idx] : null;
+      const isNowPaid = invoice.status === 'paid';
+      const wasPaid = oldInv ? (oldInv.status === 'paid' || !!oldInv.stockDeducted) : false;
+
+      if (isNowPaid && !wasPaid) {
+        // Status changed to PAID: deduct stock!
+        (invoice.items || []).forEach(newItem => {
+          const p = findProduct(newItem);
+          if (p) {
+            p.currentStock = Math.max(0, p.currentStock - (newItem.quantity || 0));
+            p.updatedAt = new Date().toISOString();
+            productsChanged = true;
+          }
+        });
+        invoice.stockDeducted = true;
+      } else if (!isNowPaid && wasPaid) {
+        // Status changed from PAID to UNPAID / other: RESTORE stock!
+        const itemsToRestore = oldInv ? oldInv.items : invoice.items;
+        (itemsToRestore || []).forEach(oldItem => {
+          const p = findProduct(oldItem);
+          if (p) {
+            p.currentStock = p.currentStock + (oldItem.quantity || 0);
+            p.updatedAt = new Date().toISOString();
+            productsChanged = true;
+          }
+        });
+        invoice.stockDeducted = false;
+      } else if (isNowPaid && wasPaid) {
+        // Was paid and remains paid: adjust differences in items if edited
+        if (oldInv) {
           (oldInv.items || []).forEach(oldItem => {
             const p = findProduct(oldItem);
             if (p) {
@@ -421,7 +447,6 @@ export const StorageService = {
             }
           });
         }
-        // Deduct new quantities
         (invoice.items || []).forEach(newItem => {
           const p = findProduct(newItem);
           if (p) {
@@ -432,16 +457,8 @@ export const StorageService = {
         });
         invoice.stockDeducted = true;
       } else {
-        // New invoice creation: deduct quantities
-        (invoice.items || []).forEach(newItem => {
-          const p = findProduct(newItem);
-          if (p) {
-            p.currentStock = Math.max(0, p.currentStock - (newItem.quantity || 0));
-            p.updatedAt = new Date().toISOString();
-            productsChanged = true;
-          }
-        });
-        invoice.stockDeducted = true;
+        // Unpaid and remains unpaid: ensure stock is not deducted
+        invoice.stockDeducted = false;
       }
     }
 
@@ -522,16 +539,28 @@ export const StorageService = {
     };
 
     const updatedInvoices = invoices.map(inv => {
-      if (inv.type === 'sales' && !inv.stockDeducted) {
-        (inv.items || []).forEach(item => {
-          const p = findProduct(item);
-          if (p) {
-            p.currentStock = Math.max(0, p.currentStock - (item.quantity || 0));
-            p.updatedAt = new Date().toISOString();
-            changed = true;
-          }
-        });
-        return { ...inv, stockDeducted: true };
+      if (inv.type === 'sales') {
+        if (inv.status === 'paid' && !inv.stockDeducted) {
+          (inv.items || []).forEach(item => {
+            const p = findProduct(item);
+            if (p) {
+              p.currentStock = Math.max(0, p.currentStock - (item.quantity || 0));
+              p.updatedAt = new Date().toISOString();
+              changed = true;
+            }
+          });
+          return { ...inv, stockDeducted: true };
+        } else if (inv.status !== 'paid' && inv.stockDeducted) {
+          (inv.items || []).forEach(item => {
+            const p = findProduct(item);
+            if (p) {
+              p.currentStock = p.currentStock + (item.quantity || 0);
+              p.updatedAt = new Date().toISOString();
+              changed = true;
+            }
+          });
+          return { ...inv, stockDeducted: false };
+        }
       }
       return inv;
     });

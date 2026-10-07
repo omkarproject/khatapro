@@ -757,17 +757,7 @@ export default function InvoicesPage() {
               {filteredInvoices.map((inv) => (
                 <tr key={inv.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                   <td className="py-3 px-3 font-mono font-bold text-slate-900 dark:text-white">
-                    <div className="flex items-center gap-1.5">
-                      <span>{inv.invoiceNumber}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditInvoice(inv)}
-                        className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                        title="Edit Invoice & Stock"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    {inv.invoiceNumber}
                   </td>
                   <td className="py-3 px-3 font-semibold text-slate-800 dark:text-slate-200">
                     {inv.customerName}
