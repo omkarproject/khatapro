@@ -10,6 +10,7 @@ import {
   InvoiceChargeConfig,
   InvoiceAppliedCharge,
   PaymentCollectionMode,
+  Product,
 } from '@/types';
 import {
   FileSpreadsheet,
@@ -42,7 +43,9 @@ import {
   Image as ImageIcon,
   Calendar,
   Settings,
-  Percent
+  Percent,
+  ChevronDown,
+  Package,
 } from 'lucide-react';
 
 const DEFAULT_INVOICE_CHARGES: InvoiceChargeConfig[] = [
@@ -153,10 +156,11 @@ export default function InvoicesPage() {
       quantity: 1,
       unitPrice: 0,
       discountPercent: 0,
-      taxPercent: 18,
+      taxPercent: 0,
       total: 0,
     },
   ]);
+  const [openProductDropdownIndex, setOpenProductDropdownIndex] = useState<number | null>(null);
   const [notes, setNotes] = useState('Thank you for your business!');
   const [terms, setTerms] = useState('Payment due within 15 days. Subject to local jurisdiction.');
 
@@ -176,20 +180,43 @@ export default function InvoicesPage() {
     const updated = [...items];
     const current = { ...updated[index], [field]: val };
 
-    // Recalculate item line total
+    // Recalculate item line total (without adding hardcoded GST)
     const qty = current.quantity || 0;
     const price = current.unitPrice || 0;
     const disc = current.discountPercent || 0;
-    const tax = current.taxPercent || 0;
 
     const lineSubtotal = qty * price;
     const lineDiscount = lineSubtotal * (disc / 100);
-    const taxable = lineSubtotal - lineDiscount;
-    const lineTax = taxable * (tax / 100);
-    current.total = Math.round(taxable + lineTax);
+    current.total = Math.round(lineSubtotal - lineDiscount);
 
     updated[index] = current;
     setItems(updated);
+  };
+
+  const handleSelectProductForLineItem = (index: number, prod: Product) => {
+    const updated = [...items];
+    const current = updated[index];
+    const qty = current.quantity && current.quantity > 0 ? current.quantity : 1;
+    const price = prod.sellingPrice || 0;
+    const disc = current.discountPercent || 0;
+
+    const lineSubtotal = qty * price;
+    const lineDiscount = lineSubtotal * (disc / 100);
+    const lineTotal = Math.round(lineSubtotal - lineDiscount);
+
+    updated[index] = {
+      ...current,
+      productId: prod.id,
+      name: prod.name,
+      quantity: qty,
+      unitPrice: price,
+      discountPercent: disc,
+      taxPercent: 0,
+      total: lineTotal,
+    };
+
+    setItems(updated);
+    setOpenProductDropdownIndex(null);
   };
 
   const addItemRow = () => {
@@ -201,7 +228,7 @@ export default function InvoicesPage() {
         quantity: 1,
         unitPrice: 0,
         discountPercent: 0,
-        taxPercent: 18,
+        taxPercent: 0,
         total: 0,
       },
     ]);
@@ -850,7 +877,7 @@ export default function InvoicesPage() {
                         {formatINR(item.unitPrice)}
                       </td>
                       <td className="py-2.5 px-2 text-center font-mono">
-                        {item.taxPercent}%
+                        {item.taxPercent ? `${item.taxPercent}%` : '-'}
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono font-bold">
                         {formatINR(item.total)}
@@ -1021,22 +1048,129 @@ export default function InvoicesPage() {
                   </button>
                 </div>
 
-                <div className="space-y-2 max-h-60 overflow-y-auto">
+                <div className="space-y-2">
+                  {/* Backdrop to close product dropdown on click outside */}
+                  {openProductDropdownIndex !== null && (
+                    <div
+                      className="fixed inset-0 z-30 bg-transparent"
+                      onClick={() => setOpenProductDropdownIndex(null)}
+                    />
+                  )}
+
                   {items.map((item, idx) => (
                     <div
                       key={item.id}
-                      className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 grid grid-cols-12 gap-2 items-center"
+                      className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 grid grid-cols-12 gap-2 items-center relative"
+                      style={{ zIndex: openProductDropdownIndex === idx ? 40 : 1 }}
                     >
-                      <div className="col-span-5">
-                        <input
-                          type="text"
-                          required
-                          placeholder="Item Name / SKU"
-                          value={item.name}
-                          onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
-                          className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"
-                        />
+                      <div className="col-span-5 relative">
+                        <div className="relative flex items-center">
+                          <input
+                            type="text"
+                            required
+                            placeholder="Item Name / SKU"
+                            value={item.name}
+                            onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
+                            className="w-full pl-2.5 pr-8 py-1.5 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenProductDropdownIndex(
+                                openProductDropdownIndex === idx ? null : idx
+                              )
+                            }
+                            className="absolute right-1 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+                            title="Select product from Inventory & Stock"
+                          >
+                            <ChevronDown
+                              className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                                openProductDropdownIndex === idx ? 'rotate-180 text-indigo-500' : ''
+                              }`}
+                            />
+                          </button>
+                        </div>
+
+                        {/* Product Dropdown from Inventory */}
+                        {openProductDropdownIndex === idx && (
+                          <div className="absolute left-0 top-full mt-1.5 w-72 sm:w-80 max-h-56 overflow-y-auto bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl z-50 p-1.5 space-y-1">
+                            <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                              <span className="flex items-center gap-1">
+                                <Package className="w-3 h-3 text-indigo-500" />
+                                Inventory Products ({products.length})
+                              </span>
+                              <span className="text-[9px] text-indigo-500 font-semibold">
+                                Click to Select
+                              </span>
+                            </div>
+
+                            {products.length === 0 ? (
+                              <div className="p-3 text-center text-xs text-slate-400">
+                                No products found in Inventory.
+                              </div>
+                            ) : (
+                              (() => {
+                                const q = (item.name || '').toLowerCase().trim();
+                                const matches = products.filter(
+                                  (p) =>
+                                    !q ||
+                                    p.name.toLowerCase().includes(q) ||
+                                    p.sku.toLowerCase().includes(q)
+                                );
+                                const list = matches.length > 0 ? matches : products;
+
+                                return (
+                                  <>
+                                    {matches.length === 0 && q && (
+                                      <div className="px-2 py-1 text-[10px] text-amber-500 font-semibold">
+                                        No exact match for &ldquo;{item.name}&rdquo;. Showing all products:
+                                      </div>
+                                    )}
+                                    {list.map((prod) => (
+                                      <button
+                                        key={prod.id}
+                                        type="button"
+                                        onClick={() => handleSelectProductForLineItem(idx, prod)}
+                                        className="w-full text-left p-2 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/60 flex items-center justify-between transition-colors cursor-pointer group"
+                                      >
+                                        <div className="min-w-0 flex-1 pr-2">
+                                          <div className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate">
+                                            {prod.name}
+                                          </div>
+                                          <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                                            {prod.sku && (
+                                              <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1 py-0.2 rounded text-[9px]">
+                                                {prod.sku}
+                                              </span>
+                                            )}
+                                            <span>•</span>
+                                            <span
+                                              className={
+                                                prod.currentStock <= prod.minStock
+                                                  ? 'text-amber-500 font-semibold'
+                                                  : 'text-emerald-500 font-semibold'
+                                              }
+                                            >
+                                              Stock: {prod.currentStock} {prod.unit || 'pcs'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                          <div className="text-xs font-mono font-bold text-slate-900 dark:text-white">
+                                            {formatINR(prod.sellingPrice)}
+                                          </div>
+                                          <div className="text-[9px] text-slate-400">Selling Price</div>
+                                        </div>
+                                      </button>
+                                    ))}
+                                  </>
+                                );
+                              })()
+                            )}
+                          </div>
+                        )}
                       </div>
+
                       <div className="col-span-2">
                         <input
                           type="number"
