@@ -3,6 +3,7 @@ import {
   Customer,
   Transaction,
   Invoice,
+  InvoiceItem,
   Product,
   Expense,
   SavingsGoal,
@@ -385,6 +386,69 @@ export const StorageService = {
     const list = StorageService.getInvoices();
     const idx = list.findIndex(i => i.id === invoice.id);
     let updated: Invoice[];
+
+    // Inventory Stock Adjustment Logic
+    const products = StorageService.getProducts();
+    let productsChanged = false;
+    const prodMap = new Map(products.map(p => [p.id, { ...p }]));
+
+    const findProduct = (item: InvoiceItem): Product | undefined => {
+      if (item.productId && prodMap.has(item.productId)) return prodMap.get(item.productId);
+      const itemLowerName = (item.name || '').toLowerCase().trim();
+      if (!itemLowerName) return undefined;
+      for (const p of prodMap.values()) {
+        if (
+          p.name.toLowerCase().trim() === itemLowerName ||
+          (p.sku && p.sku.toLowerCase().trim() === itemLowerName)
+        ) {
+          return p;
+        }
+      }
+      return undefined;
+    };
+
+    if (invoice.type === 'sales') {
+      if (idx >= 0) {
+        const oldInv = list[idx];
+        // If the old invoice had already deducted stock, restore old quantities first
+        if (oldInv.stockDeducted) {
+          (oldInv.items || []).forEach(oldItem => {
+            const p = findProduct(oldItem);
+            if (p) {
+              p.currentStock = p.currentStock + (oldItem.quantity || 0);
+              p.updatedAt = new Date().toISOString();
+              productsChanged = true;
+            }
+          });
+        }
+        // Deduct new quantities
+        (invoice.items || []).forEach(newItem => {
+          const p = findProduct(newItem);
+          if (p) {
+            p.currentStock = Math.max(0, p.currentStock - (newItem.quantity || 0));
+            p.updatedAt = new Date().toISOString();
+            productsChanged = true;
+          }
+        });
+        invoice.stockDeducted = true;
+      } else {
+        // New invoice creation: deduct quantities
+        (invoice.items || []).forEach(newItem => {
+          const p = findProduct(newItem);
+          if (p) {
+            p.currentStock = Math.max(0, p.currentStock - (newItem.quantity || 0));
+            p.updatedAt = new Date().toISOString();
+            productsChanged = true;
+          }
+        });
+        invoice.stockDeducted = true;
+      }
+    }
+
+    if (productsChanged) {
+      setLocalItem(STORAGE_KEYS.PRODUCTS, Array.from(prodMap.values()));
+    }
+
     if (idx >= 0) {
       updated = [...list];
       updated[idx] = invoice;
@@ -395,9 +459,88 @@ export const StorageService = {
     return updated;
   },
   deleteInvoice: (id: string): Invoice[] => {
-    const list = StorageService.getInvoices().filter(i => i.id !== id);
-    setLocalItem(STORAGE_KEYS.INVOICES, list);
-    return list;
+    const list = StorageService.getInvoices();
+    const invToDelete = list.find(i => i.id === id);
+    if (invToDelete && invToDelete.type === 'sales' && invToDelete.stockDeducted) {
+      const products = StorageService.getProducts();
+      let productsChanged = false;
+      const prodMap = new Map(products.map(p => [p.id, { ...p }]));
+
+      const findProduct = (item: InvoiceItem): Product | undefined => {
+        if (item.productId && prodMap.has(item.productId)) return prodMap.get(item.productId);
+        const itemLowerName = (item.name || '').toLowerCase().trim();
+        if (!itemLowerName) return undefined;
+        for (const p of prodMap.values()) {
+          if (
+            p.name.toLowerCase().trim() === itemLowerName ||
+            (p.sku && p.sku.toLowerCase().trim() === itemLowerName)
+          ) {
+            return p;
+          }
+        }
+        return undefined;
+      };
+
+      (invToDelete.items || []).forEach(item => {
+        const p = findProduct(item);
+        if (p) {
+          p.currentStock = p.currentStock + (item.quantity || 0);
+          p.updatedAt = new Date().toISOString();
+          productsChanged = true;
+        }
+      });
+
+      if (productsChanged) {
+        setLocalItem(STORAGE_KEYS.PRODUCTS, Array.from(prodMap.values()));
+      }
+    }
+
+    const updated = list.filter(i => i.id !== id);
+    setLocalItem(STORAGE_KEYS.INVOICES, updated);
+    return updated;
+  },
+  reconcileInvoiceStock: (): boolean => {
+    if (typeof window === 'undefined') return false;
+    const invoices = StorageService.getInvoices();
+    const products = StorageService.getProducts();
+    let changed = false;
+    const prodMap = new Map(products.map(p => [p.id, { ...p }]));
+
+    const findProduct = (item: InvoiceItem): Product | undefined => {
+      if (item.productId && prodMap.has(item.productId)) return prodMap.get(item.productId);
+      const itemLowerName = (item.name || '').toLowerCase().trim();
+      if (!itemLowerName) return undefined;
+      for (const p of prodMap.values()) {
+        if (
+          p.name.toLowerCase().trim() === itemLowerName ||
+          (p.sku && p.sku.toLowerCase().trim() === itemLowerName)
+        ) {
+          return p;
+        }
+      }
+      return undefined;
+    };
+
+    const updatedInvoices = invoices.map(inv => {
+      if (inv.type === 'sales' && !inv.stockDeducted) {
+        (inv.items || []).forEach(item => {
+          const p = findProduct(item);
+          if (p) {
+            p.currentStock = Math.max(0, p.currentStock - (item.quantity || 0));
+            p.updatedAt = new Date().toISOString();
+            changed = true;
+          }
+        });
+        return { ...inv, stockDeducted: true };
+      }
+      return inv;
+    });
+
+    if (changed) {
+      setLocalItem(STORAGE_KEYS.PRODUCTS, Array.from(prodMap.values()));
+      setLocalItem(STORAGE_KEYS.INVOICES, updatedInvoices);
+    }
+    return changed;
   },
 
   // Products & Inventory

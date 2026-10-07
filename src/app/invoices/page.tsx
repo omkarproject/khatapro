@@ -46,6 +46,7 @@ import {
   Percent,
   ChevronDown,
   Package,
+  Pencil,
 } from 'lucide-react';
 
 const DEFAULT_INVOICE_CHARGES: InvoiceChargeConfig[] = [
@@ -74,6 +75,7 @@ export default function InvoicesPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [activeInvoice, setActiveInvoice] = useState<Invoice | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
 
   // Status Update Modal State
   const [statusModalInvoice, setStatusModalInvoice] = useState<Invoice | null>(null);
@@ -258,9 +260,9 @@ export default function InvoicesPage() {
     [id: string]: { enabled: boolean; value: number; type: 'percentage' | 'fixed' };
   }>({});
 
-  // Sync selected charges whenever Create Modal opens or config changes
+  // Sync selected charges whenever Create Modal opens or config changes (only for new invoices)
   useEffect(() => {
-    if (isCreateModalOpen) {
+    if (isCreateModalOpen && !editingInvoice) {
       const initial: { [id: string]: { enabled: boolean; value: number; type: 'percentage' | 'fixed' } } = {};
       invoiceChargesConfig.forEach((chg) => {
         initial[chg.id] = {
@@ -271,7 +273,7 @@ export default function InvoicesPage() {
       });
       setSelectedCharges(initial);
     }
-  }, [isCreateModalOpen, invoiceChargesConfig]);
+  }, [isCreateModalOpen, invoiceChargesConfig, editingInvoice]);
 
   const saveChargesConfig = (newConfig: InvoiceChargeConfig[]) => {
     setInvoiceChargesConfig(newConfig);
@@ -387,12 +389,130 @@ export default function InvoicesPage() {
     };
   }, [items, invoiceChargesConfig, selectedCharges]);
 
-  // Handle Save New Invoice
+  // Open Create Invoice Modal with fresh defaults
+  const handleOpenCreateInvoice = () => {
+    setEditingInvoice(null);
+    setInvType('sales');
+    setSelectedCustomerId(customers[0]?.id || '');
+    setIssueDate(new Date().toISOString().split('T')[0]);
+    setDueDate(new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    setItems([
+      {
+        id: '1',
+        name: '',
+        quantity: 1,
+        unitPrice: 0,
+        discountPercent: 0,
+        taxPercent: 0,
+        total: 0,
+      },
+    ]);
+    setNotes('Thank you for your business!');
+    setTerms('Payment due within 15 days. Subject to local jurisdiction.');
+
+    const initialCharges: { [id: string]: { enabled: boolean; value: number; type: 'percentage' | 'fixed' } } = {};
+    invoiceChargesConfig.forEach((chg) => {
+      initialCharges[chg.id] = {
+        enabled: chg.enabled,
+        value: chg.value,
+        type: chg.type,
+      };
+    });
+    setSelectedCharges(initialCharges);
+    setIsCreateModalOpen(true);
+  };
+
+  // Open Edit Invoice Modal with existing invoice data
+  const handleOpenEditInvoice = (inv: Invoice) => {
+    setEditingInvoice(inv);
+    setInvType(inv.type || 'sales');
+    setSelectedCustomerId(inv.customerId);
+    setIssueDate(inv.issueDate);
+    setDueDate(inv.dueDate);
+    setItems(
+      inv.items && inv.items.length > 0
+        ? inv.items.map((it, i) => ({
+            ...it,
+            id: it.id || `item_${i}`,
+            taxPercent: it.taxPercent || 0,
+            total: it.total || (it.quantity || 1) * (it.unitPrice || 0),
+          }))
+        : [
+            {
+              id: '1',
+              name: '',
+              quantity: 1,
+              unitPrice: 0,
+              discountPercent: 0,
+              taxPercent: 0,
+              total: 0,
+            },
+          ]
+    );
+    setNotes(inv.notes || '');
+    setTerms(inv.terms || '');
+
+    // Configure charges checkboxes based on the existing invoice
+    const initialCharges: { [id: string]: { enabled: boolean; value: number; type: 'percentage' | 'fixed' } } = {};
+    invoiceChargesConfig.forEach((chg) => {
+      let isEnabled = false;
+      let val = chg.value;
+      if (chg.id === 'cgst' && inv.cgst > 0) isEnabled = true;
+      else if (chg.id === 'sgst' && inv.sgst > 0) isEnabled = true;
+      else if (chg.id === 'igst' && inv.igst > 0) isEnabled = true;
+      else if (inv.appliedCharges?.some((ac) => ac.id === chg.id)) {
+        isEnabled = true;
+        const found = inv.appliedCharges.find((ac) => ac.id === chg.id);
+        if (found) val = found.rate;
+      }
+      initialCharges[chg.id] = {
+        enabled: isEnabled,
+        value: val,
+        type: chg.type,
+      };
+    });
+    setSelectedCharges(initialCharges);
+    setIsCreateModalOpen(true);
+  };
+
+  // Handle Save (Create or Update) Invoice
   const handleSaveInvoice = (e: React.FormEvent) => {
     e.preventDefault();
     const cust = customers.find(c => c.id === selectedCustomerId);
     if (!cust) {
       addToast('Customer required', 'Please select a customer for this invoice.', 'error');
+      return;
+    }
+
+    if (editingInvoice) {
+      const updatedInvoice: Invoice = {
+        ...editingInvoice,
+        type: invType,
+        customerId: cust.id,
+        customerName: cust.name,
+        customerPhone: cust.phone,
+        customerGst: cust.gstNumber,
+        customerAddress: cust.address,
+        issueDate,
+        dueDate,
+        items: items.filter(i => i.name.trim().length > 0),
+        subtotal: calculatedTotals.subtotal,
+        discountAmount: calculatedTotals.discountAmount,
+        taxAmount: calculatedTotals.taxAmount,
+        cgst: calculatedTotals.cgst,
+        sgst: calculatedTotals.sgst,
+        igst: calculatedTotals.igst,
+        appliedCharges: calculatedTotals.appliedCharges,
+        total: calculatedTotals.total,
+        notes,
+        terms,
+      };
+
+      saveInvoice(updatedInvoice);
+      setIsCreateModalOpen(false);
+      setEditingInvoice(null);
+      setActiveInvoice(updatedInvoice);
+      addToast('Invoice Updated', `Invoice #${updatedInvoice.invoiceNumber} updated successfully.`, 'success');
       return;
     }
 
@@ -579,7 +699,7 @@ export default function InvoicesPage() {
             <Settings className="w-4 h-4" />
           </button>
           <button
-            onClick={() => setIsCreateModalOpen(true)}
+            onClick={handleOpenCreateInvoice}
             className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
@@ -637,7 +757,17 @@ export default function InvoicesPage() {
               {filteredInvoices.map((inv) => (
                 <tr key={inv.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                   <td className="py-3 px-3 font-mono font-bold text-slate-900 dark:text-white">
-                    {inv.invoiceNumber}
+                    <div className="flex items-center gap-1.5">
+                      <span>{inv.invoiceNumber}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditInvoice(inv)}
+                        className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                        title="Edit Invoice & Stock"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                   <td className="py-3 px-3 font-semibold text-slate-800 dark:text-slate-200">
                     {inv.customerName}
@@ -687,6 +817,13 @@ export default function InvoicesPage() {
                         title="View / Print Invoice"
                       >
                         <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleOpenEditInvoice(inv)}
+                        className="p-1.5 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-slate-500 hover:text-indigo-600 cursor-pointer"
+                        title="Edit Invoice & Stock"
+                      >
+                        <Pencil className="w-4 h-4" />
                       </button>
                       {inv.status !== 'paid' && (
                         <button
@@ -978,12 +1115,25 @@ export default function InvoicesPage() {
           <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 max-w-3xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                <Plus className="w-5 h-5 text-indigo-500" />
-                Create Invoice
+                {editingInvoice ? (
+                  <>
+                    <Pencil className="w-5 h-5 text-indigo-500" />
+                    <span>Edit Invoice - #{editingInvoice.invoiceNumber}</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-5 h-5 text-indigo-500" />
+                    <span>Create Invoice</span>
+                  </>
+                )}
               </h3>
               <button
-                onClick={() => setIsCreateModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
+                type="button"
+                onClick={() => {
+                  setIsCreateModalOpen(false);
+                  setEditingInvoice(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1300,16 +1450,19 @@ export default function InvoicesPage() {
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                  onClick={() => {
+                    setIsCreateModalOpen(false);
+                    setEditingInvoice(null);
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20"
+                  className="px-5 py-2 rounded-xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all cursor-pointer"
                 >
-                  Generate Invoice
+                  {editingInvoice ? 'Update Invoice' : 'Generate Invoice'}
                 </button>
               </div>
 

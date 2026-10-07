@@ -421,6 +421,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     StorageService.initializeDefaults();
+    StorageService.reconcileInvoiceStock();
     setProfileState(StorageService.getProfile());
     setCustomers(StorageService.getCustomers());
     setTransactions(StorageService.getTransactions());
@@ -599,6 +600,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const saveInvoice = (inv: Invoice) => {
     const updated = StorageService.saveInvoice(inv);
     setInvoices(updated);
+    setProducts(StorageService.getProducts());
     addToast('Invoice Saved', `Invoice #${inv.invoiceNumber} has been updated.`, 'success');
     syncWithDatabase();
   };
@@ -606,6 +608,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const deleteInvoice = (id: string) => {
     const updated = StorageService.deleteInvoice(id);
     setInvoices(updated);
+    setProducts(StorageService.getProducts());
     addToast('Invoice Deleted', 'Invoice removed.', 'info');
     syncWithDatabase();
   };

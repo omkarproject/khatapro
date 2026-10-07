@@ -97,6 +97,7 @@ export interface Invoice {
   notes?: string;
   terms?: string;
   upiPaymentQr?: string;
+  stockDeducted?: boolean;
   createdAt: string;
 }
 
