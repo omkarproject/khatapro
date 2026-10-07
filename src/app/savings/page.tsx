@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate } from '@/lib/utils';
 import { SavingsGoal, SavingsDeposit } from '@/types';
@@ -23,8 +23,13 @@ import {
   Clock,
   FileText,
   Upload,
-  FileCheck,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Search,
+  Printer,
+  FileSpreadsheet,
+  Volume2,
+  Flame,
+  ArrowRight
 } from 'lucide-react';
 
 interface ReminderStatus {
@@ -34,6 +39,24 @@ interface ReminderStatus {
   message: string;
   daysRemaining?: number;
   depositFound?: boolean;
+}
+
+const MOTIVATIONAL_SAVINGS_QUOTES = [
+  { text: 'Boond boond se sagar banta hai! Har ek rupee aapke business ki suraksha hai.', emoji: '🌱' },
+  { text: 'Emergency fund aapke business ka sabse majboot shield hai. Regular save karte rahein!', emoji: '🛡️' },
+  { text: 'Sapne bade hain to reserves bhi strong hone chahiye. Aaj ki bachat, kal ka sukoon!', emoji: '🎯' },
+  { text: 'Financial freedom ek din me nahi aati, par roz bachti hai. Keep growing!', emoji: '📈' },
+  { text: 'Cash reserve business ki oxygen hai. Healthy business ke liye funds jodein!', emoji: '💎' },
+  { text: 'Mushkil waqt aane se pehle tayyari hi samajhdari hai. Target bhot kareeb hai!', emoji: '🔥' },
+  { text: 'Chhoti si shuruat bada parinaam laati hai. Keep going, you are doing amazing!', emoji: '🚀' },
+  { text: 'Apne business ke khud malik hain, strong reserve funds hi asli taaqat hai!', emoji: '👑' },
+  { text: 'Har mahine ki regular savings aapke dhandhe ko invincible banati hai!', emoji: '🌟' },
+  { text: 'Bachat darr se nahi, balki aane waale maukon ko capture karne ke liye hoti hai!', emoji: '🪙' }
+];
+
+function getGoalMotivation(goalId: string, index: number) {
+  const seed = goalId.split('').reduce((acc, char) => acc + char.charCodeAt(0), index);
+  return MOTIVATIONAL_SAVINGS_QUOTES[seed % MOTIVATIONAL_SAVINGS_QUOTES.length];
 }
 
 function getDaySuffix(d: number): string {
@@ -56,7 +79,6 @@ function getGoalReminderStatus(goal: SavingsGoal): ReminderStatus {
   const todayYear = now.getFullYear();
   const todayMonth = now.getMonth();
 
-  // Parse YYYY-MM-DD
   const parts = goal.deadline.split('-');
   const deadYear = parseInt(parts[0], 10);
   const deadMonth = parseInt(parts[1], 10) - 1;
@@ -64,7 +86,6 @@ function getGoalReminderStatus(goal: SavingsGoal): ReminderStatus {
 
   const deadlineDate = new Date(deadYear, deadMonth, targetDay, 23, 59, 59);
 
-  // If deadline in the past, no reminder
   if (now.getTime() > deadlineDate.getTime()) {
     return {
       status: 'expired',
@@ -74,7 +95,6 @@ function getGoalReminderStatus(goal: SavingsGoal): ReminderStatus {
     };
   }
 
-  // Check if funds were already added in current calendar month
   const hasDepositedCurrentMonth = goal.deposits?.some((dep) => {
     if (!dep.date && !dep.createdAt) return false;
     const depDate = new Date(dep.date || dep.createdAt);
@@ -121,7 +141,7 @@ function getGoalReminderStatus(goal: SavingsGoal): ReminderStatus {
 }
 
 export default function SavingsPage() {
-  const { savingsGoals, saveSavingsGoal, deleteSavingsGoal, addToast } = useApp();
+  const { savingsGoals, saveSavingsGoal, deleteSavingsGoal, addToast, settings } = useApp();
 
   // Dialog States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -130,7 +150,9 @@ export default function SavingsPage() {
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [activeGoal, setActiveGoal] = useState<SavingsGoal | null>(null);
   const [historyGoal, setHistoryGoal] = useState<SavingsGoal | null>(null);
+  const [historySearchTerm, setHistorySearchTerm] = useState('');
   const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: string } | null>(null);
+  const [randomAddFundQuote, setRandomAddFundQuote] = useState(MOTIVATIONAL_SAVINGS_QUOTES[0]);
 
   // Form State: Create/Edit Goal
   const [title, setTitle] = useState('');
@@ -158,6 +180,75 @@ export default function SavingsPage() {
   const totalSaved = savingsGoals.reduce((sum, g) => sum + g.currentAmount, 0);
   const totalTarget = savingsGoals.reduce((sum, g) => sum + g.targetAmount, 0);
   const overallProgress = totalTarget > 0 ? Math.round((totalSaved / totalTarget) * 100) : 0;
+
+  // Due Goals calculation
+  const dueGoals = useMemo(() => {
+    return savingsGoals.filter((g) => getGoalReminderStatus(g).status === 'due');
+  }, [savingsGoals]);
+
+  // Play Reminder Chime (Rich 3-tone acoustic bell)
+  const playReminderChime = () => {
+    try {
+      if (typeof window === 'undefined') return;
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      if (ctx.state === 'suspended') ctx.resume();
+
+      const now = ctx.currentTime;
+      // Tone 1: E5 (659.25 Hz)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.frequency.setValueAtTime(659.25, now);
+      gain1.gain.setValueAtTime(0.2, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.25);
+
+      // Tone 2: G#5 (830.61 Hz)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.frequency.setValueAtTime(830.61, now + 0.15);
+      gain2.gain.setValueAtTime(0.25, now + 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.15);
+      osc2.stop(now + 0.45);
+
+      // Tone 3: B5 (987.77 Hz)
+      const osc3 = ctx.createOscillator();
+      const gain3 = ctx.createGain();
+      osc3.frequency.setValueAtTime(987.77, now + 0.3);
+      gain3.gain.setValueAtTime(0.3, now + 0.3);
+      gain3.gain.exponentialRampToValueAtTime(0.0001, now + 0.75);
+      osc3.connect(gain3);
+      gain3.connect(ctx.destination);
+      osc3.start(now + 0.3);
+      osc3.stop(now + 0.75);
+    } catch (err) {
+      console.warn('Audio chime playback error:', err);
+    }
+  };
+
+  // Sound & Toast Reminder alert when due goals exist on page load
+  useEffect(() => {
+    if (dueGoals.length > 0) {
+      const timer = setTimeout(() => {
+        playReminderChime();
+        addToast(
+          '🔔 Monthly Savings Due',
+          `${dueGoals.length} reserve fund deposit${dueGoals.length > 1 ? 's are' : ' is'} due this month. Click to deposit!`,
+          'warning'
+        );
+      }, 700);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   // Process File helper (Image or PDF up to 25MB)
   const processUploadedFile = (file: File, onSuccess: (url: string, name: string, type: string) => void) => {
@@ -283,6 +374,9 @@ export default function SavingsPage() {
     setDepositReceiptUrl(null);
     setDepositReceiptName('');
     setDepositReceiptType('');
+    setRandomAddFundQuote(
+      MOTIVATIONAL_SAVINGS_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_SAVINGS_QUOTES.length)]
+    );
     setIsDepositModalOpen(true);
   };
 
@@ -320,6 +414,7 @@ export default function SavingsPage() {
     setDepositAmount('');
     setDepositNote('');
     setDepositReceiptUrl(null);
+    playReminderChime();
     addToast('Funds Added', `Added ${formatINR(dep)} to ${activeGoal.title}.`, 'success');
   };
 
@@ -332,8 +427,280 @@ export default function SavingsPage() {
     document.body.removeChild(a);
   };
 
-  // Find all goals due for monthly reminder
-  const dueGoals = savingsGoals.filter((g) => getGoalReminderStatus(g).status === 'due');
+  // Search Filtered Deposits for History Modal
+  const filteredHistoryDeposits = useMemo(() => {
+    if (!historyGoal) return [];
+    const all = historyGoal.deposits || [];
+    if (!historySearchTerm.trim()) return all;
+    const q = historySearchTerm.toLowerCase().trim();
+    return all.filter((dep) => {
+      const matchAmt = dep.amount.toString().includes(q) || formatINR(dep.amount).toLowerCase().includes(q);
+      const matchDate = (dep.date || '').toLowerCase().includes(q) || formatDate(dep.date || dep.createdAt).toLowerCase().includes(q);
+      const matchNote = (dep.notes || '').toLowerCase().includes(q);
+      const matchReceipt = (dep.receiptName || '').toLowerCase().includes(q);
+      return matchAmt || matchDate || matchNote || matchReceipt;
+    });
+  }, [historyGoal, historySearchTerm]);
+
+  // Search suggestion tags based on existing deposits
+  const historySearchSuggestions = useMemo(() => {
+    if (!historyGoal || !historyGoal.deposits) return [];
+    const tags = new Set<string>();
+    historyGoal.deposits.forEach((dep) => {
+      if (dep.notes && dep.notes.trim()) tags.add(dep.notes.trim());
+      if (dep.date) tags.add(dep.date);
+      if (dep.amount) tags.add(dep.amount.toString());
+    });
+    return Array.from(tags).slice(0, 5);
+  }, [historyGoal]);
+
+  // Export History to Excel (.xlsx)
+  const handleExportHistoryExcel = async (goal: SavingsGoal) => {
+    try {
+      addToast('Preparing Excel', `Generating styled spreadsheet for ${goal.title}...`, 'info');
+      const ExcelJSModule = await import('exceljs');
+      const ExcelJS = ExcelJSModule.default || ExcelJSModule;
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'SmartKhata Pro';
+      workbook.created = new Date();
+
+      const worksheet = workbook.addWorksheet('Deposit History', {
+        views: [{ showGridLines: true }],
+      });
+
+      // Columns
+      worksheet.columns = [
+        { key: 'sno', width: 8 },
+        { key: 'date', width: 18 },
+        { key: 'amount', width: 22 },
+        { key: 'notes', width: 36 },
+        { key: 'receipt', width: 22 },
+      ];
+
+      // Palette
+      const NAVY_HEADER = '1E3A8A';
+      const SUB_BLUE = '2563EB';
+      const WHITE = 'FFFFFF';
+      const TH_SLATE = '1E293B';
+      const GREEN_TEXT = '15803D';
+      const GREEN_BG = 'DCFCE7';
+      const BORDER_COLOR = 'CBD5E1';
+
+      // Title Banner
+      worksheet.mergeCells('A1:E2');
+      const titleCell = worksheet.getCell('A1');
+      titleCell.value = 'SMARTKHATA PRO — RESERVE FUND DEPOSIT STATEMENT';
+      titleCell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: WHITE } };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY_HEADER } };
+
+      // Subtitle
+      worksheet.mergeCells('A3:E3');
+      const subCell = worksheet.getCell('A3');
+      subCell.value = `${settings.businessName || 'Business Enterprise'} • ${goal.title.toUpperCase()} (${goal.category.toUpperCase()}) • GENERATED ON ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+      subCell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: WHITE } };
+      subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: SUB_BLUE } };
+
+      // Summary Stats Cards (Rows 5-8)
+      worksheet.mergeCells('A5:B5');
+      worksheet.getCell('A5').value = 'Target Reserve Amount:';
+      worksheet.getCell('A5').font = { bold: true };
+      worksheet.getCell('C5').value = goal.targetAmount;
+      worksheet.getCell('C5').numFmt = '₹ #,##0.00';
+      worksheet.getCell('C5').font = { bold: true, color: { argb: NAVY_HEADER } };
+
+      worksheet.mergeCells('A6:B6');
+      worksheet.getCell('A6').value = 'Current Accumulated Saved:';
+      worksheet.getCell('A6').font = { bold: true };
+      worksheet.getCell('C6').value = goal.currentAmount;
+      worksheet.getCell('C6').numFmt = '₹ #,##0.00';
+      worksheet.getCell('C6').font = { bold: true, color: { argb: GREEN_TEXT } };
+
+      worksheet.mergeCells('A7:B7');
+      worksheet.getCell('A7').value = 'Progress Achieved:';
+      worksheet.getCell('A7').font = { bold: true };
+      const pct = goal.targetAmount > 0 ? Math.round((goal.currentAmount / goal.targetAmount) * 100) : 0;
+      worksheet.getCell('C7').value = `${pct}% Achieved (Remaining: ₹${Math.max(0, goal.targetAmount - goal.currentAmount).toLocaleString('en-IN')})`;
+
+      worksheet.mergeCells('A8:B8');
+      worksheet.getCell('A8').value = 'Target Completion Date:';
+      worksheet.getCell('A8').font = { bold: true };
+      worksheet.getCell('C8').value = formatDate(goal.deadline);
+
+      // Table Header Row 10
+      const headerRow = worksheet.getRow(10);
+      headerRow.values = ['S.No', 'Deposit Date', 'Amount (₹)', 'Particulars / Notes', 'Receipt Attachment'];
+      headerRow.font = { name: 'Calibri', size: 11, bold: true, color: { argb: WHITE } };
+      headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+      headerRow.height = 24;
+
+      ['A', 'B', 'C', 'D', 'E'].forEach((col) => {
+        worksheet.getCell(`${col}10`).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: TH_SLATE },
+        };
+      });
+
+      // Data Rows
+      let rowIndex = 11;
+      const deposits = goal.deposits || [];
+      if (deposits.length === 0 && goal.currentAmount > 0) {
+        const row = worksheet.getRow(rowIndex);
+        row.values = [1, formatDate(goal.createdAt), goal.currentAmount, 'Initial Reserve Deposit', 'N/A'];
+        row.getCell(1).alignment = { horizontal: 'center' };
+        row.getCell(2).alignment = { horizontal: 'center' };
+        row.getCell(3).numFmt = '₹ #,##0.00';
+        row.getCell(3).font = { bold: true, color: { argb: GREEN_TEXT } };
+        row.getCell(5).alignment = { horizontal: 'center' };
+        rowIndex++;
+      } else {
+        deposits.forEach((dep, idx) => {
+          const row = worksheet.getRow(rowIndex);
+          row.values = [
+            idx + 1,
+            formatDate(dep.date || dep.createdAt),
+            dep.amount,
+            dep.notes || 'Reserve Fund Contribution',
+            dep.receiptName ? `Attached (${dep.receiptType?.toUpperCase() || 'FILE'})` : 'No Attachment',
+          ];
+          row.getCell(1).alignment = { horizontal: 'center' };
+          row.getCell(2).alignment = { horizontal: 'center' };
+          row.getCell(3).numFmt = '₹ #,##0.00';
+          row.getCell(3).font = { bold: true, color: { argb: GREEN_TEXT } };
+          row.getCell(5).alignment = { horizontal: 'center' };
+
+          if (idx % 2 === 1) {
+            ['A', 'B', 'C', 'D', 'E'].forEach((col) => {
+              worksheet.getCell(`${col}${rowIndex}`).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'F8FAFC' },
+              };
+            });
+          }
+          rowIndex++;
+        });
+      }
+
+      // Total Row
+      const totalRow = worksheet.getRow(rowIndex);
+      worksheet.mergeCells(`A${rowIndex}:B${rowIndex}`);
+      totalRow.getCell(1).value = 'TOTAL ACCUMULATED SAVINGS';
+      totalRow.getCell(1).font = { bold: true, color: { argb: WHITE } };
+      totalRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+      totalRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY_HEADER } };
+
+      totalRow.getCell(3).value = goal.currentAmount;
+      totalRow.getCell(3).numFmt = '₹ #,##0.00';
+      totalRow.getCell(3).font = { bold: true, size: 12, color: { argb: GREEN_TEXT } };
+      totalRow.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREEN_BG } };
+
+      worksheet.mergeCells(`D${rowIndex}:E${rowIndex}`);
+      totalRow.getCell(4).value = `Target: ₹${goal.targetAmount.toLocaleString('en-IN')}`;
+      totalRow.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
+      totalRow.getCell(4).font = { bold: true, color: { argb: '475569' } };
+
+      // Borders
+      for (let r = 10; r <= rowIndex; r++) {
+        ['A', 'B', 'C', 'D', 'E'].forEach((col) => {
+          worksheet.getCell(`${col}${r}`).border = {
+            top: { style: 'thin', color: { argb: BORDER_COLOR } },
+            bottom: { style: 'thin', color: { argb: BORDER_COLOR } },
+            left: { style: 'thin', color: { argb: BORDER_COLOR } },
+            right: { style: 'thin', color: { argb: BORDER_COLOR } },
+          };
+        });
+      }
+
+      // Buffer & Download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${goal.title.replace(/[^a-zA-Z0-9]/g, '_')}_Deposit_History_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      addToast('Excel Downloaded', `Modern formatted spreadsheet for ${goal.title} downloaded.`, 'success');
+    } catch (err) {
+      console.error('Excel Export error:', err);
+      addToast('Export Error', 'Failed to generate Excel file. Please retry.', 'error');
+    }
+  };
+
+  // Export History to PDF (Clean Isolated Print Frame)
+  const handlePrintHistoryPdf = (goal: SavingsGoal) => {
+    const billEl = document.getElementById('printable-savings-statement');
+    if (!billEl) return;
+
+    const existingFrame = document.getElementById('smartkhata-savings-print-frame');
+    if (existingFrame) existingFrame.remove();
+
+    const printFrame = document.createElement('iframe');
+    printFrame.id = 'smartkhata-savings-print-frame';
+    printFrame.style.position = 'fixed';
+    printFrame.style.right = '0';
+    printFrame.style.bottom = '0';
+    printFrame.style.width = '0';
+    printFrame.style.height = '0';
+    printFrame.style.border = '0';
+    printFrame.style.visibility = 'hidden';
+    document.body.appendChild(printFrame);
+
+    const doc = printFrame.contentWindow?.document || printFrame.contentDocument;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    const billContent = billEl.innerHTML;
+    doc.open();
+    doc.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Reserve_Fund_Statement_${goal.title.replace(/[^a-zA-Z0-9]/g, '_')}</title>
+  <style>
+    @page { size: A4 portrait; margin: 15mm; }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { margin: 0; padding: 0; color: #0f172a; background: #fff; }
+    .page { width: 100%; max-width: 800px; margin: 0 auto; }
+    .header-bar { border-bottom: 2px solid #2563eb; padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; }
+    .biz-name { font-size: 20px; font-weight: 800; color: #1e3a8a; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; background: #eff6ff; color: #1d4ed8; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
+    .summary-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; text-align: center; }
+    .summary-card .label { font-size: 10px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+    .summary-card .val { font-size: 15px; font-weight: 800; color: #0f172a; margin-top: 4px; }
+    .summary-card .val.green { color: #15803d; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; }
+    th { background: #1e293b; color: #fff; padding: 8px 10px; text-align: left; font-weight: 700; }
+    td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .amount { font-weight: 800; color: #15803d; font-family: monospace; }
+    .footer { margin-top: 30px; border-top: 1px solid #cbd5e1; padding-top: 10px; display: flex; justify-content: space-between; font-size: 10px; color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    ${billContent}
+  </div>
+</body>
+</html>`);
+    doc.close();
+
+    setTimeout(() => {
+      printFrame.contentWindow?.focus();
+      printFrame.contentWindow?.print();
+    }, 350);
+  };
 
   return (
     <div className="space-y-6">
@@ -359,31 +726,48 @@ export default function SavingsPage() {
         </button>
       </div>
 
-      {/* Monthly Reminder Alert Banner (if any goals are due this month) */}
+      {/* Monthly Reminder Notification Card with Sound & Details */}
       {dueGoals.length > 0 && (
-        <div className="p-4 rounded-2xl bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-              <Bell className="w-5 h-5 animate-pulse" />
+        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-amber-500/15 border border-amber-500/35 shadow-lg shadow-amber-500/5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-fade-in">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/30">
+              <Bell className="w-6 h-6 animate-bounce" />
             </div>
-            <div>
-              <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200">
-                Monthly Savings Reminder ({dueGoals.length} {dueGoals.length === 1 ? 'fund' : 'funds'} due for deposit)
-              </h4>
-              <p className="text-[11px] text-amber-700 dark:text-amber-300">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/70 px-2.5 py-0.5 rounded-full">
+                  Monthly Reserve Reminder
+                </span>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  {dueGoals.length} {dueGoals.length === 1 ? 'Fund' : 'Funds'} Due For Deposit
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-300">
                 {dueGoals.map((g) => {
                   const rem = getGoalReminderStatus(g);
-                  return `${g.title} (due on ${rem.targetDay}${getDaySuffix(rem.targetDay)} of each month)`;
+                  const remaining = Math.max(0, g.targetAmount - g.currentAmount);
+                  return `${g.title} (Target Day: ${rem.targetDay}${getDaySuffix(rem.targetDay)} of each month • Needed: ${formatINR(remaining)})`;
                 }).join(' • ')}
               </p>
             </div>
           </div>
-          <button
-            onClick={() => handleOpenDepositModal(dueGoals[0])}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 shadow-sm transition-all whitespace-nowrap self-stretch sm:self-auto text-center cursor-pointer"
-          >
-            Add Funds Now
-          </button>
+
+          <div className="flex items-center gap-2 self-stretch md:self-auto">
+            <button
+              onClick={playReminderChime}
+              title="Play Reminder Audio Chime"
+              className="p-2.5 rounded-xl bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-slate-700 border border-amber-200 dark:border-amber-800 transition-colors cursor-pointer shrink-0"
+            >
+              <Volume2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => handleOpenDepositModal(dueGoals[0])}
+              className="flex-1 md:flex-initial px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-600/20 active:scale-95 transition-all text-center whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <span>Add Funds Now</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -442,9 +826,10 @@ export default function SavingsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {savingsGoals.map((goal) => {
+          {savingsGoals.map((goal, idx) => {
             const progress = Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100));
             const reminder = getGoalReminderStatus(goal);
+            const motivation = getGoalMotivation(goal.id, idx);
 
             return (
               <div
@@ -482,7 +867,10 @@ export default function SavingsPage() {
                     {/* Quick Action Icons: History, Edit, Delete next to Category */}
                     <div className="flex items-center gap-1 shrink-0">
                       <button
-                        onClick={() => setHistoryGoal(goal)}
+                        onClick={() => {
+                          setHistoryGoal(goal);
+                          setHistorySearchTerm('');
+                        }}
                         title="Deposit History & Receipts"
                         className="p-1.5 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors cursor-pointer"
                       >
@@ -578,12 +966,23 @@ export default function SavingsPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* Motivational Tiny Quote at Bottom of Card */}
+                  <div className="mt-3 p-2.5 rounded-2xl bg-gradient-to-r from-amber-500/5 via-indigo-500/5 to-emerald-500/5 border border-slate-200/50 dark:border-slate-800/60 flex items-start gap-2 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                    <span className="text-sm shrink-0">{motivation.emoji}</span>
+                    <div className="flex-1 italic font-medium">
+                      "{motivation.text}"
+                    </div>
+                  </div>
                 </div>
 
                 {/* Card Footer: Add Funds button right aligned */}
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                   <button
-                    onClick={() => setHistoryGoal(goal)}
+                    onClick={() => {
+                      setHistoryGoal(goal);
+                      setHistorySearchTerm('');
+                    }}
                     className="text-[11px] font-semibold text-slate-500 hover:text-indigo-600 flex items-center gap-1 cursor-pointer"
                   >
                     <History className="w-3.5 h-3.5" />
@@ -723,7 +1122,7 @@ export default function SavingsPage() {
                 />
               </div>
 
-              {/* Attach Images/PDF Option next to / below Notes */}
+              {/* Attach Images/PDF Option next to Notes */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
@@ -836,6 +1235,14 @@ export default function SavingsPage() {
 
             <div className="text-xs text-slate-500">
               Depositing towards: <strong className="text-slate-800 dark:text-slate-200">{activeGoal.title}</strong>
+            </div>
+
+            {/* Dynamic Motivation Badge inside Add Funds modal */}
+            <div className="p-3 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 border border-emerald-500/20 flex items-center gap-2.5 text-xs text-slate-700 dark:text-slate-300">
+              <span className="text-xl shrink-0">{randomAddFundQuote.emoji}</span>
+              <p className="italic font-semibold text-[11px] leading-snug">
+                "{randomAddFundQuote.text}"
+              </p>
             </div>
 
             <form onSubmit={handleDepositSubmit} className="space-y-3.5">
@@ -969,35 +1376,68 @@ export default function SavingsPage() {
         </div>
       )}
 
-      {/* Modal: Deposit History */}
+      {/* Modal: Deposit History with Excel / PDF Export & Search Suggestions */}
       {historyGoal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-5 sm:p-6 max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-5 sm:p-6 max-w-xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
+            {/* Modal Header */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
                   <History className="w-5 h-5" />
                 </div>
-                <div>
-                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                <div className="min-w-0">
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white truncate">
                     Deposit History
                   </h3>
-                  <p className="text-xs text-slate-400">{historyGoal.title}</p>
+                  <p className="text-xs text-slate-400 truncate">{historyGoal.title}</p>
                 </div>
               </div>
-              <button
-                onClick={() => setHistoryGoal(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+
+              {/* Action Buttons: Export Excel, Export PDF, Close */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleExportHistoryExcel(historyGoal)}
+                  title="Export Styled Excel (.xlsx)"
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="hidden sm:inline">Excel</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handlePrintHistoryPdf(historyGoal)}
+                  title="Print / Save Statement PDF"
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800/60 flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5 text-indigo-600" />
+                  <span className="hidden sm:inline">PDF</span>
+                </button>
+
+                <button
+                  onClick={() => setHistoryGoal(null)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Quick Goal Overview */}
             <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-xs">
               <div>
-                <div className="text-[10px] text-slate-400 uppercase font-semibold">Current Saved</div>
+                <div className="text-[10px] text-slate-400 uppercase font-semibold">Total Saved</div>
                 <div className="text-base font-bold font-mono text-emerald-600">{formatINR(historyGoal.currentAmount)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-[10px] text-slate-400 uppercase font-semibold">Progress</div>
+                <div className="text-sm font-bold text-indigo-600">
+                  {historyGoal.targetAmount > 0
+                    ? `${Math.round((historyGoal.currentAmount / historyGoal.targetAmount) * 100)}%`
+                    : '0%'}
+                </div>
               </div>
               <div className="text-right">
                 <div className="text-[10px] text-slate-400 uppercase font-semibold">Target Goal</div>
@@ -1031,10 +1471,58 @@ export default function SavingsPage() {
               </div>
             )}
 
+            {/* Search Input & Live Suggestions Bar */}
+            <div className="space-y-2">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={historySearchTerm}
+                  onChange={(e) => setHistorySearchTerm(e.target.value)}
+                  placeholder="Search by amount, note, date or receipt..."
+                  className="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                {historySearchTerm && (
+                  <button
+                    onClick={() => setHistorySearchTerm('')}
+                    className="p-1 rounded text-slate-400 hover:text-slate-600 absolute right-2.5 top-1/2 -translate-y-1/2"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Suggestions chips */}
+              {historySearchSuggestions.length > 0 && !historySearchTerm && (
+                <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                  <span className="text-slate-400 font-medium">Quick Suggestions:</span>
+                  {historySearchSuggestions.map((tag, sIdx) => (
+                    <button
+                      key={sIdx}
+                      onClick={() => setHistorySearchTerm(tag)}
+                      className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Deposits List */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[160px]">
-              {(!historyGoal.deposits || historyGoal.deposits.length === 0) ? (
-                historyGoal.currentAmount > 0 ? (
+              {filteredHistoryDeposits.length === 0 ? (
+                historySearchTerm ? (
+                  <div className="p-8 text-center text-xs text-slate-400 space-y-1">
+                    <p>No deposit transactions found matching "{historySearchTerm}"</p>
+                    <button
+                      onClick={() => setHistorySearchTerm('')}
+                      className="text-indigo-600 dark:text-indigo-400 underline font-semibold cursor-pointer"
+                    >
+                      Clear Search
+                    </button>
+                  </div>
+                ) : historyGoal.currentAmount > 0 ? (
                   <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/40 dark:border-slate-700/40 flex items-center justify-between">
                     <div>
                       <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Initial Reserve Fund</div>
@@ -1050,10 +1538,10 @@ export default function SavingsPage() {
                   </div>
                 )
               ) : (
-                historyGoal.deposits.map((dep, idx) => (
+                filteredHistoryDeposits.map((dep, idx) => (
                   <div
                     key={dep.id || idx}
-                    className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between gap-3 text-xs"
+                    className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between gap-3 text-xs hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors"
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -1097,6 +1585,7 @@ export default function SavingsPage() {
               )}
             </div>
 
+            {/* Bottom Actions */}
             <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <button
                 type="button"
@@ -1119,6 +1608,104 @@ export default function SavingsPage() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden Container for Isolated PDF Printing */}
+      {historyGoal && (
+        <div id="printable-savings-statement" className="hidden">
+          <div className="header-bar">
+            <div>
+              <div className="biz-name">{settings.businessName || 'Business Enterprise'}</div>
+              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                {settings.businessAddress && `${settings.businessAddress} • `}Phone: {settings.businessPhone || 'N/A'}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <span className="badge">{historyGoal.category}</span>
+              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                Date: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ margin: '14px 0 8px 0' }}>
+            <h2 style={{ margin: 0, fontSize: '18px', color: '#0f172a' }}>{historyGoal.title}</h2>
+            {historyGoal.notes && (
+              <p style={{ margin: '4px 0 0 0', fontSize: '11px', color: '#475569' }}>{historyGoal.notes}</p>
+            )}
+          </div>
+
+          <div className="summary-grid">
+            <div className="summary-card">
+              <div className="label">Target Amount</div>
+              <div className="val">{formatINR(historyGoal.targetAmount)}</div>
+            </div>
+            <div className="summary-card">
+              <div className="label">Total Saved</div>
+              <div className="val green">{formatINR(historyGoal.currentAmount)}</div>
+            </div>
+            <div className="summary-card">
+              <div className="label">Achieved</div>
+              <div className="val">
+                {historyGoal.targetAmount > 0
+                  ? `${Math.round((historyGoal.currentAmount / historyGoal.targetAmount) * 100)}%`
+                  : '0%'}
+              </div>
+            </div>
+            <div className="summary-card">
+              <div className="label">Target Date</div>
+              <div className="val">{formatDate(historyGoal.deadline)}</div>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: '40px', textAlign: 'center' }}>#</th>
+                <th style={{ width: '110px' }}>Date</th>
+                <th style={{ width: '130px' }}>Amount</th>
+                <th>Particulars / Notes</th>
+                <th style={{ width: '120px', textAlign: 'center' }}>Receipt Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(!historyGoal.deposits || historyGoal.deposits.length === 0) ? (
+                historyGoal.currentAmount > 0 ? (
+                  <tr>
+                    <td style={{ textAlign: 'center' }}>1</td>
+                    <td>{formatDate(historyGoal.createdAt)}</td>
+                    <td className="amount">+{formatINR(historyGoal.currentAmount)}</td>
+                    <td>Initial Reserve Deposit</td>
+                    <td style={{ textAlign: 'center' }}>N/A</td>
+                  </tr>
+                ) : (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'center', padding: '16px', color: '#94a3b8' }}>
+                      No deposit entries recorded yet.
+                    </td>
+                  </tr>
+                )
+              ) : (
+                historyGoal.deposits.map((dep, idx) => (
+                  <tr key={dep.id || idx}>
+                    <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                    <td>{formatDate(dep.date || dep.createdAt)}</td>
+                    <td className="amount">+{formatINR(dep.amount)}</td>
+                    <td>{dep.notes || 'Reserve Fund Contribution'}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      {dep.receiptUrl ? `Attached (${dep.receiptType?.toUpperCase() || 'FILE'})` : 'No Attachment'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+
+          <div className="footer">
+            <span>SmartKhata Pro • Official Digital Reserve Fund Ledger</span>
+            <span>Verified System Record</span>
           </div>
         </div>
       )}
