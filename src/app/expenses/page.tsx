@@ -90,7 +90,9 @@ export default function ExpensesPage() {
 
   // Analytics
   const totalExpense = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const percentUsed = budgetCap > 0 ? Math.round((totalExpense / budgetCap) * 100) : 0;
+  const percentUsedFloat = budgetCap > 0 ? (totalExpense / budgetCap) * 100 : 0;
+  const percentUsed = Math.round(percentUsedFloat);
+  const percentUsedDisplay = percentUsedFloat % 1 === 0 ? percentUsedFloat.toFixed(0) : percentUsedFloat.toFixed(1);
 
   const categoryBreakdown = useMemo(() => {
     const map: Record<string, number> = {};
@@ -439,54 +441,101 @@ export default function ExpensesPage() {
         {/* Right: Pie Distribution */}
         <div className="lg:col-span-4 glass-card p-6 flex flex-col justify-between">
           <div>
-            <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2 mb-2">
-              <PieIcon className="w-4 h-4 text-indigo-500" />
-              Category Breakdown
-            </h3>
-            <p className="text-xs text-slate-400 mb-4">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                <PieIcon className="w-4 h-4 text-indigo-500" />
+                Category Breakdown
+              </h3>
+              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-800/50">
+                {percentUsedDisplay}% / 100%
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mb-3">
               Visual proportion of your business expenses
             </p>
 
-            <div className="h-60 w-full">
+            <div className="relative h-64 w-full flex items-center justify-center">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={categoryBreakdown}
-                    innerRadius={55}
-                    outerRadius={80}
-                    paddingAngle={4}
+                    data={categoryBreakdown.length > 0 ? categoryBreakdown : [{ name: 'No Expense', value: 1, color: '#334155' }]}
+                    innerRadius={68}
+                    outerRadius={94}
+                    paddingAngle={categoryBreakdown.length > 1 ? 4 : 0}
                     dataKey="value"
+                    stroke="none"
                   >
-                    {categoryBreakdown.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
+                    {categoryBreakdown.length > 0 ? (
+                      categoryBreakdown.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))
+                    ) : (
+                      <Cell key="empty" fill="#94a3b8" opacity={0.25} />
+                    )}
                   </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                      borderRadius: '12px',
-                      border: 'none',
-                      color: '#fff',
-                      fontSize: '11px',
-                    }}
-                    formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Amount']}
-                  />
+                  {categoryBreakdown.length > 0 && (
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0];
+                          const itemVal = Number(data.value || 0);
+                          const catPct = totalExpense > 0 ? Math.round((itemVal / totalExpense) * 100) : 0;
+                          return (
+                            <div className="bg-slate-900/95 dark:bg-slate-950/95 text-white px-3.5 py-2.5 rounded-xl border border-slate-700/80 shadow-2xl text-xs backdrop-blur-md pointer-events-none z-50 animate-fadeIn">
+                              <div className="flex items-center gap-2 font-bold">
+                                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: data.payload.color }} />
+                                <span className="text-slate-100">{data.name}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-4 mt-1 font-mono">
+                                <span className="text-emerald-400 font-extrabold">{formatINR(itemVal)}</span>
+                                <span className="text-indigo-300 text-[11px] font-semibold">({catPct}% of spend)</span>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                  )}
                 </PieChart>
               </ResponsiveContainer>
+
+              {/* Center Donut Hole: % / 100% of Budget Utilized */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center select-none">
+                <div className={`text-2xl sm:text-3xl font-black tracking-tight ${percentUsedFloat > 100 ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>
+                  {percentUsedDisplay}%
+                </div>
+                <div className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                  / 100% Budget
+                </div>
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5">
+                  {formatINR(totalExpense)} used
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-1.5 mt-2">
-              {categoryBreakdown.slice(0, 5).map((item) => (
-                <div key={item.name} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                    <span className="text-slate-600 dark:text-slate-300">{item.name}</span>
+            {/* Category Legend list */}
+            <div className="space-y-2 mt-3 max-h-48 overflow-y-auto pr-1 divide-y divide-slate-100/60 dark:divide-slate-800/60">
+              {categoryBreakdown.map((item) => {
+                const itemPercent = totalExpense > 0 ? Math.round((item.value / totalExpense) * 100) : 0;
+                return (
+                  <div key={item.name} className="flex items-center justify-between text-xs pt-1.5 first:pt-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                      <span className="text-slate-600 dark:text-slate-300 font-medium truncate">{item.name}</span>
+                      <span className="text-[10px] text-slate-400 shrink-0">({itemPercent}%)</span>
+                    </div>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white shrink-0 ml-2">
+                      {formatINR(item.value)}
+                    </span>
                   </div>
-                  <span className="font-mono font-bold text-slate-900 dark:text-white">
-                    {formatINR(item.value)}
-                  </span>
+                );
+              })}
+              {categoryBreakdown.length === 0 && (
+                <div className="text-center py-2 text-xs text-slate-400">
+                  No expense records logged yet
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>
