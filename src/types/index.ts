@@ -13,6 +13,28 @@ export interface UserProfile {
   createdAt: string;
 }
 
+export interface CustomerBankAccount {
+  id: string;
+  bankName: string;
+  accountHolderName: string;
+  accountNumber: string;
+  ifscCode: string;
+  branchName?: string;
+  accountType: 'Savings' | 'Current' | 'Corporate';
+  isPrimary?: boolean;
+  createdAt: string;
+}
+
+export interface CustomerUpiDetail {
+  id: string;
+  upiId: string;
+  holderName?: string;
+  appName?: string;
+  qrImageUrl?: string;
+  isPrimary?: boolean;
+  createdAt: string;
+}
+
 export interface Customer {
   id: string;
   name: string;
@@ -30,6 +52,8 @@ export interface Customer {
   rating: number; // 1 - 5
   notes?: string;
   avatar?: string;
+  bankAccounts?: CustomerBankAccount[];
+  upiDetails?: CustomerUpiDetail[];
   createdAt: string;
 }
 

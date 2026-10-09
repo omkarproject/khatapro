@@ -13,6 +13,8 @@ import {
   PaymentSettings,
   CustomerDriveFolder,
   CustomerDriveFile,
+  CustomerBankAccount,
+  CustomerUpiDetail,
 } from '@/types';
 
 
@@ -709,6 +711,39 @@ export const StorageService = {
       localStorage.setItem(key, JSON.stringify(data));
     } catch (e) {
       console.error('Failed to save customer drive', e);
+    }
+  },
+  getCustomerBankingData: (customerId: string): { bankAccounts: CustomerBankAccount[]; upiDetails: CustomerUpiDetail[] } => {
+    if (typeof window === 'undefined') return { bankAccounts: [], upiDetails: [] };
+    const customers = StorageService.getCustomers();
+    const cust = customers.find(c => c.id === customerId);
+    if (cust && (cust.bankAccounts || cust.upiDetails)) {
+      return {
+        bankAccounts: cust.bankAccounts || [],
+        upiDetails: cust.upiDetails || [],
+      };
+    }
+    const key = `skp_cust_bank_${customerId}`;
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      try {
+        return JSON.parse(raw);
+      } catch (e) {}
+    }
+    return { bankAccounts: [], upiDetails: [] };
+  },
+  saveCustomerBankingData: (customerId: string, data: { bankAccounts: CustomerBankAccount[]; upiDetails: CustomerUpiDetail[] }): void => {
+    if (typeof window === 'undefined') return;
+    const key = `skp_cust_bank_${customerId}`;
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {}
+    const customers = StorageService.getCustomers();
+    const cust = customers.find(c => c.id === customerId);
+    if (cust) {
+      cust.bankAccounts = data.bankAccounts;
+      cust.upiDetails = data.upiDetails;
+      StorageService.saveCustomer(cust);
     }
   },
 

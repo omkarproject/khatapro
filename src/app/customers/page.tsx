@@ -3,8 +3,8 @@
 import React, { useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
-import { formatINR, formatDate, buildUpiUri } from '@/lib/utils';
-import { Customer, CustomerDriveFolder, CustomerDriveFile } from '@/types';
+import { formatINR, formatDate, buildUpiUri, getQrCodeUrl } from '@/lib/utils';
+import { Customer, CustomerDriveFolder, CustomerDriveFile, CustomerBankAccount, CustomerUpiDetail } from '@/types';
 import { StorageService } from '@/services/storage';
 import {
   Users,
@@ -43,7 +43,42 @@ import {
   Square,
   Camera,
   User,
+  Landmark,
+  Copy,
 } from 'lucide-react';
+
+const POPULAR_BANKS = [
+  'State Bank of India (SBI)',
+  'HDFC Bank',
+  'ICICI Bank',
+  'Punjab National Bank (PNB)',
+  'Bank of Baroda (BOB)',
+  'Axis Bank',
+  'Kotak Mahindra Bank',
+  'Canara Bank',
+  'Union Bank of India',
+  'IndusInd Bank',
+  'Bank of India',
+  'Central Bank of India',
+  'Indian Bank',
+  'YES Bank',
+  'IDBI Bank',
+  'Federal Bank',
+  'IDFC FIRST Bank',
+  'Bandhan Bank',
+  'Other Bank',
+];
+
+const UPI_APPS = [
+  'Google Pay',
+  'PhonePe',
+  'Paytm',
+  'BHIM UPI',
+  'Amazon Pay',
+  'CRED',
+  'WhatsApp Pay',
+  'Other',
+];
 
 function WindowsFolderIcon({ className = "w-12 h-12" }: { className?: string }) {
   return (
@@ -104,6 +139,35 @@ export default function CustomersPage() {
 
   // Hidden File input ref
   const driveFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Customer Bank Accounts & UPI Modal State
+  const [bankCustomer, setBankCustomer] = useState<Customer | null>(null);
+  const [bankAccounts, setBankAccounts] = useState<CustomerBankAccount[]>([]);
+  const [upiDetails, setUpiDetails] = useState<CustomerUpiDetail[]>([]);
+  const [isBankModalOpen, setIsBankModalOpen] = useState(false);
+  const [activeBankTab, setActiveBankTab] = useState<'accounts' | 'upi'>('accounts');
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Bank Form State
+  const [isAddingAccount, setIsAddingAccount] = useState(false);
+  const [bankFormName, setBankFormName] = useState('State Bank of India (SBI)');
+  const [bankFormCustomName, setBankFormCustomName] = useState('');
+  const [bankFormHolder, setBankFormHolder] = useState('');
+  const [bankFormAccNumber, setBankFormAccNumber] = useState('');
+  const [bankFormIfsc, setBankFormIfsc] = useState('');
+  const [bankFormBranch, setBankFormBranch] = useState('');
+  const [bankFormType, setBankFormType] = useState<'Savings' | 'Current' | 'Corporate'>('Savings');
+
+  // UPI Form State
+  const [isAddingUpi, setIsAddingUpi] = useState(false);
+  const [upiFormId, setUpiFormId] = useState('');
+  const [upiFormHolder, setUpiFormHolder] = useState('');
+  const [upiFormApp, setUpiFormApp] = useState('Google Pay');
+  const [upiFormQrImage, setUpiFormQrImage] = useState<string | null>(null);
+  const upiQrInputRef = useRef<HTMLInputElement>(null);
+
+  // Enlarged QR modal
+  const [enlargedQr, setEnlargedQr] = useState<{ upiId: string; qrUrl: string; holderName?: string; appName?: string } | null>(null);
 
   // Modal State for Add / Edit
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -530,6 +594,149 @@ export default function CustomersPage() {
     addToast('Deleted', `${totalCount} item(s) deleted successfully.`, 'info');
   };
 
+  // Banking & UPI Handlers
+  const handleOpenBankModal = (cust: Customer) => {
+    setBankCustomer(cust);
+    const data = StorageService.getCustomerBankingData(cust.id);
+    setBankAccounts(data.bankAccounts || []);
+    setUpiDetails(data.upiDetails || []);
+    setActiveBankTab('accounts');
+    setIsAddingAccount(false);
+    setIsAddingUpi(false);
+    setBankFormName('State Bank of India (SBI)');
+    setBankFormCustomName('');
+    setBankFormHolder(cust.name);
+    setBankFormAccNumber('');
+    setBankFormIfsc('');
+    setBankFormBranch('');
+    setBankFormType('Savings');
+    setUpiFormId('');
+    setUpiFormHolder(cust.name);
+    setUpiFormApp('Google Pay');
+    setUpiFormQrImage(null);
+    setIsBankModalOpen(true);
+  };
+
+  const handleCopyValue = (text: string, label: string, keyId: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedKey(keyId);
+    setTimeout(() => {
+      setCopiedKey(null);
+    }, 1500);
+    addToast('Copied to Clipboard', `${label}: ${text}`, 'success');
+  };
+
+  const handleUpiQrImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        addToast('File too large', 'Please choose a QR image under 5MB.', 'warning');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        setUpiFormQrImage(evt.target?.result as string);
+        addToast('QR Uploaded', 'QR Code image attached successfully.', 'info');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveBankAccount = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bankCustomer) return;
+    if (!bankFormAccNumber.trim()) {
+      addToast('Validation Error', 'Account Number is required.', 'error');
+      return;
+    }
+    if (!bankFormIfsc.trim()) {
+      addToast('Validation Error', 'IFSC Code is required.', 'error');
+      return;
+    }
+    const finalBank = bankFormName === 'Other Bank' ? (bankFormCustomName.trim() || 'Other Bank') : bankFormName;
+    const newAccount: CustomerBankAccount = {
+      id: `acc_${Date.now()}`,
+      bankName: finalBank,
+      accountHolderName: bankFormHolder.trim() || bankCustomer.name,
+      accountNumber: bankFormAccNumber.trim(),
+      ifscCode: bankFormIfsc.trim().toUpperCase(),
+      branchName: bankFormBranch.trim(),
+      accountType: bankFormType,
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [newAccount, ...bankAccounts];
+    setBankAccounts(updated);
+    StorageService.saveCustomerBankingData(bankCustomer.id, {
+      bankAccounts: updated,
+      upiDetails,
+    });
+    addToast('Bank Account Added', `${finalBank} account saved successfully.`, 'success');
+    setIsAddingAccount(false);
+    setBankFormAccNumber('');
+    setBankFormIfsc('');
+    setBankFormBranch('');
+  };
+
+  const handleDeleteBankAccount = (accId: string) => {
+    if (!bankCustomer) return;
+    const updated = bankAccounts.filter((a) => a.id !== accId);
+    setBankAccounts(updated);
+    StorageService.saveCustomerBankingData(bankCustomer.id, {
+      bankAccounts: updated,
+      upiDetails,
+    });
+    addToast('Account Removed', 'Bank account removed successfully.', 'info');
+  };
+
+  const handleSaveUpiDetail = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bankCustomer) return;
+    if (!upiFormId.trim()) {
+      addToast('Validation Error', 'UPI ID is required.', 'error');
+      return;
+    }
+    const newUpi: CustomerUpiDetail = {
+      id: `upi_${Date.now()}`,
+      upiId: upiFormId.trim().toLowerCase(),
+      holderName: upiFormHolder.trim() || bankCustomer.name,
+      appName: upiFormApp.trim() || 'UPI',
+      qrImageUrl: upiFormQrImage || undefined,
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [newUpi, ...upiDetails];
+    setUpiDetails(updated);
+    StorageService.saveCustomerBankingData(bankCustomer.id, {
+      bankAccounts,
+      upiDetails: updated,
+    });
+    addToast('UPI / QR Added', `UPI ID ${newUpi.upiId} saved successfully.`, 'success');
+    setIsAddingUpi(false);
+    setUpiFormId('');
+    setUpiFormQrImage(null);
+  };
+
+  const handleDeleteUpiDetail = (upiId: string) => {
+    if (!bankCustomer) return;
+    const updated = upiDetails.filter((u) => u.id !== upiId);
+    setUpiDetails(updated);
+    StorageService.saveCustomerBankingData(bankCustomer.id, {
+      bankAccounts,
+      upiDetails: updated,
+    });
+    addToast('UPI Removed', 'UPI detail removed successfully.', 'info');
+  };
+
+  const handleDownloadQrImage = (url: string, filename: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    addToast('QR Downloaded', `Saved ${filename}`, 'success');
+  };
+
   // Active customer transactions
   const activeCustomerTxns = useMemo(() => {
     if (!activeCustomer) return [];
@@ -706,10 +913,10 @@ export default function CustomersPage() {
                   <span className="text-slate-300">•</span>
                   <Link
                     href={`/khata?id=${cust.id}`}
-                    className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+                    className="p-1 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 rounded-lg transition-colors cursor-pointer"
+                    title="Open Khata Ledger"
                   >
-                    <BookOpen className="w-3.5 h-3.5" />
-                    Khata Ledger →
+                    <BookOpen className="w-4 h-4" />
                   </Link>
                 </div>
 
@@ -720,6 +927,13 @@ export default function CustomersPage() {
                     title="Customer Cloud Drive / Documents"
                   >
                     <HardDrive className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleOpenBankModal(cust)}
+                    className="p-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-400 transition-colors"
+                    title="Customer Bank Accounts & UPI QRs"
+                  >
+                    <Landmark className="w-4 h-4" />
                   </button>
                   {cust.outstandingBalance > 0 && (
                     <button
@@ -872,6 +1086,16 @@ export default function CustomersPage() {
                   className="px-3.5 py-2 rounded-xl text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 flex items-center gap-1.5 transition-colors"
                 >
                   <HardDrive className="w-4 h-4 text-amber-500" /> Cloud Drive
+                </button>
+                <button
+                  onClick={() => {
+                    const c = activeCustomer;
+                    setActiveCustomer(null);
+                    handleOpenBankModal(c);
+                  }}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5 transition-colors"
+                >
+                  <Landmark className="w-4 h-4 text-indigo-500" /> Bank & UPI
                 </button>
               </div>
 
@@ -1973,6 +2197,725 @@ export default function CustomersPage() {
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* CUSTOMER BANK ACCOUNTS & UPI QR MODAL */}
+      {/* ======================================================== */}
+      {isBankModalOpen && bankCustomer && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+            
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/80">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                  <Landmark className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    Bank Accounts & UPI / QR
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap">
+                    <span>Customer: <strong className="text-slate-800 dark:text-slate-200">{bankCustomer.name}</strong></span>
+                    <span>•</span>
+                    <span>{bankCustomer.phone}</span>
+                    <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400">
+                      {bankCustomer.category}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsBankModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Navigation Tabs & Add Buttons */}
+            <div className="px-6 py-3 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900">
+              <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl">
+                <button
+                  type="button"
+                  onClick={() => setActiveBankTab('accounts')}
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    activeBankTab === 'accounts'
+                      ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Landmark className="w-3.5 h-3.5" />
+                  <span>Bank Accounts ({bankAccounts.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveBankTab('upi')}
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    activeBankTab === 'upi'
+                      ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>UPI & QR Codes ({upiDetails.length})</span>
+                </button>
+              </div>
+
+              {activeBankTab === 'accounts' ? (
+                <button
+                  type="button"
+                  onClick={() => setIsAddingAccount(!isAddingAccount)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{isAddingAccount ? 'Cancel' : 'Add Bank Account'}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsAddingUpi(!isAddingUpi)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{isAddingUpi ? 'Cancel' : 'Add UPI / QR'}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-slate-50/50 dark:bg-slate-950/40">
+              
+              {/* TAB 1: BANK ACCOUNTS */}
+              {activeBankTab === 'accounts' && (
+                <div className="space-y-5">
+                  {/* Add Account Form */}
+                  {isAddingAccount && (
+                    <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-800 border-2 border-indigo-500/20 shadow-md space-y-4 animate-fadeIn">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-700">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                          <Plus className="w-3.5 h-3.5" /> New Bank Account Details
+                        </h4>
+                        <span className="text-[11px] text-slate-400">Click to save in customer portfolio</span>
+                      </div>
+
+                      <form onSubmit={handleSaveBankAccount} className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          {/* Bank Name Dropdown */}
+                          <div className="sm:col-span-2 space-y-1">
+                            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                              Select Bank <span className="text-rose-500">*</span>
+                            </label>
+                            <select
+                              value={bankFormName}
+                              onChange={(e) => setBankFormName(e.target.value)}
+                              className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            >
+                              {POPULAR_BANKS.map((b) => (
+                                <option key={b} value={b}>{b}</option>
+                              ))}
+                            </select>
+                            {bankFormName === 'Other Bank' && (
+                              <input
+                                type="text"
+                                placeholder="Enter Bank Name"
+                                value={bankFormCustomName}
+                                onChange={(e) => setBankFormCustomName(e.target.value)}
+                                className="mt-2 w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                required
+                              />
+                            )}
+                          </div>
+
+                          {/* Account Holder Name */}
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                              Account Holder Name
+                            </label>
+                            <input
+                              type="text"
+                              value={bankFormHolder}
+                              onChange={(e) => setBankFormHolder(e.target.value)}
+                              placeholder="Account Holder Name"
+                              className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </div>
+
+                          {/* Account Type */}
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                              Account Type
+                            </label>
+                            <select
+                              value={bankFormType}
+                              onChange={(e) => setBankFormType(e.target.value as any)}
+                              className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            >
+                              <option value="Savings">Savings Account</option>
+                              <option value="Current">Current Account</option>
+                              <option value="Corporate">Corporate Account</option>
+                            </select>
+                          </div>
+
+                          {/* Account Number */}
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                              Account Number <span className="text-rose-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={bankFormAccNumber}
+                              onChange={(e) => setBankFormAccNumber(e.target.value)}
+                              placeholder="e.g. 100029384756"
+                              required
+                              className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </div>
+
+                          {/* IFSC Code */}
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                              IFSC Code <span className="text-rose-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={bankFormIfsc}
+                              onChange={(e) => setBankFormIfsc(e.target.value.toUpperCase())}
+                              placeholder="e.g. SBIN0001234"
+                              required
+                              className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono font-bold uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </div>
+
+                          {/* Branch Name */}
+                          <div className="sm:col-span-2 space-y-1">
+                            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                              Branch Name (Optional)
+                            </label>
+                            <input
+                              type="text"
+                              value={bankFormBranch}
+                              onChange={(e) => setBankFormBranch(e.target.value)}
+                              placeholder="e.g. Connaught Place Branch, New Delhi"
+                              className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                          <button
+                            type="button"
+                            onClick={() => setIsAddingAccount(false)}
+                            className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="px-5 py-2 rounded-xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 hover:opacity-95 transition-all"
+                          >
+                            Save Bank Account
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {/* Saved Bank Accounts List */}
+                  {bankAccounts.length === 0 && !isAddingAccount ? (
+                    <div className="text-center py-12 px-4 rounded-3xl bg-white dark:bg-slate-800/60 border border-dashed border-slate-200 dark:border-slate-700 space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950 text-indigo-500 flex items-center justify-center mx-auto">
+                        <Landmark className="w-6 h-6" />
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                        No Bank Accounts Added Yet
+                      </h4>
+                      <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                        Add this customer&apos;s bank account details to easily view and copy Account Number and IFSC Code during transactions.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingAccount(true)}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add First Bank Account</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {bankAccounts.map((acc) => {
+                        const accCopied = copiedKey === `${acc.id}_acc`;
+                        const ifscCopied = copiedKey === `${acc.id}_ifsc`;
+
+                        return (
+                          <div
+                            key={acc.id}
+                            className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 shadow-sm space-y-3.5 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all group"
+                          >
+                            {/* Card Top */}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-sm text-slate-900 dark:text-white truncate">
+                                    {acc.bankName}
+                                  </span>
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                                    acc.accountType === 'Current'
+                                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                      : acc.accountType === 'Corporate'
+                                      ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
+                                      : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                                  }`}>
+                                    {acc.accountType}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                                  <User className="w-3 h-3 text-slate-400" />
+                                  <span className="truncate">{acc.accountHolderName}</span>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteBankAccount(acc.id)}
+                                className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                                title="Delete Account"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {/* Clickable Account Number Box */}
+                            <div
+                              onClick={() => handleCopyValue(acc.accountNumber, 'Account Number', `${acc.id}_acc`)}
+                              className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                                accCopied
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700'
+                                  : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500'
+                              }`}
+                              title="Click to copy Account Number"
+                            >
+                              <div className="min-w-0">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                                  Account Number
+                                </div>
+                                <div className="font-mono font-bold text-sm text-slate-900 dark:text-white truncate">
+                                  {acc.accountNumber}
+                                </div>
+                              </div>
+
+                              <div className="shrink-0 flex items-center gap-1 text-xs font-semibold">
+                                {accCopied ? (
+                                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-bold animate-fadeIn">
+                                    <Check className="w-3.5 h-3.5" /> Copied!
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 text-xs">
+                                    <Copy className="w-3.5 h-3.5" /> Copy
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Clickable IFSC Code Box */}
+                            <div
+                              onClick={() => handleCopyValue(acc.ifscCode, 'IFSC Code', `${acc.id}_ifsc`)}
+                              className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                                ifscCopied
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700'
+                                  : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500'
+                              }`}
+                              title="Click to copy IFSC Code"
+                            >
+                              <div className="min-w-0">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                                  IFSC Code
+                                </div>
+                                <div className="font-mono font-bold text-xs uppercase text-slate-900 dark:text-white truncate">
+                                  {acc.ifscCode}
+                                </div>
+                              </div>
+
+                              <div className="shrink-0 flex items-center gap-1 text-xs font-semibold">
+                                {ifscCopied ? (
+                                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-bold animate-fadeIn">
+                                    <Check className="w-3.5 h-3.5" /> Copied!
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 text-xs">
+                                    <Copy className="w-3.5 h-3.5" /> Copy
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Branch info */}
+                            {acc.branchName && (
+                              <div className="text-[11px] text-slate-400 flex items-center gap-1 pt-1">
+                                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                <span className="truncate">{acc.branchName}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 2: UPI & QR CODES */}
+              {activeBankTab === 'upi' && (
+                <div className="space-y-5">
+                  {/* Add UPI Form */}
+                  {isAddingUpi && (
+                    <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-800 border-2 border-emerald-500/20 shadow-md space-y-4 animate-fadeIn">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-700">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                          <Plus className="w-3.5 h-3.5" /> Add UPI ID / QR Code
+                        </h4>
+                        <span className="text-[11px] text-slate-400">Save custom UPI or upload QR</span>
+                      </div>
+
+                      <form onSubmit={handleSaveUpiDetail} className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          {/* UPI ID */}
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                              UPI ID / VPA <span className="text-rose-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={upiFormId}
+                              onChange={(e) => setUpiFormId(e.target.value)}
+                              placeholder="e.g. user@oksbi, 9876543210@paytm"
+                              required
+                              className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            />
+                          </div>
+
+                          {/* App Provider */}
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                              App / Provider
+                            </label>
+                            <select
+                              value={upiFormApp}
+                              onChange={(e) => setUpiFormApp(e.target.value)}
+                              className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            >
+                              {UPI_APPS.map((app) => (
+                                <option key={app} value={app}>{app}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Payee Name */}
+                          <div className="sm:col-span-2 space-y-1">
+                            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                              Payee / Holder Name
+                            </label>
+                            <input
+                              type="text"
+                              value={upiFormHolder}
+                              onChange={(e) => setUpiFormHolder(e.target.value)}
+                              placeholder="Payee Name"
+                              className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            />
+                          </div>
+
+                          {/* QR Upload */}
+                          <div className="sm:col-span-2 space-y-2">
+                            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                              QR Code Image (Optional)
+                            </label>
+                            <div className="flex items-center gap-3">
+                              <input
+                                ref={upiQrInputRef}
+                                type="file"
+                                accept="image/*"
+                                onChange={handleUpiQrImageUpload}
+                                className="hidden"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => upiQrInputRef.current?.click()}
+                                className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors cursor-pointer"
+                              >
+                                <Upload className="w-3.5 h-3.5 text-slate-500" />
+                                <span>{upiFormQrImage ? 'Change QR Image' : 'Upload QR Image'}</span>
+                              </button>
+                              {upiFormQrImage && (
+                                <div className="flex items-center gap-2">
+                                  <img
+                                    src={upiFormQrImage}
+                                    alt="QR Preview"
+                                    className="w-8 h-8 rounded-lg object-contain border border-slate-300 dark:border-slate-600 bg-white"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setUpiFormQrImage(null)}
+                                    className="text-xs text-rose-500 hover:underline"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                              Upload customer&apos;s physical QR image, or leave empty to auto-generate a digital QR code from the UPI ID.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                          <button
+                            type="button"
+                            onClick={() => setIsAddingUpi(false)}
+                            className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-500/20 transition-all"
+                          >
+                            Save UPI / QR
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {/* Saved UPI / QR List */}
+                  {upiDetails.length === 0 && !isAddingUpi ? (
+                    <div className="text-center py-12 px-4 rounded-3xl bg-white dark:bg-slate-800/60 border border-dashed border-slate-200 dark:border-slate-700 space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950 text-emerald-500 flex items-center justify-center mx-auto">
+                        <QrCode className="w-6 h-6" />
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                        No UPI IDs or QR Codes Added Yet
+                      </h4>
+                      <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                        Save multiple UPI IDs and QR codes for instant 1-click copying and scanning.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingUpi(true)}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add First UPI / QR</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {upiDetails.map((upi) => {
+                        const upiCopied = copiedKey === `${upi.id}_upi`;
+                        const payeeName = upi.holderName || bankCustomer.name;
+                        const qrCodeUrl = upi.qrImageUrl || getQrCodeUrl(buildUpiUri(upi.upiId, payeeName));
+
+                        return (
+                          <div
+                            key={upi.id}
+                            className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 shadow-sm space-y-3 hover:border-emerald-300 dark:hover:border-emerald-600 transition-all flex flex-col justify-between"
+                          >
+                            <div>
+                              {/* Card Top */}
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                                    {upi.appName || 'UPI'}
+                                  </span>
+                                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 mt-1 flex items-center gap-1">
+                                    <User className="w-3 h-3 text-slate-400" />
+                                    <span>{payeeName}</span>
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteUpiDetail(upi.id)}
+                                  className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                                  title="Delete UPI"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              {/* Clickable UPI Box */}
+                              <div
+                                onClick={() => handleCopyValue(upi.upiId, 'UPI ID', `${upi.id}_upi`)}
+                                className={`mt-3 p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                                  upiCopied
+                                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700'
+                                    : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-emerald-400 dark:hover:border-emerald-500'
+                                }`}
+                                title="Click to copy UPI ID"
+                              >
+                                <div className="min-w-0">
+                                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                                    UPI ID / VPA
+                                  </div>
+                                  <div className="font-mono font-bold text-xs text-slate-900 dark:text-white truncate">
+                                    {upi.upiId}
+                                  </div>
+                                </div>
+
+                                <div className="shrink-0 flex items-center gap-1 text-xs font-semibold">
+                                  {upiCopied ? (
+                                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-bold animate-fadeIn">
+                                      <Check className="w-3.5 h-3.5" /> Copied!
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs">
+                                      <Copy className="w-3.5 h-3.5" /> Copy
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* QR Code Section */}
+                            <div className="pt-2 border-t border-slate-100 dark:border-slate-700 flex items-center gap-3">
+                              <img
+                                src={qrCodeUrl}
+                                alt="UPI QR"
+                                className="w-16 h-16 rounded-xl border border-slate-200 dark:border-slate-700 bg-white p-1 object-contain shrink-0 cursor-pointer shadow-sm hover:scale-105 transition-transform"
+                                onClick={() => setEnlargedQr({ upiId: upi.upiId, qrUrl: qrCodeUrl, holderName: payeeName, appName: upi.appName })}
+                                title="Click to enlarge QR"
+                              />
+
+                              <div className="space-y-1.5 flex-1 min-w-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setEnlargedQr({ upiId: upi.upiId, qrUrl: qrCodeUrl, holderName: payeeName, appName: upi.appName })}
+                                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>View QR</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadQrImage(qrCodeUrl, `QR_${upi.upiId.replace(/[^a-zA-Z0-9]/g, '_')}.png`)}
+                                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-colors cursor-pointer"
+                                >
+                                  <Download className="w-3 h-3" />
+                                  <span>Download</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/80">
+              <span className="text-xs text-slate-400">
+                💡 Tip: Click on any Account No, IFSC Code, or UPI ID to copy instantly.
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsBankModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-white transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* ENLARGED UPI QR CODE VIEWER MODAL */}
+      {/* ======================================================== */}
+      {enlargedQr && (
+        <div className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full border border-slate-200 dark:border-slate-800 shadow-2xl p-6 text-center space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="text-left">
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Scan &amp; Pay via UPI
+                </h4>
+                <p className="text-[11px] text-slate-400">
+                  {enlargedQr.appName || 'UPI Payment'}
+                </p>
+              </div>
+              <button
+                onClick={() => setEnlargedQr(null)}
+                className="p-1 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-white rounded-2xl shadow-inner border border-slate-200 dark:border-slate-700 inline-block">
+              <img
+                src={enlargedQr.qrUrl}
+                alt="Enlarged UPI QR"
+                className="w-56 h-56 object-contain mx-auto"
+              />
+            </div>
+
+            {enlargedQr.holderName && (
+              <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Payee: {enlargedQr.holderName}
+              </div>
+            )}
+
+            {/* Click to Copy UPI ID */}
+            <div
+              onClick={() => handleCopyValue(enlargedQr.upiId, 'UPI ID', 'enlarged_upi')}
+              className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2 cursor-pointer hover:border-emerald-500 transition-all"
+              title="Click to copy UPI ID"
+            >
+              <div className="min-w-0 text-left">
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">UPI ID</span>
+                <span className="font-mono text-xs font-bold text-slate-900 dark:text-white truncate block">
+                  {enlargedQr.upiId}
+                </span>
+              </div>
+              <div className="shrink-0">
+                {copiedKey === 'enlarged_upi' ? (
+                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
+                    <Check className="w-3.5 h-3.5" /> Copied!
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 text-xs">
+                    <Copy className="w-3.5 h-3.5" /> Copy
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => handleDownloadQrImage(enlargedQr.qrUrl, `QR_${enlargedQr.upiId.replace(/[^a-zA-Z0-9]/g, '_')}.png`)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download QR</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setEnlargedQr(null)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
