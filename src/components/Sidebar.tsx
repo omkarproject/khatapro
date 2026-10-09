@@ -19,11 +19,6 @@ import {
   Settings,
   ShieldCheck,
   Zap,
-  Tag,
-  PhoneCall,
-  Scale,
-  RotateCcw,
-  FileText,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -70,14 +65,6 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
     { label: 'Document Vault', href: '/documents', icon: FolderLock },
     { label: 'Financial Analytics', href: '/analytics', icon: LineChart },
     { label: 'Settings', href: '/settings', icon: Settings },
-  ];
-
-  const complianceItems = [
-    { label: 'Products & Pricing (INR)', href: '/pricing', icon: Tag, badge: 'INR ₹' },
-    { label: 'Contact Us', href: '/contact-us', icon: PhoneCall },
-    { label: 'Terms & Conditions', href: '/terms-and-conditions', icon: Scale },
-    { label: 'Refunds & Cancellations', href: '/refund-and-cancellation', icon: RotateCcw },
-    { label: 'Privacy Policy', href: '/privacy-policy', icon: FileText },
   ];
 
   const renderSidebarContent = (isMobileView: boolean) => {
@@ -146,55 +133,6 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
                         : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400'
                     }`}
                   >
-                    {item.badge}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-
-          {/* Compliance & Policy Links */}
-          <div className={`pt-4 pb-1 ${collapsed ? 'px-1 text-center' : 'px-3'}`}>
-            {!collapsed ? (
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Policy &amp; Compliance
-              </span>
-            ) : (
-              <div className="w-full h-px bg-slate-200/60 dark:bg-slate-800/60 my-1" />
-            )}
-          </div>
-
-          {complianceItems.map((item) => {
-            const isActive = pathname === item.href;
-            const Icon = item.icon;
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onCloseMobile}
-                title={collapsed ? item.label : undefined}
-                className={`flex items-center rounded-2xl text-xs font-medium transition-all group ${
-                  collapsed
-                    ? 'justify-center p-2 my-0.5'
-                    : 'justify-between px-3.5 py-2'
-                } ${
-                  isActive
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/60 dark:hover:bg-slate-800/40'
-                }`}
-              >
-                <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
-                  <Icon
-                    className={`w-3.5 h-3.5 transition-transform group-hover:scale-110 shrink-0 ${
-                      isActive ? 'text-white' : 'text-slate-400 group-hover:text-indigo-500'
-                    }`}
-                  />
-                  {!collapsed && <span className="truncate">{item.label}</span>}
-                </div>
-
-                {!collapsed && item.badge && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
                     {item.badge}
                   </span>
                 )}
