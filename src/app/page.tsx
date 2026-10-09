@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate } from '@/lib/utils';
+import QuickAddRecordModal from '@/components/QuickAddRecordModal';
 import {
   TrendingUp,
   TrendingDown,
@@ -52,6 +53,8 @@ export default function DashboardPage() {
     profile,
     openCollectModal,
   } = useApp();
+
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
 
   // Financial Metrics Computations
   const metrics = useMemo(() => {
@@ -258,25 +261,18 @@ export default function DashboardPage() {
           <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
             <button
               onClick={() => openCollectModal()}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-cyan-500 hover:opacity-95 shadow-lg shadow-indigo-500/30 active:scale-95 transition-all whitespace-nowrap"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-cyan-500 hover:opacity-95 shadow-lg shadow-indigo-500/30 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
             >
               <QrCode className="w-4 h-4" />
               Collect Payment
             </button>
-            <Link
-              href="/invoices?action=new"
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs font-semibold text-slate-200 bg-white/10 hover:bg-white/15 border border-white/10 backdrop-blur-sm transition-all whitespace-nowrap"
+            <button
+              onClick={() => setIsQuickAddOpen(true)}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              New Invoice
-            </Link>
-            <Link
-              href="/khata"
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs font-semibold text-slate-200 bg-white/10 hover:bg-white/15 border border-white/10 backdrop-blur-sm transition-all whitespace-nowrap"
-            >
-              <Users className="w-4 h-4" />
-              Khata Entry
-            </Link>
+              Add
+            </button>
           </div>
         </div>
       </div>
@@ -676,6 +672,11 @@ export default function DashboardPage() {
 
       </div>
 
+      {/* Quick Add Record Hub Modal */}
+      <QuickAddRecordModal
+        isOpen={isQuickAddOpen}
+        onClose={() => setIsQuickAddOpen(false)}
+      />
     </div>
   );
 }
