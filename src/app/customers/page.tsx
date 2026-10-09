@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl } from '@/lib/utils';
@@ -45,6 +45,8 @@ import {
   User,
   Landmark,
   Copy,
+  Scissors,
+  ClipboardPaste,
 } from 'lucide-react';
 
 const POPULAR_BANKS = [
@@ -125,6 +127,15 @@ export default function CustomersPage() {
   // Multi-Select State
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
+
+  // Drive Clipboard for Copy / Cut / Paste
+  const [driveClipboard, setDriveClipboard] = useState<{
+    operation: 'copy' | 'cut';
+    fileIds: string[];
+    folderIds: string[];
+    sourceCustomerId: string;
+    sourceFolderId: string | null;
+  } | null>(null);
 
   // New folder modal
   const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
@@ -593,6 +604,240 @@ export default function CustomersPage() {
 
     addToast('Deleted', `${totalCount} item(s) deleted successfully.`, 'info');
   };
+
+  // Copy, Cut, Paste Handlers for Customer Cloud Drive
+  const handleCopyItem = (type: 'file' | 'folder', id: string, name: string) => {
+    if (!driveCustomer) return;
+    setDriveClipboard({
+      operation: 'copy',
+      fileIds: type === 'file' ? [id] : [],
+      folderIds: type === 'folder' ? [id] : [],
+      sourceCustomerId: driveCustomer.id,
+      sourceFolderId: currentFolderId,
+    });
+    addToast('Copied', `"${name}" copied. Open destination and click Paste.`, 'info');
+  };
+
+  const handleCutItem = (type: 'file' | 'folder', id: string, name: string) => {
+    if (!driveCustomer) return;
+    setDriveClipboard({
+      operation: 'cut',
+      fileIds: type === 'file' ? [id] : [],
+      folderIds: type === 'folder' ? [id] : [],
+      sourceCustomerId: driveCustomer.id,
+      sourceFolderId: currentFolderId,
+    });
+    addToast('Cut', `"${name}" cut. Open destination and click Paste.`, 'info');
+  };
+
+  const handleBatchCopy = () => {
+    if (!driveCustomer) return;
+    const totalCount = selectedFileIds.length + selectedFolderIds.length;
+    if (totalCount === 0) return;
+    setDriveClipboard({
+      operation: 'copy',
+      fileIds: [...selectedFileIds],
+      folderIds: [...selectedFolderIds],
+      sourceCustomerId: driveCustomer.id,
+      sourceFolderId: currentFolderId,
+    });
+    addToast('Copied to Clipboard', `${totalCount} item(s) copied. Open destination and click Paste.`, 'info');
+    setSelectedFileIds([]);
+    setSelectedFolderIds([]);
+  };
+
+  const handleBatchCut = () => {
+    if (!driveCustomer) return;
+    const totalCount = selectedFileIds.length + selectedFolderIds.length;
+    if (totalCount === 0) return;
+    setDriveClipboard({
+      operation: 'cut',
+      fileIds: [...selectedFileIds],
+      folderIds: [...selectedFolderIds],
+      sourceCustomerId: driveCustomer.id,
+      sourceFolderId: currentFolderId,
+    });
+    addToast('Cut to Clipboard', `${totalCount} item(s) cut. Open destination and click Paste.`, 'info');
+    setSelectedFileIds([]);
+    setSelectedFolderIds([]);
+  };
+
+  const handleClearClipboard = () => {
+    setDriveClipboard(null);
+    addToast('Clipboard Cleared', 'Clipboard has been cleared.', 'info');
+  };
+
+  const handlePasteItems = () => {
+    if (!driveCustomer || !driveClipboard) return;
+
+    let updatedFolders = [...driveFolders];
+    let updatedFiles = [...driveFiles];
+    let pastedCount = 0;
+
+    if (driveClipboard.operation === 'copy') {
+      // 1. Copy Files
+      const filesToCopy = updatedFiles.filter(f => driveClipboard.fileIds.includes(f.id));
+      const newFiles: CustomerDriveFile[] = filesToCopy.map((f) => {
+        let newName = f.name;
+        // If pasting into the same folder, add "- Copy" before extension
+        if (f.folderId === currentFolderId || (!f.folderId && currentFolderId === null)) {
+          const dotIdx = newName.lastIndexOf('.');
+          if (dotIdx > 0) {
+            newName = `${newName.substring(0, dotIdx)} - Copy${newName.substring(dotIdx)}`;
+          } else {
+            newName = `${newName} - Copy`;
+          }
+        }
+        return {
+          ...f,
+          id: `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          name: newName,
+          folderId: currentFolderId,
+          uploadedAt: new Date().toISOString(),
+        };
+      });
+
+      // 2. Copy Folders
+      const foldersToCopy = updatedFolders.filter(f => driveClipboard.folderIds.includes(f.id));
+      foldersToCopy.forEach((folder) => {
+        if (currentFolderId === null) {
+          // Paste at root: duplicate folder and duplicate its files
+          const newFolderId = `fld_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+          let newFolderName = `${folder.name} (Copy)`;
+          let copyIdx = 1;
+          while (updatedFolders.some(f => f.name.toUpperCase() === newFolderName.toUpperCase())) {
+            copyIdx++;
+            newFolderName = `${folder.name} (Copy ${copyIdx})`;
+          }
+          const duplicatedFolder: CustomerDriveFolder = {
+            ...folder,
+            id: newFolderId,
+            name: newFolderName,
+            createdAt: new Date().toISOString(),
+          };
+          updatedFolders.push(duplicatedFolder);
+
+          // Duplicate files inside this folder
+          const folderFiles = updatedFiles.filter(f => f.folderId === folder.id);
+          folderFiles.forEach((ff) => {
+            newFiles.push({
+              ...ff,
+              id: `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              folderId: newFolderId,
+              uploadedAt: new Date().toISOString(),
+            });
+          });
+          pastedCount++;
+        } else {
+          // Pasting inside an existing folder: duplicate files from source folder into current folder
+          const folderFiles = updatedFiles.filter(f => f.folderId === folder.id);
+          folderFiles.forEach((ff) => {
+            newFiles.push({
+              ...ff,
+              id: `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              folderId: currentFolderId,
+              uploadedAt: new Date().toISOString(),
+            });
+          });
+          pastedCount++;
+        }
+      });
+
+      updatedFiles = [...newFiles, ...updatedFiles];
+      pastedCount += filesToCopy.length;
+
+      setDriveFolders(updatedFolders);
+      setDriveFiles(updatedFiles);
+
+      StorageService.saveCustomerDriveData(driveCustomer.id, {
+        folders: updatedFolders,
+        files: updatedFiles,
+      });
+
+      addToast('Pasted Successfully', `${pastedCount} item(s) copied to this location.`, 'success');
+
+    } else if (driveClipboard.operation === 'cut') {
+      // 1. Move Files (Cut)
+      updatedFiles = updatedFiles.map((f) => {
+        if (driveClipboard.fileIds.includes(f.id)) {
+          pastedCount++;
+          return {
+            ...f,
+            folderId: currentFolderId,
+          };
+        }
+        return f;
+      });
+
+      // 2. Move Folders (Cut)
+      const cutFolders = updatedFolders.filter(f => driveClipboard.folderIds.includes(f.id));
+      if (cutFolders.length > 0) {
+        if (currentFolderId !== null) {
+          // If moved inside another folder: move all files into currentFolderId and remove cut folders
+          cutFolders.forEach((fld) => {
+            updatedFiles = updatedFiles.map(f => {
+              if (f.folderId === fld.id) {
+                return { ...f, folderId: currentFolderId };
+              }
+              return f;
+            });
+          });
+          updatedFolders = updatedFolders.filter(f => !driveClipboard.folderIds.includes(f.id));
+          pastedCount += cutFolders.length;
+        } else {
+          // Moved to root (already at root)
+          pastedCount += cutFolders.length;
+        }
+      }
+
+      setDriveFolders(updatedFolders);
+      setDriveFiles(updatedFiles);
+
+      StorageService.saveCustomerDriveData(driveCustomer.id, {
+        folders: updatedFolders,
+        files: updatedFiles,
+      });
+
+      // Clear clipboard after cut & paste
+      setDriveClipboard(null);
+      addToast('Moved Successfully', `${pastedCount} item(s) moved to this location.`, 'success');
+    }
+  };
+
+  // Keyboard Shortcuts (Ctrl+C, Ctrl+X, Ctrl+V) for Cloud Drive
+  useEffect(() => {
+    if (!driveCustomer) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        if (selectedFileIds.length > 0 || selectedFolderIds.length > 0) {
+          e.preventDefault();
+          handleBatchCopy();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+        if (selectedFileIds.length > 0 || selectedFolderIds.length > 0) {
+          e.preventDefault();
+          handleBatchCut();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        if (driveClipboard) {
+          e.preventDefault();
+          handlePasteItems();
+        }
+      } else if (e.key === 'Escape') {
+        if (driveClipboard) {
+          handleClearClipboard();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [driveCustomer, selectedFileIds, selectedFolderIds, driveClipboard, currentFolderId, driveFolders, driveFiles]);
 
   // Banking & UPI Handlers
   const handleOpenBankModal = (cust: Customer) => {
@@ -1485,6 +1730,32 @@ export default function CustomersPage() {
                   </button>
                 </div>
 
+                {/* Paste Button (shown when clipboard has cut/copied items) */}
+                {driveClipboard && (
+                  <div className="flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-300 dark:border-indigo-700 p-0.5 rounded-xl shadow-sm">
+                    <button
+                      onClick={handlePasteItems}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-sm cursor-pointer animate-pulse"
+                      title={`Paste ${driveClipboard.fileIds.length + driveClipboard.folderIds.length} item(s) here into ${currentFolder ? currentFolder.name : 'Root'}`}
+                    >
+                      <ClipboardPaste className="w-3.5 h-3.5" />
+                      <span>
+                        Paste ({driveClipboard.fileIds.length + driveClipboard.folderIds.length})
+                      </span>
+                    </button>
+                    <span className="text-[10px] font-bold uppercase px-1.5 text-indigo-700 dark:text-indigo-300">
+                      {driveClipboard.operation}
+                    </span>
+                    <button
+                      onClick={handleClearClipboard}
+                      className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors"
+                      title="Clear Clipboard"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+
                 {/* New Folder Button */}
                 <button
                   onClick={() => {
@@ -1534,12 +1805,28 @@ export default function CustomersPage() {
 
                 <div className="flex items-center gap-2">
                   <button
+                    onClick={handleBatchCopy}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+                    title="Copy selected items"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy</span>
+                  </button>
+                  <button
+                    onClick={handleBatchCut}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+                    title="Cut / Move selected items"
+                  >
+                    <Scissors className="w-3.5 h-3.5" />
+                    <span>Cut</span>
+                  </button>
+                  <button
                     onClick={handleBatchDownload}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-indigo-700 hover:bg-indigo-50 text-xs font-bold transition-all shadow-sm cursor-pointer"
                     title="Download all selected files"
                   >
                     <Download className="w-3.5 h-3.5" />
-                    <span>Download Selected</span>
+                    <span>Download</span>
                   </button>
                   <button
                     onClick={handleBatchDelete}
@@ -1547,7 +1834,7 @@ export default function CustomersPage() {
                     title="Delete all selected items"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delete Selected</span>
+                    <span>Delete</span>
                   </button>
                   <button
                     onClick={handleClearSelection}
@@ -1584,13 +1871,17 @@ export default function CustomersPage() {
                       {displayedFolders.map((folder) => {
                         const folderFileCount = driveFiles.filter(f => f.folderId === folder.id).length;
                         const isFolderSelected = selectedFolderIds.includes(folder.id);
+                        const isCutFolder = driveClipboard?.operation === 'cut' && driveClipboard.folderIds.includes(folder.id);
+
                         return (
                           <div
                             key={folder.id}
                             onDoubleClick={() => handleNavigateFolder(folder.id)}
                             onClick={() => handleNavigateFolder(folder.id)}
                             className={`group relative p-4 rounded-2xl bg-white dark:bg-slate-800/80 border transition-all flex flex-col items-center text-center cursor-pointer select-none ${
-                              isFolderSelected
+                              isCutFolder
+                                ? 'opacity-50 border-dashed border-amber-400 bg-amber-50/20'
+                                : isFolderSelected
                                 ? 'border-indigo-500 ring-2 ring-indigo-500/30 bg-indigo-50/40 dark:bg-indigo-950/30 shadow-md'
                                 : 'border-slate-200/90 dark:border-slate-700/80 hover:border-amber-400 dark:hover:border-amber-500 hover:shadow-lg hover:shadow-amber-500/10'
                             }`}
@@ -1616,8 +1907,28 @@ export default function CustomersPage() {
                               )}
                             </button>
 
-                            {/* Action overlay buttons (Rename, Delete) */}
+                            {/* Action overlay buttons (Copy, Cut, Rename, Delete) */}
                             <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 dark:bg-slate-900/95 p-1 rounded-xl shadow-md border border-slate-200 dark:border-slate-700">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyItem('folder', folder.id, folder.name);
+                                }}
+                                className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors"
+                                title="Copy Folder"
+                              >
+                                <Copy className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCutItem('folder', folder.id, folder.name);
+                                }}
+                                className="p-1 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-slate-800 transition-colors"
+                                title="Cut / Move Folder"
+                              >
+                                <Scissors className="w-3 h-3" />
+                              </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -1664,12 +1975,18 @@ export default function CustomersPage() {
                       {displayedFolders.map((folder) => {
                         const folderFileCount = driveFiles.filter(f => f.folderId === folder.id).length;
                         const isFolderSelected = selectedFolderIds.includes(folder.id);
+                        const isCutFolder = driveClipboard?.operation === 'cut' && driveClipboard.folderIds.includes(folder.id);
+
                         return (
                           <div
                             key={folder.id}
                             onClick={() => handleNavigateFolder(folder.id)}
                             className={`p-3 flex items-center justify-between transition-colors cursor-pointer group ${
-                              isFolderSelected ? 'bg-indigo-50/50 dark:bg-indigo-950/30' : 'hover:bg-amber-500/5'
+                              isCutFolder
+                                ? 'opacity-50 bg-amber-50/20'
+                                : isFolderSelected
+                                ? 'bg-indigo-50/50 dark:bg-indigo-950/30'
+                                : 'hover:bg-amber-500/5'
                             }`}
                           >
                             <div className="flex items-center gap-3">
@@ -1698,6 +2015,26 @@ export default function CustomersPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyItem('folder', folder.id, folder.name);
+                                }}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                title="Copy Folder"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCutItem('folder', folder.id, folder.name);
+                                }}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                title="Cut / Move Folder"
+                              >
+                                <Scissors className="w-3.5 h-3.5" />
+                              </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -1749,13 +2086,24 @@ export default function CustomersPage() {
                         Upload customer Aadhar cards, PAN copies, GST registration certificates, invoices, or billing receipts.
                       </p>
                     </div>
-                    <button
-                      onClick={() => driveFileInputRef.current?.click()}
-                      className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      Upload File Now
-                    </button>
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      <button
+                        onClick={() => driveFileInputRef.current?.click()}
+                        className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        Upload File Now
+                      </button>
+                      {driveClipboard && (
+                        <button
+                          onClick={handlePasteItems}
+                          className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/20 flex items-center gap-1.5 cursor-pointer animate-pulse"
+                        >
+                          <ClipboardPaste className="w-3.5 h-3.5" />
+                          Paste ({driveClipboard.fileIds.length + driveClipboard.folderIds.length}) Items Here
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ) : driveViewMode === 'grid' ? (
                   /* Grid View of Files */
@@ -1764,12 +2112,15 @@ export default function CustomersPage() {
                       const isImage = file.type.startsWith('image/');
                       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
                       const isFileSelected = selectedFileIds.includes(file.id);
+                      const isCutFile = driveClipboard?.operation === 'cut' && driveClipboard.fileIds.includes(file.id);
 
                       return (
                         <div
                           key={file.id}
                           className={`group relative p-3 rounded-2xl bg-white dark:bg-slate-800/80 border transition-all flex flex-col justify-between ${
-                            isFileSelected
+                            isCutFile
+                              ? 'opacity-50 border-dashed border-indigo-400 bg-indigo-50/20'
+                              : isFileSelected
                               ? 'border-indigo-500 ring-2 ring-indigo-500/30 bg-indigo-50/40 dark:bg-indigo-950/30 shadow-md'
                               : 'border-slate-200/90 dark:border-slate-700/80 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-lg hover:shadow-indigo-500/10'
                           }`}
@@ -1863,6 +2214,20 @@ export default function CustomersPage() {
                             </div>
                             <div className="flex items-center gap-1">
                               <button
+                                onClick={() => handleCopyItem('file', file.id, file.name)}
+                                className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                                title="Copy File"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleCutItem('file', file.id, file.name)}
+                                className="p-1 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                                title="Cut / Move File"
+                              >
+                                <Scissors className="w-3.5 h-3.5" />
+                              </button>
+                              <button
                                 onClick={() => handleStartRename('file', file.id, file.name)}
                                 className="p-1 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                                 title="Rename File"
@@ -1889,12 +2254,17 @@ export default function CustomersPage() {
                       const isImage = file.type.startsWith('image/');
                       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
                       const isFileSelected = selectedFileIds.includes(file.id);
+                      const isCutFile = driveClipboard?.operation === 'cut' && driveClipboard.fileIds.includes(file.id);
 
                       return (
                         <div
                           key={file.id}
                           className={`p-3 flex items-center justify-between transition-colors group ${
-                            isFileSelected ? 'bg-indigo-50/50 dark:bg-indigo-950/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                            isCutFile
+                              ? 'opacity-50 bg-indigo-50/20'
+                              : isFileSelected
+                              ? 'bg-indigo-50/50 dark:bg-indigo-950/30'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-800'
                           }`}
                         >
                           <div
@@ -1948,6 +2318,20 @@ export default function CustomersPage() {
                               title="Download"
                             >
                               <Download className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleCopyItem('file', file.id, file.name)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+                              title="Copy"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleCutItem('file', file.id, file.name)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+                              title="Cut / Move"
+                            >
+                              <Scissors className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => handleStartRename('file', file.id, file.name)}
