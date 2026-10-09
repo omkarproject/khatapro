@@ -20,7 +20,8 @@ import {
   ShieldCheck,
   Zap,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ClipboardList
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -58,6 +59,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
     { label: 'Customers CRM', href: '/customers', icon: Users },
     { label: 'Collect Payment', href: '/upi-collection', icon: QrCode },
     { label: 'Billing & Invoices', href: '/invoices', icon: FileSpreadsheet },
+    { label: 'Notes & Tasks', href: '/notes-tasks', icon: ClipboardList, badge: 'New' },
     { label: 'Expense Tracker', href: '/expenses', icon: Receipt },
     { label: 'Savings Goals', href: '/savings', icon: PiggyBank },
     { label: 'Inventory & Stock', href: '/inventory', icon: PackageCheck },

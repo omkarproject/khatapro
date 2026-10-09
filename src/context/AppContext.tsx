@@ -13,7 +13,10 @@ import {
   DocumentItem,
   SystemSettings,
   PaymentSettings,
-  UserRole
+  UserRole,
+  NoteItem,
+  TaskItem,
+  PasswordItem
 } from '@/types';
 import { StorageService, getCleanDefaultSettings } from '@/services/storage';
 
@@ -49,6 +52,9 @@ interface AppContextType {
   savingsGoals: SavingsGoal[];
   reminders: PaymentReminder[];
   documents: DocumentItem[];
+  notes: NoteItem[];
+  tasks: TaskItem[];
+  passwords: PasswordItem[];
   settings: SystemSettings;
   darkMode: boolean;
   activeRole: UserRole;
@@ -75,6 +81,13 @@ interface AppContextType {
   deleteReminder: (id: string) => void;
   addDocument: (doc: DocumentItem) => void;
   deleteDocument: (id: string) => void;
+  saveNote: (note: NoteItem) => void;
+  deleteNote: (id: string) => void;
+  saveTask: (task: TaskItem) => void;
+  toggleTask: (id: string) => void;
+  deleteTask: (id: string) => void;
+  savePassword: (item: PasswordItem) => void;
+  deletePassword: (id: string) => void;
   updateSettings: (settings: SystemSettings) => void;
   
   // UPI and QR Default Persistence (Key User Requirement)
@@ -137,6 +150,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
   const [reminders, setReminders] = useState<PaymentReminder[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [notes, setNotes] = useState<NoteItem[]>([]);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [passwords, setPasswords] = useState<PasswordItem[]>([]);
   const [settings, setSettingsState] = useState<SystemSettings>(() => getCleanDefaultSettings());
   const [darkMode, setDarkMode] = useState(false);
   const [activeRole, setActiveRole] = useState<UserRole>('super_admin');
@@ -185,6 +201,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           savingsGoals: StorageService.getSavingsGoals(),
           reminders: StorageService.getReminders(),
           documents: StorageService.getDocuments(),
+          notes: StorageService.getNotes(),
+          tasks: StorageService.getTasks(),
+          passwords: StorageService.getPasswords(),
           settings: StorageService.getSettings(),
           profile: StorageService.getProfile(),
         },
@@ -231,6 +250,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (Array.isArray(d.savingsGoals)) setSavingsGoals(d.savingsGoals);
           if (Array.isArray(d.reminders)) setReminders(d.reminders);
           if (Array.isArray(d.documents)) setDocuments(d.documents);
+          if (Array.isArray(d.notes)) setNotes(d.notes);
+          if (Array.isArray(d.tasks)) setTasks(d.tasks);
+          if (Array.isArray(d.passwords)) setPasswords(d.passwords);
           if (d.settings) setSettingsState(d.settings);
           if (d.user) setProfileState(d.user);
 
@@ -417,6 +439,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setSavingsGoals([]);
       setReminders([]);
       setDocuments([]);
+      setNotes([]);
+      setTasks([]);
+      setPasswords([]);
       setSettingsState(getCleanDefaultSettings());
       return;
     }
@@ -431,6 +456,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSavingsGoals(StorageService.getSavingsGoals());
     setReminders(StorageService.getReminders());
     setDocuments(StorageService.getDocuments());
+    setNotes(StorageService.getNotes());
+    setTasks(StorageService.getTasks());
+    setPasswords(StorageService.getPasswords());
     const s = StorageService.getSettings();
     setSettingsState(s);
     setDarkMode(s.darkMode);
@@ -700,6 +728,79 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     syncWithDatabase();
   };
 
+  const saveNote = (note: NoteItem) => {
+    const updated = StorageService.saveNote(note);
+    setNotes(updated);
+    addToast('Note Saved', `Note "${note.title}" saved.`, 'success');
+    if (note.reminderDate) {
+      const noteRem: PaymentReminder = {
+        id: `note_rem_${note.id}`,
+        customerId: 'notes_tasks_module',
+        customerName: `📌 Note: ${note.title}`,
+        customerPhone: '',
+        amount: 0,
+        dueDate: note.reminderDate,
+        reminderType: 'custom',
+        channels: ['sms'],
+        status: 'pending',
+        messageTemplate: note.description,
+        note: `Note Reminder (${note.reminderTime || 'All Day'})`,
+        createdAt: new Date().toISOString(),
+      };
+      saveReminder(noteRem);
+    }
+    syncWithDatabase();
+  };
+
+  const deleteNote = (id: string) => {
+    const updated = StorageService.deleteNote(id);
+    setNotes(updated);
+    const linkedRemId = `note_rem_${id}`;
+    if (reminders.some(r => r.id === linkedRemId)) {
+      deleteReminder(linkedRemId);
+    }
+    addToast('Note Deleted', 'Note removed.', 'info');
+    syncWithDatabase();
+  };
+
+  const saveTask = (task: TaskItem) => {
+    const updated = StorageService.saveTask(task);
+    setTasks(updated);
+    addToast('Task Saved', `Task "${task.title}" saved.`, 'success');
+    syncWithDatabase();
+  };
+
+  const toggleTask = (id: string) => {
+    const updated = StorageService.toggleTask(id);
+    setTasks(updated);
+    const target = updated.find(t => t.id === id);
+    if (target?.isCompleted) {
+      addToast('Task Completed', `"${target.title}" completed! 🎉`, 'success');
+    }
+    syncWithDatabase();
+  };
+
+  const deleteTask = (id: string) => {
+    const updated = StorageService.deleteTask(id);
+    setTasks(updated);
+    addToast('Task Removed', 'Task deleted.', 'info');
+    syncWithDatabase();
+  };
+
+  const savePassword = (item: PasswordItem) => {
+    const updated = StorageService.savePassword(item);
+    setPasswords(updated);
+    addToast('Credentials Saved', `Password for ${item.appName} secured.`, 'success');
+    syncWithDatabase();
+  };
+
+  const deletePassword = (id: string) => {
+    const updated = StorageService.deletePassword(id);
+    setPasswords(updated);
+    addToast('Password Deleted', 'Credential removed.', 'info');
+    syncWithDatabase();
+  };
+
   const openCollectModal = (data: {
     customerId?: string;
     customerName?: string;
@@ -729,6 +830,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         savingsGoals,
         reminders,
         documents,
+        notes,
+        tasks,
+        passwords,
         settings,
         darkMode,
         activeRole,
@@ -753,6 +857,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteReminder,
         addDocument,
         deleteDocument,
+        saveNote,
+        deleteNote,
+        saveTask,
+        toggleTask,
+        deleteTask,
+        savePassword,
+        deletePassword,
         updateSettings,
         saveDefaultUpiAndQr,
         isCollectModalOpen,

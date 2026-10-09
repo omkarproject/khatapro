@@ -30,7 +30,8 @@ import {
   Image as ImageIcon,
   ArrowRight,
   CheckCircle2,
-  Trash2
+  Trash2,
+  ClipboardList
 } from 'lucide-react';
 import { formatINR, formatDate } from '@/lib/utils';
 import { SavingsGoal, SavingsDeposit } from '@/types';
@@ -60,6 +61,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     products,
     reminders,
     savingsGoals,
+    notes,
     saveSavingsGoal,
     addToast,
     settings,
@@ -219,13 +221,20 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     return todayDay >= effectiveDay;
   });
 
-  const totalAlerts = lowStockProducts.length + overdueReminders.length + dueSavingsGoals.length;
+  const activeNoteReminders = (notes || []).filter((n) => {
+    if (!n.reminderDate) return false;
+    if (dismissedAlerts.includes(`note_${n.id}`)) return false;
+    return n.reminderDate <= todayStr;
+  });
+
+  const totalAlerts = lowStockProducts.length + overdueReminders.length + dueSavingsGoals.length + activeNoteReminders.length;
 
   const handleClearAllAlerts = () => {
     const allIds: string[] = [
       ...dueSavingsGoals.map((g) => `savings_${g.id}`),
       ...lowStockProducts.map((p) => `low_stock_${p.id}`),
       ...overdueReminders.map((r) => `overdue_${r.id}`),
+      ...activeNoteReminders.map((n) => `note_${n.id}`),
     ];
     setDismissedAlerts((prev) => {
       const next = Array.from(new Set([...prev, ...allIds]));
@@ -486,6 +495,57 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                               onClick={() => handleDismissAlert(`overdue_${r.id}`)}
                               title="Dismiss"
                               className="p-1 rounded-lg text-rose-400 hover:text-rose-700 dark:hover:text-rose-200 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors cursor-pointer shrink-0"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Note & Task Reminders */}
+                    {activeNoteReminders.length > 0 && (
+                      <div className="space-y-1.5">
+                        {activeNoteReminders.map((n) => (
+                          <div
+                            key={n.id}
+                            className="p-2.5 rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-800/60 flex items-start justify-between gap-2"
+                          >
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <div className="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 mt-0.5">
+                                <ClipboardList className="w-3.5 h-3.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-xs font-bold text-amber-950 dark:text-amber-200 truncate">
+                                    📌 Note Reminder: {n.title}
+                                  </span>
+                                  {n.reminderTime && (
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded font-bold font-mono bg-amber-200/80 dark:bg-amber-900/70 text-amber-900 dark:text-amber-200">
+                                      {n.reminderTime}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2 mt-0.5">
+                                  {n.description}
+                                </p>
+                                <div className="mt-1 flex items-center gap-2">
+                                  <Link
+                                    href="/notes-tasks"
+                                    onClick={() => setIsNotificationsOpen(false)}
+                                    className="text-[10px] font-bold text-amber-700 dark:text-amber-300 hover:underline flex items-center gap-1"
+                                  >
+                                    <span>Open in Notes & Tasks</span>
+                                    <ArrowRight className="w-3 h-3" />
+                                  </Link>
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDismissAlert(`note_${n.id}`)}
+                              title="Dismiss"
+                              className="p-1 rounded-lg text-amber-400 hover:text-amber-700 dark:hover:text-amber-200 hover:bg-amber-200/50 dark:hover:bg-amber-900/50 transition-colors cursor-pointer shrink-0"
                             >
                               <X className="w-3.5 h-3.5" />
                             </button>

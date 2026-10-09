@@ -15,6 +15,9 @@ import {
   CustomerDriveFile,
   CustomerBankAccount,
   CustomerUpiDetail,
+  NoteItem,
+  TaskItem,
+  PasswordItem,
 } from '@/types';
 
 
@@ -30,6 +33,9 @@ const STORAGE_KEYS = {
   REMINDERS: 'skp_reminders',
   DOCUMENTS: 'skp_documents',
   SETTINGS: 'skp_settings',
+  NOTES: 'skp_notes',
+  TASKS: 'skp_tasks',
+  PASSWORDS: 'skp_passwords',
   INITIALIZED: 'skp_db_v1_initialized',
 };
 
@@ -152,6 +158,9 @@ export const StorageService = {
     savingsGoals?: SavingsGoal[];
     reminders?: PaymentReminder[];
     documents?: DocumentItem[];
+    notes?: NoteItem[];
+    tasks?: TaskItem[];
+    passwords?: PasswordItem[];
     settings?: SystemSettings;
     user?: UserProfile;
   }) => {
@@ -164,6 +173,9 @@ export const StorageService = {
     if (data.savingsGoals !== undefined) setLocalItem(STORAGE_KEYS.SAVINGS, data.savingsGoals);
     if (data.reminders !== undefined) setLocalItem(STORAGE_KEYS.REMINDERS, data.reminders);
     if (data.documents !== undefined) setLocalItem(STORAGE_KEYS.DOCUMENTS, data.documents);
+    if (data.notes !== undefined) setLocalItem(STORAGE_KEYS.NOTES, data.notes);
+    if (data.tasks !== undefined) setLocalItem(STORAGE_KEYS.TASKS, data.tasks);
+    if (data.passwords !== undefined) setLocalItem(STORAGE_KEYS.PASSWORDS, data.passwords);
     if (data.settings !== undefined) setLocalItem(STORAGE_KEYS.SETTINGS, data.settings);
     if (data.user !== undefined) {
       setLocalItem(STORAGE_KEYS.PROFILE, data.user);
@@ -192,6 +204,9 @@ export const StorageService = {
       setLocalItem(STORAGE_KEYS.SAVINGS, []);
       setLocalItem(STORAGE_KEYS.REMINDERS, []);
       setLocalItem(STORAGE_KEYS.DOCUMENTS, []);
+      setLocalItem(STORAGE_KEYS.NOTES, []);
+      setLocalItem(STORAGE_KEYS.TASKS, []);
+      setLocalItem(STORAGE_KEYS.PASSWORDS, []);
       localStorage.setItem(getScopedKey(STORAGE_KEYS.INITIALIZED), 'true');
     }
   },
@@ -772,6 +787,88 @@ export const StorageService = {
     }
   },
 
+  // Notes Management
+  getNotes: (): NoteItem[] => getLocalItem<NoteItem[]>(STORAGE_KEYS.NOTES, []),
+  saveNote: (note: NoteItem): NoteItem[] => {
+    const list = StorageService.getNotes();
+    const idx = list.findIndex(n => n.id === note.id);
+    let updated: NoteItem[];
+    if (idx >= 0) {
+      updated = [...list];
+      updated[idx] = note;
+    } else {
+      updated = [note, ...list];
+    }
+    setLocalItem(STORAGE_KEYS.NOTES, updated);
+    return updated;
+  },
+  deleteNote: (id: string): NoteItem[] => {
+    const list = StorageService.getNotes();
+    const updated = list.filter(n => n.id !== id);
+    setLocalItem(STORAGE_KEYS.NOTES, updated);
+    return updated;
+  },
+
+  // Tasks Management
+  getTasks: (): TaskItem[] => getLocalItem<TaskItem[]>(STORAGE_KEYS.TASKS, []),
+  saveTask: (task: TaskItem): TaskItem[] => {
+    const list = StorageService.getTasks();
+    const idx = list.findIndex(t => t.id === task.id);
+    let updated: TaskItem[];
+    if (idx >= 0) {
+      updated = [...list];
+      updated[idx] = task;
+    } else {
+      updated = [task, ...list];
+    }
+    setLocalItem(STORAGE_KEYS.TASKS, updated);
+    return updated;
+  },
+  toggleTask: (id: string): TaskItem[] => {
+    const list = StorageService.getTasks();
+    const updated = list.map(t => {
+      if (t.id === id) {
+        const nextCompleted = !t.isCompleted;
+        return {
+          ...t,
+          isCompleted: nextCompleted,
+          completedAt: nextCompleted ? new Date().toISOString() : undefined,
+        };
+      }
+      return t;
+    });
+    setLocalItem(STORAGE_KEYS.TASKS, updated);
+    return updated;
+  },
+  deleteTask: (id: string): TaskItem[] => {
+    const list = StorageService.getTasks();
+    const updated = list.filter(t => t.id !== id);
+    setLocalItem(STORAGE_KEYS.TASKS, updated);
+    return updated;
+  },
+
+  // Password Manager
+  getPasswords: (): PasswordItem[] => getLocalItem<PasswordItem[]>(STORAGE_KEYS.PASSWORDS, []),
+  savePassword: (item: PasswordItem): PasswordItem[] => {
+    const list = StorageService.getPasswords();
+    const idx = list.findIndex(p => p.id === item.id);
+    let updated: PasswordItem[];
+    if (idx >= 0) {
+      updated = [...list];
+      updated[idx] = item;
+    } else {
+      updated = [item, ...list];
+    }
+    setLocalItem(STORAGE_KEYS.PASSWORDS, updated);
+    return updated;
+  },
+  deletePassword: (id: string): PasswordItem[] => {
+    const list = StorageService.getPasswords();
+    const updated = list.filter(p => p.id !== id);
+    setLocalItem(STORAGE_KEYS.PASSWORDS, updated);
+    return updated;
+  },
+
   // Full Database JSON Export / Import
   exportFullDatabaseJSON: (includeMedia: boolean = true): string => {
     let expenses = StorageService.getExpenses();
@@ -811,6 +908,9 @@ export const StorageService = {
       savings: StorageService.getSavingsGoals(),
       reminders: StorageService.getReminders(),
       documents,
+      notes: StorageService.getNotes(),
+      tasks: StorageService.getTasks(),
+      passwords: StorageService.getPasswords(),
     };
     return JSON.stringify(backup, null, 2);
   },
@@ -828,11 +928,14 @@ export const StorageService = {
       if (data.savings) setLocalItem(STORAGE_KEYS.SAVINGS, data.savings);
       if (data.reminders) setLocalItem(STORAGE_KEYS.REMINDERS, data.reminders);
       if (data.documents) setLocalItem(STORAGE_KEYS.DOCUMENTS, data.documents);
+      if (data.notes) setLocalItem(STORAGE_KEYS.NOTES, data.notes);
+      if (data.tasks) setLocalItem(STORAGE_KEYS.TASKS, data.tasks);
+      if (data.passwords) setLocalItem(STORAGE_KEYS.PASSWORDS, data.passwords);
       localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
       return true;
     } catch (e) {
       console.error('Failed to parse and restore database backup:', e);
       return false;
     }
-  }
+  },
 };

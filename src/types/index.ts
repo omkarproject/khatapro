@@ -332,3 +332,41 @@ export interface SystemSettings {
   darkMode: boolean;
   telegramBackup?: TelegramBackupSettings;
 }
+
+export interface NoteItem {
+  id: string;
+  title: string;
+  description: string;
+  reminderDate?: string; // YYYY-MM-DD
+  reminderTime?: string; // HH:MM
+  category?: 'General' | 'Finance' | 'Customer' | 'Inventory' | 'Personal';
+  color?: string; // e.g. 'amber', 'emerald', 'sky', 'indigo', 'rose', 'purple'
+  isPinned?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskItem {
+  id: string;
+  title: string;
+  description?: string;
+  isCompleted: boolean;
+  dueDate?: string; // YYYY-MM-DD
+  priority: 'low' | 'medium' | 'high';
+  category?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface PasswordItem {
+  id: string;
+  appName: string; // Web & App Name
+  username: string; // User Name / ID / Email
+  password: string; // Password
+  websiteUrl?: string; // Web URL
+  notes?: string; // Notes
+  category?: 'Banking' | 'Govt & Tax' | 'Business' | 'Social' | 'Utility' | 'Other';
+  createdAt: string;
+  updatedAt: string;
+}
+
