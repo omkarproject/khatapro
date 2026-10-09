@@ -81,20 +81,12 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Col 3: Products, Pricing & Payment (Cashfree Required) */}
+          {/* Col 3: Billing & Payments */}
           <div className="space-y-3">
             <div className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-              Products &amp; Pricing (INR)
+              Billing &amp; Payments
             </div>
             <ul className="space-y-2 text-xs">
-              <li>
-                <Link
-                  href="/pricing"
-                  className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium"
-                >
-                  Listed Pricing in INR (₹)
-                </Link>
-              </li>
               <li>
                 <Link
                   href="/invoices"
@@ -109,6 +101,14 @@ export default function Footer() {
                   className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium"
                 >
                   Instant UPI Collections
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/khata"
+                  className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium"
+                >
+                  Digital KhataBook Ledger
                 </Link>
               </li>
               <li>
@@ -151,7 +151,7 @@ export default function Footer() {
 
         </div>
 
-        {/* Bottom Section: Payment Partner Badges & Copyright */}
+        {/* Bottom Section: Security Badges & Copyright */}
         <div className="pt-6 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px]">
           <div className="flex items-center gap-2">
             <span>&copy; {new Date().getFullYear()} {businessName}. All rights reserved.</span>
@@ -162,7 +162,7 @@ export default function Footer() {
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-slate-400 font-semibold flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-              Cashfree Verified Merchant
+              100% Verified &amp; Secure
             </span>
             <span className="text-slate-300 dark:text-slate-700">&bull;</span>
             <span className="text-slate-400 font-semibold flex items-center gap-1">

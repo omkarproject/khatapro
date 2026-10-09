@@ -22,7 +22,6 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
   const isPayRoute = pathname?.startsWith('/pay');
   const isLoginPage = pathname === '/login' || pathname === '/login/';
   const isPublicInfoPage =
-    pathname?.startsWith('/pricing') ||
     pathname?.startsWith('/contact-us') ||
     pathname?.startsWith('/privacy-policy') ||
     pathname?.startsWith('/terms-and-conditions') ||

@@ -166,7 +166,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
               <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
                 <span className="flex items-center gap-1">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                  Cashfree Verified
+                  100% Secure
                 </span>
                 <span className="text-[10px] font-mono">v1.0 Pro</span>
               </div>
