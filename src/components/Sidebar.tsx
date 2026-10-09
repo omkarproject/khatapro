@@ -39,7 +39,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
     { label: 'Dashboard', href: '/', icon: LayoutDashboard },
     { label: 'Digital KhataBook', href: '/khata', icon: BookOpen, badge: 'Core' },
     { label: 'Customers CRM', href: '/customers', icon: Users },
-    { label: 'UPI Collection', href: '/upi-collection', icon: QrCode, badge: '0% Fee' },
+    { label: 'Collect Payment', href: '/upi-collection', icon: QrCode },
     { label: 'Billing & Invoices', href: '/invoices', icon: FileSpreadsheet },
     { label: 'Expense Tracker', href: '/expenses', icon: Receipt },
     { label: 'Savings Goals', href: '/savings', icon: PiggyBank },

@@ -287,16 +287,6 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
 
           {/* Right: Actions */}
           <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 shrink-0">
-            {/* Quick Collect UPI Button (User's primary highlight) */}
-            <button
-              onClick={() => openCollectModal()}
-              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-2xl text-xs font-bold text-white fintech-gradient-primary hover:opacity-95 shadow-md shadow-indigo-500/20 active:scale-95 transition-all"
-            >
-              <QrCode className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="hidden min-[480px]:inline">Collect via UPI</span>
-              <span className="min-[480px]:hidden hidden sm:inline">Collect</span>
-            </button>
-
             {/* Notification Bell */}
             <div className="relative">
               <button

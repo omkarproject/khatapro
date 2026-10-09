@@ -261,7 +261,7 @@ export default function DashboardPage() {
               className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-cyan-500 hover:opacity-95 shadow-lg shadow-indigo-500/30 active:scale-95 transition-all whitespace-nowrap"
             >
               <QrCode className="w-4 h-4" />
-              Collect UPI Payment
+              Collect Payment
             </button>
             <Link
               href="/invoices?action=new"
