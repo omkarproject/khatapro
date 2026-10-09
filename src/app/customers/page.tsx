@@ -142,11 +142,16 @@ export default function CustomersPage() {
 
   // Filtered customers
   const filteredCustomers = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
     return customers.filter(c => {
       const matchSearch =
-        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.phone.includes(searchTerm) ||
-        (c.businessName && c.businessName.toLowerCase().includes(searchTerm.toLowerCase()));
+        !term ||
+        c.name.toLowerCase().includes(term) ||
+        c.phone.includes(term) ||
+        (c.email && c.email.toLowerCase().includes(term)) ||
+        (c.businessName && c.businessName.toLowerCase().includes(term)) ||
+        (c.gstNumber && c.gstNumber.toLowerCase().includes(term)) ||
+        (c.city && c.city.toLowerCase().includes(term));
       const matchCat = selectedCategory === 'all' || c.category === selectedCategory;
       return matchSearch && matchCat;
     });
@@ -563,7 +568,7 @@ export default function CustomersPage() {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by name, company, or phone number..."
+            placeholder="Search by name, phone, email, or company..."
             className="w-full pl-10 pr-4 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>

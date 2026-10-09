@@ -270,11 +270,14 @@ interface AttachedBill {
 
   // Filtered customer list
   const filteredCustomers = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
     return customers.filter(c => {
       const matchSearch =
-        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.phone.includes(searchTerm) ||
-        (c.businessName && c.businessName.toLowerCase().includes(searchTerm.toLowerCase()));
+        !term ||
+        c.name.toLowerCase().includes(term) ||
+        c.phone.includes(term) ||
+        (c.email && c.email.toLowerCase().includes(term)) ||
+        (c.businessName && c.businessName.toLowerCase().includes(term));
 
       if (filterType === 'credit') return matchSearch && c.outstandingBalance > 0;
       if (filterType === 'debit') return matchSearch && c.outstandingBalance < 0;
@@ -2231,7 +2234,7 @@ interface AttachedBill {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search customer name or phone..."
+                placeholder="Search name, phone, or email..."
                 className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none"
               />
             </div>
