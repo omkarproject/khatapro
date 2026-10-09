@@ -203,6 +203,9 @@ export interface PaymentReminder {
   status: 'pending' | 'sent' | 'scheduled';
   sentAt?: string;
   messageTemplate: string;
+  note?: string;
+  transactionId?: string;
+  createdAt?: string;
 }
 
 export interface DocumentItem {

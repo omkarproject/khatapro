@@ -181,9 +181,13 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
   const lowStockProducts = products.filter(
     (p) => p.currentStock <= p.minStock && !dismissedAlerts.includes(`low_stock_${p.id}`)
   );
-  const overdueReminders = reminders.filter(
-    (r) => r.reminderType === 'overdue' && r.status === 'pending' && !dismissedAlerts.includes(`overdue_${r.id}`)
-  );
+  const todayStr = new Date().toISOString().split('T')[0];
+  const overdueReminders = reminders.filter((r) => {
+    if (dismissedAlerts.includes(`overdue_${r.id}`) || dismissedAlerts.includes(`reminder_${r.id}`)) return false;
+    if (r.status === 'sent') return false;
+    // Reminder notification triggers on or after set dueDate, or if marked overdue
+    return !r.dueDate || r.dueDate <= todayStr || r.reminderType === 'overdue';
+  });
 
   const dueSavingsGoals = savingsGoals.filter((g) => {
     if (dismissedAlerts.includes(`savings_${g.id}`)) return false;
@@ -475,11 +479,16 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                               <Clock className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
                               <div className="min-w-0">
                                 <div className="text-xs font-bold text-rose-900 dark:text-rose-200 truncate">
-                                  Payment Due: {r.customerName}
+                                  Payment Reminder: {r.customerName}
                                 </div>
-                                <div className="text-[11px] text-rose-700 dark:text-rose-300">
-                                  {formatINR(r.amount)} pending since {formatDate(r.dueDate)}.
+                                <div className="text-[11px] text-rose-700 dark:text-rose-300 font-semibold font-mono">
+                                  {formatINR(r.amount)} • Due: {formatDate(r.dueDate)}
                                 </div>
+                                {(r.note || r.messageTemplate) && (
+                                  <div className="text-[11px] text-slate-600 dark:text-slate-400 truncate mt-0.5 italic">
+                                    Note: {r.note || r.messageTemplate}
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <button

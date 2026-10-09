@@ -17,11 +17,12 @@ import {
   X,
   Send,
   Sparkles,
-  QrCode
+  QrCode,
+  Trash2,
 } from 'lucide-react';
 
 export default function RemindersPage() {
-  const { reminders, saveReminder, customers, settings, addToast, openCollectModal } = useApp();
+  const { reminders, saveReminder, deleteReminder, customers, settings, addToast, openCollectModal } = useApp();
 
   const [filter, setFilter] = useState<'all' | 'overdue' | 'upcoming'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -213,10 +214,22 @@ export default function RemindersPage() {
 
                   <button
                     onClick={() => handleSendWhatsApp(rem)}
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 flex items-center gap-1 shadow-sm shadow-emerald-500/20 transition-all"
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 flex items-center gap-1 shadow-sm shadow-emerald-500/20 transition-all cursor-pointer"
                   >
                     <Share2 className="w-3.5 h-3.5" />
                     WhatsApp
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (confirm(`Delete reminder for ${rem.customerName}?`)) {
+                        deleteReminder(rem.id);
+                      }
+                    }}
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                    title="Delete Reminder"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>

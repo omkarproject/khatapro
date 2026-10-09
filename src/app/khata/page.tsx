@@ -4,7 +4,7 @@ import React, { useState, useMemo, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
-import { Customer, Transaction, TransactionType } from '@/types';
+import { Customer, Transaction, TransactionType, PaymentReminder } from '@/types';
 import QRCode from 'qrcode';
 import {
   ArrowLeft,
@@ -39,7 +39,10 @@ import {
   Printer,
   Mail,
   Copy,
-  Smartphone
+  Smartphone,
+  Clock,
+  Pencil,
+  BellRing,
 } from 'lucide-react';
 
 function getCustomerRatingColor(rating: number = 5): string {
@@ -84,7 +87,22 @@ function KhataPageInner() {
     profile,
     currentUser,
     addToast,
+    reminders,
+    saveReminder,
+    deleteReminder,
   } = useApp();
+
+  // Payment Reminder Modal State for Transactions
+  const [reminderTxn, setReminderTxn] = useState<Transaction | null>(null);
+  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+  const [reminderAmount, setReminderAmount] = useState('');
+  const [reminderDate, setReminderDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [reminderNote, setReminderNote] = useState('');
+  const [reminderType, setReminderType] = useState<'upcoming' | 'overdue' | 'custom' | 'recurring'>('upcoming');
 
   const [isStatementBillModalOpen, setIsStatementBillModalOpen] = useState(false);
   const [isSharingWhatsApp, setIsSharingWhatsApp] = useState(false);
@@ -431,6 +449,65 @@ interface AttachedBill {
     setEntryNotes('');
     setEntryAttachments([]);
     setScreenView('chat');
+  };
+
+  // Open Payment Reminder Modal for a specific transaction
+  const handleOpenReminderModal = (txn: Transaction) => {
+    if (!activeCustomer) return;
+    setReminderTxn(txn);
+    const existing = reminders.find(r => r.transactionId === txn.id);
+    if (existing) {
+      setReminderAmount(existing.amount.toString());
+      setReminderDate(existing.dueDate);
+      setReminderNote(existing.note || existing.messageTemplate);
+      setReminderType(existing.reminderType);
+    } else {
+      setReminderAmount(txn.amount.toString());
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      setReminderDate(tomorrow.toISOString().split('T')[0]);
+      setReminderNote(txn.note ? `Payment reminder: ${txn.note}` : `Payment reminder for ${activeCustomer.name}`);
+      setReminderType(txn.type === 'credit' ? 'overdue' : 'upcoming');
+    }
+    setIsReminderModalOpen(true);
+  };
+
+  // Save / Update Payment Reminder
+  const handleSaveReminder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reminderTxn || !activeCustomer) return;
+    const num = parseFloat(reminderAmount);
+    if (!num || num <= 0) {
+      addToast('Invalid Amount', 'Please enter a valid reminder amount.', 'warning');
+      return;
+    }
+    if (!reminderDate) {
+      addToast('Date Required', 'Please select a reminder date.', 'warning');
+      return;
+    }
+
+    const existing = reminders.find(r => r.transactionId === reminderTxn.id);
+    const newRem: PaymentReminder = {
+      id: existing ? existing.id : `rem_${Date.now()}`,
+      customerId: activeCustomer.id,
+      customerName: activeCustomer.name,
+      customerPhone: activeCustomer.phone,
+      customerEmail: activeCustomer.email,
+      amount: num,
+      dueDate: reminderDate,
+      reminderType: reminderType,
+      channels: ['whatsapp', 'sms'],
+      status: 'pending',
+      messageTemplate: reminderNote.trim() || `Payment reminder for ${activeCustomer.name}`,
+      note: reminderNote.trim() || `Payment reminder for ${activeCustomer.name}`,
+      transactionId: reminderTxn.id,
+      createdAt: new Date().toISOString(),
+    };
+
+    saveReminder(newRem);
+    addToast('Reminder Set', `Reminder scheduled for ${activeCustomer.name} on ${formatDate(reminderDate)}.`, 'success');
+    setIsReminderModalOpen(false);
+    setReminderTxn(null);
   };
 
   // Handle Confirm / Save Entry (Screen 3 -> Screen 2)
@@ -2745,29 +2822,66 @@ interface AttachedBill {
                                 {/* The Bubble Card */}
                                 <div className="w-full max-w-[85%] sm:max-w-sm rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden p-3 space-y-2">
                                   
-                                  {/* Header: Arrow + Amount + Time (Click amount to edit) */}
+                                  {/* Header: Arrow + Amount + Pencil + Clock + Time + Check + Print */}
                                   <div
-                                    onClick={() => handleOpenEditTransaction(t)}
-                                    className="flex items-center justify-between cursor-pointer select-none pb-1 group/header"
-                                    title="Click to edit entry"
+                                    className="flex items-center justify-between pb-1"
                                   >
-                                    <div className="flex items-center gap-1.5">
-                                      {isReceived ? (
-                                        <ArrowDown className="w-5 h-5 text-emerald-600 dark:text-emerald-400 stroke-[3]" />
-                                      ) : (
-                                        <ArrowUp className="w-5 h-5 text-rose-600 dark:text-rose-400 stroke-[3]" />
-                                      )}
-                                      <span className={`text-xl font-black tracking-tight ${
-                                        isReceived
-                                          ? 'text-emerald-600 dark:text-emerald-400'
-                                          : 'text-rose-600 dark:text-rose-400'
-                                      }`}>
-                                        ₹{t.amount.toLocaleString('en-IN')}
-                                      </span>
-                                      <span className="opacity-0 group-hover/header:opacity-100 text-[10px] font-bold text-slate-400 pl-1 transition-opacity">
-                                        ✎
-                                      </span>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <div
+                                        onClick={() => handleOpenEditTransaction(t)}
+                                        className="flex items-center gap-1.5 cursor-pointer hover:opacity-85 transition-opacity"
+                                        title="Click to edit entry"
+                                      >
+                                        {isReceived ? (
+                                          <ArrowDown className="w-5 h-5 text-emerald-600 dark:text-emerald-400 stroke-[3]" />
+                                        ) : (
+                                          <ArrowUp className="w-5 h-5 text-rose-600 dark:text-rose-400 stroke-[3]" />
+                                        )}
+                                        <span className={`text-xl font-black tracking-tight ${
+                                          isReceived
+                                            ? 'text-emerald-600 dark:text-emerald-400'
+                                            : 'text-rose-600 dark:text-rose-400'
+                                        }`}>
+                                          ₹{t.amount.toLocaleString('en-IN')}
+                                        </span>
+                                      </div>
+
+                                      {/* Pencil Edit Icon */}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOpenEditTransaction(t);
+                                        }}
+                                        className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg transition-colors cursor-pointer"
+                                        title="Edit Transaction"
+                                      >
+                                        <Pencil className="w-3.5 h-3.5" />
+                                      </button>
+
+                                      {/* Clock Reminder Icon */}
+                                      {(() => {
+                                        const txnReminder = reminders.find(r => r.transactionId === t.id);
+                                        return (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleOpenReminderModal(t);
+                                            }}
+                                            className={`p-1 rounded-lg transition-all cursor-pointer ${
+                                              txnReminder
+                                                ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/70 border border-amber-200 dark:border-amber-800 shadow-xs'
+                                                : 'text-slate-400 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+                                            }`}
+                                            title={txnReminder ? `Reminder set for ${formatDate(txnReminder.dueDate)} (Click to view/edit)` : 'Set Payment Reminder'}
+                                          >
+                                            <Clock className="w-3.5 h-3.5" />
+                                          </button>
+                                        );
+                                      })()}
                                     </div>
+
                                     <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium shrink-0 ml-2">
                                       <span>{formatDate(t.date)}, {formatTime(t.createdAt || t.date)}</span>
                                       <span>✓</span>
@@ -2880,6 +2994,29 @@ interface AttachedBill {
                                       {t.note}
                                     </div>
                                   )}
+
+                                  {/* Reminder status badge if set */}
+                                  {(() => {
+                                    const txnRem = reminders.find(r => r.transactionId === t.id);
+                                    if (!txnRem) return null;
+                                    return (
+                                      <div
+                                        onClick={() => handleOpenReminderModal(t)}
+                                        className="mt-1.5 p-2 rounded-xl bg-amber-50/90 dark:bg-amber-950/60 border border-amber-200/80 dark:border-amber-800/60 flex items-center justify-between text-[11px] text-amber-800 dark:text-amber-300 cursor-pointer hover:bg-amber-100/80 dark:hover:bg-amber-900/40 transition-colors"
+                                        title="Click to view/update reminder"
+                                      >
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                                          <span className="font-semibold truncate">
+                                            Reminder: {formatDate(txnRem.dueDate)}
+                                          </span>
+                                        </div>
+                                        <span className="text-[9px] uppercase px-1.5 py-0.5 rounded-full font-bold bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200 shrink-0">
+                                          {txnRem.status}
+                                        </span>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
 
                                 {/* Running Balance Note below bubble: Left for Received, Right for Given */}
@@ -4341,6 +4478,202 @@ interface AttachedBill {
           </div>
         );
       })()}
+
+      {/* ================= MODAL: TRANSACTION PAYMENT REMINDER ================= */}
+      {isReminderModalOpen && reminderTxn && activeCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <Clock className="w-5 h-5 stroke-[2.2]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                    Set Payment Reminder
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Payment Follow-up & Alerts
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsReminderModalOpen(false);
+                  setReminderTxn(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveReminder} className="space-y-3.5">
+              
+              {/* Customer info preview */}
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white">
+                    {activeCustomer.name}
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    {activeCustomer.phone} {activeCustomer.email ? `• ${activeCustomer.email}` : ''}
+                  </div>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400">
+                  {reminderTxn.type === 'credit' ? 'Credit Given' : 'Payment'}
+                </span>
+              </div>
+
+              {/* Amount & Date in Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    Reminder Amount (₹) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-xs font-bold text-slate-400">₹</span>
+                    <input
+                      type="number"
+                      required
+                      value={reminderAmount}
+                      onChange={(e) => setReminderAmount(e.target.value)}
+                      className="w-full pl-7 pr-3 py-2 text-xs font-mono font-bold rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    Reminder Due Date *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={reminderDate}
+                    onChange={(e) => setReminderDate(e.target.value)}
+                    className="w-full px-3 py-2 text-xs font-bold rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Reminder Type Pills */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
+                  Reminder Type / Urgency
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setReminderType('upcoming')}
+                    className={`py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                      reminderType === 'upcoming'
+                        ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
+                        : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                    }`}
+                  >
+                    Upcoming Due
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReminderType('overdue')}
+                    className={`py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                      reminderType === 'overdue'
+                        ? 'bg-rose-500 text-white border-rose-500 shadow-xs'
+                        : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                    }`}
+                  >
+                    Overdue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReminderType('custom')}
+                    className={`py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                      reminderType === 'custom'
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                        : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                    }`}
+                  >
+                    Custom
+                  </button>
+                </div>
+              </div>
+
+              {/* Reminder Note */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Reminder Note / Message *
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={reminderNote}
+                  onChange={(e) => setReminderNote(e.target.value)}
+                  placeholder="Enter reminder note or follow-up reason..."
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              {/* Informative Note */}
+              <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60 text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                <BellRing className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                <span>
+                  Is date ko automatically <strong>Notifications & Alerts</strong> bell icon me alert aayega aur ye reminder <strong>Payment Follow-up & Reminders</strong> me dikhega.
+                </span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-between pt-2">
+                {reminders.some(r => r.transactionId === reminderTxn.id) ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const existing = reminders.find(r => r.transactionId === reminderTxn.id);
+                      if (existing) {
+                        deleteReminder(existing.id);
+                        addToast('Reminder Removed', 'Transaction reminder deleted.', 'info');
+                        setIsReminderModalOpen(false);
+                        setReminderTxn(null);
+                      }
+                    }}
+                    className="px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Delete Reminder
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsReminderModalOpen(false);
+                      setReminderTxn(null);
+                    }}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 text-xs font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-xl shadow-md shadow-amber-500/20 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    Save Reminder
+                  </button>
+                </div>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
 
       {/* Global CSS for Clean PDF Printing */}
       <style jsx global>{`
