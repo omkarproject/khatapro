@@ -109,6 +109,8 @@ function KhataPageInner() {
   const [isChatSearchOpen, setIsChatSearchOpen] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const headerAvatarInputRef = useRef<HTMLInputElement>(null);
 
 interface AttachedBill {
   id: string;
@@ -226,9 +228,14 @@ interface AttachedBill {
     );
   }, [enrichedTransactions, chatSearchQuery]);
 
-  // Auto-scroll chat to bottom ("last me") whenever entering chat or transactions change
+  // Auto-scroll chat transactions to bottom ("last me") isolatedly without scrolling the entire page / window
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-    chatEndRef.current?.scrollIntoView({ behavior });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior,
+      });
+    }
   };
 
   useEffect(() => {
@@ -979,20 +986,26 @@ interface AttachedBill {
     setEntryAttachments(prev => prev.filter(item => item.id !== id));
   };
 
-  // Handle Avatar Upload (Screen 1)
+  // Handle Avatar Upload (Screen 1 Profile & Screen 2 Header)
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && activeCustomer) {
+      if (file.size > 5 * 1024 * 1024) {
+        addToast('File too large', 'Please select an image under 5MB.', 'warning');
+        return;
+      }
       const reader = new FileReader();
       reader.onload = (evt) => {
         const base64 = evt.target?.result as string;
         setProfileAvatar(base64);
         const updated = { ...activeCustomer, avatar: base64 };
         saveCustomer(updated);
-        addToast('Photo Updated', 'Customer profile photo saved.', 'success');
+        addToast('Photo Updated', `${activeCustomer.name}'s profile photo updated.`, 'success');
       };
       reader.readAsDataURL(file);
     }
+    // Reset file input value so selecting the same file works
+    e.target.value = '';
   };
 
   // Save profile edit fields (Screen 1)
@@ -2589,17 +2602,37 @@ interface AttachedBill {
                         <ArrowLeft className="w-6 h-6 stroke-[2.2]" />
                       </button>
 
-                      {/* Circular Avatar (with rating-based colored round border) - Click opens View Profile */}
-                      <div
-                        onClick={() => setScreenView('profile')}
-                        className={`w-10 h-10 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-base shadow-xs shrink-0 select-none cursor-pointer hover:opacity-90 active:scale-95 transition-all ${getCustomerRatingBorder(activeCustomer.rating)}`}
-                        title="Click to view/edit profile"
-                      >
-                        {activeCustomer.avatar ? (
-                          <img src={activeCustomer.avatar} alt={activeCustomer.name} className="w-full h-full rounded-full object-cover" />
-                        ) : (
-                          activeCustomer.name.charAt(0).toUpperCase()
-                        )}
+                      {/* Circular Avatar (with rating-based colored round border) - Click opens View Profile, Camera button updates photo directly */}
+                      <div className="relative group shrink-0">
+                        <div
+                          onClick={() => setScreenView('profile')}
+                          className={`w-10 h-10 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-base shadow-xs shrink-0 select-none cursor-pointer hover:opacity-90 active:scale-95 transition-all overflow-hidden ${getCustomerRatingBorder(activeCustomer.rating)}`}
+                          title="Click to view/edit profile"
+                        >
+                          {activeCustomer.avatar ? (
+                            <img src={activeCustomer.avatar} alt={activeCustomer.name} className="w-full h-full object-cover" />
+                          ) : (
+                            activeCustomer.name.charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            headerAvatarInputRef.current?.click();
+                          }}
+                          className="absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-md border border-white dark:border-slate-900 transition-transform hover:scale-110 cursor-pointer"
+                          title="Change customer photo directly"
+                        >
+                          <Camera className="w-2.5 h-2.5" />
+                        </button>
+                        <input
+                          type="file"
+                          ref={headerAvatarInputRef}
+                          accept="image/*"
+                          onChange={handleAvatarUpload}
+                          className="hidden"
+                        />
                       </div>
 
                       {/* Customer Name (Color based on rating) + CRM Star Rating - Click opens View Profile */}
@@ -2682,7 +2715,10 @@ interface AttachedBill {
                   )}
 
                   {/* Transactions Stream / Chat Area (Exact replica of Image 2) */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#F2F5F4] dark:bg-[#0B101D]">
+                  <div 
+                    ref={chatContainerRef}
+                    className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#F2F5F4] dark:bg-[#0B101D]"
+                  >
                     {Object.keys(groupedTransactions).length > 0 ? (
                       Object.entries(groupedTransactions).map(([dateBadge, txns]) => (
                         <div key={dateBadge} className="space-y-4">

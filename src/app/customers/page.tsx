@@ -41,6 +41,8 @@ import {
   List as ListIcon,
   CheckSquare,
   Square,
+  Camera,
+  User,
 } from 'lucide-react';
 
 function WindowsFolderIcon({ className = "w-12 h-12" }: { className?: string }) {
@@ -106,6 +108,8 @@ export default function CustomersPage() {
   // Modal State for Add / Edit
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [formAvatar, setFormAvatar] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [formName, setFormName] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formEmail, setFormEmail] = useState('');
@@ -117,6 +121,24 @@ export default function CustomersPage() {
   const [formCategory, setFormCategory] = useState<'VIP' | 'Regular' | 'Wholesale' | 'Retail'>('Regular');
   const [formRating, setFormRating] = useState('5');
   const [formNotes, setFormNotes] = useState('');
+
+  // Handle avatar upload in customer Add/Edit modal
+  const handleFormAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        addToast('File too large', 'Please select an image under 5MB.', 'warning');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const base64 = evt.target?.result as string;
+        setFormAvatar(base64);
+        addToast('Photo Uploaded', 'Profile photo preview updated.', 'info');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Filtered customers
   const filteredCustomers = useMemo(() => {
@@ -132,6 +154,7 @@ export default function CustomersPage() {
 
   const openAddModal = () => {
     setEditingId(null);
+    setFormAvatar(null);
     setFormName('');
     setFormPhone('');
     setFormEmail('');
@@ -148,6 +171,7 @@ export default function CustomersPage() {
 
   const openEditModal = (c: Customer) => {
     setEditingId(c.id);
+    setFormAvatar(c.avatar || null);
     setFormName(c.name);
     setFormPhone(c.phone);
     setFormEmail(c.email || '');
@@ -186,12 +210,16 @@ export default function CustomersPage() {
       status: 'active',
       rating: parseInt(formRating) || 5,
       notes: formNotes.trim(),
+      avatar: formAvatar || undefined,
       createdAt: editingId
         ? customers.find(c => c.id === editingId)?.createdAt || new Date().toISOString()
         : new Date().toISOString(),
     };
 
     saveCustomer(customerData);
+    if (activeCustomer && activeCustomer.id === customerData.id) {
+      setActiveCustomer(customerData);
+    }
     setIsModalOpen(false);
   };
 
@@ -573,8 +601,12 @@ export default function CustomersPage() {
                 {/* Header */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl fintech-gradient-primary text-white font-extrabold flex items-center justify-center text-sm shadow-md">
-                      {cust.name.charAt(0)}
+                    <div className="w-11 h-11 rounded-2xl fintech-gradient-primary text-white font-extrabold flex items-center justify-center text-sm shadow-md overflow-hidden relative shrink-0">
+                      {cust.avatar ? (
+                        <img src={cust.avatar} alt={cust.name} className="w-full h-full object-cover" />
+                      ) : (
+                        cust.name.charAt(0)
+                      )}
                     </div>
                     <div>
                       <h3 className="text-sm font-bold text-slate-900 dark:text-white">
@@ -598,9 +630,18 @@ export default function CustomersPage() {
 
                 {/* Contact & GST info */}
                 <div className="mt-4 space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{cust.phone}</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>{cust.phone}</span>
+                    </div>
+                    {cust.email && (
+                      <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                        <span className="text-slate-300 dark:text-slate-600">•</span>
+                        <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate max-w-[200px]" title={cust.email}>{cust.email}</span>
+                      </div>
+                    )}
                   </div>
                   {cust.gstNumber && (
                     <div className="flex items-center gap-2 text-[11px] font-mono">
@@ -723,15 +764,29 @@ export default function CustomersPage() {
           <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 max-w-2xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl fintech-gradient-primary text-white font-black flex items-center justify-center text-lg">
-                  {activeCustomer.name.charAt(0)}
+                <div className="w-12 h-12 rounded-2xl fintech-gradient-primary text-white font-black flex items-center justify-center text-lg overflow-hidden relative shrink-0 shadow-md">
+                  {activeCustomer.avatar ? (
+                    <img src={activeCustomer.avatar} alt={activeCustomer.name} className="w-full h-full object-cover" />
+                  ) : (
+                    activeCustomer.name.charAt(0)
+                  )}
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-slate-900 dark:text-white">
                     {activeCustomer.name}
                   </h2>
-                  <p className="text-xs text-slate-400">
-                    {activeCustomer.businessName} • Member since {formatDate(activeCustomer.createdAt)}
+                  <p className="text-xs text-slate-400 flex items-center gap-1.5 flex-wrap">
+                    <span>{activeCustomer.phone}</span>
+                    {activeCustomer.email && (
+                      <>
+                        <span>•</span>
+                        <span>{activeCustomer.email}</span>
+                      </>
+                    )}
+                    <span>•</span>
+                    <span>{activeCustomer.businessName || 'Individual'}</span>
+                    <span>•</span>
+                    <span>Member since {formatDate(activeCustomer.createdAt)}</span>
                   </p>
                 </div>
               </div>
@@ -855,6 +910,55 @@ export default function CustomersPage() {
             </div>
 
             <form onSubmit={handleSaveCustomer} className="space-y-3.5">
+              {/* Profile Picture Uploader */}
+              <div className="flex items-center gap-4 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80">
+                <div className="relative shrink-0">
+                  <div className="w-16 h-16 rounded-2xl fintech-gradient-primary text-white font-black text-xl flex items-center justify-center shadow-md overflow-hidden border-2 border-white dark:border-slate-800">
+                    {formAvatar ? (
+                      <img src={formAvatar} alt="Profile preview" className="w-full h-full object-cover" />
+                    ) : formName.trim() ? (
+                      formName.trim().charAt(0).toUpperCase()
+                    ) : (
+                      <Camera className="w-7 h-7 text-white/80" />
+                    )}
+                  </div>
+                  <input
+                    type="file"
+                    ref={avatarInputRef}
+                    accept="image/*"
+                    onChange={handleFormAvatarUpload}
+                    className="hidden"
+                  />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Customer Profile Photo
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    PNG, JPG, WEBP • Max 5MB
+                  </p>
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => avatarInputRef.current?.click()}
+                      className="px-3 py-1 text-[11px] font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                    >
+                      <Camera className="w-3 h-3" />
+                      {formAvatar ? 'Change Photo' : 'Upload Photo'}
+                    </button>
+                    {formAvatar && (
+                      <button
+                        type="button"
+                        onClick={() => setFormAvatar(null)}
+                        className="px-2.5 py-1 text-[11px] font-semibold rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
