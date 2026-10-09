@@ -144,6 +144,13 @@ interface AttachedBill {
   const [entryNotes, setEntryNotes] = useState('');
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
   const [entryAttachments, setEntryAttachments] = useState<AttachedBill[]>([]);
+  const [isEntryReminderEnabled, setIsEntryReminderEnabled] = useState(false);
+  const [entryReminderDate, setEntryReminderDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [entryReminderNote, setEntryReminderNote] = useState('');
   // Preview Gallery State (Holds list of items, current active index, navigation, and linked transactionId)
   const [previewGallery, setPreviewGallery] = useState<{
     items: AttachedBill[];
@@ -437,6 +444,21 @@ interface AttachedBill {
       };
     });
     setEntryAttachments(parsedAttachments);
+
+    // Sync reminder state for this transaction
+    const existingRem = reminders.find(r => r.transactionId === txn.id);
+    if (existingRem) {
+      setIsEntryReminderEnabled(true);
+      setEntryReminderDate(existingRem.dueDate);
+      setEntryReminderNote(existingRem.note || existingRem.messageTemplate || '');
+    } else {
+      setIsEntryReminderEnabled(false);
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      setEntryReminderDate(tomorrow.toISOString().split('T')[0]);
+      setEntryReminderNote('');
+    }
+
     setScreenView('entry');
   };
 
@@ -523,6 +545,7 @@ interface AttachedBill {
 
     // Serialize attached bills to transaction attachments
     const serializedAttachments = entryAttachments.map(b => JSON.stringify(b));
+    const finalTxnId = editingTxnId || `txn_${Date.now()}`;
 
     if (editingTxnId) {
       // Modifying existing transaction
@@ -562,7 +585,7 @@ interface AttachedBill {
       const txnDateIso = entryDate === todayStr ? new Date().toISOString() : new Date(entryDate).toISOString();
 
       const newTxn: Transaction = {
-        id: `txn_${Date.now()}`,
+        id: finalTxnId,
         type: isGot ? 'debit' : 'credit',
         amount: num,
         date: txnDateIso,
@@ -585,11 +608,40 @@ interface AttachedBill {
       );
     }
 
+    // Save / update Payment Reminder if enabled during Received / Given entry
+    if (isEntryReminderEnabled && entryReminderDate) {
+      const existingRem = reminders.find(r => r.transactionId === finalTxnId);
+      const rem: PaymentReminder = {
+        id: existingRem ? existingRem.id : `rem_${Date.now()}`,
+        customerId: activeCustomer.id,
+        customerName: activeCustomer.name,
+        customerPhone: activeCustomer.phone,
+        customerEmail: activeCustomer.email,
+        amount: num,
+        dueDate: entryReminderDate,
+        reminderType: isGot ? 'upcoming' : 'overdue',
+        channels: ['whatsapp', 'sms'],
+        status: 'pending',
+        messageTemplate: entryReminderNote.trim() || entryNotes.trim() || `Payment reminder for ${activeCustomer.name}`,
+        note: entryReminderNote.trim() || entryNotes.trim() || `Payment reminder for ${activeCustomer.name}`,
+        transactionId: finalTxnId,
+        createdAt: new Date().toISOString(),
+      };
+      saveReminder(rem);
+    } else if (!isEntryReminderEnabled && editingTxnId) {
+      const existingRem = reminders.find(r => r.transactionId === editingTxnId);
+      if (existingRem) {
+        deleteReminder(existingRem.id);
+      }
+    }
+
     // Reset and return to chat view
     setEditingTxnId(null);
     setEntryAmountStr('');
     setEntryNotes('');
     setEntryAttachments([]);
+    setIsEntryReminderEnabled(false);
+    setEntryReminderNote('');
     setScreenView('chat');
   };
 
@@ -3055,6 +3107,11 @@ interface AttachedBill {
                         setEntryAmountStr('');
                         setEntryNotes('');
                         setEntryAttachments([]);
+                        setIsEntryReminderEnabled(false);
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        setEntryReminderDate(tomorrow.toISOString().split('T')[0]);
+                        setEntryReminderNote('');
                         setScreenView('entry');
                       }}
                       className="flex-1 h-12 sm:h-13 rounded-full bg-white dark:bg-slate-800 shadow-md border border-slate-200/80 dark:border-slate-700 text-[#1E7E34] dark:text-emerald-400 font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
@@ -3071,6 +3128,11 @@ interface AttachedBill {
                         setEntryAmountStr('');
                         setEntryNotes('');
                         setEntryAttachments([]);
+                        setIsEntryReminderEnabled(false);
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        setEntryReminderDate(tomorrow.toISOString().split('T')[0]);
+                        setEntryReminderNote('');
                         setScreenView('entry');
                       }}
                       className="flex-1 h-12 sm:h-13 rounded-full bg-white dark:bg-slate-800 shadow-md border border-slate-200/80 dark:border-slate-700 text-[#D32F2F] dark:text-rose-500 font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
@@ -3197,6 +3259,62 @@ interface AttachedBill {
                           </div>
                         </div>
                         <ChevronRight className="w-4 h-4 text-slate-400" />
+                      </div>
+
+                      {/* Card 3: Payment Follow-up & Reminder (Available during Received & Given entries) */}
+                      <div className="bg-[#EDF6F3] dark:bg-slate-800/80 rounded-2xl px-4 py-3 border border-[#D5ECE3] dark:border-slate-700 flex flex-col gap-2 transition-all">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Clock className={`w-4 h-4 ${isEntryReminderEnabled ? 'text-amber-500' : 'text-slate-600 dark:text-slate-400'}`} />
+                            <div>
+                              <div className="text-[10px] text-slate-400">Payment Follow-up</div>
+                              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                {isEntryReminderEnabled ? 'Reminder Active ✓' : 'Set Payment Reminder'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setIsEntryReminderEnabled(prev => !prev)}
+                            className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                              isEntryReminderEnabled
+                                ? 'bg-amber-500 text-white shadow-xs'
+                                : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600'
+                            }`}
+                          >
+                            <Clock className="w-3 h-3" />
+                            {isEntryReminderEnabled ? 'Active ✓' : '+ Set Reminder'}
+                          </button>
+                        </div>
+
+                        {/* Expandable fields when reminder is enabled */}
+                        {isEntryReminderEnabled && (
+                          <div className="pt-2.5 border-t border-[#D5ECE3] dark:border-slate-700 space-y-2 animate-in fade-in duration-150">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                                Reminder Due Date:
+                              </span>
+                              <input
+                                type="date"
+                                value={entryReminderDate}
+                                onChange={(e) => setEntryReminderDate(e.target.value)}
+                                className="px-2.5 py-1 text-xs font-bold rounded-xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              value={entryReminderNote}
+                              onChange={(e) => setEntryReminderNote(e.target.value)}
+                              placeholder="Reminder note (e.g. Next installment / Follow-up)"
+                              className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                            />
+                            <div className="text-[10px] text-amber-700 dark:text-amber-400 flex items-center gap-1 font-medium">
+                              <BellRing className="w-3 h-3 shrink-0" />
+                              <span>Due date ko Notifications & Alerts me alert aayega aur Reminders list me dikhega.</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Card 3: Add Bills / Photos & PDFs (Image 3) */}
