@@ -42,6 +42,8 @@ export default function ExpensesPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedMonth, setSelectedMonth] = useState('all');
+  const [selectedMode, setSelectedMode] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Monthly Budget Cap Edit State
@@ -77,34 +79,91 @@ export default function ExpensesPage() {
 
   const colors = ['#4F46E5', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
 
-  // Filtered expenses
+  // All-time total
+  const totalAllTime = useMemo(() => expenses.reduce((sum, e) => sum + e.amount, 0), [expenses]);
+
+  // Compute available months with spend totals and record counts
+  const availableMonths = useMemo(() => {
+    const map: Record<string, { total: number; count: number }> = {};
+    expenses.forEach(e => {
+      const monthKey = e.date ? e.date.substring(0, 7) : new Date().toISOString().substring(0, 7);
+      if (!map[monthKey]) {
+        map[monthKey] = { total: 0, count: 0 };
+      }
+      map[monthKey].total += e.amount;
+      map[monthKey].count += 1;
+    });
+
+    const keys = Object.keys(map).sort((a, b) => b.localeCompare(a));
+    return keys.map(key => {
+      let label = key;
+      let fullLabel = key;
+      try {
+        const [year, month] = key.split('-').map(Number);
+        const d = new Date(year, month - 1, 1);
+        label = d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+        fullLabel = d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+      } catch {}
+      return {
+        key,
+        label,
+        fullLabel,
+        total: map[key].total,
+        count: map[key].count,
+      };
+    });
+  }, [expenses]);
+
+  // Selected month meta
+  const selectedMonthData = useMemo(() => {
+    if (selectedMonth === 'all') return null;
+    return availableMonths.find(m => m.key === selectedMonth) || null;
+  }, [availableMonths, selectedMonth]);
+
+  // Scoped expenses by selected month
+  const scopedExpenses = useMemo(() => {
+    if (selectedMonth === 'all') return expenses;
+    return expenses.filter(e => e.date?.startsWith(selectedMonth));
+  }, [expenses, selectedMonth]);
+
+  // Filtered expenses based on search, category, and payment mode within scoped month
   const filteredExpenses = useMemo(() => {
-    return expenses.filter(e => {
+    return scopedExpenses.filter(e => {
       const matchSearch =
         e.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (e.notes && e.notes.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchCat = selectedCategory === 'all' || e.category === selectedCategory;
-      return matchSearch && matchCat;
+      const matchMode = selectedMode === 'all' || e.paymentMode === selectedMode;
+      return matchSearch && matchCat && matchMode;
     });
-  }, [expenses, searchTerm, selectedCategory]);
+  }, [scopedExpenses, searchTerm, selectedCategory, selectedMode]);
 
-  // Analytics
-  const totalExpense = expenses.reduce((sum, e) => sum + e.amount, 0);
+  // Analytics scoped to selected month
+  const totalExpense = scopedExpenses.reduce((sum, e) => sum + e.amount, 0);
   const percentUsedFloat = budgetCap > 0 ? (totalExpense / budgetCap) * 100 : 0;
   const percentUsed = Math.round(percentUsedFloat);
   const percentUsedDisplay = percentUsedFloat % 1 === 0 ? percentUsedFloat.toFixed(0) : percentUsedFloat.toFixed(1);
 
   const categoryBreakdown = useMemo(() => {
     const map: Record<string, number> = {};
-    expenses.forEach(e => {
+    scopedExpenses.forEach(e => {
       map[e.category] = (map[e.category] || 0) + e.amount;
     });
     return Object.entries(map).map(([name, value], idx) => ({
       name,
       value,
       color: colors[idx % colors.length],
-    }));
-  }, [expenses]);
+    })).sort((a, b) => b.value - a.value);
+  }, [scopedExpenses]);
+
+  const hasActiveFilters = searchTerm !== '' || selectedCategory !== 'all' || selectedMonth !== 'all' || selectedMode !== 'all';
+
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setSelectedCategory('all');
+    setSelectedMonth('all');
+    setSelectedMode('all');
+  };
 
   const handleSaveBudgetCap = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -239,22 +298,31 @@ export default function ExpensesPage() {
       {/* Analytics Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div className="glass-card p-5">
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Monthly Spend</div>
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              {selectedMonth === 'all' ? 'Total Spend (All Time)' : `Spend • ${selectedMonthData?.label || selectedMonth}`}
+            </div>
+            {selectedMonth !== 'all' && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-800/50">
+                Month Filtered
+              </span>
+            )}
+          </div>
           <div className="text-2xl font-black font-mono text-slate-900 dark:text-white mt-1">
             {formatINR(totalExpense)}
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
-            Across {expenses.length} logged expense vouchers
+            Across {scopedExpenses.length} logged expense vouchers {selectedMonth !== 'all' ? `in ${selectedMonthData?.fullLabel || selectedMonth}` : ''}
           </div>
         </div>
 
         <div className="glass-card p-5">
           <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Top Cost Driver</div>
-          <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
+          <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1 truncate">
             {categoryBreakdown[0]?.name || 'N/A'}
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
-            {formatINR(categoryBreakdown[0]?.value || 0)} spent this cycle
+            {formatINR(categoryBreakdown[0]?.value || 0)} spent {selectedMonth === 'all' ? 'across all time' : `in ${selectedMonthData?.label || 'selected month'}`}
           </div>
         </div>
 
@@ -346,29 +414,162 @@ export default function ExpensesPage() {
         
         {/* Left: Expenses Table */}
         <div className="lg:col-span-8 glass-card p-6 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-sm">
+          
+          {/* Month Wise Quick Breakdown Strip */}
+          <div className="space-y-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Month-Wise Spending Summary</span>
+              </div>
+              {selectedMonth !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedMonth('all')}
+                  className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
+                >
+                  Show All Months
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+              <button
+                type="button"
+                onClick={() => setSelectedMonth('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 border cursor-pointer ${
+                  selectedMonth === 'all'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-500/20'
+                    : 'bg-white dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                }`}
+              >
+                <span>All Months</span>
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md ${
+                  selectedMonth === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold'
+                }`}>
+                  {formatINR(totalAllTime)}
+                </span>
+                <span className={`text-[10px] ${selectedMonth === 'all' ? 'text-indigo-100' : 'text-slate-400'}`}>
+                  ({expenses.length})
+                </span>
+              </button>
+
+              {availableMonths.map((m) => {
+                const isSelected = selectedMonth === m.key;
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => setSelectedMonth(m.key)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 border cursor-pointer ${
+                      isSelected
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-500/20'
+                        : 'bg-white dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                    }`}
+                  >
+                    <span>{m.label}</span>
+                    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md ${
+                      isSelected ? 'bg-white/20 text-white' : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400'
+                    }`}>
+                      {formatINR(m.total)}
+                    </span>
+                    <span className={`text-[10px] ${isSelected ? 'text-indigo-100' : 'text-slate-400'}`}>
+                      ({m.count})
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Filter Bar with Search, Month, Category, Payment Mode & Clear button */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="relative flex-1 min-w-[180px]">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search expenses..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                placeholder="Search expenses, notes..."
+                className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>
 
-            <div className="flex items-center gap-1.5 overflow-x-auto">
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="px-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-medium"
-              >
-                <option value="all">All Categories</option>
-                {categories.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Month Selector */}
+              <div className="relative">
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className={`px-2.5 py-1.5 text-xs rounded-xl border font-medium cursor-pointer transition-all ${
+                    selectedMonth !== 'all'
+                      ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 font-bold'
+                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                  }`}
+                  title="Filter by month"
+                >
+                  <option value="all">📅 All Months</option>
+                  {availableMonths.map((m) => (
+                    <option key={m.key} value={m.key}>
+                      📅 {m.label} • {formatINR(m.total)} ({m.count})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Category Selector */}
+              <div className="relative">
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className={`px-2.5 py-1.5 text-xs rounded-xl border font-medium cursor-pointer transition-all ${
+                    selectedCategory !== 'all'
+                      ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 font-bold'
+                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                  }`}
+                  title="Filter by category"
+                >
+                  <option value="all">All Categories</option>
+                  {categories.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Payment Mode Selector */}
+              <div className="relative">
+                <select
+                  value={selectedMode}
+                  onChange={(e) => setSelectedMode(e.target.value)}
+                  className={`px-2.5 py-1.5 text-xs rounded-xl border font-medium cursor-pointer transition-all ${
+                    selectedMode !== 'all'
+                      ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 font-bold'
+                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                  }`}
+                  title="Filter by payment mode"
+                >
+                  <option value="all">All Modes</option>
+                  <option value="upi">UPI</option>
+                  <option value="cash">Cash</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="card">Card</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              {/* Clear filters button */}
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 hover:bg-rose-100 transition-colors cursor-pointer shrink-0"
+                  title="Reset all filters"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Clear</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -385,54 +586,78 @@ export default function ExpensesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredExpenses.map((exp) => (
-                  <tr key={exp.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
-                    <td className="py-3 px-3">
-                      <div className="font-semibold text-slate-900 dark:text-white">{exp.title}</div>
-                      {exp.notes && <div className="text-[11px] text-slate-400 truncate max-w-xs">{exp.notes}</div>}
-                      {((exp.receiptUrls && exp.receiptUrls.length > 0) || exp.receiptUrl) && (
-                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                          {(exp.receiptUrls && exp.receiptUrls.length > 0 ? exp.receiptUrls : [exp.receiptUrl!]).map((url, imgIdx) => (
-                            <img
-                              key={imgIdx}
-                              src={url}
-                              alt="Receipt"
-                              onClick={() => setViewingReceipt(url)}
-                              className="w-6 h-6 object-cover rounded-md border border-slate-200 dark:border-slate-700 cursor-pointer hover:scale-110 transition-transform shadow-xs"
-                              title="Click to view full receipt"
-                            />
-                          ))}
-                          <span className="text-[10px] text-slate-400 font-mono">
-                            {(exp.receiptUrls?.length || 1)} bill{(exp.receiptUrls?.length || 1) > 1 ? 's' : ''}
-                          </span>
-                        </div>
+                {filteredExpenses.length > 0 ? (
+                  filteredExpenses.map((exp) => (
+                    <tr key={exp.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                      <td className="py-3 px-3">
+                        <div className="font-semibold text-slate-900 dark:text-white">{exp.title}</div>
+                        {exp.notes && <div className="text-[11px] text-slate-400 truncate max-w-xs">{exp.notes}</div>}
+                        {((exp.receiptUrls && exp.receiptUrls.length > 0) || exp.receiptUrl) && (
+                          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                            {(exp.receiptUrls && exp.receiptUrls.length > 0 ? exp.receiptUrls : [exp.receiptUrl!]).map((url, imgIdx) => (
+                              <img
+                                key={imgIdx}
+                                src={url}
+                                alt="Receipt"
+                                onClick={() => setViewingReceipt(url)}
+                                className="w-6 h-6 object-cover rounded-md border border-slate-200 dark:border-slate-700 cursor-pointer hover:scale-110 transition-transform shadow-xs"
+                                title="Click to view full receipt"
+                              />
+                            ))}
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {(exp.receiptUrls?.length || 1)} bill{(exp.receiptUrls?.length || 1) > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400">
+                          {exp.category}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-slate-500 font-mono">
+                        {formatDate(exp.date)}
+                      </td>
+                      <td className="py-3 px-3 uppercase text-[10px] font-mono text-slate-500">
+                        {exp.paymentMode}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono font-bold text-rose-600">
+                        {formatINR(exp.amount)}
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <button
+                          onClick={() => deleteExpense(exp.id)}
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600"
+                          title="Delete expense"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-slate-400">
+                      <Receipt className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2 stroke-[1.5]" />
+                      <div className="font-semibold text-slate-700 dark:text-slate-300 text-sm">No expense records found</div>
+                      <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                        {hasActiveFilters
+                          ? 'No records match your selected month, category, or payment mode filters.'
+                          : 'No expenses logged yet. Click "Log Expense" to record your first expense.'}
+                      </p>
+                      {hasActiveFilters && (
+                        <button
+                          type="button"
+                          onClick={handleResetFilters}
+                          className="mt-3 px-3 py-1.5 rounded-xl text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          Clear All Filters
+                        </button>
                       )}
                     </td>
-                    <td className="py-3 px-3">
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400">
-                        {exp.category}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-slate-500 font-mono">
-                      {formatDate(exp.date)}
-                    </td>
-                    <td className="py-3 px-3 uppercase text-[10px] font-mono text-slate-500">
-                      {exp.paymentMode}
-                    </td>
-                    <td className="py-3 px-3 text-right font-mono font-bold text-rose-600">
-                      {formatINR(exp.amount)}
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      <button
-                        onClick={() => deleteExpense(exp.id)}
-                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600"
-                        title="Delete expense"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
@@ -451,7 +676,9 @@ export default function ExpensesPage() {
               </span>
             </div>
             <p className="text-xs text-slate-400 mb-3">
-              Visual proportion of your business expenses
+              {selectedMonth === 'all'
+                ? 'Visual proportion of your business expenses (All Time)'
+                : `Visual proportion of expenses for ${selectedMonthData?.fullLabel || selectedMonth}`}
             </p>
 
             <div className="relative h-64 w-full flex items-center justify-center">
