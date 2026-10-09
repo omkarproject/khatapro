@@ -586,7 +586,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                           </div>
                         </div>
                         <p className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 truncate">
-                          {currentUser.businessName}
+                          {settings?.businessName || profile?.businessName || currentUser.businessName || 'SmartKhata Merchant'}
                         </p>
                       </div>
 

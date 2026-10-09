@@ -505,6 +505,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const setProfile = (p: UserProfile) => {
     setProfileState(p);
     StorageService.updateProfile(p);
+    if (p.businessName && p.businessName.trim()) {
+      setSettingsState(prev => ({ ...prev, businessName: p.businessName.trim() }));
+    }
     if (currentUser) {
       const updatedUser = { ...currentUser, ...p };
       setCurrentUserState(updatedUser);
@@ -517,6 +520,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateSettings = (newSettings: SystemSettings) => {
     setSettingsState(newSettings);
     StorageService.updateSettings(newSettings);
+    if (newSettings.businessName && newSettings.businessName.trim()) {
+      setProfileState(prev => ({ ...prev, businessName: newSettings.businessName.trim() }));
+      if (currentUser) {
+        const updatedUser = { ...currentUser, businessName: newSettings.businessName.trim() };
+        setCurrentUserState(updatedUser);
+      }
+    }
     addToast('Settings Saved', 'System configurations updated successfully.', 'success');
     syncWithDatabase();
   };

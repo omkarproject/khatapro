@@ -207,27 +207,40 @@ export const StorageService = {
   getProfile: (): UserProfile => {
     const cur = StorageService.getCurrentUser();
     const stored = getLocalItem<UserProfile | null>(STORAGE_KEYS.PROFILE, null as any);
+    const settings = getLocalItem<SystemSettings | null>(STORAGE_KEYS.SETTINGS, null as any);
+    let res: UserProfile;
     if (stored && (stored.businessName || stored.name || stored.email)) {
-      return cur ? { ...cur, ...stored } : stored;
+      res = cur ? { ...cur, ...stored } : stored;
+    } else if (cur) {
+      res = { ...cur };
+    } else {
+      res = {
+        id: 'guest',
+        name: '',
+        email: '',
+        phone: '',
+        role: 'business_owner',
+        businessName: '',
+        businessGst: '',
+        businessAddress: '',
+        createdAt: new Date().toISOString(),
+      };
     }
-    if (cur) return cur;
-    return {
-      id: 'guest',
-      name: '',
-      email: '',
-      phone: '',
-      role: 'business_owner',
-      businessName: '',
-      businessGst: '',
-      businessAddress: '',
-      createdAt: new Date().toISOString(),
-    };
+    // If settings has a specific businessName saved by the merchant, ensure profile mirrors it
+    if (settings?.businessName && settings.businessName.trim()) {
+      res.businessName = settings.businessName.trim();
+    }
+    return res;
   },
   updateProfile: (profile: UserProfile): void => {
     setLocalItem(STORAGE_KEYS.PROFILE, profile);
     const cur = StorageService.getCurrentUser();
     if (cur) {
       StorageService.setCurrentUser({ ...cur, ...profile });
+    }
+    if (profile.businessName && profile.businessName.trim()) {
+      const curSettings = StorageService.getSettings();
+      setLocalItem(STORAGE_KEYS.SETTINGS, { ...curSettings, businessName: profile.businessName.trim() });
     }
   },
 
@@ -238,7 +251,19 @@ export const StorageService = {
     const s = getLocalItem(STORAGE_KEYS.SETTINGS, defaults);
     return s;
   },
-  updateSettings: (settings: SystemSettings): void => setLocalItem(STORAGE_KEYS.SETTINGS, settings),
+  updateSettings: (settings: SystemSettings): void => {
+    setLocalItem(STORAGE_KEYS.SETTINGS, settings);
+    if (settings.businessName && settings.businessName.trim()) {
+      const storedProfile = getLocalItem<UserProfile | null>(STORAGE_KEYS.PROFILE, null as any);
+      if (storedProfile) {
+        setLocalItem(STORAGE_KEYS.PROFILE, { ...storedProfile, businessName: settings.businessName.trim() });
+      }
+      const curUser = StorageService.getCurrentUser();
+      if (curUser) {
+        StorageService.setCurrentUser({ ...curUser, businessName: settings.businessName.trim() });
+      }
+    }
+  },
   
   // Custom UPI & QR quick save helper (as requested by user)
   saveDefaultUpiAndQr: (paymentSettings: Partial<PaymentSettings>): PaymentSettings => {

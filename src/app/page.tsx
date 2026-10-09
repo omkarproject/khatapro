@@ -40,6 +40,40 @@ import {
   Cell
 } from 'recharts';
 
+const DAILY_BUSINESS_MOTIVATIONS = [
+  "उधारी प्रेम की कैंची है ✂️, रोकड़ा हाथ में तो धंधा सातवें आसमान पे! 🚀💸",
+  "ग्राहक भगवान है 🙏, पर उधारी मांगने वाला सिर्फ इंसान... पेमेंट टाइम पे लो! 💳⚡",
+  "मुनाफा ऐसा कमाओ कि तिजोरी भी बोले — बस भाई, अब जगह नहीं बची! 🏦🔥",
+  "कल करे सो आज कर, आज करे सो अब... बाकी बचे हुए पैसे तुरंत खाते में दब! 💰🎯",
+  "चाय ठंडी हो सकती है ☕, पर धंधे का जोश और कलेक्शन कभी ठंडा नहीं होना चाहिए! 📈💥",
+  "बहीखाता साफ़ रखो, रात को नींद गहरी और गल्ले में लक्ष्मी जी की कृपा हमेशा रहेगी! ✨🪔",
+  "जो हिसाब में पक्का, वो धंधे का सच्चा इक्का! 🃏💪",
+  "रिश्तेदारी अपनी जगह 🤝, पर गल्ला और QR कोड अपनी जगह! नो उधारी, फुल तरक्की! 🚀📲",
+  "धंधे में शर्म कैसी? 🤑 जिसने की शर्म, उसके फूटे करम... भेजो आज ही पेमेंट रिमाइंडर! 🔔⚡",
+  "सपनों का साइज़ बड़ा रखो और खर्चों का साइज़ छोटा 📉, प्रॉफिट अपने आप रॉकेट बनेगा! 🚀👑",
+  "हर दिन नया माल, हर दिन नया ग्राहक, और हर शाम मुस्कुराता हुआ गल्ला! 🛍️✨",
+  "किस्मत के भरोसे जुआरी बैठते हैं, व्यापारी तो अपनी मेहनत और स्मार्ट खाते से राज करते हैं! 🦁📊",
+  "उधारी दी तो ग्राहक खोया, नकद बेचा तो शोरूम बनाया! 🏢💎",
+  "आज की कमाई = कल का साम्राज्य! 👑 अपने बिजनेस के असली सुल्तान आप ही हो! 💼🔥",
+  "काम ऐसा करो कि बैंक मैनेजर भी लोन ऑफर करने खुद चाय पीने दुकान पे आए! ☕🏦",
+  "ग्राहकों की मुस्कान और खाते में 'Payment Received' का मैसेज... इससे सुकून भरी आवाज़ दुनिया में नहीं! 🔔🎶",
+  "कंपटीशन चाहे कितना भी हो 🥊, अपनी सर्विस और ईमानदारी हमेशा नंबर 1 रहेगी! 🥇🌟",
+  "छोटा सोचोगे तो दुकान रह जाओगे, बड़ा सोचोगे तो ब्रांड बन जाओगे! 🏭🚀",
+  "पैसे की कद्र करो 💵, पैसा तुम्हारी कद्र पूरी दुनिया में करवा देगा! 🌍💎",
+  "मंदी सिर्फ दिमाग में होती है 🧠, असली व्यापारी हर मौसम में गल्ला भर के जाता है! 🌦️💰",
+  "हिसाब में एक रुपये की भी भूल मत करो, बूंद-बूंद से ही समंदर और चवन्नी-चवन्नी से करोड़ बनते हैं! 🌊🪙",
+  "सुबह की बोहनी अगर मुस्कान के साथ हो, तो शाम तक गल्ले में नोटों की गड्डी पक्की! 🌅💵",
+  "बिजनेस में दो ही नियम हैं: नियम 1 - कभी कैश फ्लो मत रोको, नियम 2 - नियम 1 कभी मत भूलो! 🛑📈",
+  "जो ग्राहक को इज्जत और सही दाम देता है, उसका ग्राहक कभी दूसरी दुकान का रुख नहीं करता! 🎯🤝",
+  "व्यापार वही जो दिल से हो, और हिसाब वही जो डिजिटल स्मार्टखाता में फिट हो! 📱💼",
+  "टेंशन फ्री होकर माल बेचो, पेमेंट की चिंता QR कोड और ऑटो-रिमाइंडर पे छोड़ दो! 📲⚡",
+  "कामयाबी का एक ही मंत्र: माल चोखा, दाम खरा, और व्यवहार हीरा! 💎👌",
+  "आज का पसीना, कल का मुनाफ़ा 💦💰... लगे रहो लाला जी, आज बड़ा खेल होना है! 🏆🔥",
+  "धीरूभाई भी शून्य से शुरू हुए थे 🚀, आपके हौसले में भी वही आग है! आगे बढ़ो! 💥📈",
+  "महीने का अंत हो या शुरुआत, अपनी सेल और सेविंग्स हमेशा रिकॉर्ड तोड़ होनी चाहिए! 📊🚀",
+  "जब तक गल्ला भारी है, तब तक दुनिया तुम्हारी है! 🌍💸 आज धंधे में धुआंधार बिक्री करो!"
+];
+
 export default function DashboardPage() {
   const {
     customers,
@@ -51,10 +85,20 @@ export default function DashboardPage() {
     reminders,
     settings,
     profile,
+    currentUser,
     openCollectModal,
   } = useApp();
 
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+
+  // Daily Rotating Vyapar Motivation
+  const dailyMotivation = useMemo(() => {
+    const day = new Date().getDate();
+    return DAILY_BUSINESS_MOTIVATIONS[(day - 1) % DAILY_BUSINESS_MOTIVATIONS.length];
+  }, []);
+
+  const activeBusinessName = settings?.businessName || profile?.businessName || currentUser?.businessName || 'My Business';
+  const activeOwnerName = profile?.name || currentUser?.name || 'Merchant';
 
   // Financial Metrics Computations
   const metrics = useMemo(() => {
@@ -235,42 +279,47 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       
-      {/* Top Banner: Welcome & Quick Action Bar */}
-      <div className="relative overflow-hidden rounded-[24px] sm:rounded-[28px] p-5 sm:p-7 lg:p-8 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-xl border border-slate-800">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-xs px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+      {/* Top Banner: Welcome & Quick Action Bar (Compact & Sleek) */}
+      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 lg:p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-lg border border-slate-800">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+          <div className="space-y-1 sm:space-y-1.5 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1 shrink-0">
                 <Sparkles className="w-3 h-3 text-indigo-400" />
                 Live Business Pulse
               </span>
-              <span className="text-xs text-slate-400" suppressHydrationWarning>
-                {profile?.businessName || 'SmartKhata'}
+              <span className="text-xs font-bold text-amber-300/90 tracking-wide truncate max-w-[220px] sm:max-w-md" suppressHydrationWarning>
+                {activeBusinessName}
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight" suppressHydrationWarning>
-              Good day, {profile?.name || 'Merchant'}
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-black tracking-tight" suppressHydrationWarning>
+              Good day, {activeOwnerName} 👋
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-xl" suppressHydrationWarning>
-              &ldquo;{settings?.businessTagline || 'Track Money, Manage Business, Grow Faster'}&rdquo; • All systems running securely on {(settings?.backendProvider || 'mongodb').toUpperCase()} storage.
-            </p>
+            <div className="flex items-center gap-2 pt-0.5 max-w-2xl">
+              <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30 tracking-wider shrink-0 flex items-center gap-1">
+                ⚡ Aaj Ka Vyapar Funda
+              </span>
+              <p className="text-xs sm:text-[13px] text-slate-200 truncate italic" title={dailyMotivation}>
+                {dailyMotivation}
+              </p>
+            </div>
           </div>
 
           {/* Action Hub Buttons */}
-          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
             <button
               onClick={() => openCollectModal()}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-cyan-500 hover:opacity-95 shadow-lg shadow-indigo-500/30 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
+              className="flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-cyan-500 hover:opacity-95 shadow-md shadow-indigo-500/25 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
             >
-              <QrCode className="w-4 h-4" />
+              <QrCode className="w-3.5 h-3.5" />
               Collect Payment
             </button>
             <button
               onClick={() => setIsQuickAddOpen(true)}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
+              className="flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/25 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               Add
             </button>
           </div>
