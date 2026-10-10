@@ -19,11 +19,6 @@ export default function MaintenanceNoticeModal() {
   const { settings } = useApp();
   const [isOpen, setIsOpen] = useState(false);
 
-  // If beta testing is disabled in settings, do not show modal or floating pill
-  if (settings.betaTestingEnabled === false) {
-    return null;
-  }
-
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const dismissed = sessionStorage.getItem('skp_beta_notice_dismissed');
@@ -46,6 +41,11 @@ export default function MaintenanceNoticeModal() {
   const handleOpenNotice = () => {
     setIsOpen(true);
   };
+
+  // If beta testing is disabled in settings, do not show modal or floating pill
+  if (settings?.betaTestingEnabled === false) {
+    return null;
+  }
 
   return (
     <>
