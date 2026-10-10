@@ -63,7 +63,7 @@ export default function SettingsPage() {
   const [maintEnabled, setMaintEnabled] = useState(() => settings.maintenanceMode?.enabled || false);
   const [maintDuration, setMaintDuration] = useState<number>(() => settings.maintenanceMode?.durationMinutes || 15);
   const [maintReason, setMaintReason] = useState(() => settings.maintenanceMode?.reason || 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️');
-  const [betaTestingActive, setBetaTestingActive] = useState(() => settings.betaTestingEnabled !== false);
+  const [betaTestingActive, setBetaTestingActive] = useState(() => Boolean(settings.betaTestingEnabled));
 
   // Cloud Backup & Restore State
   const [isExportingBackup, setIsExportingBackup] = useState(false);
@@ -101,7 +101,7 @@ export default function SettingsPage() {
       if (settings.maintenanceMode.reason) setMaintReason(settings.maintenanceMode.reason);
     }
     if (settings.betaTestingEnabled !== undefined) {
-      setBetaTestingActive(settings.betaTestingEnabled !== false);
+      setBetaTestingActive(Boolean(settings.betaTestingEnabled));
     }
   }, [settings.telegramBackup, settings.maintenanceMode, settings.betaTestingEnabled]);
 

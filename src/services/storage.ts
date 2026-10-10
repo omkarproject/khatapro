@@ -131,7 +131,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
     durationMinutes: 15,
     reason: 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️',
   },
-  betaTestingEnabled: true,
+  betaTestingEnabled: false,
 });
 
 export const StorageService = {
@@ -282,11 +282,26 @@ export const StorageService = {
     }
   },
 
-  // Settings & Persistent UPI / QR configuration
   getSettings: (): SystemSettings => {
     const curUser = StorageService.getCurrentUser();
     const defaults = getCleanDefaultSettings(curUser?.businessName, curUser?.phone, curUser?.email);
     const s = getLocalItem(STORAGE_KEYS.SETTINGS, defaults);
+
+    // Merge cached global system config (maintenanceMode & betaTestingEnabled)
+    if (typeof window !== 'undefined') {
+      try {
+        const rawGlobal = localStorage.getItem('skp_global_system_config');
+        if (rawGlobal) {
+          const globalConf = JSON.parse(rawGlobal);
+          if (globalConf.maintenanceMode) {
+            s.maintenanceMode = globalConf.maintenanceMode;
+          }
+          if (globalConf.betaTestingEnabled !== undefined) {
+            s.betaTestingEnabled = Boolean(globalConf.betaTestingEnabled);
+          }
+        }
+      } catch {}
+    }
     return s;
   },
   updateSettings: (settings: Partial<SystemSettings>): SystemSettings => {

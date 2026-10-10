@@ -42,8 +42,8 @@ export default function MaintenanceNoticeModal() {
     setIsOpen(true);
   };
 
-  // If beta testing is disabled in settings, do not show modal or floating pill
-  if (settings?.betaTestingEnabled === false) {
+  // If beta testing is disabled or not explicitly active, do not show modal or floating pill
+  if (!settings?.betaTestingEnabled) {
     return null;
   }
 

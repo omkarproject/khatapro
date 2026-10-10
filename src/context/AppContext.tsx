@@ -534,6 +534,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [darkMode, mounted]);
 
+  // Synchronize Global System Config (Maintenance Mode & Beta Testing) across all users / browsers
+  useEffect(() => {
+    if (!mounted) return;
+
+    const fetchGlobalSystemConfig = async () => {
+      try {
+        const res = await fetch('/api/system/config');
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json.success) {
+          const globalPayload = {
+            maintenanceMode: json.maintenanceMode,
+            betaTestingEnabled: Boolean(json.betaTestingEnabled),
+          };
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('skp_global_system_config', JSON.stringify(globalPayload));
+          }
+          setSettingsState(prev => {
+            const sameMaint = JSON.stringify(prev.maintenanceMode) === JSON.stringify(json.maintenanceMode);
+            const sameBeta = prev.betaTestingEnabled === Boolean(json.betaTestingEnabled);
+            if (sameMaint && sameBeta) return prev;
+            return {
+              ...prev,
+              maintenanceMode: json.maintenanceMode,
+              betaTestingEnabled: Boolean(json.betaTestingEnabled),
+            };
+          });
+        }
+      } catch (err) {
+        // Silently skip if network error
+      }
+    };
+
+    fetchGlobalSystemConfig();
+    const interval = setInterval(fetchGlobalSystemConfig, 12000);
+    return () => clearInterval(interval);
+  }, [mounted]);
+
   const toggleDarkMode = () => {
     const nextMode = !darkMode;
     setDarkMode(nextMode);
@@ -560,6 +598,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateSettings = (newSettings: Partial<SystemSettings>) => {
     const merged = StorageService.updateSettings(newSettings);
     setSettingsState(merged);
+
+    // If Maintenance Mode or Beta Testing was modified, broadcast immediately to Global System Config
+    if (newSettings.maintenanceMode !== undefined || newSettings.betaTestingEnabled !== undefined) {
+      if (typeof window !== 'undefined') {
+        const globalPayload = {
+          maintenanceMode: merged.maintenanceMode,
+          betaTestingEnabled: Boolean(merged.betaTestingEnabled),
+        };
+        localStorage.setItem('skp_global_system_config', JSON.stringify(globalPayload));
+        fetch('/api/system/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(globalPayload),
+        }).catch(e => console.warn('Global config broadcast error:', e));
+      }
+    }
+
     if (merged.businessName && merged.businessName.trim()) {
       setProfileState(prev => ({ ...prev, businessName: merged.businessName.trim() }));
       if (currentUser) {

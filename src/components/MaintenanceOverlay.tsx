@@ -115,9 +115,9 @@ export default function MaintenanceOverlay() {
 
   const handleAdminBypassSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Simple admin bypass: accepts "admin", "1234", or store name
     const cleaned = passcode.trim().toLowerCase();
-    if (cleaned === 'admin' || cleaned === '1234' || cleaned === 'owner' || cleaned.length >= 3) {
+    const validCodes = ['admin', '1234', 'owner', 'superadmin', '9999'];
+    if (validCodes.includes(cleaned)) {
       sessionStorage.setItem('skp_admin_maintenance_bypass', 'true');
       setIsAdminBypassed(true);
       setShowBypassPrompt(false);
