@@ -28,8 +28,12 @@ import {
   X,
   Tag,
   KeyRound,
+  Key,
   Layers,
-  ArrowRight
+  ArrowRight,
+  Upload,
+  Image as ImageIcon,
+  Bell
 } from 'lucide-react';
 
 const NOTE_COLORS = [
@@ -59,6 +63,9 @@ export default function NotesAndTasksPage() {
   const [activeTab, setActiveTab] = useState<'notes' | 'tasks' | 'passwords'>('notes');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Image Preview Modal
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+
   // --- Note Modal State ---
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -69,6 +76,8 @@ export default function NotesAndTasksPage() {
   const [noteCategory, setNoteCategory] = useState<NoteItem['category']>('General');
   const [noteColor, setNoteColor] = useState('amber');
   const [noteIsPinned, setNoteIsPinned] = useState(false);
+  const [noteAttachedImage, setNoteAttachedImage] = useState<string | undefined>(undefined);
+  const noteFileInputRef = React.useRef<HTMLInputElement>(null);
 
   // --- Task Modal & Quick Add State ---
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -76,6 +85,8 @@ export default function NotesAndTasksPage() {
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDesc, setTaskDesc] = useState('');
   const [taskDueDate, setTaskDueDate] = useState('');
+  const [taskReminderDate, setTaskReminderDate] = useState('');
+  const [taskReminderTime, setTaskReminderTime] = useState('');
   const [taskPriority, setTaskPriority] = useState<TaskItem['priority']>('medium');
   const [taskCategory, setTaskCategory] = useState('Business');
   const [taskFilter, setTaskFilter] = useState<'all' | 'pending' | 'completed'>('all');
@@ -86,14 +97,30 @@ export default function NotesAndTasksPage() {
   const [passAppName, setPassAppName] = useState('');
   const [passUsername, setPassUsername] = useState('');
   const [passPassword, setPassPassword] = useState('');
+  const [passRecoveryKey, setPassRecoveryKey] = useState('');
+  const [passAttachedImage, setPassAttachedImage] = useState<string | undefined>(undefined);
   const [passWebsiteUrl, setPassWebsiteUrl] = useState('');
   const [passNotes, setPassNotes] = useState('');
   const [passCategory, setPassCategory] = useState<PasswordItem['category']>('Banking');
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
-  const [copiedField, setCopiedField] = useState<{ id: string; field: 'user' | 'pass' } | null>(null);
+  const [copiedField, setCopiedField] = useState<{ id: string; field: 'user' | 'pass' | 'recovery' } | null>(null);
+  const passFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Image upload handler helper
+  const handleProcessImage = (file: File, callback: (base64: string) => void) => {
+    if (file.size > 8 * 1024 * 1024) {
+      addToast('File Too Large', 'Please upload an image smaller than 8MB.', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      callback(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   // --- Copy Helper ---
-  const handleCopyText = (id: string, text: string, field: 'user' | 'pass', label: string) => {
+  const handleCopyText = (id: string, text: string, field: 'user' | 'pass' | 'recovery', label: string) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
     setCopiedField({ id, field });
@@ -113,6 +140,7 @@ export default function NotesAndTasksPage() {
     setNoteCategory('General');
     setNoteColor('amber');
     setNoteIsPinned(false);
+    setNoteAttachedImage(undefined);
     setIsNoteModalOpen(true);
   };
 
@@ -125,6 +153,7 @@ export default function NotesAndTasksPage() {
     setNoteCategory(note.category || 'General');
     setNoteColor(note.color || 'amber');
     setNoteIsPinned(Boolean(note.isPinned));
+    setNoteAttachedImage(note.attachedImage);
     setIsNoteModalOpen(true);
   };
 
@@ -144,6 +173,7 @@ export default function NotesAndTasksPage() {
       category: noteCategory,
       color: noteColor,
       isPinned: noteIsPinned,
+      attachedImage: noteAttachedImage,
       createdAt: editingNoteId ? (notes.find(n => n.id === editingNoteId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -158,6 +188,8 @@ export default function NotesAndTasksPage() {
     setTaskTitle('');
     setTaskDesc('');
     setTaskDueDate('');
+    setTaskReminderDate('');
+    setTaskReminderTime('');
     setTaskPriority('medium');
     setTaskCategory('Business');
     setIsTaskModalOpen(true);
@@ -168,6 +200,8 @@ export default function NotesAndTasksPage() {
     setTaskTitle(task.title);
     setTaskDesc(task.description || '');
     setTaskDueDate(task.dueDate || '');
+    setTaskReminderDate(task.reminderDate || '');
+    setTaskReminderTime(task.reminderTime || '');
     setTaskPriority(task.priority);
     setTaskCategory(task.category || 'Business');
     setIsTaskModalOpen(true);
@@ -186,6 +220,8 @@ export default function NotesAndTasksPage() {
       description: taskDesc.trim() || undefined,
       isCompleted: editingTaskId ? (tasks.find(t => t.id === editingTaskId)?.isCompleted || false) : false,
       dueDate: taskDueDate || undefined,
+      reminderDate: taskReminderDate || undefined,
+      reminderTime: taskReminderTime || undefined,
       priority: taskPriority,
       category: taskCategory,
       createdAt: editingTaskId ? (tasks.find(t => t.id === editingTaskId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
@@ -201,6 +237,8 @@ export default function NotesAndTasksPage() {
     setPassAppName('');
     setPassUsername('');
     setPassPassword('');
+    setPassRecoveryKey('');
+    setPassAttachedImage(undefined);
     setPassWebsiteUrl('');
     setPassNotes('');
     setPassCategory('Banking');
@@ -212,6 +250,8 @@ export default function NotesAndTasksPage() {
     setPassAppName(item.appName);
     setPassUsername(item.username);
     setPassPassword(item.password);
+    setPassRecoveryKey(item.recoveryKey || '');
+    setPassAttachedImage(item.attachedImage);
     setPassWebsiteUrl(item.websiteUrl || '');
     setPassNotes(item.notes || '');
     setPassCategory(item.category || 'Banking');
@@ -234,6 +274,8 @@ export default function NotesAndTasksPage() {
       appName: passAppName.trim(),
       username: passUsername.trim(),
       password: passPassword.trim(),
+      recoveryKey: passRecoveryKey.trim() || undefined,
+      attachedImage: passAttachedImage,
       websiteUrl: passWebsiteUrl.trim() || undefined,
       notes: passNotes.trim() || undefined,
       category: passCategory,
@@ -510,6 +552,27 @@ export default function NotesAndTasksPage() {
                       <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed line-clamp-6">
                         {note.description}
                       </p>
+
+                      {/* Attached Image Thumbnail */}
+                      {note.attachedImage && (
+                        <div className="mt-2.5">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage({ url: note.attachedImage!, title: note.title })}
+                            className="relative rounded-xl overflow-hidden border border-slate-200/80 dark:border-slate-700/80 group/img block w-full text-left cursor-pointer"
+                          >
+                            <img
+                              src={note.attachedImage}
+                              alt={note.title}
+                              className="w-full h-32 object-cover transition-transform group-hover/img:scale-105"
+                            />
+                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center text-white text-[11px] font-bold gap-1">
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>View Image</span>
+                            </div>
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Bottom Reminder & Timestamp Footer */}
@@ -704,19 +767,31 @@ export default function NotesAndTasksPage() {
                         )}
 
                         {/* Due Date Indicator */}
-                        {task.dueDate && (
-                          <div
-                            className={`inline-flex items-center gap-1 text-[10px] font-mono font-bold mt-2 px-2 py-0.5 rounded-md ${
-                              isOverdue
-                                ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200/60'
-                                : 'text-slate-400 dark:text-slate-500'
-                            }`}
-                          >
-                            <Calendar className="w-3 h-3" />
-                            <span>Due: {formatDate(task.dueDate)}</span>
-                            {isOverdue && <span className="text-rose-600 dark:text-rose-400 font-extrabold">(Overdue)</span>}
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 flex-wrap mt-2">
+                          {task.dueDate && (
+                            <div
+                              className={`inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md ${
+                                isOverdue
+                                  ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200/60'
+                                  : 'text-slate-400 dark:text-slate-500'
+                              }`}
+                            >
+                              <Calendar className="w-3 h-3" />
+                              <span>Due: {formatDate(task.dueDate)}</span>
+                              {isOverdue && <span className="text-rose-600 dark:text-rose-400 font-extrabold">(Overdue)</span>}
+                            </div>
+                          )}
+
+                          {task.reminderDate && (
+                            <div
+                              className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/60"
+                              title="Alert in Notifications & Alerts"
+                            >
+                              <Bell className="w-3 h-3 text-amber-500" />
+                              <span>Reminder: {formatDate(task.reminderDate)} {task.reminderTime && `• ${task.reminderTime}`}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -928,6 +1003,64 @@ export default function NotesAndTasksPage() {
                         </div>
                       </div>
 
+                      {/* Recovery Key with 1-click copy */}
+                      {item.recoveryKey && (
+                        <div className="space-y-1 mt-2.5">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                            <Key className="w-3 h-3" />
+                            <span>Recovery / Backup Key</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(item.id, item.recoveryKey!, 'recovery', 'Recovery Key')}
+                            className="w-full flex items-center justify-between p-2 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/60 hover:border-amber-500 transition-all text-left cursor-pointer group/rec"
+                            title="Click to copy recovery key"
+                          >
+                            <span className="text-xs font-mono font-bold text-amber-900 dark:text-amber-200 truncate pr-2">
+                              {item.recoveryKey}
+                            </span>
+                            <span className="flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-300 shrink-0">
+                              {copiedField?.id === item.id && copiedField.field === 'recovery' ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-500" />
+                                  <span className="text-emerald-500 font-extrabold">Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3 opacity-60 group-hover/rec:opacity-100" />
+                                  <span className="opacity-0 group-hover/rec:opacity-100 transition-opacity">Copy</span>
+                                </>
+                              )}
+                            </span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Attached Backup Image / QR */}
+                      {item.attachedImage && (
+                        <div className="mt-2.5">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
+                            <ImageIcon className="w-3 h-3 text-indigo-500" />
+                            <span>Attached 2FA / Backup Photo</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage({ url: item.attachedImage!, title: `${item.appName} - Backup Attachment` })}
+                            className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 group/passimg block w-full text-left cursor-pointer"
+                          >
+                            <img
+                              src={item.attachedImage}
+                              alt={`${item.appName} backup`}
+                              className="w-full h-24 object-contain bg-slate-950/90"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/passimg:opacity-100 transition-opacity flex items-center justify-center text-white text-[11px] font-bold gap-1">
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>View Attachment</span>
+                            </div>
+                          </button>
+                        </div>
+                      )}
+
                       {/* Notes / Hints if present */}
                       {item.notes && (
                         <div className="mt-2.5 p-2 rounded-xl bg-slate-100/60 dark:bg-slate-800/40 text-[11px] text-slate-500 dark:text-slate-400 italic">
@@ -1094,6 +1227,47 @@ export default function NotesAndTasksPage() {
                 </div>
               </div>
 
+              {/* Attach Image (Receipts, Bill Photos, Reference) */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Attach Image (Receipts, Bill Photos, Documents)
+                </label>
+                <input
+                  type="file"
+                  ref={noteFileInputRef}
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleProcessImage(file, (b64) => setNoteAttachedImage(b64));
+                  }}
+                />
+                {noteAttachedImage ? (
+                  <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 group">
+                    <img src={noteAttachedImage} alt="Attachment" className="w-full h-36 object-cover" />
+                    <div className="absolute top-2 right-2 flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setNoteAttachedImage(undefined)}
+                        className="p-1.5 rounded-lg bg-black/70 hover:bg-rose-600 text-white transition-colors cursor-pointer"
+                        title="Remove Image"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => noteFileInputRef.current?.click()}
+                    className="w-full py-3 px-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-amber-500 dark:hover:border-amber-400 bg-slate-50/50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 hover:text-amber-600 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Upload className="w-4 h-4 text-amber-500" />
+                    <span>Click to attach photo or receipt image</span>
+                  </button>
+                )}
+              </div>
+
               {/* Submit Button */}
               <div className="pt-2">
                 <button
@@ -1193,6 +1367,38 @@ export default function NotesAndTasksPage() {
                     <option value="medium">Medium Priority</option>
                     <option value="high">High Priority</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Set Reminder Date & Time */}
+              <div className="p-3 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/30 space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900 dark:text-emerald-300">
+                  <Bell className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Set Reminder (Notifications &amp; Alerts me aayega)</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                      Reminder Date
+                    </label>
+                    <input
+                      type="date"
+                      value={taskReminderDate}
+                      onChange={(e) => setTaskReminderDate(e.target.value)}
+                      className="w-full px-3 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                      Reminder Time (Optional)
+                    </label>
+                    <input
+                      type="time"
+                      value={taskReminderTime}
+                      onChange={(e) => setTaskReminderTime(e.target.value)}
+                      className="w-full px-3 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1332,6 +1538,62 @@ export default function NotesAndTasksPage() {
                 />
               </div>
 
+              {/* Recovery Key / 2FA Backup Seed Key */}
+              <div>
+                <label className="block text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1 flex items-center gap-1">
+                  <Key className="w-3.5 h-3.5" />
+                  <span>Recovery Key / Backup Key / 2FA Seed (Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. ABCD-EFGH-1234-5678 or 24-word backup mnemonic phrase"
+                  value={passRecoveryKey}
+                  onChange={(e) => setPassRecoveryKey(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-white"
+                />
+              </div>
+
+              {/* Attach Image (2FA QR Screenshot, Backup Photo) */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Attach Image (2FA QR Screenshot, Seed Key Photo)
+                </label>
+                <input
+                  type="file"
+                  ref={passFileInputRef}
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleProcessImage(file, (b64) => setPassAttachedImage(b64));
+                  }}
+                />
+                {passAttachedImage ? (
+                  <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 group">
+                    <img src={passAttachedImage} alt="Backup Attachment" className="w-full h-36 object-contain bg-slate-950" />
+                    <div className="absolute top-2 right-2 flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setPassAttachedImage(undefined)}
+                        className="p-1.5 rounded-lg bg-black/70 hover:bg-rose-600 text-white transition-colors cursor-pointer"
+                        title="Remove Image"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => passFileInputRef.current?.click()}
+                    className="w-full py-3 px-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 bg-slate-50/50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 hover:text-indigo-600 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Upload className="w-4 h-4 text-indigo-500" />
+                    <span>Click to attach 2FA QR screenshot or recovery photo</span>
+                  </button>
+                )}
+              </div>
+
               {/* Submit Button */}
               <div className="pt-2">
                 <button
@@ -1342,6 +1604,27 @@ export default function NotesAndTasksPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Enlarged Image Preview Modal */}
+      {previewImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="relative max-w-2xl w-full bg-slate-900 rounded-3xl border border-slate-700 overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between p-4 border-b border-slate-800 text-white">
+              <span className="text-xs font-bold truncate">{previewImage.title}</span>
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 flex items-center justify-center bg-black/40 max-h-[75vh] overflow-auto">
+              <img src={previewImage.url} alt={previewImage.title} className="max-h-[70vh] w-auto object-contain rounded-xl" />
+            </div>
           </div>
         </div>
       )}

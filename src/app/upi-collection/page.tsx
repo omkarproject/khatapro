@@ -18,7 +18,8 @@ import {
   Sparkles,
   DollarSign,
   History,
-  TrendingUp
+  TrendingUp,
+  Trash2
 } from 'lucide-react';
 
 export default function UpiCollectionPage() {
@@ -28,14 +29,15 @@ export default function UpiCollectionPage() {
     transactions,
     customers,
     addTransaction,
+    deleteTransaction,
     addToast,
   } = useApp();
 
   const paymentSettings = settings.paymentSettings;
 
-  // Merchant Default Configuration State
-  const [upiId, setUpiId] = useState(paymentSettings.upiId || 'merchant@upi');
-  const [payeeName, setPayeeName] = useState(paymentSettings.payeeName || 'SmartKhata Merchant');
+  // Merchant Default Configuration State - Use saved settings or business name, not mock placeholders
+  const [upiId, setUpiId] = useState(paymentSettings.upiId || '');
+  const [payeeName, setPayeeName] = useState(paymentSettings.payeeName || settings.businessName || 'Merchant Store');
   const [customQrUrl, setCustomQrUrl] = useState<string | undefined>(paymentSettings.customQrUrl);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
@@ -49,10 +51,16 @@ export default function UpiCollectionPage() {
 
   // Keep in sync with store
   useEffect(() => {
-    setUpiId(paymentSettings.upiId || 'merchant@upi');
-    setPayeeName(paymentSettings.payeeName || 'SmartKhata Merchant');
-    setCustomQrUrl(paymentSettings.customQrUrl);
-  }, [paymentSettings]);
+    if (paymentSettings.upiId) {
+      setUpiId(paymentSettings.upiId);
+    }
+    if (paymentSettings.payeeName || settings.businessName) {
+      setPayeeName(paymentSettings.payeeName || settings.businessName);
+    }
+    if (paymentSettings.customQrUrl !== undefined) {
+      setCustomQrUrl(paymentSettings.customQrUrl);
+    }
+  }, [paymentSettings, settings.businessName]);
 
   // Derived URI and QR image
   const numCollectAmount = parseFloat(collectAmount) || 0;
@@ -143,7 +151,8 @@ export default function UpiCollectionPage() {
   const totalUpiCollected = upiTransactions.reduce((acc, t) => acc + t.amount, 0);
 
   return (
-    <div className="space-y-6">
+    <>
+      <div className="print:hidden space-y-6">
       
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -440,6 +449,7 @@ export default function UpiCollectionPage() {
                 <th className="py-2.5 px-3">Note</th>
                 <th className="py-2.5 px-3 text-right">Amount</th>
                 <th className="py-2.5 px-3 text-center">Status</th>
+                <th className="py-2.5 px-3 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -465,6 +475,20 @@ export default function UpiCollectionPage() {
                       Settled
                     </span>
                   </td>
+                  <td className="py-3 px-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm(`Delete UPI collection record of ₹${t.amount.toLocaleString('en-IN')}?`)) {
+                          deleteTransaction(t.id);
+                        }
+                      }}
+                      title="Delete Record"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -473,5 +497,67 @@ export default function UpiCollectionPage() {
       </div>
 
     </div>
+
+    {/* DEDICATED MODERN PRINTABLE SHOP STANDEE (RENDERED ONLY DURING BROWSER PRINT) */}
+    <div className="hidden print:flex flex-col items-center justify-between min-h-[96vh] w-full max-w-xl mx-auto p-8 bg-white text-slate-900 border-[3px] border-slate-900 rounded-[36px] font-sans">
+      
+      {/* Standee Top Header */}
+      <div className="w-full flex flex-col items-center text-center space-y-2 border-b-2 border-slate-900 pb-5">
+        <div className="px-5 py-1.5 rounded-full bg-slate-900 text-white font-black text-xs tracking-widest uppercase flex items-center gap-2">
+          <span>BHARAT INTERFACE FOR MONEY</span>
+          <span>•</span>
+          <span>UPI</span>
+        </div>
+        <h1 className="text-3xl font-black tracking-tight text-slate-950 uppercase pt-1">
+          {payeeName || settings.businessName || 'MY BUSINESS'}
+        </h1>
+        <p className="text-xs font-bold text-slate-500 tracking-wider uppercase">
+          ACCEPTED HERE • SCAN &amp; PAY USING ANY UPI APP
+        </p>
+      </div>
+
+      {/* Center QR Display with Frame */}
+      <div className="my-6 flex flex-col items-center">
+        <div className="relative p-6 bg-white border-4 border-slate-900 rounded-3xl shadow-none">
+          {/* Corner Decorative Crosses */}
+          <div className="absolute top-2 left-2 w-4 h-4 border-t-4 border-l-4 border-indigo-600 rounded-tl-sm" />
+          <div className="absolute top-2 right-2 w-4 h-4 border-t-4 border-r-4 border-indigo-600 rounded-tr-sm" />
+          <div className="absolute bottom-2 left-2 w-4 h-4 border-b-4 border-l-4 border-indigo-600 rounded-bl-sm" />
+          <div className="absolute bottom-2 right-2 w-4 h-4 border-b-4 border-r-4 border-indigo-600 rounded-br-sm" />
+
+          <img
+            src={activeQrDisplay}
+            alt="Merchant QR"
+            className="w-64 h-64 object-contain"
+          />
+        </div>
+
+        {/* UPI ID Pill */}
+        <div className="mt-4 px-6 py-2 rounded-2xl bg-slate-100 border-2 border-slate-300 font-mono font-black text-sm text-slate-900 text-center">
+          <span className="text-[10px] text-slate-500 block font-sans font-bold uppercase tracking-wider">UPI ID</span>
+          {upiId || 'merchant@upi'}
+        </div>
+      </div>
+
+      {/* Supported UPI Apps Row */}
+      <div className="w-full flex flex-col items-center space-y-3 pt-4 border-t-2 border-slate-900">
+        <div className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">
+          ALL APPS SUPPORTED
+        </div>
+        <div className="flex items-center justify-center gap-4 text-xs font-black text-slate-800">
+          <span className="px-3 py-1 rounded-xl bg-slate-100 border border-slate-200">Google Pay</span>
+          <span className="px-3 py-1 rounded-xl bg-slate-100 border border-slate-200">PhonePe</span>
+          <span className="px-3 py-1 rounded-xl bg-slate-100 border border-slate-200">Paytm</span>
+          <span className="px-3 py-1 rounded-xl bg-slate-100 border border-slate-200">BHIM</span>
+          <span className="px-3 py-1 rounded-xl bg-slate-100 border border-slate-200">Any Bank</span>
+        </div>
+
+        <div className="text-[10px] text-slate-500 font-bold tracking-tight text-center pt-2">
+          ⚡ Instant Bank Settlement • 0% Convenience Fee • Powered by SmartKhata PRO
+        </div>
+      </div>
+
+    </div>
+  </>
   );
 }

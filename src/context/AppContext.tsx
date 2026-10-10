@@ -88,7 +88,7 @@ interface AppContextType {
   deleteTask: (id: string) => void;
   savePassword: (item: PasswordItem) => void;
   deletePassword: (id: string) => void;
-  updateSettings: (settings: SystemSettings) => void;
+  updateSettings: (settings: Partial<SystemSettings>) => void;
   
   // UPI and QR Default Persistence (Key User Requirement)
   saveDefaultUpiAndQr: (data: { upiId: string; payeeName: string; customQrUrl?: string }) => void;
@@ -253,7 +253,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (Array.isArray(d.notes)) setNotes(d.notes);
           if (Array.isArray(d.tasks)) setTasks(d.tasks);
           if (Array.isArray(d.passwords)) setPasswords(d.passwords);
-          if (d.settings) setSettingsState(d.settings);
+          if (d.settings) {
+            setSettingsState(prev => ({
+              ...d.settings,
+              paymentSettings: {
+                ...(prev.paymentSettings || {}),
+                ...(d.settings.paymentSettings || {}),
+                upiId: (d.settings.paymentSettings?.upiId || '').trim() || prev.paymentSettings?.upiId || '',
+                payeeName: (d.settings.paymentSettings?.payeeName || '').trim() || prev.paymentSettings?.payeeName || prev.businessName || '',
+                customQrUrl: d.settings.paymentSettings?.customQrUrl || prev.paymentSettings?.customQrUrl || '',
+                isDefaultQrSaved: d.settings.paymentSettings?.isDefaultQrSaved ?? prev.paymentSettings?.isDefaultQrSaved ?? false,
+              }
+            }));
+          }
           if (d.user) setProfileState(d.user);
 
           // Update local cache
@@ -545,13 +557,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     syncWithDatabase();
   };
 
-  const updateSettings = (newSettings: SystemSettings) => {
-    setSettingsState(newSettings);
-    StorageService.updateSettings(newSettings);
-    if (newSettings.businessName && newSettings.businessName.trim()) {
-      setProfileState(prev => ({ ...prev, businessName: newSettings.businessName.trim() }));
+  const updateSettings = (newSettings: Partial<SystemSettings>) => {
+    const merged = StorageService.updateSettings(newSettings);
+    setSettingsState(merged);
+    if (merged.businessName && merged.businessName.trim()) {
+      setProfileState(prev => ({ ...prev, businessName: merged.businessName.trim() }));
       if (currentUser) {
-        const updatedUser = { ...currentUser, businessName: newSettings.businessName.trim() };
+        const updatedUser = { ...currentUser, businessName: merged.businessName.trim() };
         setCurrentUserState(updatedUser);
       }
     }
@@ -576,6 +588,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       `UPI: ${data.upiId} will be loaded automatically for all payment collections.`,
       'success'
     );
+    syncWithDatabase();
   };
 
   const saveCustomer = (cust: Customer) => {
@@ -767,6 +780,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const updated = StorageService.saveTask(task);
     setTasks(updated);
     addToast('Task Saved', `Task "${task.title}" saved.`, 'success');
+    if (task.reminderDate) {
+      const taskRem: PaymentReminder = {
+        id: `task_rem_${task.id}`,
+        customerId: 'notes_tasks_module',
+        customerName: `📋 Task: ${task.title}`,
+        customerPhone: '',
+        amount: 0,
+        dueDate: task.reminderDate,
+        reminderType: 'custom',
+        channels: ['sms'],
+        status: task.isCompleted ? 'sent' : 'pending',
+        messageTemplate: task.description || task.title,
+        note: `Task Priority: ${task.priority.toUpperCase()}${task.reminderTime ? ` • Time: ${task.reminderTime}` : ''}`,
+        createdAt: new Date().toISOString(),
+      };
+      saveReminder(taskRem);
+    }
     syncWithDatabase();
   };
 
@@ -783,6 +813,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const deleteTask = (id: string) => {
     const updated = StorageService.deleteTask(id);
     setTasks(updated);
+    const linkedRemId = `task_rem_${id}`;
+    if (reminders.some(r => r.id === linkedRemId)) {
+      deleteReminder(linkedRemId);
+    }
     addToast('Task Removed', 'Task deleted.', 'info');
     syncWithDatabase();
   };

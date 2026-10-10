@@ -31,7 +31,8 @@ import {
   ArrowRight,
   CheckCircle2,
   Trash2,
-  ClipboardList
+  ClipboardList,
+  CheckSquare
 } from 'lucide-react';
 import { formatINR, formatDate } from '@/lib/utils';
 import { SavingsGoal, SavingsDeposit } from '@/types';
@@ -62,6 +63,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     reminders,
     savingsGoals,
     notes,
+    tasks,
     saveSavingsGoal,
     addToast,
     settings,
@@ -227,7 +229,15 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     return n.reminderDate <= todayStr;
   });
 
-  const totalAlerts = lowStockProducts.length + overdueReminders.length + dueSavingsGoals.length + activeNoteReminders.length;
+  const activeTaskReminders = (tasks || []).filter((t) => {
+    if (t.isCompleted) return false;
+    if (!t.reminderDate && !t.dueDate) return false;
+    if (dismissedAlerts.includes(`task_${t.id}`)) return false;
+    const targetDate = t.reminderDate || t.dueDate;
+    return targetDate! <= todayStr;
+  });
+
+  const totalAlerts = lowStockProducts.length + overdueReminders.length + dueSavingsGoals.length + activeNoteReminders.length + activeTaskReminders.length;
 
   const handleClearAllAlerts = () => {
     const allIds: string[] = [
@@ -235,6 +245,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
       ...lowStockProducts.map((p) => `low_stock_${p.id}`),
       ...overdueReminders.map((r) => `overdue_${r.id}`),
       ...activeNoteReminders.map((n) => `note_${n.id}`),
+      ...activeTaskReminders.map((t) => `task_${t.id}`),
     ];
     setDismissedAlerts((prev) => {
       const next = Array.from(new Set([...prev, ...allIds]));
@@ -546,6 +557,62 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                               onClick={() => handleDismissAlert(`note_${n.id}`)}
                               title="Dismiss"
                               className="p-1 rounded-lg text-amber-400 hover:text-amber-700 dark:hover:text-amber-200 hover:bg-amber-200/50 dark:hover:bg-amber-900/50 transition-colors cursor-pointer shrink-0"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Task Reminders */}
+                    {activeTaskReminders.length > 0 && (
+                      <div className="space-y-1.5">
+                        {activeTaskReminders.map((t) => (
+                          <div
+                            key={t.id}
+                            className="p-2.5 rounded-2xl bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-200/90 dark:border-emerald-800/60 flex items-start justify-between gap-2"
+                          >
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+                                <CheckSquare className="w-3.5 h-3.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-xs font-bold text-emerald-950 dark:text-emerald-200 truncate">
+                                    📋 Task: {t.title}
+                                  </span>
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-emerald-200/80 dark:bg-emerald-900/70 text-emerald-900 dark:text-emerald-200">
+                                    {t.priority}
+                                  </span>
+                                  {t.reminderTime && (
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                      {t.reminderTime}
+                                    </span>
+                                  )}
+                                </div>
+                                {t.description && (
+                                  <p className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2 mt-0.5">
+                                    {t.description}
+                                  </p>
+                                )}
+                                <div className="mt-1 flex items-center gap-2">
+                                  <Link
+                                    href="/notes-tasks"
+                                    onClick={() => setIsNotificationsOpen(false)}
+                                    className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 hover:underline flex items-center gap-1"
+                                  >
+                                    <span>Open in Notes &amp; Tasks</span>
+                                    <ArrowRight className="w-3 h-3" />
+                                  </Link>
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDismissAlert(`task_${t.id}`)}
+                              title="Dismiss"
+                              className="p-1 rounded-lg text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-200 hover:bg-emerald-200/50 dark:hover:bg-emerald-900/50 transition-colors cursor-pointer shrink-0"
                             >
                               <X className="w-3.5 h-3.5" />
                             </button>

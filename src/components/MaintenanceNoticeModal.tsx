@@ -13,8 +13,16 @@ import {
   Lock
 } from 'lucide-react';
 
+import { useApp } from '@/context/AppContext';
+
 export default function MaintenanceNoticeModal() {
+  const { settings } = useApp();
   const [isOpen, setIsOpen] = useState(false);
+
+  // If beta testing is disabled in settings, do not show modal or floating pill
+  if (settings.betaTestingEnabled === false) {
+    return null;
+  }
 
   useEffect(() => {
     if (typeof window !== 'undefined') {

@@ -9,6 +9,7 @@ import QuickUPICollectModal from './QuickUPICollectModal';
 import ToastContainer from './ToastContainer';
 import Footer from './Footer';
 import MaintenanceNoticeModal from './MaintenanceNoticeModal';
+import MaintenanceOverlay from './MaintenanceOverlay';
 import PaymentDetailsModal from './PaymentDetailsModal';
 import AuthModal from './AuthModal';
 import AuthGuard from './AuthGuard';
@@ -38,6 +39,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
         <Footer />
         <ToastContainer />
         <MaintenanceNoticeModal />
+        <MaintenanceOverlay />
         <PaymentDetailsModal />
       </div>
     );
@@ -69,6 +71,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
       <QuickUPICollectModal />
       <PaymentDetailsModal />
       <MaintenanceNoticeModal />
+      <MaintenanceOverlay />
       <AuthModal />
       <ToastContainer />
     </div>

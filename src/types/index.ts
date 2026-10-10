@@ -313,6 +313,13 @@ export interface TelegramBackupSettings {
   lastBackupMessage?: string;
 }
 
+export interface MaintenanceModeConfig {
+  enabled: boolean;
+  endTime?: string; // ISO timestamp
+  durationMinutes?: number;
+  reason?: string;
+}
+
 export interface SystemSettings {
   backendProvider: BackendProvider;
   supabaseUrl?: string;
@@ -331,6 +338,8 @@ export interface SystemSettings {
   monthlyBudgetCap?: number;
   darkMode: boolean;
   telegramBackup?: TelegramBackupSettings;
+  maintenanceMode?: MaintenanceModeConfig;
+  betaTestingEnabled?: boolean;
 }
 
 export interface NoteItem {
@@ -342,6 +351,7 @@ export interface NoteItem {
   category?: 'General' | 'Finance' | 'Customer' | 'Inventory' | 'Personal';
   color?: string; // e.g. 'amber', 'emerald', 'sky', 'indigo', 'rose', 'purple'
   isPinned?: boolean;
+  attachedImage?: string; // Base64 data URL or image URL
   createdAt: string;
   updatedAt: string;
 }
@@ -352,6 +362,8 @@ export interface TaskItem {
   description?: string;
   isCompleted: boolean;
   dueDate?: string; // YYYY-MM-DD
+  reminderDate?: string; // YYYY-MM-DD
+  reminderTime?: string; // HH:MM
   priority: 'low' | 'medium' | 'high';
   category?: string;
   createdAt: string;
@@ -363,10 +375,13 @@ export interface PasswordItem {
   appName: string; // Web & App Name
   username: string; // User Name / ID / Email
   password: string; // Password
+  recoveryKey?: string; // Recovery Key / 2FA Backup Key
+  attachedImage?: string; // Screenshot / QR code backup image
   websiteUrl?: string; // Web URL
   notes?: string; // Notes
   category?: 'Banking' | 'Govt & Tax' | 'Business' | 'Social' | 'Utility' | 'Other';
   createdAt: string;
   updatedAt: string;
 }
+
 

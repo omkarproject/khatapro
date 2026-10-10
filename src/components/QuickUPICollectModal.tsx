@@ -568,18 +568,19 @@ export default function QuickUPICollectModal() {
             <button
               type="button"
               onClick={() => setActiveTab(activeTab === 'history' ? 'direct_upi' : 'history')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`relative p-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'history'
                   ? 'bg-amber-600 text-white shadow-md shadow-amber-500/25'
                   : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/60'
               }`}
-              title="View Filterable Transaction History"
+              title="Transaction History"
             >
               <History className="w-4 h-4" />
-              <span className="hidden sm:inline">{activeTab === 'history' ? 'Back to Collect' : 'History'}</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/20 dark:bg-amber-900/50 font-mono">
-                {transactions.length}
-              </span>
+              {transactions.length > 0 && (
+                <span className="absolute -top-1 -right-1 text-[9px] min-w-4 h-4 px-1 rounded-full bg-amber-600 text-white font-mono font-bold flex items-center justify-center border border-white dark:border-slate-900 shadow-sm">
+                  {transactions.length}
+                </span>
+              )}
             </button>
             <button
               onClick={closeCollectModal}
@@ -682,38 +683,6 @@ export default function QuickUPICollectModal() {
               </span>
             </button>
           )}
-
-          {/* History Tab */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('history')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'history'
-                ? 'bg-amber-600 text-white shadow-md shadow-amber-600/25 ring-2 ring-amber-400/40'
-                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/60'
-            }`}
-          >
-            <History className="w-3.5 h-3.5 text-amber-400" />
-            <span>Transaction History</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
-              activeTab === 'history'
-                ? 'bg-white/20 text-white'
-                : 'bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200'
-            }`}>
-              {transactions.length}
-            </span>
-          </button>
-
-          {/* Settings Shortcut Link to Add More Keys */}
-          <Link
-            href="/settings"
-            onClick={closeCollectModal}
-            className="ml-auto text-[11px] font-semibold text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 px-2 py-1 flex items-center gap-1 shrink-0 cursor-pointer"
-            title="Configure Payment Gateways & API Keys"
-          >
-            <SettingsIcon className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Settings</span>
-          </Link>
 
         </div>
 

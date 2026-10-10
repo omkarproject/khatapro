@@ -47,14 +47,23 @@ import {
   Clock,
   Bot,
   MessageSquare,
-  FileCheck
+  FileCheck,
+  Flame,
+  Zap,
+  HardHat
 } from 'lucide-react';
 
 export default function SettingsPage() {
   const { settings, updateSettings, saveDefaultUpiAndQr, profile, setProfile, addToast, syncWithDatabase, currentUser, refreshData } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'business' | 'upi' | 'backend' | 'security' | 'backup'>('business');
+  const [activeTab, setActiveTab] = useState<'business' | 'upi' | 'backend' | 'security' | 'backup' | 'maintenance'>('business');
   const [isSyncingData, setIsSyncingData] = useState(false);
+
+  // Maintenance & Beta Testing State
+  const [maintEnabled, setMaintEnabled] = useState(() => settings.maintenanceMode?.enabled || false);
+  const [maintDuration, setMaintDuration] = useState<number>(() => settings.maintenanceMode?.durationMinutes || 15);
+  const [maintReason, setMaintReason] = useState(() => settings.maintenanceMode?.reason || 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️');
+  const [betaTestingActive, setBetaTestingActive] = useState(() => settings.betaTestingEnabled !== false);
 
   // Cloud Backup & Restore State
   const [isExportingBackup, setIsExportingBackup] = useState(false);
@@ -75,7 +84,7 @@ export default function SettingsPage() {
   const [isSavingTg, setIsSavingTg] = useState(false);
   const [tgTestMessage, setTgTestMessage] = useState<{ success: boolean; message: string } | null>(null);
 
-  // Keep local tg state in sync if settings update
+  // Keep local tg & maintenance state in sync if settings update
   useEffect(() => {
     if (settings.telegramBackup) {
       setTgEnabled(settings.telegramBackup.enabled || false);
@@ -86,18 +95,51 @@ export default function SettingsPage() {
       setTgBackupTime(settings.telegramBackup.backupTime || '21:00');
       setTgIncludeMedia(settings.telegramBackup.includeMedia !== false);
     }
-  }, [settings.telegramBackup]);
+    if (settings.maintenanceMode) {
+      setMaintEnabled(settings.maintenanceMode.enabled || false);
+      if (settings.maintenanceMode.durationMinutes) setMaintDuration(settings.maintenanceMode.durationMinutes);
+      if (settings.maintenanceMode.reason) setMaintReason(settings.maintenanceMode.reason);
+    }
+    if (settings.betaTestingEnabled !== undefined) {
+      setBetaTestingActive(settings.betaTestingEnabled !== false);
+    }
+  }, [settings.telegramBackup, settings.maintenanceMode, settings.betaTestingEnabled]);
 
   // Read ?tab= from URL on load
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
-      if (tabParam === 'backup' || tabParam === 'business' || tabParam === 'upi' || tabParam === 'backend' || tabParam === 'security') {
+      if (tabParam === 'backup' || tabParam === 'business' || tabParam === 'upi' || tabParam === 'backend' || tabParam === 'security' || tabParam === 'maintenance') {
         setActiveTab(tabParam as any);
       }
     }
   }, []);
+
+  // Save Maintenance & Beta Testing Settings
+  const handleSaveMaintenance = (enableMode?: boolean) => {
+    const isEnabling = enableMode !== undefined ? enableMode : maintEnabled;
+    const newEndTime = isEnabling ? new Date(Date.now() + maintDuration * 60 * 1000).toISOString() : undefined;
+
+    updateSettings({
+      ...settings,
+      maintenanceMode: {
+        enabled: isEnabling,
+        durationMinutes: maintDuration,
+        endTime: newEndTime,
+        reason: maintReason.trim() || 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️',
+      },
+      betaTestingEnabled: betaTestingActive,
+    });
+    setMaintEnabled(isEnabling);
+    addToast(
+      isEnabling ? 'Maintenance Mode Enabled! ⚡' : 'Maintenance Mode Disabled',
+      isEnabling
+        ? `System maintenance timer set for ${maintDuration} minutes. Auto-turns OFF on expiry.`
+        : 'System is back online for all users.',
+      isEnabling ? 'warning' : 'success'
+    );
+  };
 
   // 1-Click Backup Export
   const handleExportBackup = (includeMedia: boolean = exportIncludeMedia) => {
@@ -996,6 +1038,21 @@ export default function SettingsPage() {
         >
           <CloudUpload className="w-4 h-4" />
           Cloud Backup
+        </button>
+
+        <button
+          onClick={() => setActiveTab('maintenance')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+            activeTab === 'maintenance'
+              ? 'bg-rose-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Flame className="w-4 h-4 text-rose-500" />
+          <span>Maintenance &amp; Beta</span>
+          {maintEnabled && (
+            <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
+          )}
         </button>
       </div>
 
@@ -2638,6 +2695,181 @@ export default function SettingsPage() {
 
             </form>
 
+          </div>
+
+        </div>
+      )}
+
+      {/* Tab 6: Maintenance Mode & Beta Testing Controls */}
+      {activeTab === 'maintenance' && (
+        <div className="space-y-6 animate-in fade-in max-w-4xl">
+          
+          {/* Header Card */}
+          <div className="p-6 rounded-3xl bg-gradient-to-r from-rose-950/40 via-amber-950/30 to-slate-900 border border-rose-500/30 space-y-2">
+            <div className="flex items-center gap-2 text-rose-400 text-xs font-bold uppercase tracking-wider">
+              <Flame className="w-4 h-4 text-rose-500" />
+              <span>System Emergency Controls</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
+              Maintenance Mode &amp; Beta Testing
+              <span className="text-xl">⚡💥🔥</span>
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl">
+              Website ko maintenance mode me daalein ya normal karein. Jab maintenance mode on hoga, to visitors ko funny animated &quot;Transformer me aag lag gai&quot; page aur ticking bomb timer 💣 dikhega jo time pura hote hi auto-off ho jaega.
+            </p>
+          </div>
+
+          {/* Card 1: Maintenance Mode Controller */}
+          <div className="glass-card p-6 sm:p-8 space-y-6">
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100 dark:border-slate-800">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                    Emergency Maintenance Mode
+                  </h3>
+                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider font-mono ${
+                    maintEnabled
+                      ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse'
+                      : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                  }`}>
+                    {maintEnabled ? 'Active (Site In Repair)' : 'Inactive (Live Online)'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Enable karne par visitors ko animated countdown bomb timer dikhega.
+                </p>
+              </div>
+
+              {/* Master Maintenance Switch Button */}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !maintEnabled;
+                    setMaintEnabled(next);
+                    handleSaveMaintenance(next);
+                  }}
+                  className={`px-5 py-2.5 rounded-2xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-lg active:scale-95 ${
+                    maintEnabled
+                      ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/30'
+                      : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  <Flame className="w-4 h-4" />
+                  <span>{maintEnabled ? 'Turn OFF Maintenance' : 'Turn ON Maintenance'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Timer Duration Selection */}
+            <div className="space-y-3">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-amber-500" />
+                <span>Countdown Timer Duration (Auto-Off Duration)</span>
+              </label>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                {[5, 15, 30, 60, 120].map((mins) => (
+                  <button
+                    key={mins}
+                    type="button"
+                    onClick={() => setMaintDuration(mins)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      maintDuration === mins
+                        ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20 ring-2 ring-amber-400/40'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {mins < 60 ? `${mins} Minutes` : `${mins / 60} Hour${mins / 60 > 1 ? 's' : ''}`}
+                  </button>
+                ))}
+
+                <div className="flex items-center gap-2 pl-2">
+                  <span className="text-xs text-slate-400">Custom (Min):</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="1440"
+                    value={maintDuration}
+                    onChange={(e) => setMaintDuration(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-20 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold text-center"
+                  />
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-400 font-mono">
+                ⏱️ Maintenance mode ON karne par ticking bomb timer exact {maintDuration} minutes chalega, uske baad website khud ba khud open ho jaegi.
+              </p>
+            </div>
+
+            {/* Custom Funny Story & Reason */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-rose-500" />
+                <span>Notice Message / Story (Displayed with Emojis)</span>
+              </label>
+
+              <textarea
+                rows={3}
+                value={maintReason}
+                onChange={(e) => setMaintReason(e.target.value)}
+                placeholder="Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️"
+                className="w-full px-3.5 py-2.5 text-xs rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white leading-relaxed resize-none font-medium"
+              />
+            </div>
+
+            {/* Save Button for Maintenance */}
+            <div className="pt-2 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => handleSaveMaintenance()}
+                className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-500/20 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+              >
+                <Save className="w-4 h-4" />
+                <span>Save Maintenance Configuration</span>
+              </button>
+            </div>
+
+          </div>
+
+          {/* Card 2: Beta Testing Toggle */}
+          <div className="glass-card p-6 sm:p-8 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-cyan-400" />
+                  Enable Beta Testing Mode
+                </h3>
+                <p className="text-xs text-slate-400 max-w-lg leading-relaxed">
+                  Screen par futuristic cyan floating pill &quot;BETA TESTING ACTIVE&quot; aur beta status modal dikhana chahte hain ya hide karna chahte hain, yaha se on/off karein.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={betaTestingActive}
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      setBetaTestingActive(next);
+                      updateSettings({ ...settings, betaTestingEnabled: next });
+                      addToast(
+                        next ? 'Beta Testing Enabled' : 'Beta Testing Disabled',
+                        next ? 'Beta testing indicators are now active.' : 'Beta testing badges hidden.',
+                        'info'
+                      );
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-12 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+                </label>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  {betaTestingActive ? 'ON' : 'OFF'}
+                </span>
+              </div>
+            </div>
           </div>
 
         </div>

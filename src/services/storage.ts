@@ -126,6 +126,12 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
     backupTime: '21:00',
     includeMedia: true,
   },
+  maintenanceMode: {
+    enabled: false,
+    durationMinutes: 15,
+    reason: 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️',
+  },
+  betaTestingEnabled: true,
 });
 
 export const StorageService = {
@@ -176,7 +182,24 @@ export const StorageService = {
     if (data.notes !== undefined) setLocalItem(STORAGE_KEYS.NOTES, data.notes);
     if (data.tasks !== undefined) setLocalItem(STORAGE_KEYS.TASKS, data.tasks);
     if (data.passwords !== undefined) setLocalItem(STORAGE_KEYS.PASSWORDS, data.passwords);
-    if (data.settings !== undefined) setLocalItem(STORAGE_KEYS.SETTINGS, data.settings);
+    if (data.settings !== undefined) {
+      const existingSettings = StorageService.getSettings();
+      const mergedPaymentSettings = {
+        ...(existingSettings?.paymentSettings || {}),
+        ...(data.settings.paymentSettings || {}),
+        // Preserve saved UPI ID and QR if cloud returns empty
+        upiId: (data.settings.paymentSettings?.upiId || '').trim() || existingSettings?.paymentSettings?.upiId || '',
+        payeeName: (data.settings.paymentSettings?.payeeName || '').trim() || existingSettings?.paymentSettings?.payeeName || existingSettings?.businessName || '',
+        customQrUrl: data.settings.paymentSettings?.customQrUrl || existingSettings?.paymentSettings?.customQrUrl || '',
+        isDefaultQrSaved: data.settings.paymentSettings?.isDefaultQrSaved ?? existingSettings?.paymentSettings?.isDefaultQrSaved ?? false,
+      };
+      const mergedSettings = {
+        ...existingSettings,
+        ...data.settings,
+        paymentSettings: mergedPaymentSettings,
+      };
+      setLocalItem(STORAGE_KEYS.SETTINGS, mergedSettings);
+    }
     if (data.user !== undefined) {
       setLocalItem(STORAGE_KEYS.PROFILE, data.user);
       const cur = StorageService.getCurrentUser();
@@ -266,18 +289,21 @@ export const StorageService = {
     const s = getLocalItem(STORAGE_KEYS.SETTINGS, defaults);
     return s;
   },
-  updateSettings: (settings: SystemSettings): void => {
-    setLocalItem(STORAGE_KEYS.SETTINGS, settings);
-    if (settings.businessName && settings.businessName.trim()) {
+  updateSettings: (settings: Partial<SystemSettings>): SystemSettings => {
+    const cur = StorageService.getSettings();
+    const merged: SystemSettings = { ...cur, ...settings };
+    setLocalItem(STORAGE_KEYS.SETTINGS, merged);
+    if (merged.businessName && merged.businessName.trim()) {
       const storedProfile = getLocalItem<UserProfile | null>(STORAGE_KEYS.PROFILE, null as any);
       if (storedProfile) {
-        setLocalItem(STORAGE_KEYS.PROFILE, { ...storedProfile, businessName: settings.businessName.trim() });
+        setLocalItem(STORAGE_KEYS.PROFILE, { ...storedProfile, businessName: merged.businessName.trim() });
       }
       const curUser = StorageService.getCurrentUser();
       if (curUser) {
-        StorageService.setCurrentUser({ ...curUser, businessName: settings.businessName.trim() });
+        StorageService.setCurrentUser({ ...curUser, businessName: merged.businessName.trim() });
       }
     }
+    return merged;
   },
   
   // Custom UPI & QR quick save helper (as requested by user)
