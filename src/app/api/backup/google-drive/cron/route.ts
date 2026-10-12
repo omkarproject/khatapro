@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { decryptToken } from '@/lib/encryption';
-import { getDriveClient, ensureHisabKitabFolders, uploadBackupZip, uploadBackupManifest } from '@/lib/googleDrive';
+import { getDriveClient, ensureSmartKhataFolders, uploadBackupZip, uploadBackupManifest } from '@/lib/googleDrive';
 import { createBackupArchive } from '@/lib/backupArchive';
 
 export async function GET(req: NextRequest) {
@@ -67,7 +67,7 @@ async function handleCron(req: NextRequest) {
 
         let backupsFolderId = userRecord.backups_folder_id;
         if (!backupsFolderId) {
-          const folders = await ensureHisabKitabFolders(drive);
+          const folders = await ensureSmartKhataFolders(drive);
           backupsFolderId = folders.backupsId;
         }
 
@@ -86,6 +86,8 @@ async function handleCron(req: NextRequest) {
           sbNotes,
           sbTasks,
           sbPass,
+          sbDriveFolders,
+          sbDriveFiles,
         ] = await Promise.all([
           supabase.from('customers').select('*').eq('user_id', userId),
           supabase.from('transactions').select('*').eq('user_id', userId),
@@ -100,6 +102,8 @@ async function handleCron(req: NextRequest) {
           supabase.from('notes').select('*').eq('user_id', userId),
           supabase.from('tasks').select('*').eq('user_id', userId),
           supabase.from('passwords').select('*').eq('user_id', userId),
+          supabase.from('customer_drive_folders').select('*').eq('user_id', userId),
+          supabase.from('customer_drive_files').select('*').eq('user_id', userId),
         ]);
 
         const fullData = {
@@ -116,6 +120,10 @@ async function handleCron(req: NextRequest) {
           notes: sbNotes.data || [],
           tasks: sbTasks.data || [],
           passwords: sbPass.data || [],
+          customerDrive: {
+            folders: sbDriveFolders.data || [],
+            files: sbDriveFiles.data || [],
+          },
         };
 
         const { zipBuffer, manifest, filename } = await createBackupArchive(fullData);
