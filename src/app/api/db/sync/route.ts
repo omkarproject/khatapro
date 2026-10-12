@@ -36,19 +36,32 @@ function customerToDb(c: any, userId: string) {
 
 function transactionToDb(t: any, userId: string) {
   // Strip large base64 data URLs from attachments so database strictly holds metadata records
-  const sanitizedAttachments = (t.attachments || []).map((att: string) => {
-    try {
-      const obj = JSON.parse(att);
-      if (obj.url && obj.url.startsWith('data:')) {
-        return JSON.stringify({
-          ...obj,
-          url: obj.driveFileId ? `https://drive.google.com/file/d/${obj.driveFileId}/view` : '',
-        });
+  const sanitizedAttachments = (t.attachments || []).map((att: any) => {
+    let obj: any = null;
+    if (typeof att === 'object' && att !== null) {
+      obj = att;
+    } else if (typeof att === 'string') {
+      try {
+        obj = JSON.parse(att);
+      } catch {
+        if (att.startsWith('data:')) return '';
+        return att;
       }
-      return att;
-    } catch {
-      return att && !att.startsWith('data:') ? att : '';
+    } else {
+      return '';
     }
+
+    if (obj) {
+      let safeUrl = obj.url || '';
+      if (safeUrl.startsWith('data:')) {
+        safeUrl = obj.driveFileId ? `https://drive.google.com/file/d/${obj.driveFileId}/view` : '';
+      }
+      return JSON.stringify({
+        ...obj,
+        url: safeUrl,
+      });
+    }
+    return '';
   }).filter(Boolean);
 
   return {
@@ -193,11 +206,17 @@ function documentToDb(d: any, userId: string) {
   if (fileUrl.startsWith('data:')) {
     fileUrl = d.driveFileId ? `/api/backup/google-drive/view-file?fileId=${d.driveFileId}` : '';
   }
+  if (!fileUrl && d.driveFileId) {
+    fileUrl = `/api/backup/google-drive/view-file?fileId=${d.driveFileId}`;
+  }
+  if (!fileUrl) {
+    fileUrl = `/docs/${d.title || 'document'}`;
+  }
 
   return {
     id: String(d.id),
     user_id: userId,
-    title: d.title || '',
+    title: d.title || 'Document',
     category: d.category || 'general',
     file_url: fileUrl,
     file_type: d.fileType || '',
@@ -271,17 +290,23 @@ function customerDriveFolderToDb(f: any, userId: string) {
 }
 
 function customerDriveFileToDb(f: any, userId: string) {
-  const safeUrl = f.url && !f.url.startsWith('data:') ? f.url : (f.driveFileId ? `https://drive.google.com/file/d/${f.driveFileId}/view` : null);
+  let safeUrl = f.url && !f.url.startsWith('data:') ? f.url : null;
+  if (!safeUrl && f.driveFileId) {
+    safeUrl = `https://drive.google.com/file/d/${f.driveFileId}/view`;
+  }
+  const proxyUrl = f.driveFileId ? `/api/backup/google-drive/view-file?fileId=${f.driveFileId}` : '';
+  const fallbackSafeDataUrl = proxyUrl || safeUrl || (f.dataUrl && !f.dataUrl.startsWith('data:') ? f.dataUrl : '') || f.name || 'file';
+
   return {
     id: String(f.id),
     user_id: userId,
     customer_id: f.customerId || '',
-    name: f.name || '',
+    name: f.name || 'Untitled File',
     size: Number(f.size) || 0,
-    type: f.type || '',
+    type: f.type || 'application/octet-stream',
     mime_type: f.mimeType || null,
-    url: safeUrl,
-    data_url: null, // Keep Supabase Postgres clean and lightweight without multi-megabyte base64
+    url: safeUrl || proxyUrl || null,
+    data_url: fallbackSafeDataUrl, // Satisfies PostgreSQL `data_url TEXT NOT NULL` constraint without storing multi-megabyte base64
     folder_id: f.folderId || null,
     created_at: f.createdAt || new Date().toISOString(),
     uploaded_at: f.uploadedAt || new Date().toISOString(),
@@ -593,16 +618,21 @@ function customerDriveFolderFromDb(row: any) {
 }
 
 function customerDriveFileFromDb(row: any) {
-  // Extract real Drive file ID (either raw ID or parsed from drive.google.com/file/d/ID/view)
-  let extractedDriveFileId = row.url || '';
-  if (extractedDriveFileId.includes('/file/d/')) {
-    const match = extractedDriveFileId.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  // Extract real Drive file ID (either raw ID or parsed from drive.google.com/file/d/ID/view or view-file)
+  let extractedDriveFileId = '';
+  const candidateUrl = row.url || row.data_url || '';
+  if (candidateUrl.includes('view-file?fileId=')) {
+    extractedDriveFileId = candidateUrl.split('view-file?fileId=')[1]?.split('&')[0];
+  } else if (candidateUrl.includes('/file/d/')) {
+    const match = candidateUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
     if (match) extractedDriveFileId = match[1];
+  } else if (/^[a-zA-Z0-9_-]{25,}$/.test(candidateUrl)) {
+    extractedDriveFileId = candidateUrl;
   }
 
   // Streamable direct URL through our view-file proxy
   const proxyUrl = extractedDriveFileId ? `/api/backup/google-drive/view-file?fileId=${extractedDriveFileId}` : '';
-  const finalDisplayUrl = row.data_url || proxyUrl || row.url || '';
+  const finalDisplayUrl = proxyUrl || (row.data_url && row.data_url !== 'file' ? row.data_url : '') || row.url || '';
 
   return {
     id: row.id,

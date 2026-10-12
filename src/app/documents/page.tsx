@@ -188,29 +188,32 @@ export default function DocumentsPage() {
   };
 
   const handleDownload = (doc: DocumentItem) => {
-    if (doc.fileUrl && doc.fileUrl.startsWith('data:')) {
+    const downloadUrl = (doc.driveFileId ? `/api/backup/google-drive/view-file?fileId=${doc.driveFileId}&download=true` : '') || doc.fileUrl;
+    if (downloadUrl && (downloadUrl.startsWith('data:') || downloadUrl.startsWith('http') || downloadUrl.startsWith('/api/'))) {
       const link = document.createElement('a');
-      link.href = doc.fileUrl;
+      link.href = downloadUrl;
       link.download = doc.title;
+      link.target = '_blank';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       addToast('Download Complete', `${doc.title} downloaded.`, 'success');
-    } else {
-      // Fallback text download for pre-existing mock documents
-      const blob = new Blob([
-        `SmartKhata Pro Vault Document\n\nTitle: ${doc.title}\nCategory: ${doc.category.toUpperCase()}\nRelated Entity: ${doc.relatedEntityName || 'N/A'}\nFile Size: ${doc.fileSize}\nUploaded At: ${doc.uploadedAt}\n`
-      ], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = doc.title.endsWith('.txt') || doc.title.endsWith('.pdf') ? doc.title : `${doc.title}.txt`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      addToast('Download Complete', `${doc.title} downloaded.`, 'success');
+      return;
     }
+
+    // Fallback text download for pre-existing mock documents
+    const blob = new Blob([
+      `SmartKhata Pro Vault Document\n\nTitle: ${doc.title}\nCategory: ${doc.category.toUpperCase()}\nRelated Entity: ${doc.relatedEntityName || 'N/A'}\nFile Size: ${doc.fileSize}\nUploaded At: ${doc.uploadedAt}\n`
+    ], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = doc.title.endsWith('.txt') || doc.title.endsWith('.pdf') ? doc.title : `${doc.title}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    addToast('Download Complete', `${doc.title} downloaded.`, 'success');
   };
 
   const filteredDocuments = documents.filter(doc => {
@@ -395,38 +398,57 @@ export default function DocumentsPage() {
             </div>
 
             {/* Real File Rendering if available */}
-            {previewDoc.fileUrl && previewDoc.fileUrl.startsWith('data:image/') ? (
-              <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-950 flex items-center justify-center max-h-80">
-                <img
-                  src={previewDoc.fileUrl}
-                  alt={previewDoc.title}
-                  className="max-h-80 w-auto object-contain"
-                />
-              </div>
-            ) : previewDoc.fileUrl && previewDoc.fileUrl.startsWith('data:application/pdf') ? (
-              <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 h-80">
-                <iframe
-                  src={previewDoc.fileUrl}
-                  title={previewDoc.title}
-                  className="w-full h-full border-0"
-                />
-              </div>
-            ) : (
-              <div className="p-8 rounded-2xl bg-slate-50 dark:bg-slate-800 text-center space-y-3">
-                <div className="w-16 h-16 rounded-3xl fintech-gradient-primary text-white flex items-center justify-center mx-auto shadow-md">
-                  <FileText className="w-8 h-8" />
+            {(() => {
+              const fileSrc = (previewDoc.driveFileId ? `/api/backup/google-drive/view-file?fileId=${previewDoc.driveFileId}` : '') || previewDoc.fileUrl;
+              const isImg = fileSrc.startsWith('data:image/') ||
+                (previewDoc.fileType && previewDoc.fileType.toLowerCase().includes('image')) ||
+                /\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i.test(previewDoc.title || '');
+              
+              const isPdf = fileSrc.startsWith('data:application/pdf') ||
+                (previewDoc.fileType && previewDoc.fileType.toLowerCase().includes('pdf')) ||
+                (previewDoc.title || '').toLowerCase().endsWith('.pdf');
+
+              if (fileSrc && isImg) {
+                return (
+                  <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-950 flex items-center justify-center max-h-80">
+                    <img
+                      src={fileSrc}
+                      alt={previewDoc.title}
+                      className="max-h-80 w-auto object-contain"
+                    />
+                  </div>
+                );
+              }
+
+              if (fileSrc && isPdf) {
+                return (
+                  <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 h-80">
+                    <iframe
+                      src={fileSrc}
+                      title={previewDoc.title}
+                      className="w-full h-full border-0"
+                    />
+                  </div>
+                );
+              }
+
+              return (
+                <div className="p-8 rounded-2xl bg-slate-50 dark:bg-slate-800 text-center space-y-3">
+                  <div className="w-16 h-16 rounded-3xl fintech-gradient-primary text-white flex items-center justify-center mx-auto shadow-md">
+                    <FileText className="w-8 h-8" />
+                  </div>
+                  <div className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                    {previewDoc.title}
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    Category: <span className="uppercase font-semibold text-indigo-600 dark:text-indigo-400">{previewDoc.category}</span> • Size: {previewDoc.fileSize}
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    Related Entity: {previewDoc.relatedEntityName || 'N/A'}
+                  </div>
                 </div>
-                <div className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                  {previewDoc.title}
-                </div>
-                <div className="text-xs text-slate-400">
-                  Category: <span className="uppercase font-semibold text-indigo-600 dark:text-indigo-400">{previewDoc.category}</span> • Size: {previewDoc.fileSize}
-                </div>
-                <div className="text-xs text-slate-400">
-                  Related Entity: {previewDoc.relatedEntityName || 'N/A'}
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
               <button

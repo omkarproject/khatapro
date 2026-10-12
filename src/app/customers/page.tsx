@@ -2218,8 +2218,8 @@ export default function CustomersPage() {
                   /* Grid View of Files */
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {displayedFiles.map((file) => {
-                      const isImage = file.type.startsWith('image/');
-                      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                      const isImage = (file.type && file.type.startsWith('image/')) || /\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i.test(file.name || '');
+                      const isPdf = file.type === 'application/pdf' || (file.name || '').toLowerCase().endsWith('.pdf');
                       const isFileSelected = selectedFileIds.includes(file.id);
                       const isCutFile = driveClipboard?.operation === 'cut' && driveClipboard.fileIds.includes(file.id);
 
@@ -2364,8 +2364,8 @@ export default function CustomersPage() {
                   /* List View of Files */
                   <div className="bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700/60 overflow-hidden">
                     {displayedFiles.map((file) => {
-                      const isImage = file.type.startsWith('image/');
-                      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                      const isImage = (file.type && file.type.startsWith('image/')) || /\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i.test(file.name || '');
+                      const isPdf = file.type === 'application/pdf' || (file.name || '').toLowerCase().endsWith('.pdf');
                       const isFileSelected = selectedFileIds.includes(file.id);
                       const isCutFile = driveClipboard?.operation === 'cut' && driveClipboard.fileIds.includes(file.id);
 
@@ -2668,13 +2668,13 @@ export default function CustomersPage() {
 
             {/* Preview Viewport */}
             <div className="p-4 flex-1 overflow-auto flex items-center justify-center bg-slate-950/20 min-h-[400px]">
-              {previewFile.type.startsWith('image/') ? (
+              {(previewFile.type && previewFile.type.startsWith('image/')) || /\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i.test(previewFile.name || '') ? (
                 <img
                   src={previewFile.dataUrl || previewFile.url || (previewFile.driveFileId ? `/api/backup/google-drive/view-file?fileId=${previewFile.driveFileId}` : '')}
                   alt={previewFile.name}
                   className="max-h-[75vh] w-auto max-w-full object-contain rounded-xl shadow-lg border border-slate-200/20"
                 />
-              ) : previewFile.type === 'application/pdf' || previewFile.name.toLowerCase().endsWith('.pdf') ? (
+              ) : previewFile.type === 'application/pdf' || (previewFile.name || '').toLowerCase().endsWith('.pdf') ? (
                 <iframe
                   src={previewFile.dataUrl || previewFile.url || (previewFile.driveFileId ? `/api/backup/google-drive/view-file?fileId=${previewFile.driveFileId}` : '')}
                   title={previewFile.name}

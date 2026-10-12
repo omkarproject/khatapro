@@ -3883,7 +3883,7 @@ interface AttachedBill {
                       ) : (
                         /* PDF Preview: Embedded Iframe + View/Download Footer */
                         <div className="w-full h-[58vh] flex flex-col rounded-xl overflow-hidden bg-slate-950 border border-slate-800">
-                          {currentItem.url.startsWith('data:application/pdf') || currentItem.url.startsWith('blob:') || currentItem.url.endsWith('.pdf') ? (
+                          {currentItem.url.startsWith('data:application/pdf') || currentItem.url.startsWith('blob:') || currentItem.url.toLowerCase().endsWith('.pdf') || (currentItem.name && currentItem.name.toLowerCase().endsWith('.pdf')) || currentItem.url.includes('view-file?fileId=') ? (
                             <iframe
                               src={currentItem.url}
                               className="w-full flex-1 border-0 rounded-t-xl bg-slate-900"

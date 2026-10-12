@@ -284,8 +284,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 byCust[f.customerId].files.push(f);
               }
             });
-            Object.entries(byCust).forEach(([cid, cdata]) => {
-              StorageService.saveCustomerDriveData(cid, cdata);
+
+            const targetCustomerIds = new Set<string>([
+              ...Object.keys(byCust),
+              ...((d.customers || []).map((c: any) => c.id).filter(Boolean)),
+            ]);
+
+            targetCustomerIds.forEach((cid) => {
+              const cdata = byCust[cid] || { folders: [], files: [] };
+              const localExisting = StorageService.getCustomerDriveData(cid);
+
+              const defaultFolders = [
+                { id: 'fld_aadhar', name: 'AADHAR CARD', createdAt: new Date().toISOString() },
+                { id: 'fld_bills', name: 'BILLS', createdAt: new Date().toISOString() },
+                { id: 'fld_docs', name: 'DOCUMENTS', createdAt: new Date().toISOString() },
+              ];
+
+              const foldersToSave = cdata.folders && cdata.folders.length > 0
+                ? cdata.folders
+                : (localExisting.folders && localExisting.folders.length > 0 ? localExisting.folders : defaultFolders);
+
+              // If cloud returned files for this customer, use cloud files.
+              // If cloud returned 0 files, but cloud overall has 0 files (e.g. prior sync failure) and local has files, preserve local.
+              let filesToSave = cdata.files || [];
+              if (filesToSave.length === 0 && (!d.customerDriveFiles || d.customerDriveFiles.length === 0) && localExisting.files && localExisting.files.length > 0) {
+                filesToSave = localExisting.files;
+              }
+
+              StorageService.saveCustomerDriveData(cid, {
+                folders: foldersToSave,
+                files: filesToSave,
+              });
             });
           }
           if (d.settings) {
