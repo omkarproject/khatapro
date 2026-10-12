@@ -181,6 +181,15 @@ export const StorageService = {
     if (data.passwords !== undefined) setLocalItem(STORAGE_KEYS.PASSWORDS, data.passwords);
     if (data.settings !== undefined) {
       const existingSettings = StorageService.getSettings();
+      const existingProfile = StorageService.getProfile();
+      const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
+      const incomingLogo = data.settings?.businessLogo || data.user?.avatarUrl || (data.user as any)?.avatar_url || '';
+      const finalLogo = incomingLogo || existingSettings?.businessLogo || existingProfile?.avatarUrl || globalLogo;
+
+      if (finalLogo && typeof window !== 'undefined') {
+        try { localStorage.setItem('khatapro_business_logo', finalLogo); } catch {}
+      }
+
       const mergedPaymentSettings = {
         ...(existingSettings?.paymentSettings || {}),
         ...(data.settings.paymentSettings || {}),
@@ -193,15 +202,27 @@ export const StorageService = {
       const mergedSettings = {
         ...existingSettings,
         ...data.settings,
+        businessLogo: finalLogo,
         paymentSettings: mergedPaymentSettings,
       };
       setLocalItem(STORAGE_KEYS.SETTINGS, mergedSettings);
     }
     if (data.user !== undefined) {
-      setLocalItem(STORAGE_KEYS.PROFILE, data.user);
+      const existingProfile = StorageService.getProfile();
+      const existingSettings = StorageService.getSettings();
+      const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
+      const incomingAvatar = data.user?.avatarUrl || (data.user as any)?.avatar_url || data.settings?.businessLogo || '';
+      const finalAvatar = incomingAvatar || existingProfile?.avatarUrl || existingSettings?.businessLogo || globalLogo;
+
+      const mergedUser: UserProfile = {
+        ...existingProfile,
+        ...data.user,
+        avatarUrl: finalAvatar,
+      };
+      setLocalItem(STORAGE_KEYS.PROFILE, mergedUser);
       const cur = StorageService.getCurrentUser();
       if (cur) {
-        StorageService.setCurrentUser({ ...cur, ...data.user });
+        StorageService.setCurrentUser({ ...cur, ...mergedUser, avatarUrl: finalAvatar });
       }
     }
   },
@@ -280,6 +301,9 @@ export const StorageService = {
     }
     if (profile.avatarUrl !== undefined) {
       settingsUpdate.businessLogo = profile.avatarUrl;
+      if (profile.avatarUrl) {
+        try { localStorage.setItem('khatapro_business_logo', profile.avatarUrl); } catch {}
+      }
     }
     if (Object.keys(settingsUpdate).length > 0) {
       setLocalItem(STORAGE_KEYS.SETTINGS, { ...curSettings, ...settingsUpdate });
@@ -326,6 +350,9 @@ export const StorageService = {
     }
 
     if (merged.businessLogo !== undefined) {
+      if (merged.businessLogo) {
+        try { localStorage.setItem('khatapro_business_logo', merged.businessLogo); } catch {}
+      }
       if (storedProfile) {
         setLocalItem(STORAGE_KEYS.PROFILE, { ...storedProfile, avatarUrl: merged.businessLogo });
       }

@@ -68,7 +68,9 @@ export default function SettingsPage() {
     currentUser?.email === 'anantyadav8924@gmail.com'
   );
 
-  const [activeTab, setActiveTab] = useState<'business' | 'upi' | 'backend' | 'drive' | 'security' | 'backup' | 'maintenance' | 'users'>('business');
+  const [mainTab, setMainTab] = useState<'business' | 'backup' | 'admin'>('business');
+  const [businessSubTab, setBusinessSubTab] = useState<'enterprise' | 'payments' | 'security'>('enterprise');
+  const [adminSubTab, setAdminSubTab] = useState<'supabase' | 'drive' | 'users' | 'maintenance'>('supabase');
   const [isSyncingData, setIsSyncingData] = useState(false);
 
   // User Management CRM State (Admin Only)
@@ -94,10 +96,10 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
-    if (activeTab === 'users' && isAdmin) {
+    if (mainTab === 'admin' && adminSubTab === 'users' && isAdmin) {
       fetchCrmUsers();
     }
-  }, [activeTab, isAdmin]);
+  }, [mainTab, adminSubTab, isAdmin]);
 
   const handleUpdateUserRole = async (userId: string, newRole: string) => {
     setUpdatingUserId(userId);
@@ -164,11 +166,44 @@ export default function SettingsPage() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
-      if (tabParam === 'backup' || tabParam === 'business' || tabParam === 'upi' || tabParam === 'backend' || tabParam === 'drive' || tabParam === 'security' || tabParam === 'maintenance') {
-        setActiveTab(tabParam as any);
+      if (tabParam === 'backup') {
+        setMainTab('backup');
+      } else if (tabParam === 'upi') {
+        setMainTab('business');
+        setBusinessSubTab('payments');
+      } else if (tabParam === 'security') {
+        setMainTab('business');
+        setBusinessSubTab('security');
+      } else if (tabParam === 'business') {
+        setMainTab('business');
+        setBusinessSubTab('enterprise');
+      } else if (tabParam === 'backend' || tabParam === 'supabase') {
+        setMainTab('admin');
+        setAdminSubTab('supabase');
+      } else if (tabParam === 'drive') {
+        setMainTab('admin');
+        setAdminSubTab('drive');
+      } else if (tabParam === 'users') {
+        setMainTab('admin');
+        setAdminSubTab('users');
+      } else if (tabParam === 'maintenance') {
+        setMainTab('admin');
+        setAdminSubTab('maintenance');
       }
     }
   }, []);
+
+  // Keep logo state in sync when settings / profile / localStorage updates
+  useEffect(() => {
+    const currentLogo =
+      settings.businessLogo ||
+      profile?.avatarUrl ||
+      currentUser?.avatarUrl ||
+      (typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '');
+    if (currentLogo && !bLogo) {
+      setBLogo(currentLogo);
+    }
+  }, [settings.businessLogo, profile?.avatarUrl, currentUser?.avatarUrl]);
 
   // Save Maintenance & Beta Testing Settings
   const handleSaveMaintenance = (enableMode?: boolean) => {
@@ -832,118 +867,158 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      {/* Tabs */}
+      {/* Primary Tabs */}
       <div className="flex gap-2 border-b border-slate-200/80 dark:border-slate-800 pb-3 overflow-x-auto">
         <button
-          onClick={() => setActiveTab('business')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-            activeTab === 'business'
+          onClick={() => setMainTab('business')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+            mainTab === 'business'
               ? 'bg-indigo-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
           <Building className="w-4 h-4" />
-          Business Profile
+          <span>Business Profile</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('upi')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-            activeTab === 'upi'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <QrCode className="w-4 h-4" />
-          Default UPI & Shop QR
-        </button>
-
-        <button
-          onClick={() => setActiveTab('security')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-            activeTab === 'security'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <KeyRound className="w-4 h-4" />
-          Security & Password
-        </button>
-
-        <button
-          onClick={() => setActiveTab('backup')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-            activeTab === 'backup'
+          onClick={() => setMainTab('backup')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+            mainTab === 'backup'
               ? 'bg-indigo-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
           <CloudUpload className="w-4 h-4" />
-          Cloud Backup
+          <span>Cloud Backup</span>
         </button>
 
         {isAdmin && (
-          <>
-            <button
-              onClick={() => setActiveTab('backend')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-                activeTab === 'backend'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              <Database className="w-4 h-4" />
-              <span>Database & Cloud Auth</span>
-              <span className="text-[10px] font-bold px-1.5 py-0.2 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-md">Admin</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('drive')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-                activeTab === 'drive'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              <CloudUpload className="w-4 h-4 text-emerald-500" />
-              <span>Google Drive API</span>
-              <span className="text-[10px] font-bold px-1.5 py-0.2 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-md">Admin</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('users')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-                activeTab === 'users'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              <Users className="w-4 h-4 text-indigo-400" />
-              <span>User Management</span>
-              <span className="text-[10px] font-bold px-1.5 py-0.2 bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-md">CRM</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('maintenance')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-                activeTab === 'maintenance'
-                  ? 'bg-rose-600 text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              <Flame className="w-4 h-4 text-rose-500" />
-              <span>Maintenance &amp; Beta</span>
-              <span className="text-[10px] font-bold px-1.5 py-0.2 bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-md">Admin</span>
-              {maintEnabled && (
-                <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
-              )}
-            </button>
-          </>
+          <button
+            onClick={() => setMainTab('admin')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+              mainTab === 'admin'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Database className="w-4 h-4 text-emerald-400" />
+            <span>Database &amp; Cloud Auth</span>
+            <span className="text-[10px] font-bold px-1.5 py-0.2 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-md">Admin</span>
+            {maintEnabled && (
+              <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
+            )}
+          </button>
         )}
       </div>
 
-      {/* Tab 1: Business Profile */}
-      {activeTab === 'business' && (
+      {/* Sub-Tabs: Inside Business Profile */}
+      {mainTab === 'business' && (
+        <div className="flex gap-1.5 p-1 bg-slate-100/80 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 w-fit overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setBusinessSubTab('enterprise')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              businessSubTab === 'enterprise'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Building className="w-3.5 h-3.5" />
+            <span>Enterprise Information</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setBusinessSubTab('payments')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              businessSubTab === 'payments'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <QrCode className="w-3.5 h-3.5" />
+            <span>Payment Collection &amp; Gateways</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setBusinessSubTab('security')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              businessSubTab === 'security'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <KeyRound className="w-3.5 h-3.5" />
+            <span>Security &amp; Password</span>
+          </button>
+        </div>
+      )}
+
+      {/* Sub-Tabs: Inside Database & Cloud Auth (Admin Only) */}
+      {mainTab === 'admin' && isAdmin && (
+        <div className="flex gap-1.5 p-1 bg-slate-100/80 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 w-fit overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setAdminSubTab('supabase')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              adminSubTab === 'supabase'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Supabase Cloud DB &amp; Auth</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAdminSubTab('drive')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              adminSubTab === 'drive'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <CloudUpload className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Google Drive API</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAdminSubTab('users')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              adminSubTab === 'users'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-indigo-400" />
+            <span>User Management</span>
+            <span className="text-[10px] font-bold px-1.5 py-0.2 bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-md">CRM</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAdminSubTab('maintenance')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              adminSubTab === 'maintenance'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Flame className="w-3.5 h-3.5 text-rose-500" />
+            <span>Maintenance &amp; Beta</span>
+            {maintEnabled && (
+              <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Tab 1: Business Profile - Enterprise Information */}
+      {mainTab === 'business' && businessSubTab === 'enterprise' && (
         <form onSubmit={handleSaveBusiness} className="glass-card p-6 space-y-4 max-w-2xl">
           <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
             <Building className="w-4 h-4 text-indigo-500" />
@@ -1116,8 +1191,8 @@ export default function SettingsPage() {
         </form>
       )}
 
-      {/* Tab 2: Payment Collection & Gateways */}
-      {activeTab === 'upi' && (
+      {/* Tab: Payment Collection & Gateways */}
+      {mainTab === 'business' && businessSubTab === 'payments' && (
         <form onSubmit={handleSaveUpi} className="glass-card p-6 space-y-6 max-w-3xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -1764,8 +1839,8 @@ export default function SettingsPage() {
         </form>
       )}
 
-      {/* Tab 3: Database & Cloud Auth Switcher (Admin Only) */}
-      {activeTab === 'backend' && isAdmin && (
+      {/* Tab: Database & Cloud Auth Switcher (Admin Only) */}
+      {mainTab === 'admin' && adminSubTab === 'supabase' && isAdmin && (
         <form onSubmit={handleSaveBackend} className="glass-card p-6 space-y-5 max-w-2xl">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-200/80 dark:border-slate-800">
             <div>
@@ -1874,7 +1949,7 @@ export default function SettingsPage() {
       )}
 
       {/* Tab: Google Drive API Configuration (Admin Only) */}
-      {activeTab === 'drive' && isAdmin && (
+      {mainTab === 'admin' && adminSubTab === 'drive' && isAdmin && (
         <form onSubmit={handleSaveDriveApi} className="glass-card p-6 space-y-5 max-w-2xl">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-200/80 dark:border-slate-800">
             <div>
@@ -1970,8 +2045,8 @@ export default function SettingsPage() {
         </form>
       )}
 
-      {/* Tab 4: Account Security & Password Update */}
-      {activeTab === 'security' && (
+      {/* Tab: Account Security & Password Update */}
+      {mainTab === 'business' && businessSubTab === 'security' && (
         <form onSubmit={handleUpdatePassword} className="glass-card p-6 sm:p-8 space-y-6 max-w-2xl">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-200/80 dark:border-slate-800">
             <div>
@@ -2118,8 +2193,8 @@ export default function SettingsPage() {
         </form>
       )}
 
-      {/* Tab 5: Cloud Backup & Automated Telegram Recovery */}
-      {activeTab === 'backup' && (
+      {/* Tab: Cloud Backup */}
+      {mainTab === 'backup' && (
         <div className="space-y-6 animate-in fade-in">
           
           {/* Active Database Banner */}
@@ -2311,7 +2386,7 @@ export default function SettingsPage() {
       )}
 
       {/* Tab: Maintenance Mode & Beta Testing Controls (Admin Only) */}
-      {activeTab === 'maintenance' && isAdmin && (
+      {mainTab === 'admin' && adminSubTab === 'maintenance' && isAdmin && (
         <div className="space-y-6 animate-in fade-in max-w-4xl">
           
           {/* Header Card */}
@@ -2486,7 +2561,7 @@ export default function SettingsPage() {
       )}
 
       {/* Tab: User Management CRM (Admin Only) */}
-      {activeTab === 'users' && isAdmin && (
+      {mainTab === 'admin' && adminSubTab === 'users' && isAdmin && (
         <div className="space-y-6 animate-in fade-in max-w-5xl">
           
           {/* CRM Header Card */}

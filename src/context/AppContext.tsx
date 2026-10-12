@@ -255,19 +255,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (Array.isArray(d.tasks)) setTasks(d.tasks);
           if (Array.isArray(d.passwords)) setPasswords(d.passwords);
           if (d.settings) {
-            setSettingsState(prev => ({
-              ...d.settings,
-              paymentSettings: {
-                ...(prev.paymentSettings || {}),
-                ...(d.settings.paymentSettings || {}),
-                upiId: (d.settings.paymentSettings?.upiId || '').trim() || prev.paymentSettings?.upiId || '',
-                payeeName: (d.settings.paymentSettings?.payeeName || '').trim() || prev.paymentSettings?.payeeName || prev.businessName || '',
-                customQrUrl: d.settings.paymentSettings?.customQrUrl || prev.paymentSettings?.customQrUrl || '',
-                isDefaultQrSaved: d.settings.paymentSettings?.isDefaultQrSaved ?? prev.paymentSettings?.isDefaultQrSaved ?? false,
-              }
-            }));
+            setSettingsState(prev => {
+              const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
+              const incomingLogo = d.settings.businessLogo || d.user?.avatarUrl || (d.user as any)?.avatar_url || '';
+              const preservedLogo = incomingLogo || prev.businessLogo || globalLogo;
+              return {
+                ...prev,
+                ...d.settings,
+                businessLogo: preservedLogo,
+                paymentSettings: {
+                  ...(prev.paymentSettings || {}),
+                  ...(d.settings.paymentSettings || {}),
+                  upiId: (d.settings.paymentSettings?.upiId || '').trim() || prev.paymentSettings?.upiId || '',
+                  payeeName: (d.settings.paymentSettings?.payeeName || '').trim() || prev.paymentSettings?.payeeName || prev.businessName || '',
+                  customQrUrl: d.settings.paymentSettings?.customQrUrl || prev.paymentSettings?.customQrUrl || '',
+                  isDefaultQrSaved: d.settings.paymentSettings?.isDefaultQrSaved ?? prev.paymentSettings?.isDefaultQrSaved ?? false,
+                }
+              };
+            });
           }
-          if (d.user) setProfileState(d.user);
+          if (d.user) {
+            setProfileState(prev => {
+              const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
+              const incomingAvatar = d.user.avatarUrl || (d.user as any)?.avatar_url || d.settings?.businessLogo || '';
+              const preservedAvatar = incomingAvatar || prev.avatarUrl || globalLogo;
+              return {
+                ...prev,
+                ...d.user,
+                avatarUrl: preservedAvatar,
+              };
+            });
+            setCurrentUserState(prev => {
+              if (!prev) return null;
+              const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
+              const incomingAvatar = d.user.avatarUrl || (d.user as any)?.avatar_url || d.settings?.businessLogo || '';
+              const preservedAvatar = incomingAvatar || prev.avatarUrl || globalLogo;
+              return {
+                ...prev,
+                ...d.user,
+                avatarUrl: preservedAvatar,
+              };
+            });
+          }
 
           // Update local cache
           StorageService.setAllUserData(d);

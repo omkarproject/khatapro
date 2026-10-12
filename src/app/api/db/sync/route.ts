@@ -50,6 +50,33 @@ export async function GET(req: NextRequest) {
       supabase.from('profiles').select('*').eq('id', userId).single(),
     ]);
 
+    const logo = sbProfile.data?.avatar_url || sbSet.data?.payment_settings?.businessLogo || '';
+
+    const finalUser = sbProfile.data ? {
+      id: sbProfile.data.id,
+      name: sbProfile.data.name || sbProfile.data.full_name || '',
+      email: sbProfile.data.email || '',
+      phone: sbProfile.data.phone || '',
+      businessName: sbProfile.data.business_name || '',
+      avatarUrl: logo,
+      role: sbProfile.data.role || 'user',
+      createdAt: sbProfile.data.created_at || new Date().toISOString(),
+    } : null;
+
+    const finalSettings = sbSet.data ? {
+      businessName: sbSet.data.business_name || '',
+      businessLogo: logo,
+      businessTagline: sbSet.data.business_tagline || '',
+      businessPhone: sbSet.data.business_phone || '',
+      businessEmail: sbSet.data.business_email || '',
+      paymentSettings: {
+        ...(sbSet.data.payment_settings || {}),
+        businessLogo: logo,
+      },
+      darkMode: Boolean(sbSet.data.dark_mode),
+      backendProvider: sbSet.data.backend_provider || 'supabase',
+    } : null;
+
     const finalData = {
       customers: sbCust.data || [],
       transactions: sbTxn.data || [],
@@ -62,8 +89,8 @@ export async function GET(req: NextRequest) {
       notes: sbNotes.data || [],
       tasks: sbTasks.data || [],
       passwords: sbPass.data || [],
-      settings: sbSet.data || null,
-      user: sbProfile.data || null,
+      settings: finalSettings,
+      user: finalUser,
     };
 
     return NextResponse.json({
@@ -122,14 +149,20 @@ export async function POST(req: NextRequest) {
         syncSbTable('passwords', data.passwords),
       ]);
 
+      const logoToSave = data.settings?.businessLogo || data.profile?.avatarUrl || '';
+
       if (data.settings) {
+        const paymentSettingsWithLogo = {
+          ...(data.settings.paymentSettings || {}),
+          businessLogo: logoToSave || data.settings.paymentSettings?.businessLogo || '',
+        };
         await supabase.from('system_settings').upsert({
           user_id: userId,
           business_name: data.settings.businessName,
           business_tagline: data.settings.businessTagline,
           business_phone: data.settings.businessPhone,
           business_email: data.settings.businessEmail,
-          payment_settings: data.settings.paymentSettings,
+          payment_settings: paymentSettingsWithLogo,
           dark_mode: data.settings.darkMode,
           backend_provider: 'supabase',
           updated_at: new Date().toISOString(),
@@ -143,6 +176,7 @@ export async function POST(req: NextRequest) {
           email: data.profile.email,
           phone: data.profile.phone,
           business_name: data.profile.businessName,
+          avatar_url: logoToSave || data.profile.avatarUrl || '',
           updated_at: new Date().toISOString(),
         }, { onConflict: 'id' });
       }
