@@ -52,6 +52,8 @@ export interface Customer {
   rating: number; // 1 - 5
   notes?: string;
   avatar?: string;
+  avatarUrl?: string;
+  driveAvatarId?: string;
   bankAccounts?: CustomerBankAccount[];
   upiDetails?: CustomerUpiDetail[];
   createdAt: string;

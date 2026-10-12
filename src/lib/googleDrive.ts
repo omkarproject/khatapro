@@ -312,12 +312,14 @@ export async function getOrCreateCustomerFolder(
 
   // 2. Ensure customer-specific folder exists inside "Customer CRM"
   const cleanCustomerName = (customerName || 'General Customer').trim() || 'General Customer';
-  const folderName = customerId ? `${cleanCustomerName} (${customerId.slice(0, 8)})` : cleanCustomerName;
+  const folderName = customerId ? `${cleanCustomerName} (${customerId})` : cleanCustomerName;
   const customerFolderId = await findOrCreate(folderName, crmRootFolderId);
 
-  // 3. If a subfolder name (e.g. "AADHAR CARD", "BILLS", "DOCUMENTS") is provided, place inside that subfolder
+  // 3. If a subfolder name (e.g. "Profile Picture", "AADHAR CARD", "BILLS", "DOCUMENTS") is provided, place inside that subfolder
   if (subfolderName && subfolderName.trim()) {
-    return await findOrCreate(subfolderName.trim().toUpperCase(), customerFolderId);
+    const cleanSubfolder = subfolderName.trim();
+    const targetSubfolderName = cleanSubfolder.toLowerCase() === 'profile picture' ? 'Profile Picture' : cleanSubfolder.toUpperCase();
+    return await findOrCreate(targetSubfolderName, customerFolderId);
   }
 
   return customerFolderId;

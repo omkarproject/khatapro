@@ -1197,26 +1197,38 @@ interface AttachedBill {
         setProfileAvatar(base64);
 
         const ext = file.name.split('.').pop() || 'jpg';
-        const photoFileName = `Profile_Photo_${activeCustomer.name.replace(/\s+/g, '_')}.${ext}`;
+        const photoFileName = `${activeCustomer.name.replace(/\s+/g, '_')}_profile_picture.${ext}`;
         const uploadRes = await uploadToDriveFiles(
           photoFileName,
           base64,
-          file.type,
+          file.type || 'image/jpeg',
           undefined,
           {
             customerName: activeCustomer.name,
             customerId: activeCustomer.id,
-            folderName: 'Profile',
+            folderName: 'Profile Picture',
+            category: 'Profile Picture',
+            appFileId: `avatar_${activeCustomer.id}`,
+            uploadedAt: new Date().toISOString(),
           }
         );
 
+        let finalAvatar = base64;
+        let driveAvatarId: string | undefined = undefined;
+        if (uploadRes.success && uploadRes.fileId) {
+          driveAvatarId = uploadRes.fileId;
+          finalAvatar = `/api/backup/google-drive/view-file?fileId=${uploadRes.fileId}`;
+          setProfileAvatar(finalAvatar);
+        }
+
         const updated = {
           ...activeCustomer,
-          avatar: base64,
-          avatarUrl: uploadRes.webViewLink || uploadRes.webContentLink,
+          avatar: finalAvatar,
+          avatarUrl: finalAvatar,
+          driveAvatarId,
         };
         saveCustomer(updated);
-        addToast('Photo Updated', `${activeCustomer.name}'s profile photo saved to Customer CRM.`, 'success');
+        addToast('Photo Updated', `${activeCustomer.name}'s profile photo saved to Google Drive (Profile Picture folder).`, 'success');
       };
       reader.readAsDataURL(file);
     }
@@ -2496,8 +2508,13 @@ interface AttachedBill {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className={`w-9 h-9 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-xs shrink-0 ${getCustomerRatingBorder(cust.rating)}`}>
-                        {cust.avatar ? (
-                          <img src={cust.avatar} alt={cust.name} className="w-full h-full rounded-full object-cover" />
+                        {(cust.avatar || cust.avatarUrl) ? (
+                          <img
+                            src={cust.avatar || cust.avatarUrl}
+                            alt={cust.name}
+                            className="w-full h-full rounded-full object-cover"
+                            onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                          />
                         ) : (
                           cust.name.charAt(0)
                         )}
@@ -2825,8 +2842,13 @@ interface AttachedBill {
                           className={`w-10 h-10 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-base shadow-xs shrink-0 select-none cursor-pointer hover:opacity-90 active:scale-95 transition-all overflow-hidden ${getCustomerRatingBorder(activeCustomer.rating)}`}
                           title="Click to view/edit profile"
                         >
-                          {activeCustomer.avatar ? (
-                            <img src={activeCustomer.avatar} alt={activeCustomer.name} className="w-full h-full object-cover" />
+                          {(activeCustomer.avatar || activeCustomer.avatarUrl) ? (
+                            <img
+                              src={activeCustomer.avatar || activeCustomer.avatarUrl}
+                              alt={activeCustomer.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                            />
                           ) : (
                             activeCustomer.name.charAt(0).toUpperCase()
                           )}

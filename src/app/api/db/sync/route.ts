@@ -6,8 +6,20 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 // --- MAPPERS: Frontend camelCase -> Supabase snake_case ---
 
 function customerToDb(c: any, userId: string) {
-  // Store only URL/link, do not store huge base64 strings in database
-  const safeAvatar = c.avatarUrl || (c.avatar && !c.avatar.startsWith('data:') ? c.avatar : null);
+  // Store only URL/link or stream proxy or compact photo, avoid multi-MB strings
+  let safeAvatar = c.avatar || c.avatarUrl || null;
+  if (safeAvatar) {
+    if (safeAvatar.startsWith('data:')) {
+      if (c.driveAvatarId) {
+        safeAvatar = `/api/backup/google-drive/view-file?fileId=${c.driveAvatarId}`;
+      } else if (safeAvatar.length < 500000) {
+        // Retain compact base64 avatar (under 500KB) if Drive upload not yet performed
+        safeAvatar = safeAvatar;
+      } else {
+        safeAvatar = null;
+      }
+    }
+  }
 
   return {
     id: String(c.id),
@@ -318,12 +330,19 @@ function customerDriveFileToDb(f: any, userId: string) {
 
 function customerFromDb(row: any) {
   let avatarUrl = row.avatar || '';
+  let driveAvatarId: string | undefined = undefined;
   if (avatarUrl) {
     if (avatarUrl.includes('view-file?fileId=')) {
-      // already a proxy url
+      driveAvatarId = avatarUrl.split('view-file?fileId=')[1]?.split('&')[0];
     } else if (avatarUrl.includes('/file/d/')) {
       const match = avatarUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-      if (match) avatarUrl = `/api/backup/google-drive/view-file?fileId=${match[1]}`;
+      if (match) {
+        driveAvatarId = match[1];
+        avatarUrl = `/api/backup/google-drive/view-file?fileId=${match[1]}`;
+      }
+    } else if (/^[a-zA-Z0-9_-]{25,}$/.test(avatarUrl)) {
+      driveAvatarId = avatarUrl;
+      avatarUrl = `/api/backup/google-drive/view-file?fileId=${avatarUrl}`;
     }
   }
 
@@ -345,6 +364,7 @@ function customerFromDb(row: any) {
     notes: row.notes || '',
     avatar: avatarUrl,
     avatarUrl: avatarUrl,
+    driveAvatarId,
     bankAccounts: row.bank_accounts || [],
     upiDetails: row.upi_details || [],
     createdAt: row.created_at,

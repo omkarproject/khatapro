@@ -201,6 +201,8 @@ export default function CustomersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formAvatar, setFormAvatar] = useState<string | null>(null);
+  const [formDriveAvatarId, setFormDriveAvatarId] = useState<string | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [formName, setFormName] = useState('');
   const [formPhone, setFormPhone] = useState('');
@@ -218,15 +220,45 @@ export default function CustomersPage() {
   const handleFormAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        addToast('File too large', 'Please select an image under 5MB.', 'warning');
+      if (file.size > 10 * 1024 * 1024) {
+        addToast('File too large', 'Please select an image under 10MB.', 'warning');
         return;
       }
       const reader = new FileReader();
-      reader.onload = (evt) => {
+      reader.onload = async (evt) => {
         const base64 = evt.target?.result as string;
         setFormAvatar(base64);
-        addToast('Photo Uploaded', 'Profile photo preview updated.', 'info');
+        addToast('Photo Selected', 'Uploading profile picture to Google Drive...', 'info');
+
+        const targetId = editingId || `cust_${Date.now()}`;
+        const targetName = formName.trim() || 'Customer';
+
+        setIsUploadingAvatar(true);
+        try {
+          const driveRes = await uploadToDriveFiles(
+            `${targetName.replace(/\s+/g, '_')}_profile.jpg`,
+            base64,
+            file.type || 'image/jpeg',
+            {
+              customerName: targetName,
+              customerId: targetId,
+              folderName: 'Profile Picture',
+              category: 'Profile Picture',
+              appFileId: `avatar_${targetId}`,
+              uploadedAt: new Date().toISOString(),
+            }
+          );
+
+          if (driveRes.success && driveRes.fileId) {
+            setFormDriveAvatarId(driveRes.fileId);
+            setFormAvatar(`/api/backup/google-drive/view-file?fileId=${driveRes.fileId}`);
+            addToast('Profile Pic Uploaded', 'Saved to Google Drive in customer Profile Picture folder!', 'success');
+          }
+        } catch (err) {
+          console.warn('Profile picture upload deferred:', err);
+        } finally {
+          setIsUploadingAvatar(false);
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -252,6 +284,8 @@ export default function CustomersPage() {
   const openAddModal = () => {
     setEditingId(null);
     setFormAvatar(null);
+    setFormDriveAvatarId(null);
+    setIsUploadingAvatar(false);
     setFormName('');
     setFormPhone('');
     setFormEmail('');
@@ -268,7 +302,9 @@ export default function CustomersPage() {
 
   const openEditModal = (c: Customer) => {
     setEditingId(c.id);
-    setFormAvatar(c.avatar || null);
+    setFormAvatar(c.avatar || c.avatarUrl || null);
+    setFormDriveAvatarId(c.driveAvatarId || null);
+    setIsUploadingAvatar(false);
     setFormName(c.name);
     setFormPhone(c.phone);
     setFormEmail(c.email || '');
@@ -283,15 +319,47 @@ export default function CustomersPage() {
     setIsModalOpen(true);
   };
 
-  const handleSaveCustomer = (e: React.FormEvent) => {
+  const handleSaveCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) {
       addToast('Validation Error', 'Customer name is required.', 'error');
       return;
     }
 
+    const customerId = editingId || `cust_${Date.now()}`;
+    let finalAvatar = formAvatar || undefined;
+    let finalDriveAvatarId = formDriveAvatarId || undefined;
+
+    // If formAvatar is still raw base64, ensure it's uploaded to Google Drive
+    if (formAvatar && formAvatar.startsWith('data:')) {
+      try {
+        setIsUploadingAvatar(true);
+        const driveRes = await uploadToDriveFiles(
+          `${formName.trim().replace(/\s+/g, '_')}_profile.jpg`,
+          formAvatar,
+          'image/jpeg',
+          {
+            customerName: formName.trim(),
+            customerId: customerId,
+            folderName: 'Profile Picture',
+            category: 'Profile Picture',
+            appFileId: `avatar_${customerId}`,
+            uploadedAt: new Date().toISOString(),
+          }
+        );
+        if (driveRes.success && driveRes.fileId) {
+          finalDriveAvatarId = driveRes.fileId;
+          finalAvatar = `/api/backup/google-drive/view-file?fileId=${driveRes.fileId}`;
+        }
+      } catch (err) {
+        console.warn('Avatar upload on save deferred:', err);
+      } finally {
+        setIsUploadingAvatar(false);
+      }
+    }
+
     const customerData: Customer = {
-      id: editingId || `cust_${Date.now()}`,
+      id: customerId,
       name: formName.trim(),
       phone: formPhone.trim() || '+91 98000 00000',
       email: formEmail.trim(),
@@ -307,7 +375,9 @@ export default function CustomersPage() {
       status: 'active',
       rating: parseInt(formRating) || 5,
       notes: formNotes.trim(),
-      avatar: formAvatar || undefined,
+      avatar: finalAvatar,
+      avatarUrl: finalAvatar,
+      driveAvatarId: finalDriveAvatarId,
       createdAt: editingId
         ? customers.find(c => c.id === editingId)?.createdAt || new Date().toISOString()
         : new Date().toISOString(),
@@ -1168,8 +1238,13 @@ export default function CustomersPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className="w-11 h-11 rounded-2xl fintech-gradient-primary text-white font-extrabold flex items-center justify-center text-sm shadow-md overflow-hidden relative shrink-0">
-                      {cust.avatar ? (
-                        <img src={cust.avatar} alt={cust.name} className="w-full h-full object-cover" />
+                      {(cust.avatar || cust.avatarUrl) ? (
+                        <img
+                          src={cust.avatar || cust.avatarUrl}
+                          alt={cust.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                        />
                       ) : (
                         cust.name.charAt(0)
                       )}
@@ -1338,8 +1413,13 @@ export default function CustomersPage() {
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl fintech-gradient-primary text-white font-black flex items-center justify-center text-lg overflow-hidden relative shrink-0 shadow-md">
-                  {activeCustomer.avatar ? (
-                    <img src={activeCustomer.avatar} alt={activeCustomer.name} className="w-full h-full object-cover" />
+                  {(activeCustomer.avatar || activeCustomer.avatarUrl) ? (
+                    <img
+                      src={activeCustomer.avatar || activeCustomer.avatarUrl}
+                      alt={activeCustomer.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                    />
                   ) : (
                     activeCustomer.name.charAt(0)
                   )}
@@ -1514,17 +1594,23 @@ export default function CustomersPage() {
                   />
                 </div>
                 <div className="flex-1 space-y-1">
-                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                    Customer Profile Photo
+                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <span>Customer Profile Photo</span>
+                    {isUploadingAvatar && (
+                      <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold animate-pulse">
+                        • Saving to Drive...
+                      </span>
+                    )}
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    PNG, JPG, WEBP • Max 5MB
+                    PNG, JPG, WEBP • Saves to Google Drive (Profile Picture)
                   </p>
                   <div className="flex items-center gap-2 pt-0.5">
                     <button
                       type="button"
+                      disabled={isUploadingAvatar}
                       onClick={() => avatarInputRef.current?.click()}
-                      className="px-3 py-1 text-[11px] font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                      className="px-3 py-1 text-[11px] font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
                     >
                       <Camera className="w-3 h-3" />
                       {formAvatar ? 'Change Photo' : 'Upload Photo'}
@@ -1532,7 +1618,10 @@ export default function CustomersPage() {
                     {formAvatar && (
                       <button
                         type="button"
-                        onClick={() => setFormAvatar(null)}
+                        onClick={() => {
+                          setFormAvatar(null);
+                          setFormDriveAvatarId(null);
+                        }}
                         className="px-2.5 py-1 text-[11px] font-semibold rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
                       >
                         Remove
