@@ -102,7 +102,7 @@ export default function GoogleDriveBackupPanel() {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('gdrive_status') === 'connected') {
-        addToast('Google Drive Connected! 🎉', 'Your private HisabKitab folder is ready for automated backups.', 'success');
+        addToast('Google Drive Connected! 🎉', 'Your private SmartKhata Pro folder is ready for backups & file attachments.', 'success');
         // Clean URL
         window.history.replaceState({}, '', window.location.pathname + '?tab=backup');
         checkStatus();
@@ -161,8 +161,8 @@ export default function GoogleDriveBackupPanel() {
 
       setLastBackupAt(json.timestamp);
       addToast(
-        'Backup Uploaded Successfully! ☁️',
-        `${json.filename} (${(json.sizeBytes / 1024).toFixed(1)} KB) saved to HisabKitab/Backups.`,
+        'Backup Snapshot Saved! ☁️',
+        `${json.filename} (${(json.sizeBytes / 1024).toFixed(1)} KB) updated in SmartKhata Pro/Backups.`,
         'success'
       );
       checkStatus();
@@ -265,7 +265,7 @@ export default function GoogleDriveBackupPanel() {
               </button>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Automatic daily backups &amp; 1-click restore from your private Google Drive folder (<code className="text-emerald-600 dark:text-emerald-400 font-mono">HisabKitab/</code>)
+              Automatic daily backups &amp; 1-click restore from your private Google Drive (<code className="text-emerald-600 dark:text-emerald-400 font-mono">SmartKhata Pro/</code>)
             </p>
           </div>
         </div>
@@ -358,7 +358,7 @@ export default function GoogleDriveBackupPanel() {
                 Connect your Google Account
               </h4>
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xl">
-                Authorize SmartKhata Pro to save encrypted daily backups in your private Google Drive (<code className="text-emerald-600 font-mono">HisabKitab/</code>). You can restore all your data anytime, even if you delete your SmartKhata account.
+                Authorize SmartKhata Pro to save encrypted daily backups in your private Google Drive (<code className="text-emerald-600 font-mono">SmartKhata Pro/</code>). You can restore all your data anytime, even if you delete your SmartKhata account.
               </p>
             </div>
 
@@ -458,7 +458,7 @@ export default function GoogleDriveBackupPanel() {
                     Restore from Google Drive
                   </h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Discovered backup files in your private <code className="text-emerald-600 font-mono">HisabKitab/Backups/</code> folder
+                    Discovered backup files in your private <code className="text-emerald-600 font-mono">SmartKhata Pro/Backups/</code> folder
                   </p>
                 </div>
               </div>
@@ -638,13 +638,11 @@ export default function GoogleDriveBackupPanel() {
               <div className="space-y-1">
                 <strong className="text-slate-900 dark:text-white block font-bold">2. Private Folder Hierarchy:</strong>
                 <p>
-                  SmartKhata creates a dedicated folder structure inside your personal Google Drive:
+                  SmartKhata Pro creates exactly 2 folders inside your personal Google Drive (<code className="text-emerald-600 font-mono">SmartKhata Pro/</code>):
                   <br />
-                  <code className="text-emerald-600 font-mono">HisabKitab/Backups/</code> — Versioned ZIP archives
+                  <code className="text-emerald-600 font-mono">SmartKhata Pro/Backups/</code> — Latest daily backup ZIP archive &amp; manifest.json (auto-updated in-place)
                   <br />
-                  <code className="text-emerald-600 font-mono">HisabKitab/Backup Manifest/</code> — Snapshot manifests
-                  <br />
-                  <code className="text-emerald-600 font-mono">HisabKitab/Customer Documents/</code> — Customer bills &amp; KYC
+                  <code className="text-emerald-600 font-mono">SmartKhata Pro/Files/</code> — User-attached bills, invoices, receipts, and CRM files
                 </p>
               </div>
 

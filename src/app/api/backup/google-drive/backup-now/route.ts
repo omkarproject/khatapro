@@ -16,13 +16,11 @@ export async function POST(req: NextRequest) {
 
     const { drive, tokenRecord } = await getAuthenticatedDriveForUser(userId);
 
-    // Ensure folder IDs are valid
+    // Ensure folder IDs are valid (SmartKhata Pro / Backups & Files)
     let backupsFolderId = tokenRecord.backups_folder_id;
-    let manifestFolderId = tokenRecord.manifest_folder_id;
-    if (!backupsFolderId || !manifestFolderId) {
+    if (!backupsFolderId) {
       const folders = await ensureHisabKitabFolders(drive);
       backupsFolderId = folders.backupsId;
-      manifestFolderId = folders.manifestId;
     }
 
     // Gather user data (from request payload if sent, or query Supabase)
@@ -83,12 +81,11 @@ export async function POST(req: NextRequest) {
     // 1. Generate versioned ZIP archive
     const { zipBuffer, manifest, filename } = await createBackupArchive(fullData);
 
-    // 2. Upload ZIP to HisabKitab/Backups/
+    // 2. Upload / replace latest ZIP in SmartKhata Pro/Backups/
     const uploadResult = await uploadBackupZip(drive, backupsFolderId, filename, zipBuffer);
 
-    // 3. Upload manifest copy to HisabKitab/Backup Manifest/ for fast discovery
-    const manifestFileName = `manifest_${Date.now()}.json`;
-    await uploadBackupManifest(drive, manifestFolderId, manifestFileName, manifest);
+    // 3. Upload / replace manifest.json in SmartKhata Pro/Backups/
+    await uploadBackupManifest(drive, backupsFolderId, 'manifest.json', manifest);
 
     // 4. Record history entry in Supabase
     const historyItem = {
@@ -114,7 +111,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Backup uploaded to your private HisabKitab folder in Google Drive!',
+      message: 'Backup snapshot saved & updated in your private SmartKhata Pro/Backups folder in Google Drive!',
       fileId: uploadResult.fileId,
       filename,
       sizeBytes: uploadResult.size,

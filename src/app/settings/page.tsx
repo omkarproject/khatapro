@@ -2211,7 +2211,7 @@ export default function SettingsPage() {
                 Database Backup &amp; Google Drive Cloud Sync
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Export full JSON backup, restore existing snapshots, or synchronize automated daily backups directly to your private Google Drive HisabKitab folder.
+                Export full JSON backup, restore existing snapshots, or synchronize automated daily backups directly to your private Google Drive SmartKhata Pro folder.
               </p>
             </div>
 

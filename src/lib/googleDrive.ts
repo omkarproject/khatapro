@@ -54,18 +54,17 @@ export async function getUserEmailFromTokens(tokens: any): Promise<string> {
 
 /**
  * Creates or locates the private folder structure in user's Google Drive:
- * HisabKitab/
- * ├── Backups/
- * ├── Customer Documents/
- * └── Backup Manifest/
+ * SmartKhata Pro/
+ * ├── Backups/  (Contains latest daily backup ZIP & manifest.json)
+ * └── Files/    (Contains user attachments: bills, invoices, receipts, CRM drive documents)
  */
-export async function ensureHisabKitabFolders(drive: any): Promise<{
+export async function ensureSmartKhataFolders(drive: any): Promise<{
   rootId: string;
   backupsId: string;
+  filesId: string;
   docsId: string;
   manifestId: string;
 }> {
-  // Helper to find or create a folder
   const findOrCreateFolder = async (name: string, parentId?: string): Promise<string> => {
     let query = `name = '${name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
     if (parentId) {
@@ -81,7 +80,6 @@ export async function ensureHisabKitabFolders(drive: any): Promise<{
       return res.data.files[0].id;
     }
 
-    // Create if not found
     const folderMetadata: any = {
       name,
       mimeType: 'application/vnd.google-apps.folder',
@@ -96,16 +94,28 @@ export async function ensureHisabKitabFolders(drive: any): Promise<{
     return createRes.data.id;
   };
 
-  const rootId = await findOrCreateFolder('HisabKitab');
-  const backupsId = await findOrCreateFolder('Backups', rootId);
-  const docsId = await findOrCreateFolder('Customer Documents', rootId);
-  const manifestId = await findOrCreateFolder('Backup Manifest', rootId);
+  // 1. Root folder: "SmartKhata Pro"
+  const rootId = await findOrCreateFolder('SmartKhata Pro');
 
-  return { rootId, backupsId, docsId, manifestId };
+  // 2. Exactly two sub-folders: "Backups" and "Files"
+  const backupsId = await findOrCreateFolder('Backups', rootId);
+  const filesId = await findOrCreateFolder('Files', rootId);
+
+  return {
+    rootId,
+    backupsId,
+    filesId,
+    docsId: filesId,       // Alias pointing to Files folder
+    manifestId: backupsId, // Alias pointing to Backups folder (manifest lives here)
+  };
 }
 
+// Backward-compatible alias
+export const ensureHisabKitabFolders = ensureSmartKhataFolders;
+
 /**
- * Uploads a versioned ZIP backup file to HisabKitab/Backups/
+ * Uploads a daily ZIP backup to SmartKhata Pro/Backups/
+ * Replaces / overwrites previous backup ZIP so that multiple daily ZIP archives do not accumulate!
  */
 export async function uploadBackupZip(
   drive: any,
@@ -113,40 +123,80 @@ export async function uploadBackupZip(
   fileName: string,
   zipBuffer: Buffer
 ): Promise<{ fileId: string; size: number }> {
+  // Check if a backup zip file already exists in Backups folder
+  const existingRes = await drive.files.list({
+    q: `'${backupsFolderId}' in parents and mimeType = 'application/zip' and trashed = false`,
+    fields: 'files(id, name)',
+  });
+
+  const existingFiles = existingRes.data.files || [];
+
   const stream = new Readable();
   stream.push(zipBuffer);
   stream.push(null);
-
-  const fileMetadata = {
-    name: fileName,
-    parents: [backupsFolderId],
-    description: 'SmartKhata Pro Automated / Manual Cloud Backup Snapshot',
-  };
 
   const media = {
     mimeType: 'application/zip',
     body: stream,
   };
 
-  const res = await drive.files.create({
+  if (existingFiles.length > 0) {
+    // Update the existing primary backup zip in place
+    const primaryFileId = existingFiles[0].id;
+    const updateRes = await drive.files.update({
+      fileId: primaryFileId,
+      requestBody: {
+        name: fileName,
+        description: 'SmartKhata Pro Latest Automated / Manual Cloud Backup Snapshot',
+      },
+      media,
+      fields: 'id, name, size',
+    });
+
+    // Delete any secondary or duplicate zip archives if more than 1 existed
+    if (existingFiles.length > 1) {
+      for (let i = 1; i < existingFiles.length; i++) {
+        try {
+          await drive.files.delete({ fileId: existingFiles[i].id });
+        } catch (delErr) {
+          console.warn('Could not delete redundant backup zip file:', delErr);
+        }
+      }
+    }
+
+    return {
+      fileId: updateRes.data.id,
+      size: Number(updateRes.data.size) || zipBuffer.length,
+    };
+  }
+
+  // Create new if none exists yet
+  const fileMetadata = {
+    name: fileName,
+    parents: [backupsFolderId],
+    description: 'SmartKhata Pro Latest Automated / Manual Cloud Backup Snapshot',
+  };
+
+  const createRes = await drive.files.create({
     requestBody: fileMetadata,
     media,
     fields: 'id, name, size',
   });
 
   return {
-    fileId: res.data.id,
-    size: Number(res.data.size) || zipBuffer.length,
+    fileId: createRes.data.id,
+    size: Number(createRes.data.size) || zipBuffer.length,
   };
 }
 
 /**
- * Uploads a JSON manifest to HisabKitab/Backup Manifest/
+ * Uploads / updates manifest.json inside SmartKhata Pro/Backups/
+ * Replaces existing manifest.json in-place so it does not accumulate.
  */
 export async function uploadBackupManifest(
   drive: any,
-  manifestFolderId: string,
-  fileName: string,
+  backupsFolderId: string,
+  _fileName: string,
   manifestData: any
 ): Promise<string> {
   const jsonStr = JSON.stringify(manifestData, null, 2);
@@ -154,14 +204,37 @@ export async function uploadBackupManifest(
   stream.push(jsonStr);
   stream.push(null);
 
-  const fileMetadata = {
-    name: fileName,
-    parents: [manifestFolderId],
-  };
-
   const media = {
     mimeType: 'application/json',
     body: stream,
+  };
+
+  // Check if manifest.json exists in backupsFolderId
+  const existingRes = await drive.files.list({
+    q: `'${backupsFolderId}' in parents and name = 'manifest.json' and trashed = false`,
+    fields: 'files(id, name)',
+  });
+
+  const existingFiles = existingRes.data.files || [];
+
+  if (existingFiles.length > 0) {
+    const fileId = existingFiles[0].id;
+    const updateRes = await drive.files.update({
+      fileId,
+      requestBody: {
+        name: 'manifest.json',
+        description: 'SmartKhata Pro Backup Manifest',
+      },
+      media,
+      fields: 'id',
+    });
+    return updateRes.data.id;
+  }
+
+  const fileMetadata = {
+    name: 'manifest.json',
+    parents: [backupsFolderId],
+    description: 'SmartKhata Pro Backup Manifest',
   };
 
   const res = await drive.files.create({
@@ -171,6 +244,45 @@ export async function uploadBackupManifest(
   });
 
   return res.data.id;
+}
+
+/**
+ * Uploads a user-attached file (PDF, Image, Receipt, Bill, KYC document) to SmartKhata Pro/Files/
+ */
+export async function uploadAttachmentFile(
+  drive: any,
+  filesFolderId: string,
+  fileName: string,
+  mimeType: string,
+  fileBuffer: Buffer
+): Promise<{ fileId: string; webViewLink?: string; webContentLink?: string; size: number }> {
+  const stream = new Readable();
+  stream.push(fileBuffer);
+  stream.push(null);
+
+  const fileMetadata = {
+    name: fileName,
+    parents: [filesFolderId],
+    description: 'SmartKhata Pro User Attachment',
+  };
+
+  const media = {
+    mimeType: mimeType || 'application/octet-stream',
+    body: stream,
+  };
+
+  const res = await drive.files.create({
+    requestBody: fileMetadata,
+    media,
+    fields: 'id, name, size, webViewLink, webContentLink',
+  });
+
+  return {
+    fileId: res.data.id,
+    webViewLink: res.data.webViewLink,
+    webContentLink: res.data.webContentLink,
+    size: Number(res.data.size) || fileBuffer.length,
+  };
 }
 
 /**

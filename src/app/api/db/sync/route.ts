@@ -1,7 +1,517 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 
-// GET: Fetch all modules for a specific user from Supabase PostgreSQL
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// --- MAPPERS: Frontend camelCase -> Supabase snake_case ---
+
+function customerToDb(c: any, userId: string) {
+  return {
+    id: String(c.id),
+    user_id: userId,
+    name: c.name || '',
+    phone: c.phone || '',
+    email: c.email || '',
+    business_name: c.businessName || '',
+    gst_number: c.gstNumber || '',
+    address: c.address || '',
+    city: c.city || '',
+    state: c.state || '',
+    credit_limit: Number(c.creditLimit) || 0,
+    outstanding_balance: Number(c.outstandingBalance) || 0,
+    category: c.category || 'Regular',
+    status: c.status || 'active',
+    rating: Number(c.rating) || 5,
+    notes: c.notes || '',
+    avatar: c.avatar || '',
+    bank_accounts: Array.isArray(c.bankAccounts) ? c.bankAccounts : [],
+    upi_details: Array.isArray(c.upiDetails) ? c.upiDetails : [],
+    created_at: c.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function transactionToDb(t: any, userId: string) {
+  return {
+    id: String(t.id),
+    user_id: userId,
+    type: t.type || 'credit',
+    amount: Number(t.amount) || 0,
+    date: t.date || new Date().toISOString().split('T')[0],
+    customer_id: t.customerId || null,
+    customer_name: t.customerName || '',
+    category: t.category || 'General',
+    payment_mode: t.paymentMode || 'upi',
+    note: t.note || '',
+    tags: Array.isArray(t.tags) ? t.tags : [],
+    attachments: Array.isArray(t.attachments) ? t.attachments : [],
+    reference_no: t.referenceNo || '',
+    status: t.status || 'completed',
+    created_by: t.createdBy || '',
+    created_at: t.createdAt || new Date().toISOString(),
+    updated_at: t.updatedAt || new Date().toISOString(),
+  };
+}
+
+function productToDb(p: any, userId: string) {
+  return {
+    id: String(p.id),
+    user_id: userId,
+    name: p.name || '',
+    sku: p.sku || '',
+    barcode: p.barcode || '',
+    category: p.category || 'General',
+    purchase_price: Number(p.purchasePrice) || 0,
+    selling_price: Number(p.sellingPrice) || 0,
+    current_stock: Number(p.currentStock) || 0,
+    min_stock: Number(p.minStock) || 0,
+    unit: p.unit || 'pcs',
+    supplier: p.supplier || '',
+    location: p.location || '',
+    image_url: p.imageUrl || '',
+    updated_at: p.updatedAt || new Date().toISOString(),
+  };
+}
+
+function invoiceToDb(inv: any, userId: string) {
+  return {
+    id: String(inv.id),
+    user_id: userId,
+    invoice_number: inv.invoiceNumber || '',
+    type: inv.type || 'sales',
+    customer_id: inv.customerId || '',
+    customer_name: inv.customerName || '',
+    customer_phone: inv.customerPhone || '',
+    customer_gst: inv.customerGst || '',
+    customer_address: inv.customerAddress || '',
+    issue_date: inv.issueDate || new Date().toISOString().split('T')[0],
+    due_date: inv.dueDate || new Date().toISOString().split('T')[0],
+    items: Array.isArray(inv.items) ? inv.items : [],
+    subtotal: Number(inv.subtotal) || 0,
+    discount_amount: Number(inv.discountAmount) || 0,
+    tax_amount: Number(inv.taxAmount) || 0,
+    cgst: Number(inv.cgst) || 0,
+    sgst: Number(inv.sgst) || 0,
+    igst: Number(inv.igst) || 0,
+    total: Number(inv.total) || 0,
+    paid_amount: Number(inv.paidAmount) || 0,
+    status: inv.status || 'unpaid',
+    payment_date: inv.paymentDate || null,
+    receipt_url: inv.receiptUrl || null,
+    receipt_name: inv.receiptName || null,
+    receipt_type: inv.receiptType || null,
+    status_history: Array.isArray(inv.statusHistory) ? inv.statusHistory : [],
+    applied_charges: Array.isArray(inv.appliedCharges) ? inv.appliedCharges : [],
+    notes: inv.notes || null,
+    terms: inv.terms || null,
+    upi_payment_qr: inv.upiPaymentQr || null,
+    stock_deducted: Boolean(inv.stockDeducted),
+    created_at: inv.createdAt || new Date().toISOString(),
+  };
+}
+
+function expenseToDb(e: any, userId: string) {
+  return {
+    id: String(e.id),
+    user_id: userId,
+    title: e.title || '',
+    amount: Number(e.amount) || 0,
+    category: e.category || 'General',
+    date: e.date || new Date().toISOString().split('T')[0],
+    payment_mode: e.paymentMode || 'cash',
+    notes: e.notes || null,
+    receipt_url: e.receiptUrl || null,
+    receipt_urls: Array.isArray(e.receiptUrls) ? e.receiptUrls : [],
+    is_recurring: Boolean(e.isRecurring),
+    recurring_frequency: e.recurringFrequency || null,
+    tags: Array.isArray(e.tags) ? e.tags : [],
+    created_at: e.createdAt || new Date().toISOString(),
+  };
+}
+
+function savingsGoalToDb(s: any, userId: string) {
+  return {
+    id: String(s.id),
+    user_id: userId,
+    title: s.title || '',
+    target_amount: Number(s.targetAmount) || 0,
+    current_amount: Number(s.currentAmount) || 0,
+    category: s.category || 'Emergency Fund',
+    deadline: s.deadline || '',
+    notes: s.notes || null,
+    icon: s.icon || null,
+    document_url: s.documentUrl || null,
+    document_name: s.documentName || null,
+    document_type: s.documentType || null,
+    deposits: Array.isArray(s.deposits) ? s.deposits : [],
+    created_at: s.createdAt || new Date().toISOString(),
+  };
+}
+
+function reminderToDb(r: any, userId: string) {
+  return {
+    id: String(r.id),
+    user_id: userId,
+    customer_id: r.customerId || '',
+    customer_name: r.customerName || '',
+    customer_phone: r.customerPhone || '',
+    customer_email: r.customerEmail || '',
+    amount: Number(r.amount) || 0,
+    due_date: r.dueDate || '',
+    reminder_type: r.reminderType || 'upcoming',
+    channels: Array.isArray(r.channels) ? r.channels : ['sms'],
+    status: r.status || 'pending',
+    sent_at: r.sentAt || null,
+    message_template: r.messageTemplate || '',
+    note: r.note || null,
+    transaction_id: r.transactionId || null,
+    created_at: r.createdAt || new Date().toISOString(),
+  };
+}
+
+function documentToDb(d: any, userId: string) {
+  return {
+    id: String(d.id),
+    user_id: userId,
+    title: d.title || '',
+    category: d.category || 'general',
+    file_url: d.fileUrl || '',
+    file_type: d.fileType || '',
+    file_size: d.fileSize || '',
+    related_entity_id: d.relatedEntityId || null,
+    related_entity_name: d.relatedEntityName || null,
+    uploaded_at: d.uploadedAt || new Date().toISOString(),
+  };
+}
+
+function noteToDb(n: any, userId: string) {
+  return {
+    id: String(n.id),
+    user_id: userId,
+    title: n.title || '',
+    description: n.description || '',
+    reminder_date: n.reminderDate || null,
+    reminder_time: n.reminderTime || null,
+    category: n.category || 'General',
+    color: n.color || 'amber',
+    is_pinned: Boolean(n.isPinned),
+    attached_image: n.attachedImage || null,
+    created_at: n.createdAt || new Date().toISOString(),
+    updated_at: n.updatedAt || new Date().toISOString(),
+  };
+}
+
+function taskToDb(t: any, userId: string) {
+  return {
+    id: String(t.id),
+    user_id: userId,
+    title: t.title || '',
+    description: t.description || '',
+    is_completed: Boolean(t.isCompleted),
+    due_date: t.dueDate || null,
+    reminder_date: t.reminderDate || null,
+    reminder_time: t.reminderTime || null,
+    priority: t.priority || 'medium',
+    category: t.category || 'General',
+    created_at: t.createdAt || new Date().toISOString(),
+    completed_at: t.completedAt || null,
+  };
+}
+
+function passwordToDb(p: any, userId: string) {
+  return {
+    id: String(p.id),
+    user_id: userId,
+    app_name: p.appName || '',
+    username: p.username || '',
+    password: p.password || '',
+    recovery_key: p.recoveryKey || null,
+    attached_image: p.attachedImage || null,
+    website_url: p.websiteUrl || null,
+    notes: p.notes || null,
+    category: p.category || 'Business',
+    created_at: p.createdAt || new Date().toISOString(),
+    updated_at: p.updatedAt || new Date().toISOString(),
+  };
+}
+
+function customerDriveFolderToDb(f: any, userId: string) {
+  return {
+    id: String(f.id),
+    user_id: userId,
+    customer_id: f.customerId || '',
+    name: f.name || '',
+    color: f.color || null,
+    created_at: f.createdAt || new Date().toISOString(),
+  };
+}
+
+function customerDriveFileToDb(f: any, userId: string) {
+  return {
+    id: String(f.id),
+    user_id: userId,
+    customer_id: f.customerId || '',
+    name: f.name || '',
+    size: Number(f.size) || 0,
+    type: f.type || '',
+    mime_type: f.mimeType || null,
+    url: f.url || null,
+    data_url: f.dataUrl || '',
+    folder_id: f.folderId || null,
+    created_at: f.createdAt || new Date().toISOString(),
+    uploaded_at: f.uploadedAt || new Date().toISOString(),
+    updated_at: f.updatedAt || new Date().toISOString(),
+  };
+}
+
+// --- MAPPERS: Supabase snake_case -> Frontend camelCase ---
+
+function customerFromDb(row: any) {
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone || '',
+    email: row.email || '',
+    businessName: row.business_name || '',
+    gstNumber: row.gst_number || '',
+    address: row.address || '',
+    city: row.city || '',
+    state: row.state || '',
+    creditLimit: Number(row.credit_limit) || 0,
+    outstandingBalance: Number(row.outstanding_balance) || 0,
+    category: row.category || 'Regular',
+    status: row.status || 'active',
+    rating: Number(row.rating) || 5,
+    notes: row.notes || '',
+    avatar: row.avatar || '',
+    bankAccounts: row.bank_accounts || [],
+    upiDetails: row.upi_details || [],
+    createdAt: row.created_at,
+  };
+}
+
+function transactionFromDb(row: any) {
+  return {
+    id: row.id,
+    type: row.type,
+    amount: Number(row.amount) || 0,
+    date: row.date,
+    customerId: row.customer_id || undefined,
+    customerName: row.customer_name || '',
+    category: row.category || 'General',
+    paymentMode: row.payment_mode || 'upi',
+    note: row.note || '',
+    tags: row.tags || [],
+    attachments: row.attachments || [],
+    referenceNo: row.reference_no || '',
+    status: row.status || 'completed',
+    createdBy: row.created_by || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function productFromDb(row: any) {
+  return {
+    id: row.id,
+    name: row.name,
+    sku: row.sku || '',
+    barcode: row.barcode || '',
+    category: row.category || 'General',
+    purchasePrice: Number(row.purchase_price) || 0,
+    sellingPrice: Number(row.selling_price) || 0,
+    currentStock: Number(row.current_stock) || 0,
+    minStock: Number(row.min_stock) || 0,
+    unit: row.unit || 'pcs',
+    supplier: row.supplier || '',
+    location: row.location || '',
+    imageUrl: row.image_url || '',
+    updatedAt: row.updated_at,
+  };
+}
+
+function invoiceFromDb(row: any) {
+  return {
+    id: row.id,
+    invoiceNumber: row.invoice_number,
+    type: row.type || 'sales',
+    customerId: row.customer_id,
+    customerName: row.customer_name,
+    customerPhone: row.customer_phone || '',
+    customerGst: row.customer_gst || '',
+    customerAddress: row.customer_address || '',
+    issueDate: row.issue_date,
+    dueDate: row.due_date,
+    items: row.items || [],
+    subtotal: Number(row.subtotal) || 0,
+    discountAmount: Number(row.discount_amount) || 0,
+    taxAmount: Number(row.tax_amount) || 0,
+    cgst: Number(row.cgst) || 0,
+    sgst: Number(row.sgst) || 0,
+    igst: Number(row.igst) || 0,
+    total: Number(row.total) || 0,
+    paidAmount: Number(row.paid_amount) || 0,
+    status: row.status || 'unpaid',
+    paymentDate: row.payment_date || undefined,
+    receiptUrl: row.receipt_url || undefined,
+    receiptName: row.receipt_name || undefined,
+    receiptType: row.receipt_type || undefined,
+    statusHistory: row.status_history || [],
+    appliedCharges: row.applied_charges || [],
+    notes: row.notes || undefined,
+    terms: row.terms || undefined,
+    upiPaymentQr: row.upi_payment_qr || undefined,
+    stockDeducted: Boolean(row.stock_deducted),
+    createdAt: row.created_at,
+  };
+}
+
+function expenseFromDb(row: any) {
+  return {
+    id: row.id,
+    title: row.title,
+    amount: Number(row.amount) || 0,
+    category: row.category || 'General',
+    date: row.date,
+    paymentMode: row.payment_mode || 'cash',
+    notes: row.notes || undefined,
+    receiptUrl: row.receipt_url || undefined,
+    receiptUrls: row.receipt_urls || [],
+    isRecurring: Boolean(row.is_recurring),
+    recurringFrequency: row.recurring_frequency || undefined,
+    tags: row.tags || [],
+    createdAt: row.created_at,
+  };
+}
+
+function savingsGoalFromDb(row: any) {
+  return {
+    id: row.id,
+    title: row.title,
+    targetAmount: Number(row.target_amount) || 0,
+    currentAmount: Number(row.current_amount) || 0,
+    category: row.category || 'Emergency Fund',
+    deadline: row.deadline || '',
+    notes: row.notes || undefined,
+    icon: row.icon || undefined,
+    documentUrl: row.document_url || undefined,
+    documentName: row.document_name || undefined,
+    documentType: row.document_type || undefined,
+    deposits: row.deposits || [],
+    createdAt: row.created_at,
+  };
+}
+
+function reminderFromDb(row: any) {
+  return {
+    id: row.id,
+    customerId: row.customer_id,
+    customerName: row.customer_name,
+    customerPhone: row.customer_phone || '',
+    customerEmail: row.customer_email || undefined,
+    amount: Number(row.amount) || 0,
+    dueDate: row.due_date,
+    reminderType: row.reminder_type || 'upcoming',
+    channels: row.channels || ['sms'],
+    status: row.status || 'pending',
+    sentAt: row.sent_at || undefined,
+    messageTemplate: row.message_template || '',
+    note: row.note || undefined,
+    transactionId: row.transaction_id || undefined,
+    createdAt: row.created_at,
+  };
+}
+
+function documentFromDb(row: any) {
+  return {
+    id: row.id,
+    title: row.title,
+    category: row.category || 'general',
+    fileUrl: row.file_url,
+    fileType: row.file_type || '',
+    fileSize: row.file_size || '',
+    relatedEntityId: row.related_entity_id || undefined,
+    relatedEntityName: row.related_entity_name || undefined,
+    uploadedAt: row.uploaded_at,
+  };
+}
+
+function noteFromDb(row: any) {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description || '',
+    reminderDate: row.reminder_date || undefined,
+    reminderTime: row.reminder_time || undefined,
+    category: row.category || 'General',
+    color: row.color || 'amber',
+    isPinned: Boolean(row.is_pinned),
+    attachedImage: row.attached_image || undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function taskFromDb(row: any) {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description || '',
+    isCompleted: Boolean(row.is_completed),
+    dueDate: row.due_date || undefined,
+    reminderDate: row.reminder_date || undefined,
+    reminderTime: row.reminder_time || undefined,
+    priority: row.priority || 'medium',
+    category: row.category || 'General',
+    createdAt: row.created_at,
+    completedAt: row.completed_at || undefined,
+  };
+}
+
+function passwordFromDb(row: any) {
+  return {
+    id: row.id,
+    appName: row.app_name,
+    username: row.username,
+    password: row.password,
+    recoveryKey: row.recovery_key || undefined,
+    attachedImage: row.attached_image || undefined,
+    websiteUrl: row.website_url || undefined,
+    notes: row.notes || undefined,
+    category: row.category || 'Business',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function customerDriveFolderFromDb(row: any) {
+  return {
+    id: row.id,
+    customerId: row.customer_id,
+    name: row.name,
+    color: row.color || undefined,
+    createdAt: row.created_at,
+  };
+}
+
+function customerDriveFileFromDb(row: any) {
+  return {
+    id: row.id,
+    customerId: row.customer_id,
+    name: row.name,
+    size: Number(row.size) || 0,
+    type: row.type || '',
+    mimeType: row.mime_type || undefined,
+    url: row.url || undefined,
+    dataUrl: row.data_url || '',
+    folderId: row.folder_id || undefined,
+    createdAt: row.created_at,
+    uploadedAt: row.uploaded_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+// GET: Fetch all modules for a specific user from Supabase PostgreSQL (returns camelCase objects)
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -9,6 +519,16 @@ export async function GET(req: NextRequest) {
 
     if (!userId) {
       return NextResponse.json({ success: false, message: 'userId query parameter is required' }, { status: 400 });
+    }
+
+    if (!UUID_REGEX.test(userId)) {
+      // Local/guest user session (not a UUID) -> return empty object gracefully
+      return NextResponse.json({
+        success: true,
+        userId,
+        provider: 'supabase',
+        data: {},
+      });
     }
 
     if (!isSupabaseConfigured()) {
@@ -32,6 +552,8 @@ export async function GET(req: NextRequest) {
       sbNotes,
       sbTasks,
       sbPass,
+      sbDriveFld,
+      sbDriveFile,
       sbSet,
       sbProfile,
     ] = await Promise.all([
@@ -46,11 +568,13 @@ export async function GET(req: NextRequest) {
       supabase.from('notes').select('*').eq('user_id', userId),
       supabase.from('tasks').select('*').eq('user_id', userId),
       supabase.from('passwords').select('*').eq('user_id', userId),
+      supabase.from('customer_drive_folders').select('*').eq('user_id', userId),
+      supabase.from('customer_drive_files').select('*').eq('user_id', userId),
       supabase.from('system_settings').select('*').eq('user_id', userId).single(),
       supabase.from('profiles').select('*').eq('id', userId).single(),
     ]);
 
-    const logo = sbProfile.data?.avatar_url || sbSet.data?.payment_settings?.businessLogo || '';
+    const logo = sbProfile.data?.avatar_url || sbSet.data?.payment_settings?.businessLogo || sbSet.data?.business_logo || '';
 
     const finalUser = sbProfile.data ? {
       id: sbProfile.data.id,
@@ -69,6 +593,7 @@ export async function GET(req: NextRequest) {
       businessTagline: sbSet.data.business_tagline || '',
       businessPhone: sbSet.data.business_phone || '',
       businessEmail: sbSet.data.business_email || '',
+      businessAddress: sbSet.data.business_address || '',
       paymentSettings: {
         ...(sbSet.data.payment_settings || {}),
         businessLogo: logo,
@@ -78,17 +603,19 @@ export async function GET(req: NextRequest) {
     } : null;
 
     const finalData = {
-      customers: sbCust.data || [],
-      transactions: sbTxn.data || [],
-      products: sbProd.data || [],
-      invoices: sbInv.data || [],
-      expenses: sbExp.data || [],
-      savingsGoals: sbSavings.data || [],
-      reminders: sbRem.data || [],
-      documents: sbDoc.data || [],
-      notes: sbNotes.data || [],
-      tasks: sbTasks.data || [],
-      passwords: sbPass.data || [],
+      customers: (sbCust.data || []).map(customerFromDb),
+      transactions: (sbTxn.data || []).map(transactionFromDb),
+      products: (sbProd.data || []).map(productFromDb),
+      invoices: (sbInv.data || []).map(invoiceFromDb),
+      expenses: (sbExp.data || []).map(expenseFromDb),
+      savingsGoals: (sbSavings.data || []).map(savingsGoalFromDb),
+      reminders: (sbRem.data || []).map(reminderFromDb),
+      documents: (sbDoc.data || []).map(documentFromDb),
+      notes: (sbNotes.data || []).map(noteFromDb),
+      tasks: (sbTasks.data || []).map(taskFromDb),
+      passwords: (sbPass.data || []).map(passwordFromDb),
+      customerDriveFolders: (sbDriveFld.data || []).map(customerDriveFolderFromDb),
+      customerDriveFiles: (sbDriveFile.data || []).map(customerDriveFileFromDb),
       settings: finalSettings,
       user: finalUser,
     };
@@ -115,6 +642,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'userId is required' }, { status: 400 });
     }
 
+    if (!UUID_REGEX.test(userId)) {
+      // Guest or local mode without Supabase auth UUID
+      return NextResponse.json({
+        success: true,
+        message: 'Local guest session preserved. Sign in to sync across devices.',
+        provider: 'local',
+      });
+    }
+
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ success: false, message: 'Supabase Cloud Database is not configured' }, { status: 500 });
     }
@@ -125,29 +661,86 @@ export async function POST(req: NextRequest) {
     }
 
     if (data) {
-      const syncSbTable = async (table: string, items: any[] | undefined) => {
-        if (!Array.isArray(items) || items.length === 0) return;
-        for (const item of items) {
-          if (!item.id) continue;
-          const row = { ...item, user_id: userId };
-          delete (row as any).userId;
-          await supabase.from(table).upsert(row, { onConflict: 'id, user_id' });
+      // Helper to batch upsert converted rows into a table
+      const upsertRows = async (table: string, rows: any[]) => {
+        if (!rows || rows.length === 0) return;
+        // Upsert in batches of 50 to avoid request size limits
+        const chunkSize = 50;
+        for (let i = 0; i < rows.length; i += chunkSize) {
+          const chunk = rows.slice(i, i + chunkSize);
+          const { error } = await supabase.from(table).upsert(chunk, { onConflict: 'id, user_id' });
+          if (error) {
+            console.error(`Error syncing table ${table}:`, error.message);
+          }
         }
       };
 
-      await Promise.all([
-        syncSbTable('customers', data.customers),
-        syncSbTable('transactions', data.transactions),
-        syncSbTable('products', data.products),
-        syncSbTable('invoices', data.invoices),
-        syncSbTable('expenses', data.expenses),
-        syncSbTable('savings_goals', data.savingsGoals),
-        syncSbTable('payment_reminders', data.reminders),
-        syncSbTable('documents', data.documents),
-        syncSbTable('notes', data.notes),
-        syncSbTable('tasks', data.tasks),
-        syncSbTable('passwords', data.passwords),
-      ]);
+      const promises: Promise<any>[] = [];
+
+      if (Array.isArray(data.customers) && data.customers.length > 0) {
+        const rows = data.customers.filter((c: any) => c && c.id).map((c: any) => customerToDb(c, userId));
+        promises.push(upsertRows('customers', rows));
+      }
+
+      if (Array.isArray(data.transactions) && data.transactions.length > 0) {
+        const rows = data.transactions.filter((t: any) => t && t.id).map((t: any) => transactionToDb(t, userId));
+        promises.push(upsertRows('transactions', rows));
+      }
+
+      if (Array.isArray(data.products) && data.products.length > 0) {
+        const rows = data.products.filter((p: any) => p && p.id).map((p: any) => productToDb(p, userId));
+        promises.push(upsertRows('products', rows));
+      }
+
+      if (Array.isArray(data.invoices) && data.invoices.length > 0) {
+        const rows = data.invoices.filter((inv: any) => inv && inv.id).map((inv: any) => invoiceToDb(inv, userId));
+        promises.push(upsertRows('invoices', rows));
+      }
+
+      if (Array.isArray(data.expenses) && data.expenses.length > 0) {
+        const rows = data.expenses.filter((e: any) => e && e.id).map((e: any) => expenseToDb(e, userId));
+        promises.push(upsertRows('expenses', rows));
+      }
+
+      if (Array.isArray(data.savingsGoals) && data.savingsGoals.length > 0) {
+        const rows = data.savingsGoals.filter((s: any) => s && s.id).map((s: any) => savingsGoalToDb(s, userId));
+        promises.push(upsertRows('savings_goals', rows));
+      }
+
+      if (Array.isArray(data.reminders) && data.reminders.length > 0) {
+        const rows = data.reminders.filter((r: any) => r && r.id).map((r: any) => reminderToDb(r, userId));
+        promises.push(upsertRows('payment_reminders', rows));
+      }
+
+      if (Array.isArray(data.documents) && data.documents.length > 0) {
+        const rows = data.documents.filter((d: any) => d && d.id).map((d: any) => documentToDb(d, userId));
+        promises.push(upsertRows('documents', rows));
+      }
+
+      if (Array.isArray(data.notes) && data.notes.length > 0) {
+        const rows = data.notes.filter((n: any) => n && n.id).map((n: any) => noteToDb(n, userId));
+        promises.push(upsertRows('notes', rows));
+      }
+
+      if (Array.isArray(data.tasks) && data.tasks.length > 0) {
+        const rows = data.tasks.filter((t: any) => t && t.id).map((t: any) => taskToDb(t, userId));
+        promises.push(upsertRows('tasks', rows));
+      }
+
+      if (Array.isArray(data.passwords) && data.passwords.length > 0) {
+        const rows = data.passwords.filter((p: any) => p && p.id).map((p: any) => passwordToDb(p, userId));
+        promises.push(upsertRows('passwords', rows));
+      }
+
+      if (Array.isArray(data.customerDriveFolders) && data.customerDriveFolders.length > 0) {
+        const rows = data.customerDriveFolders.filter((f: any) => f && f.id).map((f: any) => customerDriveFolderToDb(f, userId));
+        promises.push(upsertRows('customer_drive_folders', rows));
+      }
+
+      if (Array.isArray(data.customerDriveFiles) && data.customerDriveFiles.length > 0) {
+        const rows = data.customerDriveFiles.filter((f: any) => f && f.id).map((f: any) => customerDriveFileToDb(f, userId));
+        promises.push(upsertRows('customer_drive_files', rows));
+      }
 
       const logoToSave = data.settings?.businessLogo || data.profile?.avatarUrl || '';
 
@@ -156,30 +749,44 @@ export async function POST(req: NextRequest) {
           ...(data.settings.paymentSettings || {}),
           businessLogo: logoToSave || data.settings.paymentSettings?.businessLogo || '',
         };
-        await supabase.from('system_settings').upsert({
-          user_id: userId,
-          business_name: data.settings.businessName,
-          business_tagline: data.settings.businessTagline,
-          business_phone: data.settings.businessPhone,
-          business_email: data.settings.businessEmail,
-          payment_settings: paymentSettingsWithLogo,
-          dark_mode: data.settings.darkMode,
-          backend_provider: 'supabase',
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' });
+        promises.push(
+          Promise.resolve(
+            supabase.from('system_settings').upsert({
+              user_id: userId,
+              business_name: data.settings.businessName,
+              business_logo: logoToSave,
+              business_tagline: data.settings.businessTagline,
+              business_phone: data.settings.businessPhone,
+              business_email: data.settings.businessEmail,
+              business_address: data.settings.businessAddress,
+              payment_settings: paymentSettingsWithLogo,
+              dark_mode: data.settings.darkMode,
+              backend_provider: 'supabase',
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'user_id' })
+          )
+        );
       }
 
       if (data.profile) {
-        await supabase.from('profiles').upsert({
-          id: userId,
-          name: data.profile.name,
-          email: data.profile.email,
-          phone: data.profile.phone,
-          business_name: data.profile.businessName,
-          avatar_url: logoToSave || data.profile.avatarUrl || '',
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'id' });
+        promises.push(
+          Promise.resolve(
+            supabase.from('profiles').upsert({
+              id: userId,
+              name: data.profile.name,
+              email: data.profile.email,
+              phone: data.profile.phone,
+              business_name: data.profile.businessName,
+              business_gst: data.profile.businessGst || '',
+              business_address: data.profile.businessAddress || '',
+              avatar_url: logoToSave || data.profile.avatarUrl || '',
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'id' })
+          )
+        );
       }
+
+      await Promise.all(promises);
     }
 
     return NextResponse.json({

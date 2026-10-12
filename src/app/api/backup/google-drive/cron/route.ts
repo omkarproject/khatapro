@@ -66,11 +66,9 @@ async function handleCron(req: NextRequest) {
         const drive = await getDriveClient(tokens);
 
         let backupsFolderId = userRecord.backups_folder_id;
-        let manifestFolderId = userRecord.manifest_folder_id;
-        if (!backupsFolderId || !manifestFolderId) {
+        if (!backupsFolderId) {
           const folders = await ensureHisabKitabFolders(drive);
           backupsFolderId = folders.backupsId;
-          manifestFolderId = folders.manifestId;
         }
 
         // Fetch user data from Supabase PostgreSQL
@@ -122,8 +120,7 @@ async function handleCron(req: NextRequest) {
 
         const { zipBuffer, manifest, filename } = await createBackupArchive(fullData);
         const uploadResult = await uploadBackupZip(drive, backupsFolderId, filename, zipBuffer);
-        const manifestFileName = `manifest_daily_${Date.now()}.json`;
-        await uploadBackupManifest(drive, manifestFolderId, manifestFileName, manifest);
+        await uploadBackupManifest(drive, backupsFolderId, 'manifest.json', manifest);
 
         const historyItem = {
           id: `bk_cron_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,

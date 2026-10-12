@@ -4,6 +4,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate } from '@/lib/utils';
 import { Expense, PaymentMode } from '@/types';
+import { uploadToDriveFiles } from '@/lib/driveUploadClient';
 import {
   Receipt,
   Plus,
@@ -228,6 +229,7 @@ export default function ExpensesPage() {
             });
           };
           img.src = result;
+          uploadToDriveFiles(file.name, result, file.type);
         }
       };
       reader.readAsDataURL(file);

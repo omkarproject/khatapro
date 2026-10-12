@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
 import { Customer, Transaction, TransactionType, PaymentReminder } from '@/types';
+import { uploadToDriveFiles } from '@/lib/driveUploadClient';
 import QRCode from 'qrcode';
 import {
   ArrowLeft,
@@ -1101,6 +1102,7 @@ interface AttachedBill {
             type: isPdf ? 'pdf' : 'image',
             size: sizeFormatted,
           });
+          uploadToDriveFiles(file.name, evt.target?.result as string, file.type);
           loadedCount++;
           if (loadedCount === fileList.length) {
             setEntryAttachments(prev => [...prev, ...newItems]);

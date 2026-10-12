@@ -191,10 +191,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       setCloudSyncStatus('syncing');
       // Read latest data synchronously from StorageService to avoid React closure lag
+      const curCustomers = StorageService.getCustomers();
+      const allDriveFolders: any[] = [];
+      const allDriveFiles: any[] = [];
+      curCustomers.forEach(c => {
+        const cd = StorageService.getCustomerDriveData(c.id);
+        if (Array.isArray(cd.folders)) {
+          cd.folders.forEach(f => allDriveFolders.push({ ...f, customerId: c.id }));
+        }
+        if (Array.isArray(cd.files)) {
+          cd.files.forEach(f => allDriveFiles.push({ ...f, customerId: c.id }));
+        }
+      });
+
       const payload = {
         userId,
         data: {
-          customers: StorageService.getCustomers(),
+          customers: curCustomers,
           transactions: StorageService.getTransactions(),
           products: StorageService.getProducts(),
           invoices: StorageService.getInvoices(),
@@ -205,6 +218,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           notes: StorageService.getNotes(),
           tasks: StorageService.getTasks(),
           passwords: StorageService.getPasswords(),
+          customerDriveFolders: allDriveFolders,
+          customerDriveFiles: allDriveFiles,
           settings: StorageService.getSettings(),
           profile: StorageService.getProfile(),
         },
@@ -254,6 +269,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (Array.isArray(d.notes)) setNotes(d.notes);
           if (Array.isArray(d.tasks)) setTasks(d.tasks);
           if (Array.isArray(d.passwords)) setPasswords(d.passwords);
+          if (Array.isArray(d.customerDriveFolders) || Array.isArray(d.customerDriveFiles)) {
+            const byCust: Record<string, { folders: any[]; files: any[] }> = {};
+            (d.customerDriveFolders || []).forEach((f: any) => {
+              if (f.customerId) {
+                if (!byCust[f.customerId]) byCust[f.customerId] = { folders: [], files: [] };
+                byCust[f.customerId].folders.push(f);
+              }
+            });
+            (d.customerDriveFiles || []).forEach((f: any) => {
+              if (f.customerId) {
+                if (!byCust[f.customerId]) byCust[f.customerId] = { folders: [], files: [] };
+                byCust[f.customerId].files.push(f);
+              }
+            });
+            Object.entries(byCust).forEach(([cid, cdata]) => {
+              StorageService.saveCustomerDriveData(cid, cdata);
+            });
+          }
           if (d.settings) {
             setSettingsState(prev => {
               const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';

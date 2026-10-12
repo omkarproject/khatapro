@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatDate } from '@/lib/utils';
 import { DocumentItem } from '@/types';
+import { uploadToDriveFiles } from '@/lib/driveUploadClient';
 import {
   FolderLock,
   Plus,
@@ -152,6 +153,7 @@ export default function DocumentsPage() {
     };
 
     addDocument(newDoc);
+    uploadToDriveFiles(finalTitle, finalUrl, finalType);
     setIsUploadModalOpen(false);
     resetUploadForm();
   };

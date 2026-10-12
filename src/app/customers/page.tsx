@@ -6,6 +6,7 @@ import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl } from '@/lib/utils';
 import { Customer, CustomerDriveFolder, CustomerDriveFile, CustomerBankAccount, CustomerUpiDetail } from '@/types';
 import { StorageService } from '@/services/storage';
+import { uploadToDriveFiles } from '@/lib/driveUploadClient';
 import {
   Users,
   Search,
@@ -415,15 +416,17 @@ export default function CustomersPage() {
 
       const reader = new FileReader();
       reader.onload = () => {
+        const fileDataUrl = reader.result as string;
         newFiles.push({
           id: `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
           name: file.name,
           size: file.size,
           type: file.type || 'application/octet-stream',
-          dataUrl: reader.result as string,
+          dataUrl: fileDataUrl,
           folderId: currentFolderId,
           uploadedAt: new Date().toISOString(),
         });
+        uploadToDriveFiles(file.name, fileDataUrl, file.type);
         loadedCount++;
 
         if (loadedCount === fileList.length) {

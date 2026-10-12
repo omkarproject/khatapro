@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
+import { uploadToDriveFiles } from '@/lib/driveUploadClient';
 import {
   Invoice,
   InvoiceItem,
@@ -585,6 +586,7 @@ export default function InvoicesPage() {
       setStatusModalReceiptUrl(result);
       setStatusModalReceiptName(file.name);
       setStatusModalReceiptType(type);
+      uploadToDriveFiles(file.name, result, file.type);
     };
     reader.readAsDataURL(file);
   };
