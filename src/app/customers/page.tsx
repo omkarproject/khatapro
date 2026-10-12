@@ -547,8 +547,13 @@ export default function CustomersPage() {
   };
 
   const handleDownloadFile = (file: CustomerDriveFile) => {
+    const fileSource = file.dataUrl || file.url || (file.driveFileId ? `/api/backup/google-drive/view-file?fileId=${file.driveFileId}&download=true` : '');
+    if (!fileSource) {
+      addToast('Download Failed', 'File URL is not available.', 'error');
+      return;
+    }
     const link = document.createElement('a');
-    link.href = file.dataUrl;
+    link.href = fileSource;
     link.download = file.name;
     document.body.appendChild(link);
     link.click();
@@ -2257,9 +2262,13 @@ export default function CustomersPage() {
                           >
                             {isImage ? (
                               <img
-                                src={file.dataUrl}
+                                src={file.dataUrl || file.url || (file.driveFileId ? `/api/backup/google-drive/view-file?fileId=${file.driveFileId}` : '')}
                                 alt={file.name}
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                onError={(e) => {
+                                  // Fallback gracefully to icon if image cannot be loaded
+                                  (e.target as HTMLElement).style.display = 'none';
+                                }}
                               />
                             ) : isPdf ? (
                               <div className="flex flex-col items-center gap-1 text-rose-500">
@@ -2661,13 +2670,13 @@ export default function CustomersPage() {
             <div className="p-4 flex-1 overflow-auto flex items-center justify-center bg-slate-950/20 min-h-[400px]">
               {previewFile.type.startsWith('image/') ? (
                 <img
-                  src={previewFile.dataUrl}
+                  src={previewFile.dataUrl || previewFile.url || (previewFile.driveFileId ? `/api/backup/google-drive/view-file?fileId=${previewFile.driveFileId}` : '')}
                   alt={previewFile.name}
                   className="max-h-[75vh] w-auto max-w-full object-contain rounded-xl shadow-lg border border-slate-200/20"
                 />
               ) : previewFile.type === 'application/pdf' || previewFile.name.toLowerCase().endsWith('.pdf') ? (
                 <iframe
-                  src={previewFile.dataUrl}
+                  src={previewFile.dataUrl || previewFile.url || (previewFile.driveFileId ? `/api/backup/google-drive/view-file?fileId=${previewFile.driveFileId}` : '')}
                   title={previewFile.name}
                   className="w-full h-[75vh] rounded-xl border border-slate-200 dark:border-slate-700 bg-white"
                 />

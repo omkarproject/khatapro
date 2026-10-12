@@ -442,7 +442,16 @@ interface AttachedBill {
     const parsedAttachments: AttachedBill[] = (txn.attachments || []).map((att, idx) => {
       try {
         const obj = JSON.parse(att);
-        if (obj.url) return obj;
+        let resolvedUrl = obj.url;
+        if (!resolvedUrl && obj.driveFileId) {
+          resolvedUrl = `/api/backup/google-drive/view-file?fileId=${obj.driveFileId}`;
+        }
+        if (resolvedUrl) {
+          return {
+            ...obj,
+            url: resolvedUrl,
+          };
+        }
       } catch {}
       const isPdf = att.toLowerCase().includes('.pdf') || att.startsWith('data:application/pdf');
       return {
@@ -1093,61 +1102,73 @@ interface AttachedBill {
     const files = e.target.files;
     if (files && files.length > 0) {
       const fileList = Array.from(files);
-      let loadedCount = 0;
-      const newItems: AttachedBill[] = [];
-
-      fileList.forEach(file => {
-        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-        const sizeFormatted = file.size > 1024 * 1024
-          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-          : `${Math.round(file.size / 1024)} KB`;
-
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          const base64Data = evt.target?.result as string;
-          const attId = `att_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-          const billItem: AttachedBill = {
-            id: attId,
-            url: base64Data,
-            name: file.name,
-            type: isPdf ? 'pdf' : 'image',
-            size: sizeFormatted,
-          };
-          newItems.push(billItem);
-
-          uploadToDriveFiles(
-            file.name,
-            base64Data,
-            file.type,
-            undefined,
-            activeCustomer ? {
-              customerName: activeCustomer.name,
-              customerId: activeCustomer.id,
-              folderName: 'BILLS',
-              appFileId: attId,
-              uploadedAt: new Date().toISOString(),
-            } : undefined
-          ).then(uploadRes => {
-            if (uploadRes.fileId) {
-              billItem.driveFileId = uploadRes.fileId;
-              setEntryAttachments(prev =>
-                prev.map(item => item.id === attId ? { ...item, driveFileId: uploadRes.fileId } : item)
-              );
-            }
-          }).catch(err => {
-            console.warn('Background bill upload error:', err);
-          });
-
-          loadedCount++;
-          if (loadedCount === fileList.length) {
-            setEntryAttachments(prev => [...prev, ...newItems]);
-            addToast('Bills Added', `${fileList.length} file(s) attached (Images & PDFs supported).`, 'success');
-          }
-        };
-        reader.readAsDataURL(file);
-      });
       // Reset input value so same files can be re-selected if needed
       e.target.value = '';
+
+      addToast('Uploading Bills...', `Processing ${fileList.length} bill attachment(s)...`, 'info');
+
+      (async () => {
+        const newItems: AttachedBill[] = [];
+
+        for (const file of fileList) {
+          const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+          const sizeFormatted = file.size > 1024 * 1024
+            ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+            : `${Math.round(file.size / 1024)} KB`;
+
+          try {
+            const base64Data = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+
+            const attId = `att_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+            let driveFileId: string | undefined = undefined;
+
+            if (activeCustomer) {
+              try {
+                const uploadRes = await uploadToDriveFiles(
+                  file.name,
+                  base64Data,
+                  file.type,
+                  undefined,
+                  {
+                    customerName: activeCustomer.name,
+                    customerId: activeCustomer.id,
+                    folderName: 'BILLS',
+                    appFileId: attId,
+                    uploadedAt: new Date().toISOString(),
+                  }
+                );
+                if (uploadRes.fileId) {
+                  driveFileId = uploadRes.fileId;
+                }
+              } catch (err) {
+                console.warn('Drive upload notice:', err);
+              }
+            }
+
+            const billItem: AttachedBill = {
+              id: attId,
+              url: base64Data,
+              name: file.name,
+              type: isPdf ? 'pdf' : 'image',
+              size: sizeFormatted,
+              driveFileId,
+            };
+            newItems.push(billItem);
+          } catch (err) {
+            console.error('Bill process error:', err);
+          }
+        }
+
+        if (newItems.length > 0) {
+          setEntryAttachments(prev => [...prev, ...newItems]);
+          addToast('Bills Added', `${newItems.length} file(s) attached and saved to Google Drive.`, 'success');
+        }
+      })();
     }
   };
 
@@ -3021,7 +3042,16 @@ interface AttachedBill {
                                         const parsedList: AttachedBill[] = (t.attachments || []).map((raw, idx) => {
                                           try {
                                             const obj = JSON.parse(raw);
-                                            if (obj.url) return obj;
+                                            let resolvedUrl = obj.url;
+                                            if (!resolvedUrl && obj.driveFileId) {
+                                              resolvedUrl = `/api/backup/google-drive/view-file?fileId=${obj.driveFileId}`;
+                                            }
+                                            if (resolvedUrl) {
+                                              return {
+                                                ...obj,
+                                                url: resolvedUrl,
+                                              };
+                                            }
                                           } catch {}
                                           const isPdf = raw.toLowerCase().includes('.pdf') || raw.startsWith('data:application/pdf');
                                           return {

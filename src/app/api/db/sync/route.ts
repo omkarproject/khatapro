@@ -189,12 +189,17 @@ function reminderToDb(r: any, userId: string) {
 }
 
 function documentToDb(d: any, userId: string) {
+  let fileUrl = d.fileUrl || '';
+  if (fileUrl.startsWith('data:')) {
+    fileUrl = d.driveFileId ? `/api/backup/google-drive/view-file?fileId=${d.driveFileId}` : '';
+  }
+
   return {
     id: String(d.id),
     user_id: userId,
     title: d.title || '',
     category: d.category || 'general',
-    file_url: d.fileUrl && !d.fileUrl.startsWith('data:') ? d.fileUrl : '',
+    file_url: fileUrl,
     file_type: d.fileType || '',
     file_size: d.fileSize || '',
     related_entity_id: d.relatedEntityId || null,
@@ -287,6 +292,16 @@ function customerDriveFileToDb(f: any, userId: string) {
 // --- MAPPERS: Supabase snake_case -> Frontend camelCase ---
 
 function customerFromDb(row: any) {
+  let avatarUrl = row.avatar || '';
+  if (avatarUrl) {
+    if (avatarUrl.includes('view-file?fileId=')) {
+      // already a proxy url
+    } else if (avatarUrl.includes('/file/d/')) {
+      const match = avatarUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (match) avatarUrl = `/api/backup/google-drive/view-file?fileId=${match[1]}`;
+    }
+  }
+
   return {
     id: row.id,
     name: row.name,
@@ -303,7 +318,8 @@ function customerFromDb(row: any) {
     status: row.status || 'active',
     rating: Number(row.rating) || 5,
     notes: row.notes || '',
-    avatar: row.avatar || '',
+    avatar: avatarUrl,
+    avatarUrl: avatarUrl,
     bankAccounts: row.bank_accounts || [],
     upiDetails: row.upi_details || [],
     createdAt: row.created_at,
@@ -311,6 +327,32 @@ function customerFromDb(row: any) {
 }
 
 function transactionFromDb(row: any) {
+  const transformedAttachments = (row.attachments || []).map((att: string) => {
+    try {
+      const obj = JSON.parse(att);
+      let driveId = obj.driveFileId;
+      if (!driveId && obj.url) {
+        if (obj.url.includes('view-file?fileId=')) {
+          driveId = obj.url.split('view-file?fileId=')[1]?.split('&')[0];
+        } else if (obj.url.includes('/file/d/')) {
+          const match = obj.url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+          if (match) driveId = match[1];
+        }
+      }
+
+      if (driveId) {
+        return JSON.stringify({
+          ...obj,
+          driveFileId: driveId,
+          url: `/api/backup/google-drive/view-file?fileId=${driveId}`,
+        });
+      }
+      return att;
+    } catch {
+      return att;
+    }
+  });
+
   return {
     id: row.id,
     type: row.type,
@@ -322,7 +364,7 @@ function transactionFromDb(row: any) {
     paymentMode: row.payment_mode || 'upi',
     note: row.note || '',
     tags: row.tags || [],
-    attachments: row.attachments || [],
+    attachments: transformedAttachments,
     referenceNo: row.reference_no || '',
     status: row.status || 'completed',
     createdBy: row.created_by || '',
@@ -351,6 +393,12 @@ function productFromDb(row: any) {
 }
 
 function invoiceFromDb(row: any) {
+  let receiptUrl = row.receipt_url || undefined;
+  if (receiptUrl && receiptUrl.includes('/file/d/')) {
+    const match = receiptUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) receiptUrl = `/api/backup/google-drive/view-file?fileId=${match[1]}`;
+  }
+
   return {
     id: row.id,
     invoiceNumber: row.invoice_number,
@@ -373,7 +421,7 @@ function invoiceFromDb(row: any) {
     paidAmount: Number(row.paid_amount) || 0,
     status: row.status || 'unpaid',
     paymentDate: row.payment_date || undefined,
-    receiptUrl: row.receipt_url || undefined,
+    receiptUrl: receiptUrl,
     receiptName: row.receipt_name || undefined,
     receiptType: row.receipt_type || undefined,
     statusHistory: row.status_history || [],
@@ -387,6 +435,20 @@ function invoiceFromDb(row: any) {
 }
 
 function expenseFromDb(row: any) {
+  let receiptUrl = row.receipt_url || undefined;
+  if (receiptUrl && receiptUrl.includes('/file/d/')) {
+    const match = receiptUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) receiptUrl = `/api/backup/google-drive/view-file?fileId=${match[1]}`;
+  }
+
+  const receiptUrls = (row.receipt_urls || []).map((u: string) => {
+    if (u && u.includes('/file/d/')) {
+      const match = u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (match) return `/api/backup/google-drive/view-file?fileId=${match[1]}`;
+    }
+    return u;
+  });
+
   return {
     id: row.id,
     title: row.title,
@@ -395,8 +457,8 @@ function expenseFromDb(row: any) {
     date: row.date,
     paymentMode: row.payment_mode || 'cash',
     notes: row.notes || undefined,
-    receiptUrl: row.receipt_url || undefined,
-    receiptUrls: row.receipt_urls || [],
+    receiptUrl: receiptUrl,
+    receiptUrls: receiptUrls,
     isRecurring: Boolean(row.is_recurring),
     recurringFrequency: row.recurring_frequency || undefined,
     tags: row.tags || [],
@@ -405,6 +467,12 @@ function expenseFromDb(row: any) {
 }
 
 function savingsGoalFromDb(row: any) {
+  let docUrl = row.document_url || undefined;
+  if (docUrl && docUrl.includes('/file/d/')) {
+    const match = docUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) docUrl = `/api/backup/google-drive/view-file?fileId=${match[1]}`;
+  }
+
   return {
     id: row.id,
     title: row.title,
@@ -414,7 +482,7 @@ function savingsGoalFromDb(row: any) {
     deadline: row.deadline || '',
     notes: row.notes || undefined,
     icon: row.icon || undefined,
-    documentUrl: row.document_url || undefined,
+    documentUrl: docUrl,
     documentName: row.document_name || undefined,
     documentType: row.document_type || undefined,
     deposits: row.deposits || [],
@@ -443,15 +511,25 @@ function reminderFromDb(row: any) {
 }
 
 function documentFromDb(row: any) {
+  let fileUrl = row.file_url || '';
+  let driveFileId: string | undefined = undefined;
+  if (fileUrl.includes('view-file?fileId=')) {
+    driveFileId = fileUrl.split('view-file?fileId=')[1]?.split('&')[0];
+  } else if (fileUrl.includes('/file/d/')) {
+    const match = fileUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) driveFileId = match[1];
+  }
+
   return {
     id: row.id,
     title: row.title,
     category: row.category || 'general',
-    fileUrl: row.file_url,
+    fileUrl: fileUrl,
     fileType: row.file_type || '',
     fileSize: row.file_size || '',
     relatedEntityId: row.related_entity_id || undefined,
     relatedEntityName: row.related_entity_name || undefined,
+    driveFileId,
     uploadedAt: row.uploaded_at,
   };
 }
@@ -515,6 +593,17 @@ function customerDriveFolderFromDb(row: any) {
 }
 
 function customerDriveFileFromDb(row: any) {
+  // Extract real Drive file ID (either raw ID or parsed from drive.google.com/file/d/ID/view)
+  let extractedDriveFileId = row.url || '';
+  if (extractedDriveFileId.includes('/file/d/')) {
+    const match = extractedDriveFileId.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) extractedDriveFileId = match[1];
+  }
+
+  // Streamable direct URL through our view-file proxy
+  const proxyUrl = extractedDriveFileId ? `/api/backup/google-drive/view-file?fileId=${extractedDriveFileId}` : '';
+  const finalDisplayUrl = row.data_url || proxyUrl || row.url || '';
+
   return {
     id: row.id,
     customerId: row.customer_id,
@@ -522,9 +611,9 @@ function customerDriveFileFromDb(row: any) {
     size: Number(row.size) || 0,
     type: row.type || '',
     mimeType: row.mime_type || undefined,
-    url: row.url || undefined,
-    driveFileId: row.url || undefined,
-    dataUrl: row.data_url || '',
+    url: proxyUrl || row.url || undefined,
+    driveFileId: extractedDriveFileId || undefined,
+    dataUrl: finalDisplayUrl,
     folderId: row.folder_id || undefined,
     createdAt: row.created_at,
     uploadedAt: row.uploaded_at,
