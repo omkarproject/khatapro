@@ -67,6 +67,7 @@ export default function InvoicesPage() {
     products,
     settings,
     profile,
+    currentUser,
     addToast,
     openCollectModal,
   } = useApp();
@@ -914,22 +915,31 @@ export default function InvoicesPage() {
             <div className="p-6 bg-white text-slate-900 rounded-2xl border border-slate-200 shadow-sm space-y-6 print:border-none print:shadow-none">
               
               {/* Header: Company & Invoice Meta */}
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-xl font-black text-slate-900 tracking-tight">
-                    {profile.businessName}
-                  </h2>
-                  <p className="text-xs text-slate-500 max-w-sm mt-0.5">
-                    {profile.businessAddress}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Phone: {profile.phone} • Email: {profile.email}
-                  </p>
-                  {profile.businessGst && (
-                    <p className="text-xs font-mono font-semibold text-indigo-700 mt-0.5">
-                      GSTIN: {profile.businessGst}
-                    </p>
+              <div className="flex justify-between items-start gap-4">
+                <div className="flex items-start gap-3.5">
+                  {(settings.businessLogo || profile.avatarUrl || currentUser?.avatarUrl) && (
+                    <img
+                      src={settings.businessLogo || profile.avatarUrl || currentUser?.avatarUrl}
+                      alt="Business Logo"
+                      className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-contain border border-slate-200 p-1 bg-white shrink-0 shadow-xs print:w-16 print:h-16"
+                    />
                   )}
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                      {settings.businessName || profile.businessName}
+                    </h2>
+                    <p className="text-xs text-slate-500 max-w-sm mt-0.5">
+                      {settings.businessAddress || profile.businessAddress}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Phone: {settings.businessPhone || profile.phone} • Email: {settings.businessEmail || profile.email}
+                    </p>
+                    {(settings.paymentSettings?.businessGst || profile.businessGst) && (
+                      <p className="text-xs font-mono font-semibold text-indigo-700 mt-0.5">
+                        GSTIN: {settings.paymentSettings?.businessGst || profile.businessGst}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="text-right">

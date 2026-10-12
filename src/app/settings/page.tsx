@@ -50,15 +50,90 @@ import {
   FileCheck,
   Flame,
   Zap,
-  HardHat
+  HardHat,
+  Users,
+  UserCheck,
+  UserX,
+  Search,
+  Filter
 } from 'lucide-react';
 import GoogleDriveBackupPanel from '@/components/GoogleDriveBackupPanel';
 
 export default function SettingsPage() {
   const { settings, updateSettings, saveDefaultUpiAndQr, profile, setProfile, addToast, syncWithDatabase, currentUser, refreshData } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'business' | 'upi' | 'backend' | 'drive' | 'security' | 'backup' | 'maintenance'>('business');
+  const isAdmin = Boolean(
+    currentUser?.role === 'super_admin' ||
+    currentUser?.role === 'admin' ||
+    currentUser?.email === 'anantyadav8924@gmail.com'
+  );
+
+  const [activeTab, setActiveTab] = useState<'business' | 'upi' | 'backend' | 'drive' | 'security' | 'backup' | 'maintenance' | 'users'>('business');
   const [isSyncingData, setIsSyncingData] = useState(false);
+
+  // User Management CRM State (Admin Only)
+  const [crmUsers, setCrmUsers] = useState<any[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'super_admin' | 'admin' | 'user'>('all');
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+
+  const fetchCrmUsers = async () => {
+    setIsLoadingUsers(true);
+    try {
+      const res = await fetch('/api/admin/users');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.users)) {
+        setCrmUsers(data.users);
+      }
+    } catch (err) {
+      console.warn('Failed to load CRM users:', err);
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'users' && isAdmin) {
+      fetchCrmUsers();
+    }
+  }, [activeTab, isAdmin]);
+
+  const handleUpdateUserRole = async (userId: string, newRole: string) => {
+    setUpdatingUserId(userId);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, role: newRole }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || 'Failed to update user role');
+      addToast('Role Updated', `User role changed to ${newRole}.`, 'success');
+      fetchCrmUsers();
+    } catch (err: any) {
+      addToast('Update Failed', err.message || 'Could not update user role', 'error');
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!confirm(`Are you sure you want to remove user "${userName}" from SmartKhata? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/admin/users?userId=${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || 'Failed to delete user');
+      addToast('User Removed', `User ${userName} has been removed.`, 'info');
+      fetchCrmUsers();
+    } catch (err: any) {
+      addToast('Delete Failed', err.message || 'Could not delete user', 'error');
+    }
+  };
 
   // Maintenance & Beta Testing State
   const [maintEnabled, setMaintEnabled] = useState(() => settings.maintenanceMode?.enabled || false);
@@ -518,7 +593,9 @@ export default function SettingsPage() {
             ctx?.drawImage(img, 0, 0, width, height);
             const compressed = canvas.toDataURL('image/jpeg', 0.85);
             setBLogo(compressed);
-            addToast('Logo Selected', 'Click "Save Business Details" to save your profile logo.', 'info');
+            updateSettings({ businessLogo: compressed });
+            setProfile({ ...profile, avatarUrl: compressed });
+            addToast('Logo Updated', 'Profile & business logo updated successfully.', 'success');
           };
           img.src = result;
         }
@@ -530,7 +607,9 @@ export default function SettingsPage() {
 
   const handleRemoveLogo = () => {
     setBLogo('');
-    addToast('Logo Removed', 'Click "Save Business Details" to apply changes.', 'info');
+    updateSettings({ businessLogo: '' });
+    setProfile({ ...profile, avatarUrl: '' });
+    addToast('Logo Removed', 'Profile logo has been removed.', 'info');
   };
 
   // Handle Business Save
@@ -780,30 +859,6 @@ export default function SettingsPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab('backend')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-            activeTab === 'backend'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Database className="w-4 h-4" />
-          Database & Cloud Auth
-        </button>
-
-        <button
-          onClick={() => setActiveTab('drive')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-            activeTab === 'drive'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <CloudUpload className="w-4 h-4 text-emerald-500" />
-          Google Drive API
-        </button>
-
-        <button
           onClick={() => setActiveTab('security')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
             activeTab === 'security'
@@ -827,20 +882,64 @@ export default function SettingsPage() {
           Cloud Backup
         </button>
 
-        <button
-          onClick={() => setActiveTab('maintenance')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-            activeTab === 'maintenance'
-              ? 'bg-rose-600 text-white shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Flame className="w-4 h-4 text-rose-500" />
-          <span>Maintenance &amp; Beta</span>
-          {maintEnabled && (
-            <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
-          )}
-        </button>
+        {isAdmin && (
+          <>
+            <button
+              onClick={() => setActiveTab('backend')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                activeTab === 'backend'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Database className="w-4 h-4" />
+              <span>Database & Cloud Auth</span>
+              <span className="text-[10px] font-bold px-1.5 py-0.2 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-md">Admin</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('drive')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                activeTab === 'drive'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <CloudUpload className="w-4 h-4 text-emerald-500" />
+              <span>Google Drive API</span>
+              <span className="text-[10px] font-bold px-1.5 py-0.2 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-md">Admin</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                activeTab === 'users'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Users className="w-4 h-4 text-indigo-400" />
+              <span>User Management</span>
+              <span className="text-[10px] font-bold px-1.5 py-0.2 bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-md">CRM</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('maintenance')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                activeTab === 'maintenance'
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Flame className="w-4 h-4 text-rose-500" />
+              <span>Maintenance &amp; Beta</span>
+              <span className="text-[10px] font-bold px-1.5 py-0.2 bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-md">Admin</span>
+              {maintEnabled && (
+                <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
+              )}
+            </button>
+          </>
+        )}
       </div>
 
       {/* Tab 1: Business Profile */}
@@ -1665,8 +1764,8 @@ export default function SettingsPage() {
         </form>
       )}
 
-      {/* Tab 3: Database & Cloud Auth Switcher */}
-      {activeTab === 'backend' && (
+      {/* Tab 3: Database & Cloud Auth Switcher (Admin Only) */}
+      {activeTab === 'backend' && isAdmin && (
         <form onSubmit={handleSaveBackend} className="glass-card p-6 space-y-5 max-w-2xl">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-200/80 dark:border-slate-800">
             <div>
@@ -1774,8 +1873,8 @@ export default function SettingsPage() {
         </form>
       )}
 
-      {/* Tab: Google Drive API Configuration */}
-      {activeTab === 'drive' && (
+      {/* Tab: Google Drive API Configuration (Admin Only) */}
+      {activeTab === 'drive' && isAdmin && (
         <form onSubmit={handleSaveDriveApi} className="glass-card p-6 space-y-5 max-w-2xl">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-200/80 dark:border-slate-800">
             <div>
@@ -2211,8 +2310,8 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Tab 6: Maintenance Mode & Beta Testing Controls */}
-      {activeTab === 'maintenance' && (
+      {/* Tab: Maintenance Mode & Beta Testing Controls (Admin Only) */}
+      {activeTab === 'maintenance' && isAdmin && (
         <div className="space-y-6 animate-in fade-in max-w-4xl">
           
           {/* Header Card */}
@@ -2380,6 +2479,284 @@ export default function SettingsPage() {
                   {betaTestingActive ? 'ON' : 'OFF'}
                 </span>
               </div>
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* Tab: User Management CRM (Admin Only) */}
+      {activeTab === 'users' && isAdmin && (
+        <div className="space-y-6 animate-in fade-in max-w-5xl">
+          
+          {/* CRM Header Card */}
+          <div className="p-6 rounded-3xl bg-gradient-to-r from-indigo-950/40 via-violet-950/30 to-slate-900 border border-indigo-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase tracking-wider">
+                <Users className="w-4 h-4 text-indigo-400" />
+                <span>Super Admin &bull; Multi-Merchant CRM</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
+                User Management &amp; Merchant CRM
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl">
+                View all registered merchants, assign administrative privileges, manage user roles, and monitor account registration details in real-time.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={fetchCrmUsers}
+              disabled={isLoadingUsers}
+              className="px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/30 active:scale-95 transition-all self-start sm:self-auto cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingUsers ? 'animate-spin' : ''}`} />
+              <span>{isLoadingUsers ? 'Refreshing...' : 'Refresh Users'}</span>
+            </button>
+          </div>
+
+          {/* CRM Toolbar: Search & Role Filter */}
+          <div className="glass-card p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by name, email, business or phone..."
+                value={userSearchQuery}
+                onChange={(e) => setUserSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3.5 py-2 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+              />
+              {userSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setUserSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter Pills */}
+            <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+              {[
+                { id: 'all', label: 'All Users', count: crmUsers.length },
+                { id: 'super_admin', label: 'Super Admin', count: crmUsers.filter(u => u.role === 'super_admin').length },
+                { id: 'admin', label: 'Admins', count: crmUsers.filter(u => u.role === 'admin').length },
+                { id: 'user', label: 'Merchants', count: crmUsers.filter(u => u.role === 'user' || !u.role).length },
+              ].map((pill) => (
+                <button
+                  key={pill.id}
+                  type="button"
+                  onClick={() => setRoleFilter(pill.id as any)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                    roleFilter === pill.id
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <span>{pill.label}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    roleFilter === pill.id
+                      ? 'bg-white/20 text-white'
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}>
+                    {pill.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* CRM Users List / Table */}
+          <div className="glass-card overflow-hidden">
+            {isLoadingUsers ? (
+              <div className="p-12 text-center space-y-3">
+                <Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-500" />
+                <p className="text-xs font-medium text-slate-500">Loading user records from Supabase Cloud...</p>
+              </div>
+            ) : (() => {
+              const query = userSearchQuery.trim().toLowerCase();
+              const filteredUsers = crmUsers.filter((u) => {
+                const matchesRole =
+                  roleFilter === 'all'
+                    ? true
+                    : roleFilter === 'user'
+                    ? u.role === 'user' || !u.role
+                    : u.role === roleFilter;
+
+                if (!matchesRole) return false;
+                if (!query) return true;
+
+                const nameMatch = (u.full_name || u.name || '').toLowerCase().includes(query);
+                const emailMatch = (u.email || '').toLowerCase().includes(query);
+                const phoneMatch = (u.phone || '').toLowerCase().includes(query);
+                const businessMatch = (u.business_name || '').toLowerCase().includes(query);
+                return nameMatch || emailMatch || phoneMatch || businessMatch;
+              });
+
+              if (filteredUsers.length === 0) {
+                return (
+                  <div className="p-12 text-center space-y-2">
+                    <UserX className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
+                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">No users found</h4>
+                    <p className="text-xs text-slate-400">
+                      {userSearchQuery
+                        ? 'Try modifying your search query or role filter.'
+                        : 'No user profiles are registered in Supabase yet.'}
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold border-b border-slate-200 dark:border-slate-800">
+                      <tr>
+                        <th className="px-5 py-3.5">User / Business</th>
+                        <th className="px-4 py-3.5">Contact</th>
+                        <th className="px-4 py-3.5">Role</th>
+                        <th className="px-4 py-3.5">Registered</th>
+                        <th className="px-5 py-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {filteredUsers.map((u) => {
+                        const isSelf = currentUser?.id === u.id || currentUser?.email === u.email;
+                        const isPrimaryAdmin = u.email === 'anantyadav8924@gmail.com';
+                        const displayName = u.full_name || u.name || (u.email ? u.email.split('@')[0] : 'Merchant User');
+                        const businessName = u.business_name || 'Individual Merchant';
+                        const avatarUrl = u.avatar_url || null;
+                        const role = u.role || 'user';
+                        const joinedDate = u.created_at
+                          ? new Date(u.created_at).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                          : 'Recent';
+
+                        return (
+                          <tr key={u.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                            {/* User details */}
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-3">
+                                {avatarUrl ? (
+                                  <img
+                                    src={avatarUrl}
+                                    alt={displayName}
+                                    className="w-10 h-10 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-xs"
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-2xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 font-extrabold flex items-center justify-center text-sm border border-indigo-200 dark:border-indigo-800 shadow-xs">
+                                    {displayName.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                    <span>{displayName}</span>
+                                    {isSelf && (
+                                      <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-extrabold uppercase">
+                                        You
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                                    <Building className="w-3 h-3 text-slate-400" />
+                                    <span>{businessName}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Contact info */}
+                            <td className="px-4 py-4">
+                              <div className="space-y-0.5">
+                                <div className="font-mono text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                  <span>{u.email || '—'}</span>
+                                </div>
+                                {u.phone && (
+                                  <div className="text-[11px] text-slate-400 font-mono">
+                                    {u.phone}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Role badge */}
+                            <td className="px-4 py-4">
+                              {role === 'super_admin' ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                  <Shield className="w-3 h-3 text-purple-600" />
+                                  Super Admin
+                                </span>
+                              ) : role === 'admin' ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                  <Key className="w-3 h-3 text-amber-600" />
+                                  Admin
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                  <UserCheck className="w-3 h-3 text-emerald-600" />
+                                  Merchant
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Registration date */}
+                            <td className="px-4 py-4 text-slate-500 font-medium">
+                              {joinedDate}
+                            </td>
+
+                            {/* Actions */}
+                            <td className="px-5 py-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                {/* Role Switcher Dropdown */}
+                                <select
+                                  value={role}
+                                  disabled={updatingUserId === u.id || isPrimaryAdmin}
+                                  onChange={(e) => handleUpdateUserRole(u.id, e.target.value)}
+                                  className="text-[11px] font-bold px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer disabled:opacity-50"
+                                >
+                                  <option value="user">Merchant</option>
+                                  <option value="admin">Admin</option>
+                                  <option value="super_admin">Super Admin</option>
+                                </select>
+
+                                {/* Delete user button */}
+                                {!isPrimaryAdmin && !isSelf && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteUser(u.id, displayName)}
+                                    title="Delete user account"
+                                    className="p-1.5 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
+                                  >
+                                    <UserX className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* CRM Helper Footer Notice */}
+          <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/40 text-xs text-indigo-700 dark:text-indigo-300 flex items-start gap-3">
+            <Shield className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold">Role Permissions &amp; Access Control:</p>
+              <p className="text-[11px] leading-relaxed text-indigo-600/90 dark:text-indigo-400">
+                &bull; <strong>Merchant (user):</strong> Can create invoices, manage their ledger, customer records, and personal business profile. Technical tabs (Database, Google Drive API, Maintenance, User Management) remain completely hidden.
+                <br />
+                &bull; <strong>Admin / Super Admin:</strong> Has full access to technical database keys, emergency maintenance controls, and multi-merchant user CRM.
+              </p>
             </div>
           </div>
 

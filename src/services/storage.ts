@@ -273,9 +273,16 @@ export const StorageService = {
     if (cur) {
       StorageService.setCurrentUser({ ...cur, ...profile });
     }
+    const curSettings = StorageService.getSettings();
+    const settingsUpdate: Partial<SystemSettings> = {};
     if (profile.businessName && profile.businessName.trim()) {
-      const curSettings = StorageService.getSettings();
-      setLocalItem(STORAGE_KEYS.SETTINGS, { ...curSettings, businessName: profile.businessName.trim() });
+      settingsUpdate.businessName = profile.businessName.trim();
+    }
+    if (profile.avatarUrl !== undefined) {
+      settingsUpdate.businessLogo = profile.avatarUrl;
+    }
+    if (Object.keys(settingsUpdate).length > 0) {
+      setLocalItem(STORAGE_KEYS.SETTINGS, { ...curSettings, ...settingsUpdate });
     }
   },
 
@@ -305,14 +312,25 @@ export const StorageService = {
     const cur = StorageService.getSettings();
     const merged: SystemSettings = { ...cur, ...settings };
     setLocalItem(STORAGE_KEYS.SETTINGS, merged);
+    
+    const storedProfile = getLocalItem<UserProfile | null>(STORAGE_KEYS.PROFILE, null as any);
+    const curUser = StorageService.getCurrentUser();
+
     if (merged.businessName && merged.businessName.trim()) {
-      const storedProfile = getLocalItem<UserProfile | null>(STORAGE_KEYS.PROFILE, null as any);
       if (storedProfile) {
         setLocalItem(STORAGE_KEYS.PROFILE, { ...storedProfile, businessName: merged.businessName.trim() });
       }
-      const curUser = StorageService.getCurrentUser();
       if (curUser) {
         StorageService.setCurrentUser({ ...curUser, businessName: merged.businessName.trim() });
+      }
+    }
+
+    if (merged.businessLogo !== undefined) {
+      if (storedProfile) {
+        setLocalItem(STORAGE_KEYS.PROFILE, { ...storedProfile, avatarUrl: merged.businessLogo });
+      }
+      if (curUser) {
+        StorageService.setCurrentUser({ ...curUser, avatarUrl: merged.businessLogo });
       }
     }
     return merged;

@@ -600,6 +600,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (p.businessName && p.businessName.trim()) {
       setSettingsState(prev => ({ ...prev, businessName: p.businessName.trim() }));
     }
+    if (p.avatarUrl !== undefined) {
+      setSettingsState(prev => ({ ...prev, businessLogo: p.avatarUrl }));
+    }
     if (currentUser) {
       const updatedUser = { ...currentUser, ...p };
       setCurrentUserState(updatedUser);
@@ -636,6 +639,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setCurrentUserState(updatedUser);
       }
     }
+
+    if (merged.businessLogo !== undefined) {
+      setProfileState(prev => ({ ...prev, avatarUrl: merged.businessLogo }));
+      if (currentUser) {
+        const updatedUser = { ...currentUser, avatarUrl: merged.businessLogo };
+        setCurrentUserState(updatedUser);
+        StorageService.setCurrentUser(updatedUser);
+      }
+    }
+
     addToast('Settings Saved', 'System configurations updated successfully.', 'success');
     syncWithDatabase();
   };

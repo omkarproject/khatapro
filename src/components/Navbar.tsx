@@ -675,55 +675,60 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
             <div ref={userMenuRef} className="relative pl-2 border-l border-slate-200 dark:border-slate-800">
               {currentUser ? (
                 <div>
-                  <button
-                    type="button"
-                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                    className="flex items-center gap-2 p-1 pl-1.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60 transition-all cursor-pointer group"
-                    title="User Profile"
-                  >
-                    {currentUser.avatarUrl || profile.avatarUrl || settings.businessLogo ? (
-                      <img
-                        src={currentUser.avatarUrl || profile.avatarUrl || settings.businessLogo}
-                        alt="Profile Logo"
-                        className="w-8 h-8 rounded-xl object-cover shadow-sm border border-indigo-200 dark:border-indigo-800 shrink-0"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 text-white font-extrabold text-xs flex items-center justify-center shadow-sm">
-                        {currentUser.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <div className="hidden xl:block text-left pr-1 min-w-0">
-                      <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[110px]">
-                        {currentUser.name}
-                      </div>
-                      <div className={`text-[10px] font-mono font-semibold flex items-center gap-1 ${
-                        isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-                        {isOnline ? 'Online' : 'Offline'}
-                      </div>
-                    </div>
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 hidden sm:block" />
-                  </button>
-
-                  {/* Dropdown Menu */}
-                  {isUserMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-72 p-3 bg-white dark:bg-[#0B101D] rounded-2xl shadow-2xl border border-slate-200 dark:border-indigo-500/30 z-50 animate-in fade-in zoom-in-95 duration-100">
-                      
-                      {/* User Info Header */}
-                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 space-y-2">
-                        <div className="flex items-center gap-3">
-                          {currentUser.avatarUrl || profile.avatarUrl || settings.businessLogo ? (
+                  {/* Profile Button */}
+                  {(() => {
+                    const activeAvatar = settings.businessLogo || profile?.avatarUrl || currentUser.avatarUrl || '';
+                    return (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                          className="flex items-center gap-2 p-1 pl-1.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60 transition-all cursor-pointer group"
+                          title="User Profile"
+                        >
+                          {activeAvatar ? (
                             <img
-                              src={currentUser.avatarUrl || profile.avatarUrl || settings.businessLogo}
+                              src={activeAvatar}
                               alt="Profile Logo"
-                              className="w-10 h-10 rounded-xl object-cover border border-indigo-200 dark:border-indigo-800 shrink-0"
+                              className="w-8 h-8 rounded-xl object-cover shadow-sm border border-indigo-200 dark:border-indigo-800 shrink-0"
                             />
                           ) : (
-                            <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-black text-sm flex items-center justify-center shrink-0 border border-indigo-200 dark:border-indigo-800">
+                            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 text-white font-extrabold text-xs flex items-center justify-center shadow-sm">
                               {currentUser.name.charAt(0).toUpperCase()}
                             </div>
                           )}
+                          <div className="hidden xl:block text-left pr-1 min-w-0">
+                            <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[110px]">
+                              {currentUser.name}
+                            </div>
+                            <div className={`text-[10px] font-mono font-semibold flex items-center gap-1 ${
+                              isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                              {isOnline ? 'Online' : 'Offline'}
+                            </div>
+                          </div>
+                          <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 hidden sm:block" />
+                        </button>
+
+                        {/* Dropdown Menu */}
+                        {isUserMenuOpen && (
+                          <div className="absolute right-0 mt-2 w-72 p-3 bg-white dark:bg-[#0B101D] rounded-2xl shadow-2xl border border-slate-200 dark:border-indigo-500/30 z-50 animate-in fade-in zoom-in-95 duration-100">
+                            
+                            {/* User Info Header */}
+                            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 space-y-2">
+                              <div className="flex items-center gap-3">
+                                {activeAvatar ? (
+                                  <img
+                                    src={activeAvatar}
+                                    alt="Profile Logo"
+                                    className="w-10 h-10 rounded-xl object-cover border border-indigo-200 dark:border-indigo-800 shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-black text-sm flex items-center justify-center shrink-0 border border-indigo-200 dark:border-indigo-800">
+                                    {currentUser.name.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between">
                               <span className="text-xs font-black text-slate-900 dark:text-white truncate">
@@ -767,8 +772,11 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
 
                     </div>
                   )}
-                </div>
-              ) : (
+                </>
+              );
+            })()}
+          </div>
+        ) : (
                 <button
                   type="button"
                   onClick={openAuthModal}

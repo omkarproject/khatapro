@@ -618,15 +618,24 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
             <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6 print:p-0 print:border-none print:shadow-none print:rounded-none print:w-full print:text-black print:space-y-4">
               
               {/* PRINT ONLY MERCHANT HEADER - Only visible when printing */}
-              <div className="hidden print:flex justify-between items-start pb-4 border-b border-slate-300">
-                <div>
-                  <h1 className="text-xl font-black text-slate-900">{merchantName}</h1>
-                  <p className="text-xs text-slate-600 mt-1">
-                    {[merchantPhone, merchantEmail, merchantGst ? `GSTIN: ${merchantGst}` : ''].filter(Boolean).join(' • ')}
-                  </p>
-                  {merchantAddress && (
-                    <p className="text-xs text-slate-500 mt-0.5">{merchantAddress}</p>
+              <div className="hidden print:flex justify-between items-start pb-4 border-b border-slate-300 gap-3">
+                <div className="flex items-start gap-3">
+                  {merchantLogo && (
+                    <img
+                      src={merchantLogo}
+                      alt={merchantName}
+                      className="w-14 h-14 object-contain border border-slate-200 p-0.5 rounded-lg shrink-0"
+                    />
                   )}
+                  <div>
+                    <h1 className="text-xl font-black text-slate-900">{merchantName}</h1>
+                    <p className="text-xs text-slate-600 mt-1">
+                      {[merchantPhone, merchantEmail, merchantGst ? `GSTIN: ${merchantGst}` : ''].filter(Boolean).join(' • ')}
+                    </p>
+                    {merchantAddress && (
+                      <p className="text-xs text-slate-500 mt-0.5">{merchantAddress}</p>
+                    )}
+                  </div>
                 </div>
                 <div className="text-right">
                   <div className="text-sm font-black uppercase tracking-wider text-slate-800">
