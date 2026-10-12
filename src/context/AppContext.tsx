@@ -123,6 +123,7 @@ interface AppContextType {
   closeAuthModal: () => void;
   login: (email: string, password: string) => Promise<void>;
   register: (data: { name: string; email: string; password: string; businessName?: string; phone?: string; role?: UserRole }) => Promise<void>;
+  applyAuthenticatedUser: (user: UserProfile) => Promise<void>;
   logout: () => void;
   cloudSyncStatus: 'synced' | 'syncing' | 'offline' | 'error';
   syncWithDatabase: () => Promise<void>;
@@ -343,6 +344,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Load user's fresh database records from Supabase Cloud
     await loadUserDataFromCloud(user.id);
     addToast('Account Created & Database Initialized', `Welcome, ${user.name}! Your isolated cloud ledger is active.`, 'success');
+  };
+
+  // Direct authentication apply after OTP verification
+  const applyAuthenticatedUser = async (user: UserProfile) => {
+    setCurrentUserState(user);
+    StorageService.setCurrentUser(user);
+    if (typeof document !== 'undefined') {
+      document.cookie = `skp_auth_session=${user.id || (user as any)._id}; Path=/; Max-Age=2592000; SameSite=Lax;`;
+    }
+    setProfileState(user);
+    setActiveRole('super_admin');
+    await loadUserDataFromCloud(user.id);
+    addToast('Authentication Verified', `Welcome, ${user.name}! Connected to Supabase Cloud Database.`, 'success');
   };
 
   // Logout handler
@@ -972,6 +986,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         closeAuthModal,
         login,
         register,
+        applyAuthenticatedUser,
         logout,
         cloudSyncStatus,
         syncWithDatabase,
