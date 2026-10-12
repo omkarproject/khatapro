@@ -13,22 +13,34 @@ import {
   Eye,
   EyeOff,
   Sparkles,
-  ShieldCheck,
-  Database,
   ArrowRight,
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Zap,
   ArrowLeft,
   KeyRound,
   RefreshCw,
-  Send
+  Send,
+  ShieldCheck,
+  Check,
+  X
 } from 'lucide-react';
+
+// Math CAPTCHA generator
+function generateCaptcha() {
+  const num1 = Math.floor(Math.random() * 9) + 1; // 1 to 9
+  const num2 = Math.floor(Math.random() * 9) + 1; // 1 to 9
+  return {
+    num1,
+    num2,
+    answer: num1 + num2,
+    question: `${num1} + ${num2}`,
+  };
+}
 
 export default function LoginPage() {
   const router = useRouter();
-  const { currentUser, isMounted, login, applyAuthenticatedUser, logout } = useApp();
+  const { currentUser, login, applyAuthenticatedUser, logout } = useApp();
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot_password'>('signin');
   const [step, setStep] = useState<'input' | 'otp'>('input');
@@ -48,8 +60,21 @@ export default function LoginPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Captcha State (for Sign In)
+  const [captcha, setCaptcha] = useState<{ num1: number; num2: number; answer: number; question: string }>({
+    num1: 5,
+    num2: 3,
+    answer: 8,
+    question: '5 + 3',
+  });
+  const [captchaInput, setCaptchaInput] = useState('');
+
   // Resend Timer
   const [resendTimer, setResendTimer] = useState<number>(0);
+
+  useEffect(() => {
+    setCaptcha(generateCaptcha());
+  }, []);
 
   useEffect(() => {
     let interval: any = null;
@@ -61,35 +86,82 @@ export default function LoginPage() {
     return () => clearInterval(interval);
   }, [resendTimer]);
 
+  const refreshCaptcha = () => {
+    setCaptcha(generateCaptcha());
+    setCaptchaInput('');
+  };
+
   const resetFormState = (newMode: 'signin' | 'signup' | 'forgot_password') => {
     setMode(newMode);
     setStep('input');
     setErrorMsg('');
     setSuccessMsg('');
     setOtpCode('');
+    refreshCaptcha();
   };
 
-  // Step 1: Send OTP for Sign In, Sign Up, or Forgot Password
-  const handleSendOtp = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  // Password Policy Checks (6-10 chars, 1 uppercase, 1 number, 1 special symbol)
+  const targetPassword = mode === 'forgot_password' ? newPassword : password;
+  const isLengthValid = targetPassword.length >= 6 && targetPassword.length <= 10;
+  const hasUppercase = /[A-Z]/.test(targetPassword);
+  const hasNumber = /[0-9]/.test(targetPassword);
+  const hasSymbol = /[!@#$%^&*(),.?":{}|<>_\-+=~/]/.test(targetPassword);
+  const isPasswordPolicyMet = isLengthValid && hasUppercase && hasNumber && hasSymbol;
+
+  // Sign In Handler with Captcha (Direct password login, no OTP required)
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
+
+    if (!email.trim() || !password) {
+      setErrorMsg('Please enter both email and password.');
+      return;
+    }
+
+    // Verify Captcha
+    if (parseInt(captchaInput.trim(), 10) !== captcha.answer) {
+      setErrorMsg('Incorrect captcha answer. Please solve the math verification.');
+      refreshCaptcha();
+      return;
+    }
+
     setIsLoading(true);
-
     try {
-      if (!email.trim()) {
-        throw new Error('Please enter your email address.');
-      }
+      await login(email.trim(), password);
+      router.replace('/');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Invalid email or password.');
+      refreshCaptcha();
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      if (mode === 'signin' && !password) {
-        throw new Error('Please enter your password.');
-      }
+  // Sign Up / Forgot Password: Step 1 (Send OTP to Email)
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
 
-      if (mode === 'signup') {
-        if (!name.trim()) throw new Error('Please enter your full name.');
-        if (!password || password.length < 4) throw new Error('Password must be at least 4 characters.');
-      }
+    if (!email.trim()) {
+      setErrorMsg('Please enter your email address.');
+      return;
+    }
 
+    if (mode === 'signup') {
+      if (!name.trim()) {
+        setErrorMsg('Please enter your full name.');
+        return;
+      }
+      if (!isPasswordPolicyMet) {
+        setErrorMsg('Password must satisfy all security rules: 6-10 chars, 1 uppercase letter, 1 number, and 1 special symbol.');
+        return;
+      }
+    }
+
+    setIsLoading(true);
+    try {
       const res = await fetch('/api/auth/otp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -105,40 +177,43 @@ export default function LoginPage() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Failed to dispatch verification code.');
+        throw new Error(data.message || 'Failed to send verification code.');
       }
 
-      setSuccessMsg(data.message || '6-digit verification code sent to your email.');
+      setSuccessMsg(`A 6-digit verification code has been sent to ${email.trim()}.`);
       setStep('otp');
       setResendTimer(60);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Request failed. Please check your details.');
+      setErrorMsg(err.message || 'Request failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Step 2: Verify OTP
+  // Sign Up / Forgot Password: Step 2 (Verify OTP & Complete Action)
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
+
+    if (!otpCode.trim() || otpCode.trim().length < 6) {
+      setErrorMsg('Please enter the complete 6-digit verification code.');
+      return;
+    }
+
+    if (mode === 'forgot_password') {
+      if (!isPasswordPolicyMet) {
+        setErrorMsg('New password must satisfy all rules: 6-10 chars, 1 uppercase letter, 1 number, and 1 special symbol.');
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        setErrorMsg('New password and confirmation do not match.');
+        return;
+      }
+    }
+
     setIsLoading(true);
-
     try {
-      if (!otpCode.trim() || otpCode.trim().length < 6) {
-        throw new Error('Please enter the complete 6-digit verification code.');
-      }
-
-      if (mode === 'forgot_password') {
-        if (!newPassword || newPassword.length < 4) {
-          throw new Error('New password must be at least 4 characters long.');
-        }
-        if (newPassword !== confirmPassword) {
-          throw new Error('New password and confirmation do not match.');
-        }
-      }
-
       const res = await fetch('/api/auth/otp/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -152,19 +227,20 @@ export default function LoginPage() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Verification failed. Please try again.');
+        throw new Error(data.message || 'Invalid or expired verification code.');
       }
 
       if (mode === 'forgot_password') {
-        setSuccessMsg('Password reset successfully! You can now sign in with your new password.');
+        setSuccessMsg('Password has been reset successfully! You can now sign in with your new password.');
         setMode('signin');
         setStep('input');
         setPassword('');
         setNewPassword('');
         setConfirmPassword('');
         setOtpCode('');
+        refreshCaptcha();
       } else {
-        // Sign In or Sign Up verified!
+        // Sign Up Verified!
         if (data.user) {
           await applyAuthenticatedUser(data.user);
           router.replace('/');
@@ -177,79 +253,60 @@ export default function LoginPage() {
     }
   };
 
-  // Direct login fallback (skip email OTP if needed)
-  const handleDirectPasswordLogin = async () => {
-    setErrorMsg('');
-    setIsLoading(true);
-    try {
-      if (!email.trim() || !password) {
-        throw new Error('Please enter email and password.');
-      }
-      await login(email.trim(), password);
-      router.replace('/');
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Direct password login failed.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#070B14] flex flex-col justify-center items-center p-4 sm:p-6 text-slate-900 dark:text-slate-100 relative overflow-hidden">
       
-      {/* Background ambient cyberpunk orbs */}
+      {/* Background ambient lighting */}
       <div className="absolute top-1/4 -left-20 w-96 h-96 bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-indigo-600/10 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* Top Bar Branding */}
+      {/* Top Branding Bar */}
       <div className="w-full max-w-md mb-4 flex items-center justify-between">
-        {currentUser ? (
+        <Link href="/" className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-md">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <span className="text-sm font-black tracking-wider uppercase bg-gradient-to-r from-cyan-500 to-indigo-600 bg-clip-text text-transparent">
+            SmartKhata Pro
+          </span>
+        </Link>
+
+        {currentUser && (
           <Link
             href="/"
-            className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Go to Dashboard</span>
+            <span>Dashboard</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </Link>
-        ) : (
-          <div className="flex items-center gap-2 text-xs font-black tracking-wider uppercase bg-gradient-to-r from-cyan-500 to-indigo-600 bg-clip-text text-transparent">
-            SmartKhata Pro
-          </div>
         )}
-        <span className="text-[11px] font-mono font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-          Cloud Ledger Connected
-        </span>
       </div>
 
       <div className="w-full max-w-md bg-white dark:bg-[#0C1222] rounded-[32px] shadow-2xl border border-slate-200/90 dark:border-indigo-500/30 overflow-hidden relative">
         
-        {/* Cyber Glow Accent Line */}
+        {/* Accent Line */}
         <div className="h-1.5 w-full bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 animate-[pulse_2.5s_ease-in-out_infinite]" />
 
         <div className="p-6 sm:p-8 space-y-6">
           
-          {/* Header */}
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-xl shadow-indigo-600/25 shrink-0">
-              {mode === 'forgot_password' ? <KeyRound className="w-6 h-6" /> : <Sparkles className="w-6 h-6" />}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono uppercase tracking-wider font-extrabold text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/80 px-2 py-0.5 rounded-md border border-cyan-200 dark:border-cyan-800/60 flex items-center gap-1">
-                  <Database className="w-3 h-3" /> Supabase Cloud PostgreSQL
-                </span>
-              </div>
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-1">
-                {currentUser
-                  ? 'Active Cloud Session'
-                  : mode === 'forgot_password'
-                  ? 'Reset Your Password'
-                  : mode === 'signin'
-                  ? 'Sign In to SmartKhata'
-                  : 'Create Merchant Account'}
-              </h1>
-            </div>
+          {/* Card Title */}
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white">
+              {currentUser
+                ? 'Active Account Session'
+                : mode === 'forgot_password'
+                ? 'Reset Password'
+                : mode === 'signin'
+                ? 'Sign In to SmartKhata'
+                : 'Create Account'}
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              {mode === 'forgot_password'
+                ? 'Verify your email to create a new password'
+                : mode === 'signin'
+                ? 'Enter your credentials to access your business ledger'
+                : 'Fill in your details and verify your email'}
+            </p>
           </div>
 
           {currentUser ? (
@@ -285,13 +342,13 @@ export default function LoginPage() {
                   onClick={() => logout()}
                   className="w-full py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-rose-600 dark:text-rose-400 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
-                  <span>Log Out &amp; Switch User</span>
+                  <span>Log Out &amp; Switch Account</span>
                 </button>
               </div>
             </div>
           ) : (
             <>
-              {/* Tab Switcher (Sign In vs Sign Up) */}
+              {/* Tab Switcher (Sign In vs Create Account) */}
               {step === 'input' && mode !== 'forgot_password' && (
                 <div className="grid grid-cols-2 gap-1 p-1 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs font-bold">
                   <button
@@ -319,7 +376,7 @@ export default function LoginPage() {
                 </div>
               )}
 
-              {/* Back button if in forgot password mode */}
+              {/* Back to Sign In button (when in Forgot Password mode) */}
               {mode === 'forgot_password' && step === 'input' && (
                 <button
                   type="button"
@@ -331,7 +388,7 @@ export default function LoginPage() {
                 </button>
               )}
 
-              {/* Status Messages */}
+              {/* Error Message */}
               {errorMsg && (
                 <div className="p-3 bg-rose-50 dark:bg-rose-950/40 rounded-2xl border border-rose-200 dark:border-rose-800/60 flex items-start gap-2.5 text-xs text-rose-700 dark:text-rose-300 animate-in fade-in">
                   <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
@@ -339,6 +396,7 @@ export default function LoginPage() {
                 </div>
               )}
 
+              {/* Success Message */}
               {successMsg && (
                 <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-800/60 flex items-start gap-2.5 text-xs text-emerald-700 dark:text-emerald-300 animate-in fade-in">
                   <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500 mt-0.5" />
@@ -347,9 +405,116 @@ export default function LoginPage() {
               )}
 
               {/* ==================================================== */}
-              {/* STEP 1: INITIAL DATA INPUT                          */}
+              {/* 1. SIGN IN FORM (Direct Login + Anti-Bot Captcha)    */}
               {/* ==================================================== */}
-              {step === 'input' && (
+              {mode === 'signin' && (
+                <form onSubmit={handleSignIn} className="space-y-4">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
+                      Email Address *
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="e.g. anantyadav8924@gmail.com"
+                        className="w-full pl-10 pr-3 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400">
+                        Password *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => resetFormState('forgot_password')}
+                        className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Anti-Bot Security CAPTCHA */}
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Security Check: Solve Math Captcha</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={refreshCaptcha}
+                        className="text-slate-400 hover:text-indigo-600 text-xs flex items-center gap-1 cursor-pointer"
+                        title="Reload Captcha"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                      </button>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <div className="px-3.5 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800 font-mono font-black text-sm text-indigo-700 dark:text-indigo-300 tracking-wider shrink-0 select-none">
+                        {captcha.question} = ?
+                      </div>
+                      <input
+                        type="number"
+                        required
+                        value={captchaInput}
+                        onChange={(e) => setCaptchaInput(e.target.value)}
+                        placeholder="Answer"
+                        className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-black text-xs tracking-wider uppercase shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Signing In...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Sign In</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
+
+              {/* ==================================================== */}
+              {/* 2. SIGN UP / FORGOT PASSWORD - STEP 1 (INPUT)        */}
+              {/* ==================================================== */}
+              {mode !== 'signin' && step === 'input' && (
                 <form onSubmit={handleSendOtp} className="space-y-4">
                   {mode === 'signup' && (
                     <>
@@ -380,7 +545,7 @@ export default function LoginPage() {
                             type="text"
                             value={businessName}
                             onChange={(e) => setBusinessName(e.target.value)}
-                            placeholder="e.g. SmartKhata Store"
+                            placeholder="e.g. Apex Enterprises"
                             className="w-full pl-10 pr-3 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
                           />
                         </div>
@@ -421,87 +586,81 @@ export default function LoginPage() {
                     </div>
                   </div>
 
-                  {mode !== 'forgot_password' && (
+                  {/* Password Input for Signup */}
+                  {mode === 'signup' && (
                     <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400">
-                          Password *
-                        </label>
-                        {mode === 'signin' && (
-                          <button
-                            type="button"
-                            onClick={() => resetFormState('forgot_password')}
-                            className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-                          >
-                            Forgot Password?
-                          </button>
-                        )}
-                      </div>
+                      <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
+                        Create Password * (6 to 10 Digits)
+                      </label>
                       <div className="relative">
                         <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                         <input
                           type={showPassword ? 'text' : 'password'}
                           required
+                          maxLength={10}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          placeholder="••••••••"
+                          placeholder="e.g. Admin@123"
                           className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                          className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                         >
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
+                      </div>
+
+                      {/* Real-time Password Security Checklist */}
+                      <div className="mt-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-1.5 text-[11px]">
+                        <div className="font-bold text-slate-600 dark:text-slate-300 mb-1">Password Requirements:</div>
+                        <div className={`flex items-center gap-1.5 ${isLengthValid ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                          {isLengthValid ? <Check className="w-3.5 h-3.5" /> : <span className="w-3.5 h-3.5 text-center leading-none">•</span>}
+                          <span>Length between 6 and 10 digits/characters ({password.length}/10)</span>
+                        </div>
+                        <div className={`flex items-center gap-1.5 ${hasUppercase ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                          {hasUppercase ? <Check className="w-3.5 h-3.5" /> : <span className="w-3.5 h-3.5 text-center leading-none">•</span>}
+                          <span>At least 1 Capital letter (A-Z)</span>
+                        </div>
+                        <div className={`flex items-center gap-1.5 ${hasNumber ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                          {hasNumber ? <Check className="w-3.5 h-3.5" /> : <span className="w-3.5 h-3.5 text-center leading-none">•</span>}
+                          <span>At least 1 Number (0-9)</span>
+                        </div>
+                        <div className={`flex items-center gap-1.5 ${hasSymbol ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                          {hasSymbol ? <Check className="w-3.5 h-3.5" /> : <span className="w-3.5 h-3.5 text-center leading-none">•</span>}
+                          <span>At least 1 Symbol / Special character (!@#$%^&amp;*)</span>
+                        </div>
                       </div>
                     </div>
                   )}
 
                   <button
                     type="submit"
-                    disabled={isLoading}
+                    disabled={isLoading || (mode === 'signup' && !isPasswordPolicyMet)}
                     className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-black text-xs tracking-wider uppercase shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
                   >
                     {isLoading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Sending Verification Code...</span>
+                        <span>Sending Code...</span>
                       </>
                     ) : (
                       <>
                         <Send className="w-4 h-4" />
                         <span>
-                          {mode === 'forgot_password'
-                            ? 'Send Password Reset Code'
-                            : mode === 'signin'
-                            ? 'Send Login Verification Code'
-                            : 'Send Signup Verification Code'}
+                          {mode === 'forgot_password' ? 'Send Password Reset Code' : 'Send Email Verification Code'}
                         </span>
                       </>
                     )}
                   </button>
-
-                  {/* Direct Password Login Option for Signin */}
-                  {mode === 'signin' && (
-                    <div className="pt-2 text-center border-t border-slate-200/80 dark:border-slate-800">
-                      <button
-                        type="button"
-                        onClick={handleDirectPasswordLogin}
-                        disabled={isLoading}
-                        className="text-xs text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer font-medium"
-                      >
-                        ⚡ Direct Password Login (Skip Email OTP)
-                      </button>
-                    </div>
-                  )}
                 </form>
               )}
 
               {/* ==================================================== */}
-              {/* STEP 2: OTP VERIFICATION & NEW PASSWORD             */}
+              {/* 3. SIGN UP / FORGOT PASSWORD - STEP 2 (OTP VERIFY)   */}
               {/* ==================================================== */}
-              {step === 'otp' && (
+              {mode !== 'signin' && step === 'otp' && (
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
                   <div className="p-3.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/60 text-xs text-indigo-950 dark:text-indigo-200 space-y-1">
                     <div className="font-bold flex items-center gap-1.5">
@@ -509,13 +668,13 @@ export default function LoginPage() {
                       <span>Verification Code Sent!</span>
                     </div>
                     <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                      We have dispatched a 6-digit verification code to <strong className="font-mono">{email}</strong>.
+                      Check your email <strong className="font-mono">{email}</strong> for the 6-digit verification code.
                     </p>
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
-                      Enter 6-Digit Verification Code *
+                      Enter 6-Digit Code *
                     </label>
                     <div className="relative">
                       <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
@@ -532,21 +691,22 @@ export default function LoginPage() {
                     </div>
                   </div>
 
-                  {/* If in Forgot Password mode, also ask for new password */}
+                  {/* New Password Input for Forgot Password */}
                   {mode === 'forgot_password' && (
                     <>
                       <div>
                         <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
-                          New Password *
+                          New Password * (6 to 10 Digits)
                         </label>
                         <div className="relative">
                           <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                           <input
                             type={showPassword ? 'text' : 'password'}
                             required
+                            maxLength={10}
                             value={newPassword}
                             onChange={(e) => setNewPassword(e.target.value)}
-                            placeholder="At least 4 characters"
+                            placeholder="e.g. Admin@123"
                             className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
                           />
                           <button
@@ -556,6 +716,26 @@ export default function LoginPage() {
                           >
                             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>
+                        </div>
+
+                        {/* Real-time Checklist for New Password */}
+                        <div className="mt-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-1.5 text-[11px]">
+                          <div className={`flex items-center gap-1.5 ${isLengthValid ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+                            {isLengthValid ? <Check className="w-3.5 h-3.5" /> : <span>•</span>}
+                            <span>6 to 10 digits/characters ({newPassword.length}/10)</span>
+                          </div>
+                          <div className={`flex items-center gap-1.5 ${hasUppercase ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+                            {hasUppercase ? <Check className="w-3.5 h-3.5" /> : <span>•</span>}
+                            <span>At least 1 Capital letter (A-Z)</span>
+                          </div>
+                          <div className={`flex items-center gap-1.5 ${hasNumber ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+                            {hasNumber ? <Check className="w-3.5 h-3.5" /> : <span>•</span>}
+                            <span>At least 1 Number (0-9)</span>
+                          </div>
+                          <div className={`flex items-center gap-1.5 ${hasSymbol ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+                            {hasSymbol ? <Check className="w-3.5 h-3.5" /> : <span>•</span>}
+                            <span>At least 1 Special symbol (!@#$%^&amp;*)</span>
+                          </div>
                         </div>
                       </div>
 
@@ -568,6 +748,7 @@ export default function LoginPage() {
                           <input
                             type={showConfirmPassword ? 'text' : 'password'}
                             required
+                            maxLength={10}
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
                             placeholder="Repeat new password"
@@ -587,23 +768,19 @@ export default function LoginPage() {
 
                   <button
                     type="submit"
-                    disabled={isLoading}
+                    disabled={isLoading || (mode === 'forgot_password' && !isPasswordPolicyMet)}
                     className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-black text-xs tracking-wider uppercase shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
                   >
                     {isLoading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Verifying Code...</span>
+                        <span>Verifying...</span>
                       </>
                     ) : (
                       <>
                         <CheckCircle2 className="w-4 h-4" />
                         <span>
-                          {mode === 'forgot_password'
-                            ? 'Reset & Update Password'
-                            : mode === 'signin'
-                            ? 'Verify & Enter Dashboard'
-                            : 'Verify & Create Account'}
+                          {mode === 'forgot_password' ? 'Reset & Update Password' : 'Verify & Create Account'}
                         </span>
                       </>
                     )}
@@ -616,17 +793,17 @@ export default function LoginPage() {
                       className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer flex items-center gap-1 font-medium"
                     >
                       <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Back / Change Email</span>
+                      <span>Back</span>
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => handleSendOtp()}
+                      onClick={(e) => handleSendOtp(e)}
                       disabled={resendTimer > 0 || isLoading}
                       className="text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer disabled:opacity-50 font-bold flex items-center gap-1"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                      <span>{resendTimer > 0 ? `Resend Code (${resendTimer}s)` : 'Resend Code'}</span>
+                      <span>{resendTimer > 0 ? `Resend (${resendTimer}s)` : 'Resend Code'}</span>
                     </button>
                   </div>
                 </form>

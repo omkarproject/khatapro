@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
-import { saveOtp } from '@/lib/otpStore';
+import { saveOtp, validatePasswordStrength } from '@/lib/otpStore';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, purpose, password, name, businessName, phone } = body;
+    const { email, purpose: rawPurpose, password, name, businessName, phone } = body;
 
     if (!email || !email.trim()) {
       return NextResponse.json({ success: false, message: 'Email address is required' }, { status: 400 });
     }
+
+    const purpose = (rawPurpose === 'signin' ? 'login' : rawPurpose) as 'signup' | 'login' | 'forgot_password';
 
     if (!purpose || !['signup', 'login', 'forgot_password'].includes(purpose)) {
       return NextResponse.json({ success: false, message: 'Valid purpose (signup, login, forgot_password) is required' }, { status: 400 });
@@ -45,8 +47,13 @@ export async function POST(req: NextRequest) {
         }, { status: 401 });
       }
     } else if (purpose === 'signup') {
-      if (!password || !name) {
-        return NextResponse.json({ success: false, message: 'Name and password are required for signup' }, { status: 400 });
+      if (!name) {
+        return NextResponse.json({ success: false, message: 'Full name is required for signup' }, { status: 400 });
+      }
+
+      const passCheck = validatePasswordStrength(password);
+      if (!passCheck.valid) {
+        return NextResponse.json({ success: false, message: passCheck.message }, { status: 400 });
       }
 
       // Check if user already exists

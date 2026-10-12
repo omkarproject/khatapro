@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
-import { verifyOtp as verifyLocalOtp } from '@/lib/otpStore';
+import { verifyOtp as verifyLocalOtp, validatePasswordStrength } from '@/lib/otpStore';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, code, purpose, newPassword } = body;
+    const { email, code, purpose: rawPurpose, newPassword } = body;
 
     if (!email || !code) {
       return NextResponse.json({ success: false, message: 'Email and verification code are required' }, { status: 400 });
     }
+
+    const purpose = (rawPurpose === 'signin' ? 'login' : rawPurpose) as 'signup' | 'login' | 'forgot_password';
 
     if (!purpose || !['signup', 'login', 'forgot_password'].includes(purpose)) {
       return NextResponse.json({ success: false, message: 'Valid purpose is required' }, { status: 400 });
@@ -176,7 +178,7 @@ export async function POST(req: NextRequest) {
 
       const res = NextResponse.json({
         success: true,
-        message: `Welcome back, ${safeUser.name}! Login verified.`,
+        message: `Welcome back, ${safeUser.name}!`,
         user: safeUser,
         token: `token_${safeUser.id}_${Date.now()}`,
         provider: 'supabase',
@@ -193,10 +195,11 @@ export async function POST(req: NextRequest) {
 
     // CASE C: FORGOT PASSWORD
     if (purpose === 'forgot_password') {
-      if (!newPassword || newPassword.trim().length < 4) {
+      const passCheck = validatePasswordStrength(newPassword);
+      if (!passCheck.valid) {
         return NextResponse.json({
           success: false,
-          message: 'New password must be at least 4 characters long.',
+          message: passCheck.message,
         }, { status: 400 });
       }
 

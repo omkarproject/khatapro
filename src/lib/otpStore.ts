@@ -23,6 +23,24 @@ export function generateOtpCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+// Password policy validator: 6-10 chars, 1 uppercase, 1 number, 1 special symbol
+export function validatePasswordStrength(password: string): { valid: boolean; message?: string } {
+  if (!password) return { valid: false, message: 'Password is required' };
+  if (password.length < 6 || password.length > 10) {
+    return { valid: false, message: 'Password must be between 6 and 10 characters long' };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least 1 uppercase letter (A-Z)' };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least 1 number (0-9)' };
+  }
+  if (!/[!@#$%^&*(),.?":{}|<>_\-+=~/]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least 1 special symbol (!@#$%^&* etc.)' };
+  }
+  return { valid: true };
+}
+
 // Save OTP record (expires in 10 minutes)
 export function saveOtp(email: string, purpose: 'signup' | 'login' | 'forgot_password', metadata?: any): string {
   const cleanEmail = email.toLowerCase().trim();
