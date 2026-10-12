@@ -4,6 +4,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate } from '@/lib/utils';
 import { SavingsGoal, SavingsDeposit } from '@/types';
+import { uploadToDriveFiles } from '@/lib/driveUploadClient';
 import {
   PiggyBank,
   Plus,
@@ -249,6 +250,10 @@ export default function SavingsPage() {
     reader.onload = (e) => {
       const result = e.target?.result as string;
       onSuccess(result, file.name, type);
+      uploadToDriveFiles(file.name, result, file.type, {
+        category: 'Savings',
+        uploadedAt: new Date().toISOString(),
+      });
     };
     reader.readAsDataURL(file);
   };

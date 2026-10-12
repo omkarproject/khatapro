@@ -1120,7 +1120,13 @@ interface AttachedBill {
             base64Data,
             file.type,
             undefined,
-            activeCustomer ? { customerName: activeCustomer.name, customerId: activeCustomer.id } : undefined
+            activeCustomer ? {
+              customerName: activeCustomer.name,
+              customerId: activeCustomer.id,
+              folderName: 'BILLS',
+              appFileId: attId,
+              uploadedAt: new Date().toISOString(),
+            } : undefined
           ).then(uploadRes => {
             if (uploadRes.fileId) {
               billItem.driveFileId = uploadRes.fileId;
@@ -1150,7 +1156,7 @@ interface AttachedBill {
     if (itemToRemove) {
       deleteFromDriveFiles({
         fileId: itemToRemove.driveFileId,
-        fileName: itemToRemove.name,
+        fileName: itemToRemove.driveFileId ? undefined : itemToRemove.name,
       });
     }
     setEntryAttachments(prev => prev.filter(item => item.id !== id));
@@ -1165,12 +1171,31 @@ interface AttachedBill {
         return;
       }
       const reader = new FileReader();
-      reader.onload = (evt) => {
+      reader.onload = async (evt) => {
         const base64 = evt.target?.result as string;
         setProfileAvatar(base64);
-        const updated = { ...activeCustomer, avatar: base64 };
+
+        const ext = file.name.split('.').pop() || 'jpg';
+        const photoFileName = `Profile_Photo_${activeCustomer.name.replace(/\s+/g, '_')}.${ext}`;
+        const uploadRes = await uploadToDriveFiles(
+          photoFileName,
+          base64,
+          file.type,
+          undefined,
+          {
+            customerName: activeCustomer.name,
+            customerId: activeCustomer.id,
+            folderName: 'Profile',
+          }
+        );
+
+        const updated = {
+          ...activeCustomer,
+          avatar: base64,
+          avatarUrl: uploadRes.webViewLink || uploadRes.webContentLink,
+        };
         saveCustomer(updated);
-        addToast('Photo Updated', `${activeCustomer.name}'s profile photo updated.`, 'success');
+        addToast('Photo Updated', `${activeCustomer.name}'s profile photo saved to Customer CRM.`, 'success');
       };
       reader.readAsDataURL(file);
     }

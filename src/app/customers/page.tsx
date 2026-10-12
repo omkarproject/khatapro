@@ -102,6 +102,21 @@ function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+function formatFullDateTime(isoString?: string): string {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return isoString;
+  return d.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  });
+}
+
 export default function CustomersPage() {
   const {
     customers,
@@ -421,68 +436,84 @@ export default function CustomersPage() {
     setRenameValue('');
   };
 
-  const handleUploadFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!driveCustomer || !e.target.files || e.target.files.length === 0) return;
     const fileList = Array.from(e.target.files);
+    e.target.value = '';
 
-    let loadedCount = 0;
-    const newFiles: CustomerDriveFile[] = [];
+    // Determine current subfolder name if inside a folder
+    const currentFolder = driveFolders.find(f => f.id === currentFolderId);
+    const subfolderName = currentFolder ? currentFolder.name : undefined;
 
-    fileList.forEach(file => {
-      if (file.size > 15 * 1024 * 1024) {
-        addToast('File too large', `${file.name} exceeds 15MB limit.`, 'error');
-        return;
+    const newUploadedFiles: CustomerDriveFile[] = [];
+
+    addToast('Uploading...', `Uploading ${fileList.length} file(s) to Customer CRM (${subfolderName || 'Root'})...`, 'info');
+
+    for (const file of fileList) {
+      if (file.size > 25 * 1024 * 1024) {
+        addToast('File too large', `${file.name} exceeds 25MB limit.`, 'error');
+        continue;
       }
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        const fileDataUrl = reader.result as string;
-        const newFileId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      try {
+        const fileDataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        // Exact timestamp including date, hours, minutes, seconds & milliseconds
+        const uploadTimestamp = new Date().toISOString();
+        const newFileId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+        // Upload directly to Google Drive in the proper Customer CRM folder / subfolder!
+        const driveRes = await uploadToDriveFiles(
+          file.name,
+          fileDataUrl,
+          file.type,
+          undefined,
+          {
+            customerName: driveCustomer.name,
+            customerId: driveCustomer.id,
+            folderName: subfolderName,
+            appFileId: newFileId,
+            uploadedAt: uploadTimestamp,
+          }
+        );
+
         const customerDriveFile: CustomerDriveFile = {
           id: newFileId,
           name: file.name,
           size: file.size,
           type: file.type || 'application/octet-stream',
           dataUrl: fileDataUrl,
+          url: driveRes.webViewLink || driveRes.webContentLink,
+          driveFileId: driveRes.fileId,
           folderId: currentFolderId,
-          uploadedAt: new Date().toISOString(),
+          uploadedAt: uploadTimestamp,
         };
-        newFiles.push(customerDriveFile);
 
-        uploadToDriveFiles(
-          file.name,
-          fileDataUrl,
-          file.type,
-          undefined,
-          { customerName: driveCustomer.name, customerId: driveCustomer.id }
-        ).then(res => {
-          if (res.fileId) {
-            customerDriveFile.driveFileId = res.fileId;
-            setDriveFiles(prev =>
-              prev.map(f => f.id === newFileId ? { ...f, driveFileId: res.fileId } : f)
-            );
-          }
-        }).catch(err => {
-          console.warn('Customer drive background file upload error:', err);
-        });
+        newUploadedFiles.push(customerDriveFile);
+      } catch (err: any) {
+        console.error('File upload error for', file.name, err);
+      }
+    }
 
-        loadedCount++;
-
-        if (loadedCount === fileList.length) {
-          const updatedFiles = [...driveFiles, ...newFiles];
-          setDriveFiles(updatedFiles);
-          StorageService.saveCustomerDriveData(driveCustomer.id, {
-            folders: driveFolders,
-            files: updatedFiles,
-          });
-          syncWithDatabase();
-          addToast('Files Uploaded', `${newFiles.length} file(s) saved to customer drive and Google Drive.`, 'success');
-        }
-      };
-      reader.readAsDataURL(file);
-    });
-
-    e.target.value = '';
+    if (newUploadedFiles.length > 0) {
+      const updatedFiles = [...driveFiles, ...newUploadedFiles];
+      setDriveFiles(updatedFiles);
+      StorageService.saveCustomerDriveData(driveCustomer.id, {
+        folders: driveFolders,
+        files: updatedFiles,
+      });
+      syncWithDatabase();
+      addToast(
+        'Upload Complete',
+        `${newUploadedFiles.length} file(s) saved with unique Drive IDs and timestamp records.`,
+        'success'
+      );
+    }
   };
 
   const handleDeleteFile = (fileId: string, fileName: string) => {
@@ -499,10 +530,18 @@ export default function CustomersPage() {
     if (previewFile?.id === fileId) {
       setPreviewFile(null);
     }
-    deleteFromDriveFiles({
-      fileId: targetFile?.driveFileId,
-      fileName,
-    });
+
+    // Only pass fileId if present so Drive NEVER deletes other files with the same name!
+    if (targetFile?.driveFileId) {
+      deleteFromDriveFiles({
+        fileId: targetFile.driveFileId,
+      });
+    } else {
+      deleteFromDriveFiles({
+        fileName,
+      });
+    }
+
     syncWithDatabase();
     addToast('File Deleted', `"${fileName}" has been deleted.`, 'info');
   };
@@ -2255,7 +2294,7 @@ export default function CustomersPage() {
                             </div>
                             <div className="flex items-center justify-between text-[10px] text-slate-400">
                               <span>{formatFileSize(file.size)}</span>
-                              <span>{formatDate(file.uploadedAt)}</span>
+                              <span title={file.uploadedAt}>{formatFullDateTime(file.uploadedAt)}</span>
                             </div>
                           </div>
 
@@ -2364,7 +2403,7 @@ export default function CustomersPage() {
                                 {file.name}
                               </div>
                               <div className="text-[10px] text-slate-400">
-                                {formatFileSize(file.size)} • {formatDate(file.uploadedAt)}
+                                {formatFileSize(file.size)} • <span title={file.uploadedAt}>{formatFullDateTime(file.uploadedAt)}</span>
                               </div>
                             </div>
                           </div>
@@ -2595,7 +2634,7 @@ export default function CustomersPage() {
                     {previewFile.name}
                   </h4>
                   <p className="text-[10px] text-slate-400">
-                    {formatFileSize(previewFile.size)} • Uploaded {formatDate(previewFile.uploadedAt)}
+                    {formatFileSize(previewFile.size)} • Uploaded {formatFullDateTime(previewFile.uploadedAt)}
                   </p>
                 </div>
               </div>

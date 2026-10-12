@@ -229,7 +229,10 @@ export default function ExpensesPage() {
             });
           };
           img.src = result;
-          uploadToDriveFiles(file.name, result, file.type);
+          uploadToDriveFiles(file.name, result, file.type, {
+            category: 'Expenses',
+            uploadedAt: new Date().toISOString(),
+          });
         }
       };
       reader.readAsDataURL(file);

@@ -6,6 +6,9 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 // --- MAPPERS: Frontend camelCase -> Supabase snake_case ---
 
 function customerToDb(c: any, userId: string) {
+  // Store only URL/link, do not store huge base64 strings in database
+  const safeAvatar = c.avatarUrl || (c.avatar && !c.avatar.startsWith('data:') ? c.avatar : null);
+
   return {
     id: String(c.id),
     user_id: userId,
@@ -23,7 +26,7 @@ function customerToDb(c: any, userId: string) {
     status: c.status || 'active',
     rating: Number(c.rating) || 5,
     notes: c.notes || '',
-    avatar: c.avatar || '',
+    avatar: safeAvatar || null,
     bank_accounts: Array.isArray(c.bankAccounts) ? c.bankAccounts : [],
     upi_details: Array.isArray(c.upiDetails) ? c.upiDetails : [],
     created_at: c.createdAt || new Date().toISOString(),
@@ -32,6 +35,22 @@ function customerToDb(c: any, userId: string) {
 }
 
 function transactionToDb(t: any, userId: string) {
+  // Strip large base64 data URLs from attachments so database strictly holds metadata records
+  const sanitizedAttachments = (t.attachments || []).map((att: string) => {
+    try {
+      const obj = JSON.parse(att);
+      if (obj.url && obj.url.startsWith('data:')) {
+        return JSON.stringify({
+          ...obj,
+          url: obj.driveFileId ? `https://drive.google.com/file/d/${obj.driveFileId}/view` : '',
+        });
+      }
+      return att;
+    } catch {
+      return att && !att.startsWith('data:') ? att : '';
+    }
+  }).filter(Boolean);
+
   return {
     id: String(t.id),
     user_id: userId,
@@ -44,7 +63,7 @@ function transactionToDb(t: any, userId: string) {
     payment_mode: t.paymentMode || 'upi',
     note: t.note || '',
     tags: Array.isArray(t.tags) ? t.tags : [],
-    attachments: Array.isArray(t.attachments) ? t.attachments : [],
+    attachments: sanitizedAttachments,
     reference_no: t.referenceNo || '',
     status: t.status || 'completed',
     created_by: t.createdBy || '',
@@ -68,7 +87,7 @@ function productToDb(p: any, userId: string) {
     unit: p.unit || 'pcs',
     supplier: p.supplier || '',
     location: p.location || '',
-    image_url: p.imageUrl || '',
+    image_url: p.imageUrl && !p.imageUrl.startsWith('data:') ? p.imageUrl : '',
     updated_at: p.updatedAt || new Date().toISOString(),
   };
 }
@@ -97,14 +116,14 @@ function invoiceToDb(inv: any, userId: string) {
     paid_amount: Number(inv.paidAmount) || 0,
     status: inv.status || 'unpaid',
     payment_date: inv.paymentDate || null,
-    receipt_url: inv.receiptUrl || null,
+    receipt_url: inv.receiptUrl && !inv.receiptUrl.startsWith('data:') ? inv.receiptUrl : null,
     receipt_name: inv.receiptName || null,
     receipt_type: inv.receiptType || null,
     status_history: Array.isArray(inv.statusHistory) ? inv.statusHistory : [],
     applied_charges: Array.isArray(inv.appliedCharges) ? inv.appliedCharges : [],
     notes: inv.notes || null,
     terms: inv.terms || null,
-    upi_payment_qr: inv.upiPaymentQr || null,
+    upi_payment_qr: inv.upiPaymentQr && !inv.upiPaymentQr.startsWith('data:') ? inv.upiPaymentQr : null,
     stock_deducted: Boolean(inv.stockDeducted),
     created_at: inv.createdAt || new Date().toISOString(),
   };
@@ -120,8 +139,8 @@ function expenseToDb(e: any, userId: string) {
     date: e.date || new Date().toISOString().split('T')[0],
     payment_mode: e.paymentMode || 'cash',
     notes: e.notes || null,
-    receipt_url: e.receiptUrl || null,
-    receipt_urls: Array.isArray(e.receiptUrls) ? e.receiptUrls : [],
+    receipt_url: e.receiptUrl && !e.receiptUrl.startsWith('data:') ? e.receiptUrl : null,
+    receipt_urls: Array.isArray(e.receiptUrls) ? e.receiptUrls.filter((u: any) => typeof u === 'string' && !u.startsWith('data:')) : [],
     is_recurring: Boolean(e.isRecurring),
     recurring_frequency: e.recurringFrequency || null,
     tags: Array.isArray(e.tags) ? e.tags : [],
@@ -140,7 +159,7 @@ function savingsGoalToDb(s: any, userId: string) {
     deadline: s.deadline || '',
     notes: s.notes || null,
     icon: s.icon || null,
-    document_url: s.documentUrl || null,
+    document_url: s.documentUrl && !s.documentUrl.startsWith('data:') ? s.documentUrl : null,
     document_name: s.documentName || null,
     document_type: s.documentType || null,
     deposits: Array.isArray(s.deposits) ? s.deposits : [],
@@ -175,7 +194,7 @@ function documentToDb(d: any, userId: string) {
     user_id: userId,
     title: d.title || '',
     category: d.category || 'general',
-    file_url: d.fileUrl || '',
+    file_url: d.fileUrl && !d.fileUrl.startsWith('data:') ? d.fileUrl : '',
     file_type: d.fileType || '',
     file_size: d.fileSize || '',
     related_entity_id: d.relatedEntityId || null,
@@ -195,7 +214,7 @@ function noteToDb(n: any, userId: string) {
     category: n.category || 'General',
     color: n.color || 'amber',
     is_pinned: Boolean(n.isPinned),
-    attached_image: n.attachedImage || null,
+    attached_image: n.attachedImage && !n.attachedImage.startsWith('data:') ? n.attachedImage : null,
     created_at: n.createdAt || new Date().toISOString(),
     updated_at: n.updatedAt || new Date().toISOString(),
   };
@@ -226,7 +245,7 @@ function passwordToDb(p: any, userId: string) {
     username: p.username || '',
     password: p.password || '',
     recovery_key: p.recoveryKey || null,
-    attached_image: p.attachedImage || null,
+    attached_image: p.attachedImage && !p.attachedImage.startsWith('data:') ? p.attachedImage : null,
     website_url: p.websiteUrl || null,
     notes: p.notes || null,
     category: p.category || 'Business',
@@ -247,6 +266,7 @@ function customerDriveFolderToDb(f: any, userId: string) {
 }
 
 function customerDriveFileToDb(f: any, userId: string) {
+  const safeUrl = f.url && !f.url.startsWith('data:') ? f.url : (f.driveFileId ? `https://drive.google.com/file/d/${f.driveFileId}/view` : null);
   return {
     id: String(f.id),
     user_id: userId,
@@ -255,8 +275,8 @@ function customerDriveFileToDb(f: any, userId: string) {
     size: Number(f.size) || 0,
     type: f.type || '',
     mime_type: f.mimeType || null,
-    url: f.url || f.driveFileId || null,
-    data_url: f.dataUrl || '',
+    url: safeUrl,
+    data_url: null, // Keep Supabase Postgres clean and lightweight without multi-megabyte base64
     folder_id: f.folderId || null,
     created_at: f.createdAt || new Date().toISOString(),
     uploaded_at: f.uploadedAt || new Date().toISOString(),

@@ -1,11 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedDriveForUser } from '@/lib/driveTokenHelper';
-import { ensureSmartKhataFolders, uploadAttachmentFile, getOrCreateCustomerFolder } from '@/lib/googleDrive';
+import { ensureSmartKhataFolders, uploadAttachmentFile, getOrCreateCustomerFolder, getOrCreateCategoryFolder } from '@/lib/googleDrive';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { userId: reqUserId, fileName, fileData, mimeType, customerName, customerId } = body;
+    const {
+      userId: reqUserId,
+      fileName,
+      fileData,
+      mimeType,
+      customerName,
+      customerId,
+      folderName, // e.g. "AADHAR CARD", "BILLS", "DOCUMENTS"
+      category,   // e.g. "Invoices", "Vault", "Expenses", "Savings"
+      appFileId,
+      uploadedAt,
+    } = body;
     const userId = reqUserId || req.cookies.get('skp_auth_session')?.value;
 
     if (!userId) {
@@ -38,15 +49,32 @@ export async function POST(req: NextRequest) {
       filesFolderId = folders.filesId;
     }
 
-    // If customer context is provided, store in Customer CRM/<Customer Name>/
+    // Determine target folder in Google Drive:
     let targetFolderId = filesFolderId;
     let targetFolderName = 'SmartKhata Pro/Files';
+
     if (customerName || customerId) {
+      // 1. Customer CRM Folder (/Files/Customer CRM/<Customer Name>/<Subfolder>)
       try {
-        targetFolderId = await getOrCreateCustomerFolder(drive, filesFolderId, customerName || 'Customer', customerId);
-        targetFolderName = `SmartKhata Pro/Files/Customer CRM/${customerName || 'Customer'}`;
+        targetFolderId = await getOrCreateCustomerFolder(
+          drive,
+          filesFolderId,
+          customerName || 'Customer',
+          customerId,
+          folderName
+        );
+        targetFolderName = `SmartKhata Pro/Files/Customer CRM/${customerName || 'Customer'}${folderName ? `/${folderName}` : ''}`;
       } catch (fldErr) {
         console.warn('Could not create/locate customer folder in Drive, using root Files folder:', fldErr);
+        targetFolderId = filesFolderId;
+      }
+    } else if (category) {
+      // 2. Category Folder (/Files/Invoices, /Files/Vault, /Files/Expenses, /Files/Savings)
+      try {
+        targetFolderId = await getOrCreateCategoryFolder(drive, filesFolderId, category);
+        targetFolderName = `SmartKhata Pro/Files/${category}`;
+      } catch (catErr) {
+        console.warn('Could not create/locate category folder in Drive, using root Files folder:', catErr);
         targetFolderId = filesFolderId;
       }
     }
@@ -67,13 +95,18 @@ export async function POST(req: NextRequest) {
       buffer = Buffer.from(fileData, 'base64');
     }
 
-    // Upload to Google Drive
+    // Upload to Google Drive with custom timestamp and appFileId metadata
     const uploadResult = await uploadAttachmentFile(
       drive,
       targetFolderId,
       fileName,
       actualMime,
-      buffer
+      buffer,
+      {
+        appFileId,
+        uploadedAt: uploadedAt || new Date().toISOString(),
+        description: `SmartKhata Pro [${targetFolderName}] | Uploaded: ${uploadedAt || new Date().toISOString()}`,
+      }
     );
 
     return NextResponse.json({

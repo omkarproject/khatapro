@@ -586,7 +586,10 @@ export default function InvoicesPage() {
       setStatusModalReceiptUrl(result);
       setStatusModalReceiptName(file.name);
       setStatusModalReceiptType(type);
-      uploadToDriveFiles(file.name, result, file.type);
+      uploadToDriveFiles(file.name, result, file.type, {
+        category: 'Invoices',
+        uploadedAt: new Date().toISOString(),
+      });
     };
     reader.readAsDataURL(file);
   };

@@ -129,7 +129,7 @@ export default function DocumentsPage() {
     }
   };
 
-  const handleUploadSubmit = (e: React.FormEvent) => {
+  const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
       addToast('Title Required', 'Please provide a file name or title.', 'error');
@@ -140,28 +140,50 @@ export default function DocumentsPage() {
     const finalUrl = fileDataUrl || '/docs/sample_document.pdf';
     const finalSize = fileSizeStr || '1.2 MB';
     const finalType = fileTypeStr || (finalTitle.toLowerCase().endsWith('.pdf') ? 'PDF' : 'DOC');
+    const docId = `doc_${Date.now()}`;
+    const nowIso = new Date().toISOString();
+
+    let driveFileId: string | undefined = undefined;
+    if (finalUrl && finalUrl.startsWith('data:')) {
+      try {
+        const driveRes = await uploadToDriveFiles(finalTitle, finalUrl, finalType, {
+          category: 'Vault',
+          appFileId: docId,
+          uploadedAt: nowIso,
+        });
+        if (driveRes.success && driveRes.fileId) {
+          driveFileId = driveRes.fileId;
+        }
+      } catch (err) {
+        console.warn('Vault Drive upload failed:', err);
+      }
+    }
 
     const newDoc: DocumentItem = {
-      id: `doc_${Date.now()}`,
+      id: docId,
       title: finalTitle,
       category,
       fileUrl: finalUrl,
       fileType: finalType,
       fileSize: finalSize,
       relatedEntityName: entityName.trim() || 'General Business File',
-      uploadedAt: new Date().toISOString(),
+      driveFileId,
+      uploadedAt: nowIso,
     };
 
     addDocument(newDoc);
-    uploadToDriveFiles(finalTitle, finalUrl, finalType);
     setIsUploadModalOpen(false);
     resetUploadForm();
   };
 
-  const handleDeleteDoc = (id: string, docTitle: string) => {
+  const handleDeleteDoc = (id: string, docTitle: string, driveFileId?: string) => {
     if (confirm(`Are you sure you want to delete "${docTitle}" from your Document Vault?`)) {
       deleteDocument(id);
-      deleteFromDriveFiles({ fileName: docTitle });
+      if (driveFileId) {
+        deleteFromDriveFiles({ fileId: driveFileId });
+      } else {
+        deleteFromDriveFiles({ fileName: docTitle });
+      }
     }
   };
 
@@ -309,7 +331,7 @@ export default function DocumentsPage() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDeleteDoc(doc.id, doc.title);
+                        handleDeleteDoc(doc.id, doc.title, doc.driveFileId);
                       }}
                       className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
                       title={`Delete ${doc.title}`}
@@ -410,7 +432,7 @@ export default function DocumentsPage() {
               <button
                 type="button"
                 onClick={() => {
-                  handleDeleteDoc(previewDoc.id, previewDoc.title);
+                  handleDeleteDoc(previewDoc.id, previewDoc.title, previewDoc.driveFileId);
                   setPreviewDoc(null);
                 }}
                 className="px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 flex items-center gap-1.5 transition-colors cursor-pointer"

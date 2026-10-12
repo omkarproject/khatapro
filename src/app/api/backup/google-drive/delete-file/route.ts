@@ -36,30 +36,24 @@ export async function POST(req: NextRequest) {
 
     let deletedCount = 0;
 
-    // 1. Delete by fileId if provided
+    // 1. Delete by unique fileId if provided (target exact file)
     if (fileId) {
       const ok = await deleteDriveFile(drive, fileId);
       if (ok) deletedCount++;
-    }
-
-    // 2. Delete by array of fileIds
-    if (Array.isArray(fileIds) && fileIds.length > 0) {
+    } else if (Array.isArray(fileIds) && fileIds.length > 0) {
+      // 2. Delete by array of fileIds (target exact files)
       for (const id of fileIds) {
         if (id) {
           const ok = await deleteDriveFile(drive, id);
           if (ok) deletedCount++;
         }
       }
-    }
-
-    // 3. Delete by fileName inside Files folder
-    if (fileName && filesFolderId) {
-      const count = await deleteDriveFilesByName(drive, filesFolderId, fileName);
+    } else if (fileName && filesFolderId) {
+      // 3. Fallback: Only if fileId was NOT provided, delete at most ONE file with that name
+      const count = await deleteDriveFilesByName(drive, filesFolderId, fileName, 1);
       deletedCount += count;
-    }
-
-    // 4. Delete by array of fileNames inside Files folder
-    if (Array.isArray(fileNames) && fileNames.length > 0 && filesFolderId) {
+    } else if (Array.isArray(fileNames) && fileNames.length > 0 && filesFolderId) {
+      // 4. Fallback: Only if fileIds were NOT provided
       const count = await deleteDriveFilesByNames(drive, filesFolderId, fileNames);
       deletedCount += count;
     }

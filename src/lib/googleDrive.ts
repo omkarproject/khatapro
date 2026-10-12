@@ -278,13 +278,14 @@ export async function getDriveStorageQuota(drive: any): Promise<{
 
 /**
  * Creates or retrieves the dedicated customer folder inside SmartKhata Pro/Files/Customer CRM/<Customer Name>/
- * This prevents filename collision across different customers and keeps files organized per customer.
+ * Supports optional subfolderName (e.g. AADHAR CARD, BILLS, DOCUMENTS) to reflect Customer Drive folders.
  */
 export async function getOrCreateCustomerFolder(
   drive: any,
   filesFolderId: string,
   customerName: string,
-  customerId?: string
+  customerId?: string,
+  subfolderName?: string
 ): Promise<string> {
   const findOrCreate = async (name: string, parentId: string): Promise<string> => {
     const safeName = name.replace(/'/g, "\\'");
@@ -311,31 +312,76 @@ export async function getOrCreateCustomerFolder(
 
   // 2. Ensure customer-specific folder exists inside "Customer CRM"
   const cleanCustomerName = (customerName || 'General Customer').trim() || 'General Customer';
-  // Include customer ID snippet if available to avoid conflict with duplicate customer names
   const folderName = customerId ? `${cleanCustomerName} (${customerId.slice(0, 8)})` : cleanCustomerName;
-  return await findOrCreate(folderName, crmRootFolderId);
+  const customerFolderId = await findOrCreate(folderName, crmRootFolderId);
+
+  // 3. If a subfolder name (e.g. "AADHAR CARD", "BILLS", "DOCUMENTS") is provided, place inside that subfolder
+  if (subfolderName && subfolderName.trim()) {
+    return await findOrCreate(subfolderName.trim().toUpperCase(), customerFolderId);
+  }
+
+  return customerFolderId;
+}
+
+/**
+ * Creates or retrieves category folders under SmartKhata Pro/Files/ (Invoices, Vault, Expenses, Savings)
+ */
+export async function getOrCreateCategoryFolder(
+  drive: any,
+  filesFolderId: string,
+  category: 'Invoices' | 'Vault' | 'Expenses' | 'Savings' | string
+): Promise<string> {
+  const safeName = category.replace(/'/g, "\\'");
+  const res = await drive.files.list({
+    q: `'${filesFolderId}' in parents and name = '${safeName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+    fields: 'files(id, name)',
+  });
+  if (res.data.files && res.data.files.length > 0) {
+    return res.data.files[0].id;
+  }
+  const createRes = await drive.files.create({
+    requestBody: {
+      name: category,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [filesFolderId],
+    },
+    fields: 'id',
+  });
+  return createRes.data.id;
 }
 
 /**
  * Uploads a user-attached file (PDF, Image, Receipt, Bill, KYC document)
- * to SmartKhata Pro/Files/ (or a specific customer folder inside Files/Customer CRM/)
+ * to SmartKhata Pro/Files/ (or a specific customer/category folder)
  */
 export async function uploadAttachmentFile(
   drive: any,
   parentFolderId: string,
   fileName: string,
   mimeType: string,
-  fileBuffer: Buffer
+  fileBuffer: Buffer,
+  extraMetadata?: {
+    appFileId?: string;
+    uploadedAt?: string;
+    description?: string;
+  }
 ): Promise<{ fileId: string; webViewLink?: string; webContentLink?: string; size: number }> {
   const stream = new Readable();
   stream.push(fileBuffer);
   stream.push(null);
 
-  const fileMetadata = {
+  const fileMetadata: any = {
     name: fileName,
     parents: [parentFolderId],
-    description: 'SmartKhata Pro User Attachment',
+    description: extraMetadata?.description || `SmartKhata Pro User Attachment [${extraMetadata?.uploadedAt || new Date().toISOString()}]`,
   };
+
+  if (extraMetadata?.appFileId) {
+    fileMetadata.appProperties = {
+      appFileId: extraMetadata.appFileId,
+      uploadedAt: extraMetadata.uploadedAt || new Date().toISOString(),
+    };
+  }
 
   const media = {
     mimeType: mimeType || 'application/octet-stream',
@@ -462,7 +508,7 @@ export async function deleteDriveFile(drive: any, fileId: string): Promise<boole
 /**
  * Finds and deletes all files matching a specific fileName inside SmartKhata Pro folders
  */
-export async function deleteDriveFilesByName(drive: any, filesFolderId: string, fileName: string): Promise<number> {
+export async function deleteDriveFilesByName(drive: any, filesFolderId: string, fileName: string, maxCount = 1): Promise<number> {
   if (!fileName) return 0;
   try {
     const safeName = fileName.replace(/'/g, "\\'");
@@ -470,7 +516,8 @@ export async function deleteDriveFilesByName(drive: any, filesFolderId: string, 
     let query = `'${filesFolderId}' in parents and name = '${safeName}' and trashed = false`;
     let res = await drive.files.list({
       q: query,
-      fields: 'files(id, name)',
+      fields: 'files(id, name, createdTime)',
+      orderBy: 'createdTime asc',
     });
 
     let files = res.data.files || [];
@@ -478,13 +525,15 @@ export async function deleteDriveFilesByName(drive: any, filesFolderId: string, 
       // Search anywhere in user's Drive for this specific file name
       res = await drive.files.list({
         q: `name = '${safeName}' and trashed = false`,
-        fields: 'files(id, name)',
+        fields: 'files(id, name, createdTime)',
+        orderBy: 'createdTime asc',
       });
       files = res.data.files || [];
     }
 
     let count = 0;
     for (const f of files) {
+      if (maxCount > 0 && count >= maxCount) break;
       try {
         await drive.files.delete({ fileId: f.id });
         count++;
@@ -507,7 +556,7 @@ export async function deleteDriveFilesByNames(drive: any, filesFolderId: string,
   let totalDeleted = 0;
   for (const name of fileNames) {
     if (name) {
-      totalDeleted += await deleteDriveFilesByName(drive, filesFolderId, name);
+      totalDeleted += await deleteDriveFilesByName(drive, filesFolderId, name, 1);
     }
   }
   return totalDeleted;

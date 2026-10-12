@@ -6,8 +6,22 @@ export async function uploadToDriveFiles(
   fileName: string,
   fileData: string, // data:image/png;base64,... or raw base64
   mimeType?: string,
-  userId?: string,
-  customerContext?: { customerName?: string; customerId?: string }
+  userIdOrOptions?: string | {
+    customerName?: string;
+    customerId?: string;
+    folderName?: string;
+    category?: 'Invoices' | 'Vault' | 'Expenses' | 'Savings' | string;
+    appFileId?: string;
+    uploadedAt?: string;
+  },
+  maybeOptions?: {
+    customerName?: string;
+    customerId?: string;
+    folderName?: string;
+    category?: 'Invoices' | 'Vault' | 'Expenses' | 'Savings' | string;
+    appFileId?: string;
+    uploadedAt?: string;
+  }
 ): Promise<{
   success: boolean;
   uploadedToDrive?: boolean;
@@ -18,7 +32,24 @@ export async function uploadToDriveFiles(
   message?: string;
 }> {
   try {
-    const effectiveUserId = userId || (typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('skp_auth_user') || '{}')?.id) : undefined);
+    let effectiveUserId: string | undefined;
+    let options: {
+      customerName?: string;
+      customerId?: string;
+      folderName?: string;
+      category?: string;
+      appFileId?: string;
+      uploadedAt?: string;
+    } | undefined;
+
+    if (typeof userIdOrOptions === 'object' && userIdOrOptions !== null) {
+      options = userIdOrOptions;
+      effectiveUserId = typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('skp_auth_user') || '{}')?.id) : undefined;
+    } else {
+      effectiveUserId = (typeof userIdOrOptions === 'string' ? userIdOrOptions : undefined) || 
+        (typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('skp_auth_user') || '{}')?.id) : undefined);
+      options = maybeOptions;
+    }
     const res = await fetch('/api/backup/google-drive/upload-file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -27,8 +58,12 @@ export async function uploadToDriveFiles(
         fileName,
         fileData,
         mimeType,
-        customerName: customerContext?.customerName,
-        customerId: customerContext?.customerId,
+        customerName: options?.customerName,
+        customerId: options?.customerId,
+        folderName: options?.folderName,
+        category: options?.category,
+        appFileId: options?.appFileId,
+        uploadedAt: options?.uploadedAt,
       }),
     });
 

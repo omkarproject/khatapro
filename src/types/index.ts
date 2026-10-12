@@ -241,6 +241,7 @@ export interface DocumentItem {
   fileSize: string;
   relatedEntityId?: string;
   relatedEntityName?: string;
+  driveFileId?: string;
   uploadedAt: string;
 }
 
