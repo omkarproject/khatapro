@@ -52,6 +52,7 @@ import {
   Zap,
   HardHat
 } from 'lucide-react';
+import GoogleDriveBackupPanel from '@/components/GoogleDriveBackupPanel';
 
 export default function SettingsPage() {
   const { settings, updateSettings, saveDefaultUpiAndQr, profile, setProfile, addToast, syncWithDatabase, currentUser, refreshData } = useApp();
@@ -1892,12 +1893,11 @@ export default function SettingsPage() {
           </div>
 
           {/* Provider Selection Radio Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
-              { id: 'local', label: 'Local / Offline', desc: '0ms latency, IndexedDB storage' },
-              { id: 'supabase', label: 'Supabase Cloud', desc: 'PostgreSQL + Auth + Storage' },
+              { id: 'supabase', label: 'Supabase Cloud (Primary)', desc: 'PostgreSQL + Auth + Storage + RLS' },
+              { id: 'local', label: 'Local / Offline', desc: '0ms latency, browser IndexedDB storage' },
               { id: 'firebase', label: 'Firebase Cloud', desc: 'Firestore + Firebase Auth' },
-              { id: 'mongodb', label: 'MongoDB Atlas', desc: 'NoSQL Document DB + Cloud' },
             ].map((p) => (
               <label
                 key={p.id}
@@ -2255,7 +2255,7 @@ export default function SettingsPage() {
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                 <span className="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-                  Active Database: {settings.backendProvider === 'mongodb' ? 'MongoDB Atlas (Live Sync)' : settings.backendProvider === 'supabase' ? 'Supabase PostgreSQL' : settings.backendProvider === 'firebase' ? 'Firebase Firestore' : 'Offline / Local Database'}
+                  Active Database: {settings.backendProvider === 'supabase' ? 'Supabase PostgreSQL (Cloud Active)' : settings.backendProvider === 'firebase' ? 'Firebase Firestore' : settings.backendProvider === 'local' ? 'Offline / Local Database' : 'Supabase PostgreSQL (Primary)'}
                 </span>
               </div>
               <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
@@ -2274,6 +2274,9 @@ export default function SettingsPage() {
               </span>
             </div>
           </div>
+          
+          {/* SECTION 1: GOOGLE DRIVE BACKUP & RESTORE */}
+          <GoogleDriveBackupPanel />
 
           {/* TWO CLEAN MANUAL OPTIONS: 1) EXPORT FULL JSON  2) IMPORT JSON */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -85,7 +85,7 @@ function setLocalItem<T>(rawKey: string, value: T): void {
 }
 
 export const getCleanDefaultSettings = (businessName: string = '', phone: string = '', email: string = ''): SystemSettings => ({
-  backendProvider: 'mongodb',
+  backendProvider: 'supabase',
   mongodbUri: 'mongodb+srv://smartkhata:KhataPass%402026@cluster0.7evxtf6.mongodb.net/?appName=Cluster0',
   mongodbDbName: 'smartkhata_db',
   businessName: businessName || '',

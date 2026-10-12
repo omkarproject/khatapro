@@ -100,7 +100,7 @@ export default function LoginPage() {
         )}
         <span className="text-[11px] font-mono font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-          MongoDB Cloud Connected
+          Cloud Ledger Connected
         </span>
       </div>
 
@@ -119,7 +119,7 @@ export default function LoginPage() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono uppercase tracking-wider font-extrabold text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/80 px-2 py-0.5 rounded-md border border-cyan-200 dark:border-cyan-800/60 flex items-center gap-1">
-                  <Database className="w-3 h-3" /> MongoDB Atlas Multi-Tenant
+                  <Database className="w-3 h-3" /> Supabase Cloud PostgreSQL
                 </span>
               </div>
               <h1 className="text-2xl font-black text-slate-900 dark:text-white mt-1">
