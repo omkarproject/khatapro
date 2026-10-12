@@ -117,7 +117,7 @@ export default function AuthModal() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono uppercase tracking-wider font-extrabold text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/80 px-2 py-0.5 rounded-md border border-cyan-200 dark:border-cyan-800/60 flex items-center gap-1">
-                  <Database className="w-3 h-3" /> MongoDB Atlas Cloud
+                  <Database className="w-3 h-3" /> Supabase Cloud PostgreSQL
                 </span>
               </div>
               <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1">
@@ -130,7 +130,7 @@ export default function AuthModal() {
               ? 'Manage your active cloud session and isolated multi-tenant records.'
               : mode === 'signin'
               ? 'Access your private ledger, customers, and cloud-synced records.'
-              : 'Every user gets an isolated database ledger in MongoDB Atlas.'}
+              : 'Every user gets an isolated database ledger in Supabase Cloud.'}
           </p>
 
           {/* Mode Tabs (Sign In vs Sign Up) */}
@@ -195,7 +195,7 @@ export default function AuthModal() {
                   <div className="p-2 rounded-xl bg-white dark:bg-slate-800/50">
                     <span className="text-slate-400 block text-[10px]">Cloud Database</span>
                     <span className="font-bold text-emerald-500 flex items-center gap-1 mt-0.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" /> MongoDB Atlas
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Supabase Cloud
                     </span>
                   </div>
                   <div className="p-2 rounded-xl bg-white dark:bg-slate-800/50">
@@ -219,7 +219,7 @@ export default function AuthModal() {
                   className="w-full py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all cursor-pointer"
                 >
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
-                  <span>Sync All Records to MongoDB Atlas Now</span>
+                  <span>Sync All Records to Supabase Cloud Now</span>
                 </button>
 
                 <button
@@ -352,7 +352,7 @@ export default function AuthModal() {
                 {isLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Connecting to MongoDB Atlas...</span>
+                    <span>Connecting to Supabase Cloud...</span>
                   </>
                 ) : (
                   <>

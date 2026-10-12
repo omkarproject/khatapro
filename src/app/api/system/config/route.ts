@@ -1,80 +1,101 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/mongodb';
+import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 
-// GET: Returns the global system config (maintenanceMode & betaTestingEnabled)
+const DEFAULT_CONFIG = {
+  maintenanceMode: {
+    enabled: false,
+    durationMinutes: 15,
+    reason: 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️',
+  },
+  betaTestingEnabled: false,
+};
+
+// GET: Returns the global system config (maintenanceMode & betaTestingEnabled) from Supabase
 export async function GET() {
   try {
-    const { db } = await connectToDatabase();
-    const configDoc = await db.collection('system_config').findOne({ id: 'global_config' });
+    if (isSupabaseConfigured()) {
+      const supabase = getSupabaseAdmin();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('global_config')
+          .select('*')
+          .eq('id', 'global_config')
+          .single();
 
-    if (configDoc) {
-      return NextResponse.json({
-        success: true,
-        maintenanceMode: configDoc.maintenanceMode || {
-          enabled: false,
-          durationMinutes: 15,
-          reason: 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️',
-        },
-        betaTestingEnabled: Boolean(configDoc.betaTestingEnabled),
-      });
+        if (data && !error) {
+          return NextResponse.json({
+            success: true,
+            maintenanceMode: data.maintenance_mode || DEFAULT_CONFIG.maintenanceMode,
+            betaTestingEnabled: Boolean(data.beta_testing_enabled),
+          });
+        }
+      }
     }
 
     return NextResponse.json({
       success: true,
-      maintenanceMode: {
-        enabled: false,
-        durationMinutes: 15,
-        reason: 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️',
-      },
-      betaTestingEnabled: false,
+      ...DEFAULT_CONFIG,
     });
   } catch (error: any) {
     console.error('System config GET error:', error);
-    // Return safe default if database connection is slow
     return NextResponse.json({
       success: true,
-      maintenanceMode: {
-        enabled: false,
-        durationMinutes: 15,
-        reason: 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️',
-      },
-      betaTestingEnabled: false,
+      ...DEFAULT_CONFIG,
     });
   }
 }
 
-// POST: Save or update global system config
+// POST: Save or update global system config in Supabase
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { maintenanceMode, betaTestingEnabled } = body;
 
-    const { db } = await connectToDatabase();
-    
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({
+        success: false,
+        message: 'Supabase Cloud Database is not configured',
+      }, { status: 500 });
+    }
+
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return NextResponse.json({
+        success: false,
+        message: 'Could not connect to Supabase Cloud Database',
+      }, { status: 500 });
+    }
+
     const updatePayload: any = {
-      updatedAt: new Date().toISOString(),
+      id: 'global_config',
+      updated_at: new Date().toISOString(),
     };
 
     if (maintenanceMode !== undefined) {
-      updatePayload.maintenanceMode = maintenanceMode;
+      updatePayload.maintenance_mode = maintenanceMode;
     }
 
     if (betaTestingEnabled !== undefined) {
-      updatePayload.betaTestingEnabled = Boolean(betaTestingEnabled);
+      updatePayload.beta_testing_enabled = Boolean(betaTestingEnabled);
     }
 
-    await db.collection('system_config').updateOne(
-      { id: 'global_config' },
-      { $set: updatePayload },
-      { upsert: true }
-    );
+    const { data, error } = await supabase
+      .from('global_config')
+      .upsert(updatePayload, { onConflict: 'id' })
+      .select()
+      .single();
 
-    const updated = await db.collection('system_config').findOne({ id: 'global_config' });
+    if (error) {
+      return NextResponse.json({
+        success: false,
+        message: error.message || 'Failed to update system config in Supabase',
+      }, { status: 500 });
+    }
 
     return NextResponse.json({
       success: true,
-      maintenanceMode: updated?.maintenanceMode,
-      betaTestingEnabled: Boolean(updated?.betaTestingEnabled),
+      maintenanceMode: data?.maintenance_mode,
+      betaTestingEnabled: Boolean(data?.beta_testing_enabled),
     });
   } catch (error: any) {
     console.error('System config POST error:', error);

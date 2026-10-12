@@ -175,7 +175,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const openAuthModal = () => setIsAuthModalOpen(true);
   const closeAuthModal = () => setIsAuthModalOpen(false);
 
-  // Sync all in-memory and local data to MongoDB Atlas or active database
+  // Sync all in-memory and local data to Supabase Cloud PostgreSQL
   const syncWithDatabase = async (targetUser?: UserProfile | null) => {
     const curSettings = StorageService.getSettings();
     // In Local/Offline mode, keep data purely local (no cloud sync overhead)
@@ -226,7 +226,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Load user data from MongoDB Atlas / Cloud DB
+  // Load user data from Supabase Cloud PostgreSQL
   const loadUserDataFromCloud = async (userId: string) => {
     try {
       const curSettings = StorageService.getSettings();
@@ -305,9 +305,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProfileState(user);
     setActiveRole('super_admin');
 
-    // Load isolated data from MongoDB Atlas for this user
+    // Load isolated data from Supabase Cloud for this user
     await loadUserDataFromCloud(user.id);
-    addToast('Signed In Successfully', `Welcome back, ${user.name}! Your MongoDB Atlas ledger is loaded.`, 'success');
+    addToast('Signed In Successfully', `Welcome back, ${user.name}! Your Supabase Cloud ledger is loaded.`, 'success');
   };
 
   // Register handler
@@ -340,7 +340,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProfileState(user);
     setActiveRole('super_admin');
 
-    // Load user's fresh database records from MongoDB Atlas
+    // Load user's fresh database records from Supabase Cloud
     await loadUserDataFromCloud(user.id);
     addToast('Account Created & Database Initialized', `Welcome, ${user.name}! Your isolated cloud ledger is active.`, 'success');
   };

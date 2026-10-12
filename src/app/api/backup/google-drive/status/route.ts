@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserDriveTokens } from '@/lib/driveTokenHelper';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { connectToDatabase } from '@/lib/mongodb';
 import { isGoogleDriveConfigured } from '@/lib/googleDrive';
 
 export async function GET(req: NextRequest) {
@@ -23,7 +22,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Fetch backup history
+    // Fetch backup history from Supabase
     let history: any[] = [];
     const supabase = getSupabaseAdmin();
     if (supabase) {
@@ -35,20 +34,9 @@ export async function GET(req: NextRequest) {
           .order('created_at', { ascending: false })
           .limit(10);
         if (data) history = data;
-      } catch {}
-    }
-
-    if (history.length === 0) {
-      try {
-        const { db } = await connectToDatabase();
-        const docs = await db
-          .collection('google_drive_backups')
-          .find({ user_id: userId })
-          .sort({ created_at: -1 })
-          .limit(10)
-          .toArray();
-        history = docs.map(({ _id, ...rest }) => rest);
-      } catch {}
+      } catch (err) {
+        console.warn('Error reading google_drive_backups history:', err);
+      }
     }
 
     const lastBackupAt = history.length > 0 ? history[0].created_at : null;

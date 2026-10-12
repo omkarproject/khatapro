@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/mongodb';
+import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, email, currentPassword, newPassword } = await req.json();
+    const { userId, email, newPassword } = await req.json();
 
     if (!newPassword || newPassword.trim().length < 4) {
       return NextResponse.json(
@@ -12,54 +12,58 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { db } = await connectToDatabase();
-    const usersCol = db.collection('users');
-
-    // Find user by userId or email
-    let query: any = null;
-    if (userId) {
-      query = { $or: [{ id: userId }, { _id: userId }] };
-    } else if (email) {
-      query = { email: email.toLowerCase().trim() };
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        { success: false, message: 'Supabase Cloud Database is not configured' },
+        { status: 500 }
+      );
     }
 
-    if (!query) {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return NextResponse.json(
+        { success: false, message: 'Could not connect to Supabase Cloud Database' },
+        { status: 500 }
+      );
+    }
+
+    let targetUserId = userId;
+
+    // If userId not provided, locate userId by email from profiles table
+    if (!targetUserId && email) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', email.toLowerCase().trim())
+        .single();
+
+      if (profile?.id) {
+        targetUserId = profile.id;
+      }
+    }
+
+    if (!targetUserId) {
       return NextResponse.json(
         { success: false, message: 'User identifier (userId or email) is required' },
         { status: 400 }
       );
     }
 
-    const user = await usersCol.findOne(query);
-    if (!user) {
+    // Update password in Supabase Auth via Admin API
+    const { error } = await supabase.auth.admin.updateUserById(targetUserId, {
+      password: newPassword.trim(),
+    });
+
+    if (error) {
       return NextResponse.json(
-        { success: false, message: 'User account not found in database' },
-        { status: 404 }
+        { success: false, message: error.message || 'Failed to update password in Supabase' },
+        { status: 400 }
       );
     }
-
-    // If current password is provided, verify it matches
-    if (currentPassword && user.password && user.password !== currentPassword) {
-      return NextResponse.json(
-        { success: false, message: 'Current password is incorrect. Please try again.' },
-        { status: 401 }
-      );
-    }
-
-    // Update password in MongoDB
-    await usersCol.updateOne(
-      { _id: user._id },
-      {
-        $set: {
-          password: newPassword.trim(),
-          updatedAt: new Date().toISOString(),
-        },
-      }
-    );
 
     return NextResponse.json({
       success: true,
-      message: 'Password updated and saved successfully in MongoDB Atlas!',
+      message: 'Password updated and saved successfully in Supabase Cloud PostgreSQL!',
     });
   } catch (error: any) {
     console.error('Password update error:', error);

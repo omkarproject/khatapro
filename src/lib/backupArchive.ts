@@ -59,10 +59,8 @@ export async function createBackupArchive(data: FullBusinessData): Promise<{
   // Sanitize data: Never include tokens or credentials
   const cleanSettings = { ...(data.settings || {}) };
   delete cleanSettings.supabaseAnonKey;
+  delete cleanSettings.supabaseServiceRoleKey;
   delete cleanSettings.firebaseApiKey;
-  delete cleanSettings.mongodbUri;
-  delete cleanSettings.telegramBackup?.botToken;
-  delete cleanSettings.telegramBackup?.chatId;
 
   const cleanProfile = { ...(data.profile || {}) };
   delete cleanProfile.password;

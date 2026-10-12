@@ -154,7 +154,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
                   </span>
                   <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    {settings.backendProvider.toUpperCase()}
+                    SUPABASE
                   </span>
                 </div>
                 <div className="text-xs font-bold text-slate-900 dark:text-white truncate" suppressHydrationWarning>
@@ -177,7 +177,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
             <div className="flex flex-col items-center gap-2 py-1">
               <div
                 className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center cursor-pointer"
-                title={`Active: ${settings.backendProvider.toUpperCase()} (${settings.businessName || 'SmartKhata'})`}
+                title={`Active: SUPABASE (${settings.businessName || 'SmartKhata'})`}
               >
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               </div>

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { connectToDatabase } from '@/lib/mongodb';
 import { decryptToken } from '@/lib/encryption';
 import { getDriveClient, ensureHisabKitabFolders, uploadBackupZip, uploadBackupManifest } from '@/lib/googleDrive';
 import { createBackupArchive } from '@/lib/backupArchive';
@@ -15,7 +14,7 @@ export async function POST(req: NextRequest) {
 
 async function handleCron(req: NextRequest) {
   try {
-    // 1. Validate CRON_SECRET
+    // 1. Validate CRON_SECRET if set
     const cronSecret = process.env.CRON_SECRET;
     const authHeader = req.headers.get('authorization') || '';
     const customHeader = req.headers.get('x-cron-secret') || '';
@@ -28,32 +27,23 @@ async function handleCron(req: NextRequest) {
       }
     }
 
-    // 2. Fetch all users who have Google Drive connected
-    let connectedUsers: any[] = [];
-
-    // Try Supabase first
     const supabase = getSupabaseAdmin();
-    if (supabase) {
-      try {
-        const { data } = await supabase
-          .from('google_drive_tokens')
-          .select('*')
-          .eq('is_connected', true);
-        if (data && data.length > 0) {
-          connectedUsers = data;
-        }
-      } catch {}
+    if (!supabase) {
+      return NextResponse.json({ success: false, message: 'Supabase admin client unavailable' }, { status: 500 });
     }
 
-    // Fallback or union with MongoDB
-    if (connectedUsers.length === 0) {
-      try {
-        const { db } = await connectToDatabase();
-        connectedUsers = await db
-          .collection('google_drive_tokens')
-          .find({ is_connected: true })
-          .toArray();
-      } catch {}
+    // 2. Fetch all users who have Google Drive connected from Supabase
+    let connectedUsers: any[] = [];
+    try {
+      const { data } = await supabase
+        .from('google_drive_tokens')
+        .select('*')
+        .eq('is_connected', true);
+      if (data && data.length > 0) {
+        connectedUsers = data;
+      }
+    } catch (e: any) {
+      console.error('Error fetching drive connected users:', e);
     }
 
     if (connectedUsers.length === 0) {
@@ -65,7 +55,6 @@ async function handleCron(req: NextRequest) {
       });
     }
 
-    const { db } = await connectToDatabase();
     const results: any[] = [];
 
     // 3. Process each connected user
@@ -84,52 +73,51 @@ async function handleCron(req: NextRequest) {
           manifestFolderId = folders.manifestId;
         }
 
-        // Fetch user data
+        // Fetch user data from Supabase PostgreSQL
         const [
-          customers,
-          transactions,
-          products,
-          invoices,
-          expenses,
-          savingsGoals,
-          reminders,
-          documents,
-          settingsDoc,
-          userDoc,
-          notes,
-          tasks,
-          passwords,
+          sbCust,
+          sbTxn,
+          sbProd,
+          sbInv,
+          sbExp,
+          sbSavings,
+          sbRem,
+          sbDoc,
+          sbSet,
+          sbProfile,
+          sbNotes,
+          sbTasks,
+          sbPass,
         ] = await Promise.all([
-          db.collection('customers').find({ userId }).toArray(),
-          db.collection('transactions').find({ userId }).toArray(),
-          db.collection('products').find({ userId }).toArray(),
-          db.collection('invoices').find({ userId }).toArray(),
-          db.collection('expenses').find({ userId }).toArray(),
-          db.collection('savingsGoals').find({ userId }).toArray(),
-          db.collection('reminders').find({ userId }).toArray(),
-          db.collection('documents').find({ userId }).toArray(),
-          db.collection('settings').findOne({ userId }),
-          db.collection('users').findOne({ $or: [{ id: userId }, { _id: userId }] } as any),
-          db.collection('notes').find({ userId }).toArray(),
-          db.collection('tasks').find({ userId }).toArray(),
-          db.collection('passwords').find({ userId }).toArray(),
+          supabase.from('customers').select('*').eq('user_id', userId),
+          supabase.from('transactions').select('*').eq('user_id', userId),
+          supabase.from('products').select('*').eq('user_id', userId),
+          supabase.from('invoices').select('*').eq('user_id', userId),
+          supabase.from('expenses').select('*').eq('user_id', userId),
+          supabase.from('savings_goals').select('*').eq('user_id', userId),
+          supabase.from('payment_reminders').select('*').eq('user_id', userId),
+          supabase.from('documents').select('*').eq('user_id', userId),
+          supabase.from('system_settings').select('*').eq('user_id', userId).single(),
+          supabase.from('profiles').select('*').eq('id', userId).single(),
+          supabase.from('notes').select('*').eq('user_id', userId),
+          supabase.from('tasks').select('*').eq('user_id', userId),
+          supabase.from('passwords').select('*').eq('user_id', userId),
         ]);
 
-        const cleanArray = (arr: any[]) => arr.map(({ _id, ...rest }) => rest);
         const fullData = {
-          profile: userDoc ? (({ password, _id, ...u }) => u)(userDoc) : {},
-          settings: settingsDoc ? (({ _id, ...s }) => s)(settingsDoc) : {},
-          customers: cleanArray(customers),
-          transactions: cleanArray(transactions),
-          products: cleanArray(products),
-          invoices: cleanArray(invoices),
-          expenses: cleanArray(expenses),
-          savingsGoals: cleanArray(savingsGoals),
-          reminders: cleanArray(reminders),
-          documents: cleanArray(documents),
-          notes: cleanArray(notes),
-          tasks: cleanArray(tasks),
-          passwords: cleanArray(passwords),
+          profile: sbProfile.data || {},
+          settings: sbSet.data || {},
+          customers: sbCust.data || [],
+          transactions: sbTxn.data || [],
+          products: sbProd.data || [],
+          invoices: sbInv.data || [],
+          expenses: sbExp.data || [],
+          savingsGoals: sbSavings.data || [],
+          reminders: sbRem.data || [],
+          documents: sbDoc.data || [],
+          notes: sbNotes.data || [],
+          tasks: sbTasks.data || [],
+          passwords: sbPass.data || [],
         };
 
         const { zipBuffer, manifest, filename } = await createBackupArchive(fullData);
@@ -149,12 +137,7 @@ async function handleCron(req: NextRequest) {
           created_at: new Date().toISOString(),
         };
 
-        if (supabase) {
-          try {
-            await supabase.from('google_drive_backups').insert(historyItem);
-          } catch {}
-        }
-        await db.collection('google_drive_backups').insertOne(historyItem as any);
+        await supabase.from('google_drive_backups').insert(historyItem);
 
         results.push({ userId, status: 'success', filename, size: uploadResult.size });
       } catch (userErr: any) {

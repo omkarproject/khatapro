@@ -3,7 +3,6 @@ import { getAuthenticatedDriveForUser } from '@/lib/driveTokenHelper';
 import { downloadDriveFileBuffer } from '@/lib/googleDrive';
 import { parseBackupArchive } from '@/lib/backupArchive';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { connectToDatabase } from '@/lib/mongodb';
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,7 +16,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Authentication required' }, { status: 401 });
     }
 
-    // Download from Google Drive
+    // Download archive from Google Drive
     const { drive } = await getAuthenticatedDriveForUser(targetUserId);
     const zipBuffer = await downloadDriveFileBuffer(drive, fileId);
 
@@ -53,7 +52,7 @@ export async function POST(req: NextRequest) {
       user_id: targetUserId,
     };
 
-    // Remap profile but preserve current user's email if already set
+    // Remap profile
     const restoredProfile = {
       ...(data.profile || {}),
       id: targetUserId,
@@ -61,90 +60,53 @@ export async function POST(req: NextRequest) {
       businessName: data.profile?.businessName || manifest.businessName,
     };
 
-    // 1. Persist into Supabase PostgreSQL if configured
+    // 1. Persist into Supabase PostgreSQL
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      try {
-        const batchUpsert = async (table: string, records: any[]) => {
-          if (!records || records.length === 0) return;
-          for (const rec of records) {
-            const row = { ...rec, user_id: targetUserId };
-            delete (row as any).userId;
-            await supabase.from(table).upsert(row, { onConflict: 'id, user_id' });
-          }
-        };
-
-        await Promise.all([
-          batchUpsert('customers', restoredCustomers),
-          batchUpsert('transactions', restoredTransactions),
-          batchUpsert('products', restoredProducts),
-          batchUpsert('invoices', restoredInvoices),
-          batchUpsert('expenses', restoredExpenses),
-          batchUpsert('savings_goals', restoredSavings),
-          batchUpsert('payment_reminders', restoredReminders),
-          batchUpsert('documents', restoredDocuments),
-          batchUpsert('notes', restoredNotes),
-          batchUpsert('tasks', restoredTasks),
-          batchUpsert('passwords', restoredPasswords),
-        ]);
-
-        await supabase.from('system_settings').upsert({
-          user_id: targetUserId,
-          business_name: restoredSettings.businessName,
-          business_tagline: restoredSettings.businessTagline,
-          payment_settings: restoredSettings.paymentSettings,
-          dark_mode: restoredSettings.darkMode,
-          updated_at: new Date().toISOString(),
-        });
-      } catch (sbErr) {
-        console.warn('Supabase restore persistence error:', sbErr);
-      }
-    }
-
-    // 2. Persist into MongoDB Atlas for active runtime syncing
-    try {
-      const { db } = await connectToDatabase();
-      const saveCol = async (colName: string, items: any[]) => {
-        if (!items || items.length === 0) return;
-        const col = db.collection(colName);
-        for (const item of items) {
-          const doc = { ...item, userId: targetUserId };
-          delete (doc as any)._id;
-          await col.updateOne(
-            { id: item.id, userId: targetUserId },
-            { $set: doc },
-            { upsert: true }
-          );
+      const batchUpsert = async (table: string, records: any[]) => {
+        if (!records || records.length === 0) return;
+        for (const rec of records) {
+          const row = { ...rec, user_id: targetUserId };
+          delete (row as any).userId;
+          await supabase.from(table).upsert(row, { onConflict: 'id, user_id' });
         }
       };
 
       await Promise.all([
-        saveCol('customers', restoredCustomers),
-        saveCol('transactions', restoredTransactions),
-        saveCol('products', restoredProducts),
-        saveCol('invoices', restoredInvoices),
-        saveCol('expenses', restoredExpenses),
-        saveCol('savingsGoals', restoredSavings),
-        saveCol('reminders', restoredReminders),
-        saveCol('documents', restoredDocuments),
-        saveCol('notes', restoredNotes),
-        saveCol('tasks', restoredTasks),
-        saveCol('passwords', restoredPasswords),
+        batchUpsert('customers', restoredCustomers),
+        batchUpsert('transactions', restoredTransactions),
+        batchUpsert('products', restoredProducts),
+        batchUpsert('invoices', restoredInvoices),
+        batchUpsert('expenses', restoredExpenses),
+        batchUpsert('savings_goals', restoredSavings),
+        batchUpsert('payment_reminders', restoredReminders),
+        batchUpsert('documents', restoredDocuments),
+        batchUpsert('notes', restoredNotes),
+        batchUpsert('tasks', restoredTasks),
+        batchUpsert('passwords', restoredPasswords),
       ]);
 
-      await db.collection('settings').updateOne(
-        { userId: targetUserId },
-        { $set: { ...restoredSettings, userId: targetUserId } },
-        { upsert: true }
-      );
+      await supabase.from('system_settings').upsert({
+        user_id: targetUserId,
+        business_name: restoredSettings.businessName,
+        business_tagline: restoredSettings.businessTagline,
+        business_phone: restoredSettings.businessPhone,
+        business_email: restoredSettings.businessEmail,
+        payment_settings: restoredSettings.paymentSettings,
+        dark_mode: restoredSettings.darkMode,
+        backend_provider: 'supabase',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
 
-      await db.collection('users').updateOne(
-        { $or: [{ id: targetUserId }, { _id: targetUserId }] } as any,
-        { $set: { businessName: restoredProfile.businessName } },
-        { upsert: true }
-      );
-    } catch (mErr) {
-      console.warn('MongoDB restore persistence error:', mErr);
+      if (restoredProfile.businessName) {
+        await supabase.from('profiles').upsert({
+          id: targetUserId,
+          business_name: restoredProfile.businessName,
+          name: restoredProfile.name,
+          phone: restoredProfile.phone,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'id' });
+      }
     }
 
     const restoredCounts = {

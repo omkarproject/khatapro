@@ -303,7 +303,7 @@ export default function LoginPage() {
                   {isLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Connecting to MongoDB Atlas...</span>
+                      <span>Connecting to Supabase Cloud...</span>
                     </>
                   ) : (
                     <>

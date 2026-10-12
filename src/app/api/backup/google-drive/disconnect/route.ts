@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { connectToDatabase } from '@/lib/mongodb';
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,7 +10,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Authentication required' }, { status: 401 });
     }
 
-    // 1. Mark disconnected in Supabase
+    // Mark disconnected in Supabase
     const supabase = getSupabaseAdmin();
     if (supabase) {
       try {
@@ -19,17 +18,10 @@ export async function POST(req: NextRequest) {
           .from('google_drive_tokens')
           .update({ is_connected: false, updated_at: new Date().toISOString() })
           .eq('user_id', userId);
-      } catch {}
+      } catch (err) {
+        console.warn('Error disconnecting token in Supabase:', err);
+      }
     }
-
-    // 2. Mark disconnected in MongoDB
-    try {
-      const { db } = await connectToDatabase();
-      await db.collection('google_drive_tokens').updateOne(
-        { user_id: userId },
-        { $set: { is_connected: false, updated_at: new Date().toISOString() } }
-      );
-    } catch {}
 
     return NextResponse.json({
       success: true,

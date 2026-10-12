@@ -1,6 +1,5 @@
 import { decryptToken } from '@/lib/encryption';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { connectToDatabase } from '@/lib/mongodb';
 import { getDriveClient } from '@/lib/googleDrive';
 
 export interface StoredDriveTokens {
@@ -16,7 +15,6 @@ export interface StoredDriveTokens {
 }
 
 export async function getUserDriveTokens(userId: string): Promise<StoredDriveTokens | null> {
-  // 1. Check Supabase
   const supabase = getSupabaseAdmin();
   if (supabase) {
     try {
@@ -31,28 +29,21 @@ export async function getUserDriveTokens(userId: string): Promise<StoredDriveTok
         return data as StoredDriveTokens;
       }
     } catch {}
+
+    // Fallback: Check if there's any active token if userId is generic or migrated
+    try {
+      const { data, error } = await supabase
+        .from('google_drive_tokens')
+        .select('*')
+        .eq('is_connected', true)
+        .limit(1)
+        .single();
+
+      if (data && !error) {
+        return data as StoredDriveTokens;
+      }
+    } catch {}
   }
-
-  // 2. Check MongoDB
-  try {
-    const { db } = await connectToDatabase();
-    const doc = await db.collection('google_drive_tokens').findOne({
-      user_id: userId,
-      is_connected: true,
-    });
-    if (doc) {
-      return doc as unknown as StoredDriveTokens;
-    }
-  } catch {}
-
-  // 3. Fallback: Check if there's any active token if userId is generic
-  try {
-    const { db } = await connectToDatabase();
-    const doc = await db.collection('google_drive_tokens').findOne({ is_connected: true });
-    if (doc) {
-      return doc as unknown as StoredDriveTokens;
-    }
-  } catch {}
 
   return null;
 }

@@ -388,15 +388,10 @@ export class MongoAdapter implements IBackendAdapter {
 export const BackendManager = {
   getAdapter(): IBackendAdapter {
     const settings: SystemSettings = StorageService.getSettings();
-    if (settings.backendProvider === 'supabase') {
-      return new SupabaseAdapter(settings.supabaseUrl, settings.supabaseAnonKey);
+    if (settings.backendProvider === 'local') {
+      return new LocalAdapter();
     }
-    if (settings.backendProvider === 'firebase') {
-      return new FirebaseAdapter(settings.firebaseApiKey, settings.firebaseProjectId);
-    }
-    if (settings.backendProvider === 'mongodb') {
-      return new MongoAdapter(settings.mongodbUri, settings.mongodbDbName);
-    }
-    return new LocalAdapter();
+    return new SupabaseAdapter(settings.supabaseUrl, settings.supabaseAnonKey);
   }
 };
+
