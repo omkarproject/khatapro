@@ -320,10 +320,18 @@ export interface MaintenanceModeConfig {
   reason?: string;
 }
 
+export interface GoogleDriveConfig {
+  clientId?: string;
+  clientSecret?: string;
+  redirectUri?: string;
+}
+
 export interface SystemSettings {
   backendProvider: BackendProvider;
   supabaseUrl?: string;
   supabaseAnonKey?: string;
+  supabaseServiceRoleKey?: string;
+  googleDriveSettings?: GoogleDriveConfig;
   firebaseApiKey?: string;
   firebaseProjectId?: string;
   mongodbUri?: string;

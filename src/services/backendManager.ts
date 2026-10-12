@@ -108,12 +108,12 @@ export class SupabaseAdapter implements IBackendAdapter {
         message: 'Supabase URL and Anon Key are missing. Please enter them in Settings.',
       };
     }
-    // Simple fetch health check
     try {
-      const res = await fetch(`${this.url}/rest/v1/`, {
+      const cleanUrl = this.url.trim().replace(/\/+$/, '').replace(/\/rest\/v1\/?$/i, '');
+      const res = await fetch(`${cleanUrl}/rest/v1/`, {
         headers: { apikey: this.key, Authorization: `Bearer ${this.key}` },
       });
-      if (res.ok || res.status === 404) {
+      if (res.ok || res.status === 200 || res.status === 404) {
         return { success: true, message: 'Connected to Supabase PostgreSQL cluster successfully!' };
       }
       return { success: false, message: `Supabase responded with status ${res.status}` };

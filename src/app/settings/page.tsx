@@ -57,7 +57,7 @@ import GoogleDriveBackupPanel from '@/components/GoogleDriveBackupPanel';
 export default function SettingsPage() {
   const { settings, updateSettings, saveDefaultUpiAndQr, profile, setProfile, addToast, syncWithDatabase, currentUser, refreshData } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'business' | 'upi' | 'backend' | 'security' | 'backup' | 'maintenance'>('business');
+  const [activeTab, setActiveTab] = useState<'business' | 'upi' | 'backend' | 'drive' | 'security' | 'backup' | 'maintenance'>('business');
   const [isSyncingData, setIsSyncingData] = useState(false);
 
   // Maintenance & Beta Testing State
@@ -111,7 +111,7 @@ export default function SettingsPage() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
-      if (tabParam === 'backup' || tabParam === 'business' || tabParam === 'upi' || tabParam === 'backend' || tabParam === 'security' || tabParam === 'maintenance') {
+      if (tabParam === 'backup' || tabParam === 'business' || tabParam === 'upi' || tabParam === 'backend' || tabParam === 'drive' || tabParam === 'security' || tabParam === 'maintenance') {
         setActiveTab(tabParam as any);
       }
     }
@@ -679,20 +679,25 @@ export default function SettingsPage() {
     settings.paymentSettings.collectionMode || 'direct_upi'
   );
 
+  // Database Connection PDF Guide Modal State
+  const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
+  const [guideActiveTab, setGuideActiveTab] = useState<BackendProvider>('supabase');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Backend Provider Settings State
-  const [provider, setProvider] = useState<BackendProvider>(settings.backendProvider);
-  const [supabaseUrl, setSupabaseUrl] = useState(settings.supabaseUrl || '');
-  const [supabaseAnonKey, setSupabaseAnonKey] = useState(settings.supabaseAnonKey || '');
-  const [firebaseApiKey, setFirebaseApiKey] = useState(settings.firebaseApiKey || '');
-  const [firebaseProjectId, setFirebaseProjectId] = useState(settings.firebaseProjectId || '');
-  const [mongodbUri, setMongodbUri] = useState(settings.mongodbUri || '');
-  const [mongodbDbName, setMongodbDbName] = useState(settings.mongodbDbName || 'smartkhata_db');
+  // Backend Provider Settings State (Supabase Primary)
+  const [provider, setProvider] = useState<BackendProvider>('supabase');
+  const [supabaseUrl, setSupabaseUrl] = useState(settings.supabaseUrl || 'https://axpbydzszykqwojamblh.supabase.co');
+  const [supabaseAnonKey, setSupabaseAnonKey] = useState(settings.supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTIzNTcsImV4cCI6MjEwNzI4ODM1N30.MOkM9DqTFr5nB4mYj-Z3n9FEta1Pi0tSSJ0tTWxsxF0');
+  const [supabaseServiceRoleKey, setSupabaseServiceRoleKey] = useState(settings.supabaseServiceRoleKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTcxMjM1NywiZXhwIjoyMTA3Mjg4MzU3fQ.oUgYxGo6-WWyioLkhmPuldiCWf4pANvEl7vnPyNyyNs');
+
+  // Google Drive API Credentials State
+  const [driveClientId, setDriveClientId] = useState(settings.googleDriveSettings?.clientId || '997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com');
+  const [driveClientSecret, setDriveClientSecret] = useState(settings.googleDriveSettings?.clientSecret || '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');
+  const [driveRedirectUri, setDriveRedirectUri] = useState(settings.googleDriveSettings?.redirectUri || 'https://khatapro-sandy.vercel.app/api/backup/google-drive/callback');
+
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [isTesting, setIsTesting] = useState(false);
-  const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
-  const [guideActiveTab, setGuideActiveTab] = useState<BackendProvider>(settings.backendProvider);
 
   // Handle Profile Logo Upload & Remove
   const handleUploadLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -907,59 +912,42 @@ export default function SettingsPage() {
     e.preventDefault();
     const updated: SystemSettings = {
       ...settings,
-      backendProvider: provider,
+      backendProvider: 'supabase',
       supabaseUrl: supabaseUrl.trim(),
       supabaseAnonKey: supabaseAnonKey.trim(),
-      firebaseApiKey: firebaseApiKey.trim(),
-      firebaseProjectId: firebaseProjectId.trim(),
-      mongodbUri: mongodbUri.trim(),
-      mongodbDbName: mongodbDbName.trim(),
+      supabaseServiceRoleKey: supabaseServiceRoleKey.trim(),
     };
     updateSettings(updated);
+    addToast(
+      'Supabase Database Saved! ⚡',
+      'Supabase Project URL, Anon Key, aur Service Role Key website me live update ho gaye hain!',
+      'success'
+    );
+  };
 
-    if (provider === 'mongodb') {
-      await syncWithDatabase();
-      addToast(
-        'MongoDB Atlas Activated!',
-        'Database provider switched to MongoDB Atlas. Full website is now synced live to the database!',
-        'success'
-      );
-    } else if (provider === 'local') {
-      addToast(
-        'Local / Offline Mode Activated!',
-        'All actions are saved locally with 0ms speed and instant persistence.',
-        'info'
-      );
-    } else if (provider === 'supabase') {
-      addToast(
-        'Supabase Activated!',
-        'Switched to Supabase PostgreSQL cloud backend.',
-        'success'
-      );
-    } else if (provider === 'firebase') {
-      addToast(
-        'Firebase Activated!',
-        'Switched to Firebase Firestore cloud database.',
-        'success'
-      );
-    }
+  // Handle Google Drive API Credentials Save
+  const handleSaveDriveApi = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated: SystemSettings = {
+      ...settings,
+      googleDriveSettings: {
+        clientId: driveClientId.trim(),
+        clientSecret: driveClientSecret.trim(),
+        redirectUri: driveRedirectUri.trim(),
+      },
+    };
+    updateSettings(updated);
+    addToast(
+      'Google Drive API Saved! ☁️',
+      'Google Client ID aur Client Secret successfully save ho gaye hain!',
+      'success'
+    );
   };
 
   const handleTestConnection = async () => {
     setIsTesting(true);
     setTestResult(null);
-
-    let adapter;
-    if (provider === 'supabase') {
-      adapter = new SupabaseAdapter(supabaseUrl, supabaseAnonKey);
-    } else if (provider === 'firebase') {
-      adapter = new FirebaseAdapter(firebaseApiKey, firebaseProjectId);
-    } else if (provider === 'mongodb') {
-      adapter = new MongoAdapter(mongodbUri, mongodbDbName);
-    } else {
-      adapter = new LocalAdapter();
-    }
-
+    const adapter = new SupabaseAdapter(supabaseUrl, supabaseAnonKey);
     const res = await adapter.testConnection();
     setTestResult(res);
     setIsTesting(false);
@@ -1015,6 +1003,18 @@ export default function SettingsPage() {
         >
           <Database className="w-4 h-4" />
           Database & Cloud Auth
+        </button>
+
+        <button
+          onClick={() => setActiveTab('drive')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+            activeTab === 'drive'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <CloudUpload className="w-4 h-4 text-emerald-500" />
+          Google Drive API
         </button>
 
         <button
@@ -1882,151 +1882,75 @@ export default function SettingsPage() {
       {/* Tab 3: Database & Cloud Auth Switcher */}
       {activeTab === 'backend' && (
         <form onSubmit={handleSaveBackend} className="glass-card p-6 space-y-5 max-w-2xl">
-          <div>
-            <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-              <Database className="w-4 h-4 text-indigo-500" />
-              Dual & Multi Backend / Database Provider
-            </h3>
-            <p className="text-xs text-slate-400 mt-1">
-              Switch between Local Offline-First mode, Supabase PostgreSQL, Firebase Firestore, and MongoDB Atlas.
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-200/80 dark:border-slate-800">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                <Database className="w-4 h-4 text-emerald-500" />
+                Supabase PostgreSQL &amp; Cloud Authentication
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Primary cloud database provider for user authentication, ledger transactions, invoices, and cloud sync.
+              </p>
+            </div>
+            <span className="self-start sm:self-auto text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Primary Provider
+            </span>
           </div>
 
-          {/* Provider Selection Radio Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {[
-              { id: 'supabase', label: 'Supabase Cloud (Primary)', desc: 'PostgreSQL + Auth + Storage + RLS' },
-              { id: 'local', label: 'Local / Offline', desc: '0ms latency, browser IndexedDB storage' },
-              { id: 'firebase', label: 'Firebase Cloud', desc: 'Firestore + Firebase Auth' },
-            ].map((p) => (
-              <label
-                key={p.id}
-                className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${
-                  provider === p.id
-                    ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/40 shadow-sm'
-                    : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50/50'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-900 dark:text-white">{p.label}</span>
-                  <input
-                    type="radio"
-                    name="backend"
-                    value={p.id}
-                    checked={provider === p.id}
-                    onChange={() => setProvider(p.id as any)}
-                    className="text-indigo-600 focus:ring-indigo-500"
-                  />
-                </div>
-                <span className="text-[11px] text-slate-400">{p.desc}</span>
+          {/* Supabase Connection Details */}
+          <div className="space-y-4 p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Supabase Project API URL *
               </label>
-            ))}
+              <input
+                type="url"
+                required
+                value={supabaseUrl}
+                onChange={(e) => setSupabaseUrl(e.target.value)}
+                placeholder="https://axpbydzszykqwojamblh.supabase.co"
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                Your Supabase project URL (e.g. <code>https://axpbydzszykqwojamblh.supabase.co</code>)
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Supabase Public Anon Key *
+              </label>
+              <input
+                type="text"
+                required
+                value={supabaseAnonKey}
+                onChange={(e) => setSupabaseAnonKey(e.target.value)}
+                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                Safe for client-side queries, public auth sessions, and row-level security policies.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Supabase Service Role Key (Admin / Rol Key) *
+              </label>
+              <input
+                type="text"
+                required
+                value={supabaseServiceRoleKey}
+                onChange={(e) => setSupabaseServiceRoleKey(e.target.value)}
+                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-medium">
+                Admin key used for privileged backend operations, automated backups, and user management.
+              </p>
+            </div>
           </div>
-
-          {/* Supabase Options */}
-          {provider === 'supabase' && (
-            <div className="space-y-3 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-              <div className="text-xs font-bold text-slate-900 dark:text-white">
-                Supabase Connection Details
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  Supabase Project URL
-                </label>
-                <input
-                  type="url"
-                  value={supabaseUrl}
-                  onChange={(e) => setSupabaseUrl(e.target.value)}
-                  placeholder="https://xyzcompany.supabase.co"
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  Supabase Anon / Public Key
-                </label>
-                <input
-                  type="password"
-                  value={supabaseAnonKey}
-                  onChange={(e) => setSupabaseAnonKey(e.target.value)}
-                  placeholder="eyJhbGciOi..."
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Firebase Options */}
-          {provider === 'firebase' && (
-            <div className="space-y-3 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-              <div className="text-xs font-bold text-slate-900 dark:text-white">
-                Firebase Firestore Details
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  Firebase Project ID
-                </label>
-                <input
-                  type="text"
-                  value={firebaseProjectId}
-                  onChange={(e) => setFirebaseProjectId(e.target.value)}
-                  placeholder="smartkhata-pro-prod"
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  Firebase Web API Key
-                </label>
-                <input
-                  type="password"
-                  value={firebaseApiKey}
-                  onChange={(e) => setFirebaseApiKey(e.target.value)}
-                  placeholder="AIzaSy..."
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* MongoDB Options */}
-          {provider === 'mongodb' && (
-            <div className="space-y-3 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-              <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center justify-between">
-                <span>MongoDB Atlas / Cloud Details</span>
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                  NoSQL Document DB
-                </span>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  MongoDB Connection URI *
-                </label>
-                <input
-                  type="text"
-                  value={mongodbUri}
-                  onChange={(e) => setMongodbUri(e.target.value)}
-                  placeholder="mongodb+srv://username:password@cluster0.mongodb.net/?retryWrites=true&w=majority"
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Supports MongoDB Atlas cluster connection string (<code className="text-indigo-500 font-semibold">mongodb+srv://...</code>) or self-hosted instance URI.
-                </p>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  Database Name
-                </label>
-                <input
-                  type="text"
-                  value={mongodbDbName}
-                  onChange={(e) => setMongodbDbName(e.target.value)}
-                  placeholder="smartkhata_db"
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono"
-                />
-              </div>
-            </div>
-          )}
 
           {/* Test Connection Banner */}
           {testResult && (
@@ -2043,55 +1967,119 @@ export default function SettingsPage() {
           )}
 
           <div className="pt-2 flex justify-between items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleTestConnection}
-                disabled={isTesting}
-                className="px-4 py-2 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
-              >
-                {isTesting ? 'Pinging Provider...' : 'Test Connection'}
-              </button>
-
-              {/* Sync Data to MongoDB Atlas Button */}
-              {provider === 'mongodb' && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setIsSyncingData(true);
-                    await syncWithDatabase();
-                    setIsSyncingData(false);
-                    addToast('Cloud Database Synced', 'All local records successfully uploaded and synced to MongoDB Atlas!', 'success');
-                  }}
-                  disabled={isSyncingData}
-                  className="px-4 py-2 text-xs font-bold rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  <Database className="w-3.5 h-3.5" />
-                  <span>{isSyncingData ? 'Uploading to Atlas...' : 'Sync to MongoDB Atlas'}</span>
-                </button>
-              )}
-
-              {/* PDF Setup Guide Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  setGuideActiveTab(provider);
-                  setIsGuideModalOpen(true);
-                }}
-                className="px-3 py-2 text-xs font-bold rounded-xl bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/60 flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
-                title="View Step-by-Step PDF Setup Guide"
-              >
-                <FileText className="w-4 h-4 text-rose-500" />
-                <span>PDF Guide</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleTestConnection}
+              disabled={isTesting}
+              className="px-4 py-2.5 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer flex items-center gap-2"
+            >
+              {isTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5 text-emerald-500" />}
+              <span>{isTesting ? 'Testing Supabase Connection...' : 'Test Connection'}</span>
+            </button>
 
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+              className="px-6 py-2.5 rounded-2xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-500/20 flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
             >
               <Save className="w-4 h-4" />
-              Save Backend Provider
+              Save Supabase Connection
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Tab: Google Drive API Configuration */}
+      {activeTab === 'drive' && (
+        <form onSubmit={handleSaveDriveApi} className="glass-card p-6 space-y-5 max-w-2xl">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-200/80 dark:border-slate-800">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                <CloudUpload className="w-4 h-4 text-indigo-500" />
+                Google Drive API Configuration
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Update your Google Cloud OAuth Client ID, Secret, and Redirect URI directly without editing files.
+              </p>
+            </div>
+            <span className="self-start sm:self-auto text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-indigo-500" />
+              OAuth 2.0
+            </span>
+          </div>
+
+          <div className="space-y-4 p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Google Client ID *
+              </label>
+              <input
+                type="text"
+                required
+                value={driveClientId}
+                onChange={(e) => setDriveClientId(e.target.value)}
+                placeholder="997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com"
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                Created in Google Cloud Console &rarr; APIs &amp; Services &rarr; Credentials &rarr; OAuth 2.0 Client IDs.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Google Client Secret *
+              </label>
+              <input
+                type="password"
+                required
+                value={driveClientSecret}
+                onChange={(e) => setDriveClientSecret(e.target.value)}
+                placeholder="GOCSPX-..."
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                Kept secure on the server. Used only to exchange authorization codes and refresh tokens.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Authorized Redirect URI
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  required
+                  value={driveRedirectUri}
+                  onChange={(e) => setDriveRedirectUri(e.target.value)}
+                  placeholder="https://khatapro-sandy.vercel.app/api/backup/google-drive/callback"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(driveRedirectUri);
+                    addToast('Copied!', 'Authorized redirect URI copied to clipboard.', 'success');
+                  }}
+                  className="px-3.5 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0 transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy</span>
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">
+                Must match exactly what you added under &quot;Authorized redirect URIs&quot; in Google Cloud Console.
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-2 flex justify-end items-center gap-3">
+            <button
+              type="submit"
+              className="px-6 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+            >
+              <Save className="w-4 h-4" />
+              Save Google Drive API Details
             </button>
           </div>
         </form>

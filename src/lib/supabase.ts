@@ -1,23 +1,48 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+export function normalizeSupabaseUrl(rawUrl: string): string {
+  if (!rawUrl) return '';
+  let clean = rawUrl.trim();
+  // Strip trailing slashes
+  clean = clean.replace(/\/+$/, '');
+  // Strip /rest/v1 or /rest
+  clean = clean.replace(/\/rest\/v1\/?$/i, '');
+  clean = clean.replace(/\/rest\/?$/i, '');
+  return clean;
+}
+
+const DEFAULT_SUPABASE_URL = normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://axpbydzszykqwojamblh.supabase.co');
+const DEFAULT_SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTIzNTcsImV4cCI6MjEwNzI4ODM1N30.MOkM9DqTFr5nB4mYj-Z3n9FEta1Pi0tSSJ0tTWxsxF0';
+const DEFAULT_SUPABASE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTcxMjM1NywiZXhwIjoyMTA3Mjg4MzU3fQ.oUgYxGo6-WWyioLkhmPuldiCWf4pANvEl7vnPyNyyNs';
 
 let browserClient: SupabaseClient | null = null;
 let serverAdminClient: SupabaseClient | null = null;
 
 export function isSupabaseConfigured(): boolean {
-  return Boolean(SUPABASE_URL && (SUPABASE_ANON_KEY || SUPABASE_SERVICE_ROLE_KEY));
+  return Boolean(DEFAULT_SUPABASE_URL && (DEFAULT_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ROLE_KEY));
 }
 
 // Browser / Client-side Supabase client
-export function getSupabaseClient(): SupabaseClient | null {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+export function getSupabaseClient(customUrl?: string, customKey?: string): SupabaseClient | null {
+  const url = normalizeSupabaseUrl(customUrl || DEFAULT_SUPABASE_URL);
+  const key = customKey || DEFAULT_SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
     return null;
   }
+
+  if (customUrl || customKey) {
+    return createClient(url, key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    });
+  }
+
   if (!browserClient) {
-    browserClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    browserClient = createClient(url, key, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
@@ -29,13 +54,25 @@ export function getSupabaseClient(): SupabaseClient | null {
 }
 
 // Server-side Admin Supabase client (Bypasses RLS for trusted operations like daily cron & recovery remapping)
-export function getSupabaseAdmin(): SupabaseClient | null {
-  const key = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
-  if (!SUPABASE_URL || !key) {
+export function getSupabaseAdmin(customUrl?: string, customRoleKey?: string): SupabaseClient | null {
+  const url = normalizeSupabaseUrl(customUrl || DEFAULT_SUPABASE_URL);
+  const key = customRoleKey || DEFAULT_SUPABASE_ROLE_KEY || DEFAULT_SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
     return null;
   }
+
+  if (customUrl || customRoleKey) {
+    return createClient(url, key, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+  }
+
   if (!serverAdminClient) {
-    serverAdminClient = createClient(SUPABASE_URL, key, {
+    serverAdminClient = createClient(url, key, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,

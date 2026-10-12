@@ -1,9 +1,9 @@
 import { google } from 'googleapis';
 import { Readable } from 'stream';
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
-const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/backup/google-drive/callback`;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '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';
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'https://khatapro-sandy.vercel.app/api/backup/google-drive/callback';
 
 export const DRIVE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
@@ -15,11 +15,11 @@ export function isGoogleDriveConfigured(): boolean {
   return Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
 }
 
-export function getOAuth2Client() {
+export function getOAuth2Client(customClientId?: string, customClientSecret?: string, customRedirectUri?: string) {
   return new google.auth.OAuth2(
-    GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET,
-    GOOGLE_REDIRECT_URI
+    customClientId || GOOGLE_CLIENT_ID,
+    customClientSecret || GOOGLE_CLIENT_SECRET,
+    customRedirectUri || GOOGLE_REDIRECT_URI
   );
 }
 
