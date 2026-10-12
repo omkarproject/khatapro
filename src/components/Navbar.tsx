@@ -69,17 +69,45 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     settings,
     currentUser,
     openAuthModal,
-    cloudSyncStatus,
-    syncWithDatabase,
     logout,
     playPaymentNotificationSound,
   } = useApp();
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [isSyncingNow, setIsSyncingNow] = useState(false);
-
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+
+  const notificationRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Online / Offline & Click Outside Listeners
+  useEffect(() => {
+    setIsOnline(typeof window !== 'undefined' ? navigator.onLine : true);
+
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setIsNotificationsOpen(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Dismissed alerts tracking
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
@@ -308,7 +336,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
           {/* Right: Actions */}
           <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 shrink-0">
             {/* Notification Bell */}
-            <div className="relative">
+            <div ref={notificationRef} className="relative">
               <button
                 onClick={() => {
                   const willOpen = !isNotificationsOpen;
@@ -643,15 +671,15 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
               {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
             </button>
 
-            {/* Cloud Database & User Auth Dropdown */}
-            <div className="relative pl-2 border-l border-slate-200 dark:border-slate-800">
+            {/* User Auth Dropdown */}
+            <div ref={userMenuRef} className="relative pl-2 border-l border-slate-200 dark:border-slate-800">
               {currentUser ? (
                 <div>
                   <button
                     type="button"
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                     className="flex items-center gap-2 p-1 pl-1.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60 transition-all cursor-pointer group"
-                    title="User Profile & Cloud Sync"
+                    title="User Profile"
                   >
                     {currentUser.avatarUrl || profile.avatarUrl || settings.businessLogo ? (
                       <img
@@ -668,9 +696,11 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                       <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[110px]">
                         {currentUser.name}
                       </div>
-                      <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-semibold flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        Supabase
+                      <div className={`text-[10px] font-mono font-semibold flex items-center gap-1 ${
+                        isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                        {isOnline ? 'Online' : 'Offline'}
                       </div>
                     </div>
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 hidden sm:block" />
@@ -711,59 +741,16 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                         </p>
                       </div>
 
-                      {/* Cloud Sync Status */}
-                      <div className="my-2 p-2.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <Database className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                          <div>
-                            <div className="text-[11px] font-bold text-emerald-900 dark:text-emerald-300">
-                              Supabase Cloud DB
-                            </div>
-                            <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">
-                              {cloudSyncStatus === 'syncing'
-                                ? 'Syncing records...'
-                                : 'Cloud Synced (Live)'}
-                            </div>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          disabled={isSyncingNow}
-                          onClick={async () => {
-                            setIsSyncingNow(true);
-                            await syncWithDatabase();
-                            setIsSyncingNow(false);
-                          }}
-                          className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer transition-all disabled:opacity-50"
-                          title="Trigger Cloud Database Sync"
-                        >
-                          <RefreshCw className={`w-3.5 h-3.5 ${isSyncingNow ? 'animate-spin' : ''}`} />
-                        </button>
-                      </div>
-
                       {/* Menu Actions */}
-                      <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+                      <div className="space-y-1 pt-2 border-t border-slate-100 dark:border-slate-800 mt-2">
                         <Link
                           href="/settings"
                           onClick={() => setIsUserMenuOpen(false)}
                           className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                         >
                           <Shield className="w-3.5 h-3.5 text-indigo-500" />
-                          <span>Settings &amp; Database Config</span>
+                          <span>Settings</span>
                         </Link>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsUserMenuOpen(false);
-                            openAuthModal();
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                        >
-                          <User className="w-3.5 h-3.5 text-cyan-500" />
-                          <span>Switch User / Accounts</span>
-                        </button>
 
                         <button
                           type="button"

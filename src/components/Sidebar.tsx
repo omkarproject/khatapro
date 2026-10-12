@@ -150,11 +150,11 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
               <div className="p-3 rounded-2xl bg-gradient-to-br from-indigo-50 to-cyan-50/50 dark:from-slate-800/80 dark:to-indigo-950/40 border border-indigo-100 dark:border-indigo-900/30">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    Active Storage
+                    Status
                   </span>
                   <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    SUPABASE
+                    ONLINE
                   </span>
                 </div>
                 <div className="text-xs font-bold text-slate-900 dark:text-white truncate" suppressHydrationWarning>
@@ -177,7 +177,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
             <div className="flex flex-col items-center gap-2 py-1">
               <div
                 className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center cursor-pointer"
-                title={`Active: SUPABASE (${settings.businessName || 'SmartKhata'})`}
+                title={`Status: Online (${settings.businessName || 'SmartKhata'})`}
               >
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               </div>

@@ -97,13 +97,19 @@ export async function POST(req: NextRequest) {
 
     // 3. Attempt to trigger email dispatch via Supabase Auth
     try {
+      const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://khatapro-sandy.vercel.app';
+      const redirectTo = `${origin}/login?type=recovery`;
+
       if (purpose === 'forgot_password') {
-        await supabase.auth.resetPasswordForEmail(cleanEmail);
+        await supabase.auth.resetPasswordForEmail(cleanEmail, {
+          redirectTo,
+        });
       } else {
         await supabase.auth.signInWithOtp({
           email: cleanEmail,
           options: {
             shouldCreateUser: purpose === 'signup',
+            emailRedirectTo: `${origin}/login`,
           },
         });
       }

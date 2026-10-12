@@ -25,6 +25,7 @@ import {
   Check,
   X
 } from 'lucide-react';
+import { getSupabaseClient } from '@/lib/supabase';
 
 // Math CAPTCHA generator
 function generateCaptcha() {
@@ -43,7 +44,7 @@ export default function LoginPage() {
   const { currentUser, login, applyAuthenticatedUser, logout } = useApp();
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot_password'>('signin');
-  const [step, setStep] = useState<'input' | 'otp'>('input');
+  const [step, setStep] = useState<'input' | 'otp' | 'reset_direct'>('input');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -74,6 +75,38 @@ export default function LoginPage() {
 
   useEffect(() => {
     setCaptcha(generateCaptcha());
+
+    // Check for password recovery hash / params in URL
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      const search = window.location.search;
+
+      if (hash.includes('error=')) {
+        const params = new URLSearchParams(hash.replace(/^#/, ''));
+        const desc = params.get('error_description') || 'The reset link is invalid or has expired. Please request a new verification code.';
+        setErrorMsg(decodeURIComponent(desc.replace(/\+/g, ' ')));
+        setMode('forgot_password');
+        setStep('input');
+      } else if (hash.includes('type=recovery') || search.includes('type=recovery')) {
+        setMode('forgot_password');
+        setStep('reset_direct');
+        setSuccessMsg('Email verified via recovery link! Enter your new password below.');
+      }
+    }
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const { data: authListener } = supabase.auth.onAuthStateChange(async (event) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setMode('forgot_password');
+          setStep('reset_direct');
+          setSuccessMsg('Email verified! Please enter your new password below.');
+        }
+      });
+      return () => {
+        authListener?.subscription?.unsubscribe();
+      };
+    }
   }, []);
 
   useEffect(() => {
@@ -248,6 +281,49 @@ export default function LoginPage() {
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Verification failed. Please check the code.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Direct Password Reset (Via verified link from email)
+  const handleDirectResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    if (!isPasswordPolicyMet) {
+      setErrorMsg('Password must satisfy all rules: 6-10 chars, 1 uppercase letter, 1 number, and 1 special symbol.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setErrorMsg('New password and confirmation do not match.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        const { error } = await supabase.auth.updateUser({ password: newPassword.trim() });
+        if (error) throw error;
+      } else {
+        const res = await fetch('/api/auth/update-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim(), newPassword: newPassword.trim() }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || 'Failed to update password');
+      }
+
+      setSuccessMsg('Password updated successfully! Redirecting...');
+      setTimeout(() => {
+        resetFormState('signin');
+        router.replace('/');
+      }, 1500);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to update password. Please request a new link.');
     } finally {
       setIsLoading(false);
     }
@@ -804,6 +880,121 @@ export default function LoginPage() {
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
                       <span>{resendTimer > 0 ? `Resend (${resendTimer}s)` : 'Resend Code'}</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* ==================================================== */}
+              {/* 4. DIRECT PASSWORD RESET VIA EMAIL LINK               */}
+              {/* ==================================================== */}
+              {mode === 'forgot_password' && step === 'reset_direct' && (
+                <form onSubmit={handleDirectResetPassword} className="space-y-4">
+                  <div className="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 text-xs text-emerald-950 dark:text-emerald-200 space-y-1">
+                    <div className="font-bold flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>Email Verified via Link!</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                      Your identity has been confirmed. Please create a new password below to complete reset.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
+                      New Password * (6 to 10 Digits)
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        maxLength={10}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="e.g. Admin@123"
+                        className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+
+                    {/* Real-time Checklist for New Password */}
+                    <div className="mt-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-1.5 text-[11px]">
+                      <div className={`flex items-center gap-1.5 ${isLengthValid ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+                        {isLengthValid ? <Check className="w-3.5 h-3.5" /> : <span>•</span>}
+                        <span>6 to 10 digits/characters ({newPassword.length}/10)</span>
+                      </div>
+                      <div className={`flex items-center gap-1.5 ${hasUppercase ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+                        {hasUppercase ? <Check className="w-3.5 h-3.5" /> : <span>•</span>}
+                        <span>At least 1 Capital letter (A-Z)</span>
+                      </div>
+                      <div className={`flex items-center gap-1.5 ${hasNumber ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+                        {hasNumber ? <Check className="w-3.5 h-3.5" /> : <span>•</span>}
+                        <span>At least 1 Number (0-9)</span>
+                      </div>
+                      <div className={`flex items-center gap-1.5 ${hasSymbol ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+                        {hasSymbol ? <Check className="w-3.5 h-3.5" /> : <span>•</span>}
+                        <span>At least 1 Special symbol (!@#$%^&*)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
+                      Confirm New Password *
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        required
+                        maxLength={10}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Repeat new password"
+                        className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading || !isPasswordPolicyMet}
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-600 to-indigo-600 hover:from-emerald-400 hover:to-indigo-500 text-white font-black text-xs tracking-wider uppercase shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Updating Password...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Save &amp; Update Password</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="text-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => resetFormState('signin')}
+                      className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer font-medium"
+                    >
+                      Back to Sign In
                     </button>
                   </div>
                 </form>

@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
+import { validatePasswordStrength } from '@/lib/otpStore';
 
 export async function POST(req: NextRequest) {
   try {
     const { userId, email, newPassword } = await req.json();
 
-    if (!newPassword || newPassword.trim().length < 4) {
+    const passCheck = validatePasswordStrength(newPassword);
+    if (!passCheck.valid) {
       return NextResponse.json(
-        { success: false, message: 'New password must be at least 4 characters long' },
+        { success: false, message: passCheck.message },
         { status: 400 }
       );
     }

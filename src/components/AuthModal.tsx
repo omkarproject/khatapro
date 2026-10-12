@@ -260,7 +260,12 @@ export default function AuthModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) closeAuthModal();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200"
+    >
       <div className="relative w-full max-w-md bg-white dark:bg-[#0B101D] rounded-3xl shadow-2xl border border-slate-200/90 dark:border-indigo-500/30 overflow-hidden text-slate-900 dark:text-slate-100 flex flex-col max-h-[94vh]">
         
         {/* Top Accent Line */}
@@ -645,7 +650,7 @@ export default function AuthModal() {
                       <span>Verification Code Sent!</span>
                     </div>
                     <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                      Check your email <strong className="font-mono">{email}</strong> for the 6-digit code.
+                      Check your email <strong className="font-mono">{email}</strong> for the 6-digit verification code or click the direct Reset Link in your email.
                     </p>
                   </div>
 
