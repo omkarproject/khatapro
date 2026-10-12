@@ -4,7 +4,7 @@ import React, { useState, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatDate } from '@/lib/utils';
 import { DocumentItem } from '@/types';
-import { uploadToDriveFiles } from '@/lib/driveUploadClient';
+import { uploadToDriveFiles, deleteFromDriveFiles } from '@/lib/driveUploadClient';
 import {
   FolderLock,
   Plus,
@@ -161,6 +161,7 @@ export default function DocumentsPage() {
   const handleDeleteDoc = (id: string, docTitle: string) => {
     if (confirm(`Are you sure you want to delete "${docTitle}" from your Document Vault?`)) {
       deleteDocument(id);
+      deleteFromDriveFiles({ fileName: docTitle });
     }
   };
 

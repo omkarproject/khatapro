@@ -661,85 +661,104 @@ export async function POST(req: NextRequest) {
     }
 
     if (data) {
-      // Helper to batch upsert converted rows into a table
-      const upsertRows = async (table: string, rows: any[]) => {
-        if (!rows || rows.length === 0) return;
-        // Upsert in batches of 50 to avoid request size limits
-        const chunkSize = 50;
-        for (let i = 0; i < rows.length; i += chunkSize) {
-          const chunk = rows.slice(i, i + chunkSize);
-          const { error } = await supabase.from(table).upsert(chunk, { onConflict: 'id, user_id' });
-          if (error) {
-            console.error(`Error syncing table ${table}:`, error.message);
+      // Helper to batch upsert converted rows and remove deleted records from Supabase
+      const syncRowsWithDeletions = async (table: string, rows: any[]) => {
+        const activeIds = new Set(rows.map(r => r.id));
+
+        // 1. Delete rows in Supabase that the user has deleted
+        const { data: existing, error: fetchErr } = await supabase
+          .from(table)
+          .select('id')
+          .eq('user_id', userId);
+
+        if (!fetchErr && existing && existing.length > 0) {
+          const toDelete = existing.map(e => String(e.id)).filter(id => !activeIds.has(id));
+          if (toDelete.length > 0) {
+            for (let i = 0; i < toDelete.length; i += 50) {
+              const chunk = toDelete.slice(i, i + 50);
+              await supabase.from(table).delete().eq('user_id', userId).in('id', chunk);
+            }
+          }
+        }
+
+        // 2. Upsert active rows in batches of 50
+        if (rows.length > 0) {
+          const chunkSize = 50;
+          for (let i = 0; i < rows.length; i += chunkSize) {
+            const chunk = rows.slice(i, i + chunkSize);
+            const { error } = await supabase.from(table).upsert(chunk, { onConflict: 'id, user_id' });
+            if (error) {
+              console.error(`Error syncing table ${table}:`, error.message);
+            }
           }
         }
       };
 
       const promises: Promise<any>[] = [];
 
-      if (Array.isArray(data.customers) && data.customers.length > 0) {
+      if (Array.isArray(data.customers)) {
         const rows = data.customers.filter((c: any) => c && c.id).map((c: any) => customerToDb(c, userId));
-        promises.push(upsertRows('customers', rows));
+        promises.push(syncRowsWithDeletions('customers', rows));
       }
 
-      if (Array.isArray(data.transactions) && data.transactions.length > 0) {
+      if (Array.isArray(data.transactions)) {
         const rows = data.transactions.filter((t: any) => t && t.id).map((t: any) => transactionToDb(t, userId));
-        promises.push(upsertRows('transactions', rows));
+        promises.push(syncRowsWithDeletions('transactions', rows));
       }
 
-      if (Array.isArray(data.products) && data.products.length > 0) {
+      if (Array.isArray(data.products)) {
         const rows = data.products.filter((p: any) => p && p.id).map((p: any) => productToDb(p, userId));
-        promises.push(upsertRows('products', rows));
+        promises.push(syncRowsWithDeletions('products', rows));
       }
 
-      if (Array.isArray(data.invoices) && data.invoices.length > 0) {
+      if (Array.isArray(data.invoices)) {
         const rows = data.invoices.filter((inv: any) => inv && inv.id).map((inv: any) => invoiceToDb(inv, userId));
-        promises.push(upsertRows('invoices', rows));
+        promises.push(syncRowsWithDeletions('invoices', rows));
       }
 
-      if (Array.isArray(data.expenses) && data.expenses.length > 0) {
+      if (Array.isArray(data.expenses)) {
         const rows = data.expenses.filter((e: any) => e && e.id).map((e: any) => expenseToDb(e, userId));
-        promises.push(upsertRows('expenses', rows));
+        promises.push(syncRowsWithDeletions('expenses', rows));
       }
 
-      if (Array.isArray(data.savingsGoals) && data.savingsGoals.length > 0) {
+      if (Array.isArray(data.savingsGoals)) {
         const rows = data.savingsGoals.filter((s: any) => s && s.id).map((s: any) => savingsGoalToDb(s, userId));
-        promises.push(upsertRows('savings_goals', rows));
+        promises.push(syncRowsWithDeletions('savings_goals', rows));
       }
 
-      if (Array.isArray(data.reminders) && data.reminders.length > 0) {
+      if (Array.isArray(data.reminders)) {
         const rows = data.reminders.filter((r: any) => r && r.id).map((r: any) => reminderToDb(r, userId));
-        promises.push(upsertRows('payment_reminders', rows));
+        promises.push(syncRowsWithDeletions('payment_reminders', rows));
       }
 
-      if (Array.isArray(data.documents) && data.documents.length > 0) {
+      if (Array.isArray(data.documents)) {
         const rows = data.documents.filter((d: any) => d && d.id).map((d: any) => documentToDb(d, userId));
-        promises.push(upsertRows('documents', rows));
+        promises.push(syncRowsWithDeletions('documents', rows));
       }
 
-      if (Array.isArray(data.notes) && data.notes.length > 0) {
+      if (Array.isArray(data.notes)) {
         const rows = data.notes.filter((n: any) => n && n.id).map((n: any) => noteToDb(n, userId));
-        promises.push(upsertRows('notes', rows));
+        promises.push(syncRowsWithDeletions('notes', rows));
       }
 
-      if (Array.isArray(data.tasks) && data.tasks.length > 0) {
+      if (Array.isArray(data.tasks)) {
         const rows = data.tasks.filter((t: any) => t && t.id).map((t: any) => taskToDb(t, userId));
-        promises.push(upsertRows('tasks', rows));
+        promises.push(syncRowsWithDeletions('tasks', rows));
       }
 
-      if (Array.isArray(data.passwords) && data.passwords.length > 0) {
+      if (Array.isArray(data.passwords)) {
         const rows = data.passwords.filter((p: any) => p && p.id).map((p: any) => passwordToDb(p, userId));
-        promises.push(upsertRows('passwords', rows));
+        promises.push(syncRowsWithDeletions('passwords', rows));
       }
 
-      if (Array.isArray(data.customerDriveFolders) && data.customerDriveFolders.length > 0) {
+      if (Array.isArray(data.customerDriveFolders)) {
         const rows = data.customerDriveFolders.filter((f: any) => f && f.id).map((f: any) => customerDriveFolderToDb(f, userId));
-        promises.push(upsertRows('customer_drive_folders', rows));
+        promises.push(syncRowsWithDeletions('customer_drive_folders', rows));
       }
 
-      if (Array.isArray(data.customerDriveFiles) && data.customerDriveFiles.length > 0) {
+      if (Array.isArray(data.customerDriveFiles)) {
         const rows = data.customerDriveFiles.filter((f: any) => f && f.id).map((f: any) => customerDriveFileToDb(f, userId));
-        promises.push(upsertRows('customer_drive_files', rows));
+        promises.push(syncRowsWithDeletions('customer_drive_files', rows));
       }
 
       const logoToSave = data.settings?.businessLogo || data.profile?.avatarUrl || '';

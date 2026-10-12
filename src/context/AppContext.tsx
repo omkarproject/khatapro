@@ -19,6 +19,7 @@ import {
   PasswordItem
 } from '@/types';
 import { StorageService, getCleanDefaultSettings } from '@/services/storage';
+import { deleteFromDriveFiles } from '@/lib/driveUploadClient';
 
 export const defaultEmptyProfile: UserProfile = {
   id: '',
@@ -743,6 +744,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteCustomer = (id: string) => {
+    const cd = StorageService.getCustomerDriveData(id);
+    if (cd && Array.isArray(cd.files) && cd.files.length > 0) {
+      deleteFromDriveFiles({ fileNames: cd.files.map(f => f.name) });
+    }
     const updated = StorageService.deleteCustomer(id);
     setCustomers(updated);
     setTransactions(StorageService.getTransactions());
@@ -778,6 +783,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteTransaction = (id: string) => {
+    const existing = StorageService.getTransactions().find(t => t.id === id);
+    if (existing && Array.isArray(existing.attachments) && existing.attachments.length > 0) {
+      deleteFromDriveFiles({ fileNames: existing.attachments });
+    }
     const updatedTxns = StorageService.deleteTransaction(id);
     setTransactions(updatedTxns);
     setCustomers(StorageService.getCustomers()); // balance updated
@@ -801,6 +810,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteInvoice = (id: string) => {
+    const existing = StorageService.getInvoices().find(i => i.id === id);
+    if (existing) {
+      const fileNames: string[] = [];
+      if (existing.receiptName) fileNames.push(existing.receiptName);
+      (existing.statusHistory || []).forEach(h => {
+        if (h.receiptName) fileNames.push(h.receiptName);
+      });
+      if (fileNames.length > 0) {
+        deleteFromDriveFiles({ fileNames });
+      }
+    }
     const updated = StorageService.deleteInvoice(id);
     setInvoices(updated);
     setProducts(StorageService.getProducts());
@@ -837,6 +857,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteExpense = (id: string) => {
+    const existing = StorageService.getExpenses().find(e => e.id === id);
+    if (existing && existing.title) {
+      deleteFromDriveFiles({ fileName: existing.title });
+    }
     const updated = StorageService.deleteExpense(id);
     setExpenses(updated);
     addToast('Expense Removed', 'Expense item deleted.', 'info');
@@ -851,6 +875,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteSavingsGoal = (id: string) => {
+    const existing = StorageService.getSavingsGoals().find(s => s.id === id);
+    if (existing) {
+      const fileNames: string[] = [];
+      if (existing.documentName) fileNames.push(existing.documentName);
+      (existing.deposits || []).forEach(d => {
+        if (d.receiptName) fileNames.push(d.receiptName);
+      });
+      if (fileNames.length > 0) {
+        deleteFromDriveFiles({ fileNames });
+      }
+    }
     const updated = StorageService.deleteSavingsGoal(id);
     setSavingsGoals(updated);
     addToast('Goal Removed', 'Savings goal deleted.', 'info');
@@ -879,6 +914,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteDocument = (id: string) => {
+    const existing = StorageService.getDocuments().find(d => d.id === id);
+    if (existing && existing.title) {
+      deleteFromDriveFiles({ fileName: existing.title });
+    }
     const updated = StorageService.deleteDocument(id);
     setDocuments(updated);
     addToast('Document Deleted', 'Document removed.', 'info');

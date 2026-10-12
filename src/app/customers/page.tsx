@@ -6,7 +6,7 @@ import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl } from '@/lib/utils';
 import { Customer, CustomerDriveFolder, CustomerDriveFile, CustomerBankAccount, CustomerUpiDetail } from '@/types';
 import { StorageService } from '@/services/storage';
-import { uploadToDriveFiles } from '@/lib/driveUploadClient';
+import { uploadToDriveFiles, deleteFromDriveFiles } from '@/lib/driveUploadClient';
 import {
   Users,
   Search,
@@ -352,6 +352,7 @@ export default function CustomersPage() {
     if (!confirm(`Are you sure you want to delete folder "${folderName}" and all files inside it?`)) return;
 
     const updatedFolders = driveFolders.filter(f => f.id !== folderId);
+    const filesToDelete = driveFiles.filter(f => f.folderId === folderId);
     const updatedFiles = driveFiles.filter(f => f.folderId !== folderId);
     setDriveFolders(updatedFolders);
     setDriveFiles(updatedFiles);
@@ -362,6 +363,9 @@ export default function CustomersPage() {
       folders: updatedFolders,
       files: updatedFiles,
     });
+    if (filesToDelete.length > 0) {
+      deleteFromDriveFiles({ fileNames: filesToDelete.map(f => f.name) });
+    }
     addToast('Folder Deleted', `Folder "${folderName}" deleted.`, 'info');
   };
 
@@ -458,6 +462,7 @@ export default function CustomersPage() {
     if (previewFile?.id === fileId) {
       setPreviewFile(null);
     }
+    deleteFromDriveFiles({ fileName });
     addToast('File Deleted', `"${fileName}" has been deleted.`, 'info');
   };
 

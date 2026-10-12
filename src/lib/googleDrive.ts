@@ -319,3 +319,59 @@ export async function downloadDriveFileBuffer(drive: any, fileId: string): Promi
   );
   return Buffer.from(res.data as ArrayBuffer);
 }
+
+/**
+ * Deletes a file from Google Drive by file ID
+ */
+export async function deleteDriveFile(drive: any, fileId: string): Promise<boolean> {
+  try {
+    await drive.files.delete({ fileId });
+    return true;
+  } catch (err: any) {
+    console.warn(`Could not delete file ${fileId} from Drive:`, err?.message || err);
+    return false;
+  }
+}
+
+/**
+ * Finds and deletes all files matching a specific fileName inside SmartKhata Pro/Files/
+ */
+export async function deleteDriveFilesByName(drive: any, filesFolderId: string, fileName: string): Promise<number> {
+  if (!fileName || !filesFolderId) return 0;
+  try {
+    const safeName = fileName.replace(/'/g, "\\'");
+    const res = await drive.files.list({
+      q: `'${filesFolderId}' in parents and name = '${safeName}' and trashed = false`,
+      fields: 'files(id, name)',
+    });
+    const files = res.data.files || [];
+    let count = 0;
+    for (const f of files) {
+      try {
+        await drive.files.delete({ fileId: f.id });
+        count++;
+      } catch (delErr) {
+        console.warn(`Could not delete file ${f.id} (${f.name}) from Drive:`, delErr);
+      }
+    }
+    return count;
+  } catch (err: any) {
+    console.warn('deleteDriveFilesByName error:', err?.message || err);
+    return 0;
+  }
+}
+
+/**
+ * Finds and deletes multiple files matching an array of fileNames inside SmartKhata Pro/Files/
+ */
+export async function deleteDriveFilesByNames(drive: any, filesFolderId: string, fileNames: string[]): Promise<number> {
+  if (!Array.isArray(fileNames) || fileNames.length === 0 || !filesFolderId) return 0;
+  let totalDeleted = 0;
+  for (const name of fileNames) {
+    if (name) {
+      totalDeleted += await deleteDriveFilesByName(drive, filesFolderId, name);
+    }
+  }
+  return totalDeleted;
+}
+
