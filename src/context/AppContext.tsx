@@ -746,7 +746,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const deleteCustomer = (id: string) => {
     const cd = StorageService.getCustomerDriveData(id);
     if (cd && Array.isArray(cd.files) && cd.files.length > 0) {
-      deleteFromDriveFiles({ fileNames: cd.files.map(f => f.name) });
+      deleteFromDriveFiles({
+        fileIds: cd.files.map((f: any) => f.driveFileId).filter(Boolean),
+        fileNames: cd.files.map((f: any) => f.name).filter(Boolean),
+      });
     }
     const updated = StorageService.deleteCustomer(id);
     setCustomers(updated);
@@ -785,7 +788,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const deleteTransaction = (id: string) => {
     const existing = StorageService.getTransactions().find(t => t.id === id);
     if (existing && Array.isArray(existing.attachments) && existing.attachments.length > 0) {
-      deleteFromDriveFiles({ fileNames: existing.attachments });
+      const fileNames: string[] = [];
+      const fileIds: string[] = [];
+      existing.attachments.forEach(att => {
+        try {
+          const parsed = JSON.parse(att);
+          if (parsed.driveFileId) fileIds.push(parsed.driveFileId);
+          if (parsed.name) fileNames.push(parsed.name);
+        } catch {
+          if (att) fileNames.push(att);
+        }
+      });
+      if (fileIds.length > 0 || fileNames.length > 0) {
+        deleteFromDriveFiles({ fileIds, fileNames });
+      }
     }
     const updatedTxns = StorageService.deleteTransaction(id);
     setTransactions(updatedTxns);
@@ -795,9 +811,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateTransactionAttachments = (transactionId: string, attachments: string[]) => {
+    const existing = StorageService.getTransactions().find(t => t.id === transactionId);
+    if (existing && Array.isArray(existing.attachments)) {
+      const remainingIds = new Set<string>();
+      attachments.forEach(a => {
+        try {
+          const p = JSON.parse(a);
+          if (p.id) remainingIds.add(p.id);
+          if (p.driveFileId) remainingIds.add(p.driveFileId);
+          if (p.name) remainingIds.add(p.name);
+        } catch {
+          remainingIds.add(a);
+        }
+      });
+
+      const fileIdsToDelete: string[] = [];
+      const fileNamesToDelete: string[] = [];
+
+      existing.attachments.forEach(oldAtt => {
+        try {
+          const oldParsed = JSON.parse(oldAtt);
+          const isKept = (oldParsed.id && remainingIds.has(oldParsed.id)) ||
+                         (oldParsed.driveFileId && remainingIds.has(oldParsed.driveFileId)) ||
+                         (oldParsed.name && remainingIds.has(oldParsed.name));
+          if (!isKept) {
+            if (oldParsed.driveFileId) fileIdsToDelete.push(oldParsed.driveFileId);
+            if (oldParsed.name) fileNamesToDelete.push(oldParsed.name);
+          }
+        } catch {
+          if (!remainingIds.has(oldAtt)) {
+            fileNamesToDelete.push(oldAtt);
+          }
+        }
+      });
+
+      if (fileIdsToDelete.length > 0 || fileNamesToDelete.length > 0) {
+        deleteFromDriveFiles({ fileIds: fileIdsToDelete, fileNames: fileNamesToDelete });
+      }
+    }
+
     const updatedTxns = StorageService.updateTransactionAttachments(transactionId, attachments);
     setTransactions(updatedTxns);
-    addToast('Attachment Removed', 'File was removed from the bill record.', 'info');
+    addToast('Attachment Removed', 'File was removed from the bill record and Google Drive.', 'info');
     syncWithDatabase();
   };
 

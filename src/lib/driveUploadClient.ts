@@ -6,13 +6,15 @@ export async function uploadToDriveFiles(
   fileName: string,
   fileData: string, // data:image/png;base64,... or raw base64
   mimeType?: string,
-  userId?: string
+  userId?: string,
+  customerContext?: { customerName?: string; customerId?: string }
 ): Promise<{
   success: boolean;
   uploadedToDrive?: boolean;
   fileId?: string;
   webViewLink?: string;
   webContentLink?: string;
+  folder?: string;
   message?: string;
 }> {
   try {
@@ -25,6 +27,8 @@ export async function uploadToDriveFiles(
         fileName,
         fileData,
         mimeType,
+        customerName: customerContext?.customerName,
+        customerId: customerContext?.customerId,
       }),
     });
 
@@ -36,6 +40,42 @@ export async function uploadToDriveFiles(
   } catch (err: any) {
     console.warn('Drive file upload background notice:', err?.message || err);
     return { success: false, uploadedToDrive: false };
+  }
+}
+
+/**
+ * Helper to rename user attachments directly in Google Drive
+ */
+export async function renameInDriveFiles(params: {
+  fileId?: string;
+  oldFileName: string;
+  newFileName: string;
+  userId?: string;
+}): Promise<{
+  success: boolean;
+  renamedOnDrive?: boolean;
+  renamedCount?: number;
+  message?: string;
+}> {
+  try {
+    const effectiveUserId = params.userId || (typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('skp_auth_user') || '{}')?.id) : undefined);
+    const res = await fetch('/api/backup/google-drive/rename-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...params,
+        userId: effectiveUserId,
+      }),
+    });
+
+    if (!res.ok) {
+      return { success: false, renamedOnDrive: false };
+    }
+
+    return await res.json();
+  } catch (err: any) {
+    console.warn('Drive file rename notice:', err?.message || err);
+    return { success: false, renamedOnDrive: false };
   }
 }
 

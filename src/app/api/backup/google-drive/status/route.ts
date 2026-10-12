@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserDriveTokens } from '@/lib/driveTokenHelper';
+import { getUserDriveTokens, getAuthenticatedDriveForUser } from '@/lib/driveTokenHelper';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { isGoogleDriveConfigured } from '@/lib/googleDrive';
+import { isGoogleDriveConfigured, getDriveStorageQuota } from '@/lib/googleDrive';
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,11 +18,21 @@ export async function GET(req: NextRequest) {
         isConnected: false,
         googleEmail: null,
         lastBackupAt: null,
+        storageQuota: null,
         history: [],
       });
     }
 
-    // Fetch backup history from Supabase
+    // Fetch storage quota from Google Drive API
+    let storageQuota: any = null;
+    try {
+      const driveObj = await getAuthenticatedDriveForUser(userId);
+      storageQuota = await getDriveStorageQuota(driveObj.drive);
+    } catch (quotaErr) {
+      console.warn('Could not retrieve Drive storage quota:', quotaErr);
+    }
+
+    // Fetch backup history from Supabase (Only 1 latest backup as requested by user)
     let history: any[] = [];
     const supabase = getSupabaseAdmin();
     if (supabase) {
@@ -32,7 +42,7 @@ export async function GET(req: NextRequest) {
           .select('*')
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
-          .limit(10);
+          .limit(1);
         if (data) history = data;
       } catch (err) {
         console.warn('Error reading google_drive_backups history:', err);
@@ -48,7 +58,8 @@ export async function GET(req: NextRequest) {
       googleEmail: tokenRecord.google_email || 'Connected Google Account',
       lastConnectedAt: tokenRecord.last_connected_at,
       lastBackupAt,
-      history,
+      storageQuota,
+      history: history.slice(0, 1),
     });
   } catch (error: any) {
     console.error('Google Drive status check error:', error);

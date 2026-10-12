@@ -6,7 +6,7 @@ import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl } from '@/lib/utils';
 import { Customer, CustomerDriveFolder, CustomerDriveFile, CustomerBankAccount, CustomerUpiDetail } from '@/types';
 import { StorageService } from '@/services/storage';
-import { uploadToDriveFiles, deleteFromDriveFiles } from '@/lib/driveUploadClient';
+import { uploadToDriveFiles, deleteFromDriveFiles, renameInDriveFiles } from '@/lib/driveUploadClient';
 import {
   Users,
   Search,
@@ -111,6 +111,7 @@ export default function CustomersPage() {
     transactions,
     settings,
     addToast,
+    syncWithDatabase,
   } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -342,6 +343,7 @@ export default function CustomersPage() {
       folders: updatedFolders,
       files: driveFiles,
     });
+    syncWithDatabase();
     addToast('Folder Created', `Folder "${name}" created successfully.`, 'success');
     setNewFolderName('');
     setIsNewFolderModalOpen(false);
@@ -363,8 +365,12 @@ export default function CustomersPage() {
       folders: updatedFolders,
       files: updatedFiles,
     });
+    syncWithDatabase();
     if (filesToDelete.length > 0) {
-      deleteFromDriveFiles({ fileNames: filesToDelete.map(f => f.name) });
+      deleteFromDriveFiles({
+        fileIds: filesToDelete.map(f => f.driveFileId).filter(Boolean) as string[],
+        fileNames: filesToDelete.map(f => f.name),
+      });
     }
     addToast('Folder Deleted', `Folder "${folderName}" deleted.`, 'info');
   };
@@ -389,15 +395,25 @@ export default function CustomersPage() {
         folders: updatedFolders,
         files: driveFiles,
       });
+      syncWithDatabase();
       addToast('Renamed', `Folder renamed to "${upperName}".`, 'success');
     } else {
+      const targetFile = driveFiles.find(f => f.id === renamingItem.id);
       const updatedFiles = driveFiles.map(f =>
-        f.id === renamingItem.id ? { ...f, name: trimmed } : f
+        f.id === renamingItem.id ? { ...f, name: trimmed, updatedAt: new Date().toISOString() } : f
       );
       setDriveFiles(updatedFiles);
       StorageService.saveCustomerDriveData(driveCustomer.id, {
         folders: driveFolders,
         files: updatedFiles,
+      });
+      syncWithDatabase();
+
+      // Rename file in Google Drive via Drive API
+      renameInDriveFiles({
+        fileId: targetFile?.driveFileId,
+        oldFileName: renamingItem.name,
+        newFileName: trimmed,
       });
       addToast('Renamed', `File renamed to "${trimmed}".`, 'success');
     }
@@ -421,16 +437,35 @@ export default function CustomersPage() {
       const reader = new FileReader();
       reader.onload = () => {
         const fileDataUrl = reader.result as string;
-        newFiles.push({
-          id: `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        const newFileId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const customerDriveFile: CustomerDriveFile = {
+          id: newFileId,
           name: file.name,
           size: file.size,
           type: file.type || 'application/octet-stream',
           dataUrl: fileDataUrl,
           folderId: currentFolderId,
           uploadedAt: new Date().toISOString(),
+        };
+        newFiles.push(customerDriveFile);
+
+        uploadToDriveFiles(
+          file.name,
+          fileDataUrl,
+          file.type,
+          undefined,
+          { customerName: driveCustomer.name, customerId: driveCustomer.id }
+        ).then(res => {
+          if (res.fileId) {
+            customerDriveFile.driveFileId = res.fileId;
+            setDriveFiles(prev =>
+              prev.map(f => f.id === newFileId ? { ...f, driveFileId: res.fileId } : f)
+            );
+          }
+        }).catch(err => {
+          console.warn('Customer drive background file upload error:', err);
         });
-        uploadToDriveFiles(file.name, fileDataUrl, file.type);
+
         loadedCount++;
 
         if (loadedCount === fileList.length) {
@@ -440,7 +475,8 @@ export default function CustomersPage() {
             folders: driveFolders,
             files: updatedFiles,
           });
-          addToast('Files Uploaded', `${newFiles.length} file(s) saved to customer drive.`, 'success');
+          syncWithDatabase();
+          addToast('Files Uploaded', `${newFiles.length} file(s) saved to customer drive and Google Drive.`, 'success');
         }
       };
       reader.readAsDataURL(file);
@@ -453,6 +489,7 @@ export default function CustomersPage() {
     if (!driveCustomer) return;
     if (!confirm(`Are you sure you want to delete "${fileName}"?`)) return;
 
+    const targetFile = driveFiles.find(f => f.id === fileId);
     const updatedFiles = driveFiles.filter(f => f.id !== fileId);
     setDriveFiles(updatedFiles);
     StorageService.saveCustomerDriveData(driveCustomer.id, {
@@ -462,7 +499,11 @@ export default function CustomersPage() {
     if (previewFile?.id === fileId) {
       setPreviewFile(null);
     }
-    deleteFromDriveFiles({ fileName });
+    deleteFromDriveFiles({
+      fileId: targetFile?.driveFileId,
+      fileName,
+    });
+    syncWithDatabase();
     addToast('File Deleted', `"${fileName}" has been deleted.`, 'info');
   };
 
@@ -593,6 +634,12 @@ export default function CustomersPage() {
 
     if (!confirm(confirmMsg)) return;
 
+    const filesToDelete = driveFiles.filter(f => {
+      if (selectedFileIds.includes(f.id)) return true;
+      if (f.folderId && selectedFolderIds.includes(f.folderId)) return true;
+      return false;
+    });
+
     const updatedFolders = driveFolders.filter(f => !selectedFolderIds.includes(f.id));
     const updatedFiles = driveFiles.filter(f => {
       if (selectedFileIds.includes(f.id)) return false;
@@ -609,6 +656,14 @@ export default function CustomersPage() {
       folders: updatedFolders,
       files: updatedFiles,
     });
+    syncWithDatabase();
+
+    if (filesToDelete.length > 0) {
+      deleteFromDriveFiles({
+        fileIds: filesToDelete.map(f => f.driveFileId).filter(Boolean) as string[],
+        fileNames: filesToDelete.map(f => f.name),
+      });
+    }
 
     addToast('Deleted', `${totalCount} item(s) deleted successfully.`, 'info');
   };
@@ -761,6 +816,7 @@ export default function CustomersPage() {
         folders: updatedFolders,
         files: updatedFiles,
       });
+      syncWithDatabase();
 
       addToast('Pasted Successfully', `${pastedCount} item(s) copied to this location.`, 'success');
 
@@ -805,6 +861,7 @@ export default function CustomersPage() {
         folders: updatedFolders,
         files: updatedFiles,
       });
+      syncWithDatabase();
 
       // Clear clipboard after cut & paste
       setDriveClipboard(null);

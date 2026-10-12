@@ -251,6 +251,7 @@ export interface CustomerDriveFile {
   type: string;
   mimeType?: string;
   url?: string;
+  driveFileId?: string;
   dataUrl: string;
   folderId?: string | null;
   createdAt?: string;

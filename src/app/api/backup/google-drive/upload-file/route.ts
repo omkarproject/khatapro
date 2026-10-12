@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedDriveForUser } from '@/lib/driveTokenHelper';
-import { ensureSmartKhataFolders, uploadAttachmentFile } from '@/lib/googleDrive';
+import { ensureSmartKhataFolders, uploadAttachmentFile, getOrCreateCustomerFolder } from '@/lib/googleDrive';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { userId: reqUserId, fileName, fileData, mimeType } = body;
+    const { userId: reqUserId, fileName, fileData, mimeType, customerName, customerId } = body;
     const userId = reqUserId || req.cookies.get('skp_auth_session')?.value;
 
     if (!userId) {
@@ -38,6 +38,19 @@ export async function POST(req: NextRequest) {
       filesFolderId = folders.filesId;
     }
 
+    // If customer context is provided, store in Customer CRM/<Customer Name>/
+    let targetFolderId = filesFolderId;
+    let targetFolderName = 'SmartKhata Pro/Files';
+    if (customerName || customerId) {
+      try {
+        targetFolderId = await getOrCreateCustomerFolder(drive, filesFolderId, customerName || 'Customer', customerId);
+        targetFolderName = `SmartKhata Pro/Files/Customer CRM/${customerName || 'Customer'}`;
+      } catch (fldErr) {
+        console.warn('Could not create/locate customer folder in Drive, using root Files folder:', fldErr);
+        targetFolderId = filesFolderId;
+      }
+    }
+
     // Convert data URL or base64 to Buffer
     let buffer: Buffer;
     let actualMime = mimeType || 'application/octet-stream';
@@ -54,10 +67,10 @@ export async function POST(req: NextRequest) {
       buffer = Buffer.from(fileData, 'base64');
     }
 
-    // Upload to Google Drive "SmartKhata Pro/Files/"
+    // Upload to Google Drive
     const uploadResult = await uploadAttachmentFile(
       drive,
-      filesFolderId,
+      targetFolderId,
       fileName,
       actualMime,
       buffer
@@ -71,8 +84,8 @@ export async function POST(req: NextRequest) {
       webContentLink: uploadResult.webContentLink,
       size: uploadResult.size,
       fileName,
-      folder: 'SmartKhata Pro/Files',
-      message: `File "${fileName}" saved to your Google Drive in SmartKhata Pro/Files!`,
+      folder: targetFolderName,
+      message: `File "${fileName}" saved to your Google Drive in ${targetFolderName}!`,
     });
   } catch (error: any) {
     console.error('File upload to Google Drive error:', error);

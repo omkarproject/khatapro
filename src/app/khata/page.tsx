@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
 import { Customer, Transaction, TransactionType, PaymentReminder } from '@/types';
-import { uploadToDriveFiles } from '@/lib/driveUploadClient';
+import { uploadToDriveFiles, deleteFromDriveFiles } from '@/lib/driveUploadClient';
 import QRCode from 'qrcode';
 import {
   ArrowLeft,
@@ -137,6 +137,7 @@ interface AttachedBill {
   name: string;
   type: 'image' | 'pdf';
   size?: string;
+  driveFileId?: string;
 }
 
   // Entry screen state (Screen 3)
@@ -417,6 +418,14 @@ interface AttachedBill {
     } else if (itemToRemove) {
       // If from new entry form
       setEntryAttachments(prev => prev.filter(att => att.id !== itemToRemove.id && att.url !== itemToRemove.url));
+    }
+
+    // Delete attachment directly from Google Drive
+    if (itemToRemove) {
+      deleteFromDriveFiles({
+        fileId: itemToRemove.driveFileId,
+        fileName: itemToRemove.name,
+      });
     }
   };
 
@@ -1095,14 +1104,34 @@ interface AttachedBill {
 
         const reader = new FileReader();
         reader.onload = (evt) => {
-          newItems.push({
-            id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-            url: evt.target?.result as string,
+          const base64Data = evt.target?.result as string;
+          const attId = `att_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+          const billItem: AttachedBill = {
+            id: attId,
+            url: base64Data,
             name: file.name,
             type: isPdf ? 'pdf' : 'image',
             size: sizeFormatted,
+          };
+          newItems.push(billItem);
+
+          uploadToDriveFiles(
+            file.name,
+            base64Data,
+            file.type,
+            undefined,
+            activeCustomer ? { customerName: activeCustomer.name, customerId: activeCustomer.id } : undefined
+          ).then(uploadRes => {
+            if (uploadRes.fileId) {
+              billItem.driveFileId = uploadRes.fileId;
+              setEntryAttachments(prev =>
+                prev.map(item => item.id === attId ? { ...item, driveFileId: uploadRes.fileId } : item)
+              );
+            }
+          }).catch(err => {
+            console.warn('Background bill upload error:', err);
           });
-          uploadToDriveFiles(file.name, evt.target?.result as string, file.type);
+
           loadedCount++;
           if (loadedCount === fileList.length) {
             setEntryAttachments(prev => [...prev, ...newItems]);
@@ -1117,6 +1146,13 @@ interface AttachedBill {
   };
 
   const handleRemoveAttachment = (id: string) => {
+    const itemToRemove = entryAttachments.find(item => item.id === id);
+    if (itemToRemove) {
+      deleteFromDriveFiles({
+        fileId: itemToRemove.driveFileId,
+        fileName: itemToRemove.name,
+      });
+    }
     setEntryAttachments(prev => prev.filter(item => item.id !== id));
   };
 

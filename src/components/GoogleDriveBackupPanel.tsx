@@ -54,6 +54,12 @@ export default function GoogleDriveBackupPanel() {
   const [googleEmail, setGoogleEmail] = useState<string | null>(null);
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
   const [history, setHistory] = useState<BackupItem[]>([]);
+  const [storageQuota, setStorageQuota] = useState<{
+    usage: number;
+    limit: number;
+    usageInDrive: number;
+    percentUsed: number;
+  } | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
 
   // Operations
@@ -75,6 +81,15 @@ export default function GoogleDriveBackupPanel() {
   const [isDisconnectModalOpen, setIsDisconnectModalOpen] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
 
+  // Format bytes to human readable string
+  const formatStorageBytes = (bytes: number): string => {
+    if (!bytes || bytes <= 0) return '0 B';
+    const gb = bytes / (1024 * 1024 * 1024);
+    if (gb >= 1) return `${gb.toFixed(2)} GB`;
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(1)} MB`;
+  };
+
   // Fetch status on mount
   const checkStatus = async () => {
     try {
@@ -86,7 +101,8 @@ export default function GoogleDriveBackupPanel() {
         setIsConfigured(json.isConfigured !== false);
         setGoogleEmail(json.googleEmail);
         setLastBackupAt(json.lastBackupAt);
-        setHistory(json.history || []);
+        setStorageQuota(json.storageQuota || null);
+        setHistory(json.history ? json.history.slice(0, 1) : []);
       }
     } catch (err) {
       console.warn('Failed to load Google Drive status:', err);
@@ -385,17 +401,60 @@ export default function GoogleDriveBackupPanel() {
           </div>
         )}
 
-        {/* Backup History Table */}
+        {/* Google Drive Storage Quota Progress Bar */}
+        {isConnected && storageQuota && (
+          <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-800 space-y-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+              <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
+                <HardDrive className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>Google Drive Storage Quota</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-mono bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 font-bold">
+                  {storageQuota.percentUsed}% Used
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                <span className="font-bold text-slate-800 dark:text-slate-200">{formatStorageBytes(storageQuota.usage)}</span> of{' '}
+                <span className="font-bold text-slate-800 dark:text-slate-200">{formatStorageBytes(storageQuota.limit)}</span> Total
+              </div>
+            </div>
+
+            {/* Visual Progress Bar */}
+            <div className="w-full bg-slate-200 dark:bg-slate-800/80 h-3 rounded-full overflow-hidden p-0.5">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  storageQuota.percentUsed > 90
+                    ? 'bg-rose-500'
+                    : storageQuota.percentUsed > 75
+                    ? 'bg-amber-500'
+                    : 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                }`}
+                style={{ width: `${Math.max(2, Math.min(100, storageQuota.percentUsed))}%` }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-0.5">
+              <span>Free Drive Space: <strong className="text-emerald-600 dark:text-emerald-400 font-mono font-bold">{formatStorageBytes(Math.max(0, storageQuota.limit - storageQuota.usage))}</strong></span>
+              <span>Total Drive Storage: <strong className="font-mono text-slate-700 dark:text-slate-300">{formatStorageBytes(storageQuota.limit)}</strong></span>
+            </div>
+          </div>
+        )}
+
+        {/* Latest Backup Snapshot */}
         {isConnected && history.length > 0 && (
           <div className="space-y-3 pt-2">
             <div className="flex items-center justify-between">
-              <h5 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Recent Google Drive Backups
-              </h5>
+              <div>
+                <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  Latest Cloud Backup Snapshot
+                </h5>
+                <p className="text-[11px] text-slate-400">
+                  Auto-updated snapshot in <code className="text-emerald-600 font-mono">SmartKhata Pro/Backups/</code>
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={checkStatus}
-                className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
               >
                 <RefreshCw className="w-3 h-3" /> Refresh
               </button>
@@ -412,13 +471,13 @@ export default function GoogleDriveBackupPanel() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono text-[11px]">
-                  {history.map((item) => (
+                  {history.slice(0, 1).map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                       <td className="p-3 text-slate-700 dark:text-slate-300">
                         {new Date(item.created_at).toLocaleString('en-IN')}
                       </td>
                       <td className="p-3 text-slate-900 dark:text-white font-bold flex items-center gap-1.5">
-                        <FileArchive className="w-3.5 h-3.5 text-emerald-500" />
+                        <FileArchive className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                         <span className="truncate max-w-xs">{item.filename}</span>
                       </td>
                       <td className="p-3 text-slate-500 dark:text-slate-400">
@@ -427,7 +486,7 @@ export default function GoogleDriveBackupPanel() {
                       <td className="p-3">
                         {item.status === 'success' ? (
                           <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
-                            <CheckCircle2 className="w-3 h-3" /> Uploaded
+                            <CheckCircle2 className="w-3 h-3" /> Active Snapshot
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-rose-500 font-bold">
