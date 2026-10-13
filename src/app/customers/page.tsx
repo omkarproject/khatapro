@@ -48,6 +48,7 @@ import {
   Copy,
   Scissors,
   ClipboardPaste,
+  Loader2,
 } from 'lucide-react';
 
 const POPULAR_BANKS = [
