@@ -161,6 +161,11 @@ interface AttachedBill {
   } | null>(null);
   const billFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Avatar Review Modal State
+  const [reviewAvatarCustomer, setReviewAvatarCustomer] = useState<Customer | null>(null);
+  const [isUpdatingAvatarInReview, setIsUpdatingAvatarInReview] = useState(false);
+  const reviewAvatarInputRef = useRef<HTMLInputElement>(null);
+
   // Profile Edit modal / sub-edit states (Screen 1)
   const [profileAvatar, setProfileAvatar] = useState<string | null>(null);
   const [isEditingName, setIsEditingName] = useState(false);
@@ -551,8 +556,47 @@ interface AttachedBill {
     setReminderTxn(null);
   };
 
+  // Helper to persist pending attachments to Drive on save
+  const uploadPendingAttachmentsToDrive = async (customer: Customer, attachments: AttachedBill[]): Promise<AttachedBill[]> => {
+    if (!attachments || attachments.length === 0) return [];
+    const updated: AttachedBill[] = [];
+
+    for (const item of attachments) {
+      if (item.url && item.url.startsWith('data:')) {
+        try {
+          const uploadRes = await uploadToDriveFiles(
+            item.name,
+            item.url,
+            item.type === 'pdf' ? 'application/pdf' : 'image/jpeg',
+            undefined,
+            {
+              customerName: customer.name,
+              customerId: customer.id,
+              folderName: 'BILLS',
+              appFileId: item.id,
+              uploadedAt: new Date().toISOString(),
+            }
+          );
+
+          if (uploadRes.success && uploadRes.fileId) {
+            updated.push({
+              ...item,
+              driveFileId: uploadRes.fileId,
+              url: `/api/backup/google-drive/view-file?fileId=${uploadRes.fileId}`,
+            });
+            continue;
+          }
+        } catch (err) {
+          console.warn('Failed to upload attachment to drive during save:', err);
+        }
+      }
+      updated.push(item);
+    }
+    return updated;
+  };
+
   // Handle Confirm / Save Entry (Screen 3 -> Screen 2)
-  const handleConfirmEntry = () => {
+  const handleConfirmEntry = async () => {
     const num = parseFloat(entryAmountStr);
     if (!num || num <= 0) {
       addToast('Amount Required', 'Please enter a valid amount using the keypad.', 'warning');
@@ -562,8 +606,11 @@ interface AttachedBill {
 
     const isGot = entryType === 'received';
 
+    // Upload any newly attached files to Google Drive now that user has confirmed saving
+    const finalAttachments = await uploadPendingAttachmentsToDrive(activeCustomer, entryAttachments);
+
     // Serialize attached bills to transaction attachments
-    const serializedAttachments = entryAttachments.map(b => JSON.stringify(b));
+    const serializedAttachments = finalAttachments.map(b => JSON.stringify(b));
     const finalTxnId = editingTxnId || `txn_${Date.now()}`;
 
     if (editingTxnId) {
@@ -1020,7 +1067,7 @@ interface AttachedBill {
   };
 
   // Handle "Create Bill": Save transaction to Khata AND generate single-transaction PDF Bill
-  const handleCreateBillAndSave = (isEditing: boolean) => {
+  const handleCreateBillAndSave = async (isEditing: boolean) => {
     const num = parseFloat(entryAmountStr);
     if (!num || num <= 0) {
       addToast('Amount Required', 'Please enter a valid amount using the keypad.', 'warning');
@@ -1029,7 +1076,8 @@ interface AttachedBill {
     if (!activeCustomer) return;
 
     const isGot = entryType === 'received';
-    const serializedAttachments = entryAttachments.map(b => JSON.stringify(b));
+    const finalAttachments = await uploadPendingAttachmentsToDrive(activeCustomer, entryAttachments);
+    const serializedAttachments = finalAttachments.map(b => JSON.stringify(b));
 
     let createdOrUpdatedTxn: Transaction;
 
@@ -1097,15 +1145,13 @@ interface AttachedBill {
     printSingleTxnBill(createdOrUpdatedTxn);
   };
 
-  // Handle Multi-file & PDF Upload (Screen 3)
+  // Handle Multi-file & PDF Upload (Screen 3) - Keep local until save
   const handleBillUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
       const fileList = Array.from(files);
       // Reset input value so same files can be re-selected if needed
       e.target.value = '';
-
-      addToast('Uploading Bills...', `Processing ${fileList.length} bill attachment(s)...`, 'info');
 
       (async () => {
         const newItems: AttachedBill[] = [];
@@ -1125,30 +1171,6 @@ interface AttachedBill {
             });
 
             const attId = `att_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-            let driveFileId: string | undefined = undefined;
-
-            if (activeCustomer) {
-              try {
-                const uploadRes = await uploadToDriveFiles(
-                  file.name,
-                  base64Data,
-                  file.type,
-                  undefined,
-                  {
-                    customerName: activeCustomer.name,
-                    customerId: activeCustomer.id,
-                    folderName: 'BILLS',
-                    appFileId: attId,
-                    uploadedAt: new Date().toISOString(),
-                  }
-                );
-                if (uploadRes.fileId) {
-                  driveFileId = uploadRes.fileId;
-                }
-              } catch (err) {
-                console.warn('Drive upload notice:', err);
-              }
-            }
 
             const billItem: AttachedBill = {
               id: attId,
@@ -1156,7 +1178,6 @@ interface AttachedBill {
               name: file.name,
               type: isPdf ? 'pdf' : 'image',
               size: sizeFormatted,
-              driveFileId,
             };
             newItems.push(billItem);
           } catch (err) {
@@ -1166,7 +1187,7 @@ interface AttachedBill {
 
         if (newItems.length > 0) {
           setEntryAttachments(prev => [...prev, ...newItems]);
-          addToast('Bills Added', `${newItems.length} file(s) attached and saved to Google Drive.`, 'success');
+          addToast('Bills Attached', `${newItems.length} file(s) attached. Will save to Google Drive on confirming entry.`, 'info');
         }
       })();
     }
@@ -1174,66 +1195,119 @@ interface AttachedBill {
 
   const handleRemoveAttachment = (id: string) => {
     const itemToRemove = entryAttachments.find(item => item.id === id);
-    if (itemToRemove) {
+    if (itemToRemove && itemToRemove.driveFileId) {
       deleteFromDriveFiles({
         fileId: itemToRemove.driveFileId,
-        fileName: itemToRemove.driveFileId ? undefined : itemToRemove.name,
+        fileName: itemToRemove.name,
       });
     }
     setEntryAttachments(prev => prev.filter(item => item.id !== id));
   };
 
-  // Handle Avatar Upload (Screen 1 Profile & Screen 2 Header)
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Open Customer Profile Photo Review Modal
+  const handleOpenAvatarReview = (cust: Customer) => {
+    setReviewAvatarCustomer(cust);
+  };
+
+  // Change Profile Photo in Review Modal
+  const handleChangeAvatarInReview = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && activeCustomer) {
-      if (file.size > 5 * 1024 * 1024) {
-        addToast('File too large', 'Please select an image under 5MB.', 'warning');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = async (evt) => {
-        const base64 = evt.target?.result as string;
-        setProfileAvatar(base64);
-
-        const ext = file.name.split('.').pop() || 'jpg';
-        const photoFileName = `${activeCustomer.name.replace(/\s+/g, '_')}_profile_picture.${ext}`;
-        const uploadRes = await uploadToDriveFiles(
-          photoFileName,
-          base64,
-          file.type || 'image/jpeg',
-          undefined,
-          {
-            customerName: activeCustomer.name,
-            customerId: activeCustomer.id,
-            folderName: 'Profile Picture',
-            category: 'Profile Picture',
-            appFileId: `avatar_${activeCustomer.id}`,
-            uploadedAt: new Date().toISOString(),
-          }
-        );
-
-        let finalAvatar = base64;
-        let driveAvatarId: string | undefined = undefined;
-        if (uploadRes.success && uploadRes.fileId) {
-          driveAvatarId = uploadRes.fileId;
-          finalAvatar = `/api/backup/google-drive/view-file?fileId=${uploadRes.fileId}`;
-          setProfileAvatar(finalAvatar);
-        }
-
-        const updated = {
-          ...activeCustomer,
-          avatar: finalAvatar,
-          avatarUrl: finalAvatar,
-          driveAvatarId,
-        };
-        saveCustomer(updated);
-        addToast('Photo Updated', `${activeCustomer.name}'s profile photo saved to Google Drive (Profile Picture folder).`, 'success');
-      };
-      reader.readAsDataURL(file);
-    }
-    // Reset file input value so selecting the same file works
+    if (!file || !reviewAvatarCustomer) return;
     e.target.value = '';
+
+    if (file.size > 5 * 1024 * 1024) {
+      addToast('File too large', 'Please select an image under 5MB.', 'warning');
+      return;
+    }
+
+    setIsUpdatingAvatarInReview(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const ext = file.name.split('.').pop() || 'jpg';
+      const photoFileName = `${reviewAvatarCustomer.name.replace(/\s+/g, '_')}_profile_picture.${ext}`;
+      const uploadRes = await uploadToDriveFiles(
+        photoFileName,
+        base64,
+        file.type || 'image/jpeg',
+        undefined,
+        {
+          customerName: reviewAvatarCustomer.name,
+          customerId: reviewAvatarCustomer.id,
+          folderName: 'Profile Picture',
+          category: 'Profile Picture',
+          appFileId: `avatar_${reviewAvatarCustomer.id}`,
+          uploadedAt: new Date().toISOString(),
+        }
+      );
+
+      let finalAvatar = base64;
+      let driveAvatarId: string | undefined = undefined;
+      if (uploadRes.success && uploadRes.fileId) {
+        driveAvatarId = uploadRes.fileId;
+        finalAvatar = `/api/backup/google-drive/view-file?fileId=${uploadRes.fileId}`;
+      }
+
+      const updatedCust = {
+        ...reviewAvatarCustomer,
+        avatar: finalAvatar,
+        avatarUrl: finalAvatar,
+        driveAvatarId,
+      };
+
+      saveCustomer(updatedCust);
+      setReviewAvatarCustomer(updatedCust);
+      if (activeCustomer && activeCustomer.id === reviewAvatarCustomer.id) {
+        setProfileAvatar(finalAvatar);
+      }
+      addToast('Photo Updated', `${reviewAvatarCustomer.name}'s profile photo updated on Google Drive.`, 'success');
+    } catch (err) {
+      console.error('Avatar update failed in review:', err);
+      addToast('Update Failed', 'Could not upload photo to Google Drive.', 'error');
+    } finally {
+      setIsUpdatingAvatarInReview(false);
+    }
+  };
+
+  // Delete / Remove Profile Photo in Review Modal
+  const handleDeleteAvatarInReview = async () => {
+    if (!reviewAvatarCustomer) return;
+    if (!confirm(`Are you sure you want to remove the profile photo of ${reviewAvatarCustomer.name}?`)) return;
+
+    setIsUpdatingAvatarInReview(true);
+    try {
+      const targetDriveId = reviewAvatarCustomer.driveAvatarId;
+      if (targetDriveId) {
+        await deleteFromDriveFiles({
+          fileId: targetDriveId,
+          fileName: `${reviewAvatarCustomer.name.replace(/\s+/g, '_')}_profile_picture`,
+        });
+      }
+
+      const updatedCust: Customer = {
+        ...reviewAvatarCustomer,
+        avatar: undefined,
+        avatarUrl: undefined,
+        driveAvatarId: undefined,
+      };
+
+      saveCustomer(updatedCust);
+      setReviewAvatarCustomer(updatedCust);
+      if (activeCustomer && activeCustomer.id === reviewAvatarCustomer.id) {
+        setProfileAvatar(null);
+      }
+      addToast('Photo Removed', `Profile photo deleted for ${reviewAvatarCustomer.name}.`, 'info');
+    } catch (err) {
+      console.error('Failed to remove photo:', err);
+      addToast('Error', 'Failed to remove photo from Google Drive.', 'error');
+    } finally {
+      setIsUpdatingAvatarInReview(false);
+    }
   };
 
   // Save profile edit fields (Screen 1)
@@ -2507,7 +2581,14 @@ interface AttachedBill {
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className={`w-9 h-9 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-xs shrink-0 ${getCustomerRatingBorder(cust.rating)}`}>
+                      <div 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenAvatarReview(cust);
+                        }}
+                        className={`w-9 h-9 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-xs shrink-0 cursor-pointer hover:ring-2 hover:ring-emerald-500/50 transition-all ${getCustomerRatingBorder(cust.rating)}`}
+                        title="Click to view/change profile photo"
+                      >
                         {(cust.avatar || cust.avatarUrl) ? (
                           <img
                             src={cust.avatar || cust.avatarUrl}
@@ -2596,24 +2677,22 @@ interface AttachedBill {
                     {/* Big Avatar with Camera Button (Image 1) */}
                     <div className="flex flex-col items-center justify-center my-2">
                       <div className="relative">
-                        <div className={`w-24 h-24 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-400 overflow-hidden shadow-md ${getCustomerRatingBorder(activeCustomer.rating)}`}>
+                        <div 
+                          onClick={() => handleOpenAvatarReview(activeCustomer)}
+                          className={`w-24 h-24 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-400 overflow-hidden shadow-md cursor-pointer hover:ring-4 hover:ring-emerald-500/30 transition-all ${getCustomerRatingBorder(activeCustomer.rating)}`}
+                          title="Click to view full photo, change, or delete"
+                        >
                           {profileAvatar ? (
                             <img src={profileAvatar} alt={activeCustomer.name} className="w-full h-full object-cover" />
                           ) : (
                             <User className="w-12 h-12 text-slate-400" />
                           )}
                         </div>
-                        <input
-                          type="file"
-                          ref={avatarFileInputRef}
-                          accept="image/*"
-                          onChange={handleAvatarUpload}
-                          className="hidden"
-                        />
                         <button
-                          onClick={() => avatarFileInputRef.current?.click()}
-                          className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-lg border-2 border-white"
-                          title="Change Photo"
+                          type="button"
+                          onClick={() => handleOpenAvatarReview(activeCustomer)}
+                          className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-lg border-2 border-white cursor-pointer"
+                          title="View, change, or remove photo"
                         >
                           <Camera className="w-4 h-4" />
                         </button>
@@ -2835,12 +2914,12 @@ interface AttachedBill {
                         <ArrowLeft className="w-6 h-6 stroke-[2.2]" />
                       </button>
 
-                      {/* Circular Avatar (with rating-based colored round border) - Click opens View Profile, Camera button updates photo directly */}
+                      {/* Circular Avatar (with rating-based colored round border) - Click opens Review Modal */}
                       <div className="relative group shrink-0">
                         <div
-                          onClick={() => setScreenView('profile')}
+                          onClick={() => handleOpenAvatarReview(activeCustomer)}
                           className={`w-10 h-10 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-base shadow-xs shrink-0 select-none cursor-pointer hover:opacity-90 active:scale-95 transition-all overflow-hidden ${getCustomerRatingBorder(activeCustomer.rating)}`}
-                          title="Click to view/edit profile"
+                          title="Click to view full photo, change, or delete"
                         >
                           {(activeCustomer.avatar || activeCustomer.avatarUrl) ? (
                             <img
@@ -2857,20 +2936,13 @@ interface AttachedBill {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            headerAvatarInputRef.current?.click();
+                            handleOpenAvatarReview(activeCustomer);
                           }}
                           className="absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-md border border-white dark:border-slate-900 transition-transform hover:scale-110 cursor-pointer"
-                          title="Change customer photo directly"
+                          title="View, change, or remove profile photo"
                         >
                           <Camera className="w-2.5 h-2.5" />
                         </button>
-                        <input
-                          type="file"
-                          ref={headerAvatarInputRef}
-                          accept="image/*"
-                          onChange={handleAvatarUpload}
-                          className="hidden"
-                        />
                       </div>
 
                       {/* Customer Name (Color based on rating) + CRM Star Rating - Click opens View Profile */}
@@ -4904,6 +4976,100 @@ interface AttachedBill {
 
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* Hidden File Input for Avatar Review Modal Change */}
+      <input
+        ref={reviewAvatarInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleChangeAvatarInReview}
+      />
+
+      {/* Customer Profile Photo Review Modal */}
+      {reviewAvatarCustomer && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5 text-center relative">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 text-left">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <User className="w-4 h-4 text-emerald-500" />
+                  <span>Profile Photo</span>
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {reviewAvatarCustomer.name} ({reviewAvatarCustomer.id})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReviewAvatarCustomer(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Photo View Box */}
+            <div className="relative mx-auto w-56 h-56 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-inner group">
+              {(reviewAvatarCustomer.avatar || reviewAvatarCustomer.avatarUrl) ? (
+                <img
+                  src={reviewAvatarCustomer.avatar || reviewAvatarCustomer.avatarUrl}
+                  alt={reviewAvatarCustomer.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="text-center p-4">
+                  <div className="w-20 h-20 mx-auto rounded-full bg-[#E57373] text-white font-black text-3xl flex items-center justify-center shadow-lg mb-2">
+                    {reviewAvatarCustomer.name.charAt(0)}
+                  </div>
+                  <p className="text-xs text-slate-400">No profile photo uploaded</p>
+                </div>
+              )}
+
+              {isUpdatingAvatarInReview && (
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center text-white gap-2">
+                  <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
+                  <span className="text-xs font-semibold">Updating Google Drive...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Actions: Change / Delete / Close */}
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isUpdatingAvatarInReview}
+                onClick={() => reviewAvatarInputRef.current?.click()}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-md shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
+              >
+                <Camera className="w-4 h-4" />
+                <span>{(reviewAvatarCustomer.avatar || reviewAvatarCustomer.avatarUrl) ? 'Change Photo' : 'Upload Photo'}</span>
+              </button>
+
+              {(reviewAvatarCustomer.avatar || reviewAvatarCustomer.avatarUrl) && (
+                <button
+                  type="button"
+                  disabled={isUpdatingAvatarInReview}
+                  onClick={handleDeleteAvatarInReview}
+                  className="flex items-center justify-center gap-1.5 py-2.5 px-3.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-400 transition-all cursor-pointer disabled:opacity-50"
+                  title="Remove Profile Photo"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Remove</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setReviewAvatarCustomer(null)}
+                className="py-2.5 px-4 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

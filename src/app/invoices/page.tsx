@@ -586,15 +586,11 @@ export default function InvoicesPage() {
       setStatusModalReceiptUrl(result);
       setStatusModalReceiptName(file.name);
       setStatusModalReceiptType(type);
-      uploadToDriveFiles(file.name, result, file.type, {
-        category: 'Invoices',
-        uploadedAt: new Date().toISOString(),
-      });
     };
     reader.readAsDataURL(file);
   };
 
-  const handleSaveStatusUpdate = (e: React.FormEvent) => {
+  const handleSaveStatusUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!statusModalInvoice) return;
 
@@ -608,13 +604,34 @@ export default function InvoicesPage() {
         ? 0
         : (!isNaN(enteredAmt) ? enteredAmt : statusModalInvoice.paidAmount);
 
+    let finalReceiptUrl = statusModalReceiptUrl;
+    if (statusModalReceiptUrl && statusModalReceiptUrl.startsWith('data:')) {
+      try {
+        const uploadRes = await uploadToDriveFiles(
+          statusModalReceiptName || `receipt_${statusModalInvoice.invoiceNumber}.jpg`,
+          statusModalReceiptUrl,
+          statusModalReceiptType === 'pdf' ? 'application/pdf' : 'image/jpeg',
+          undefined,
+          {
+            category: 'Invoices',
+            uploadedAt: new Date().toISOString(),
+          }
+        );
+        if (uploadRes.success && uploadRes.fileId) {
+          finalReceiptUrl = `/api/backup/google-drive/view-file?fileId=${uploadRes.fileId}`;
+        }
+      } catch (err) {
+        console.warn('Could not upload receipt to drive on invoice status save:', err);
+      }
+    }
+
     const historyEntry: InvoiceStatusHistoryEntry = {
       id: `hist_${Date.now()}`,
       status: newStatus,
       date: paymentDate,
       amount: paidAmt,
       notes: statusModalNotes.trim() || (newStatus === 'paid' ? 'Payment received' : `Marked as ${newStatus}`),
-      receiptUrl: statusModalReceiptUrl || undefined,
+      receiptUrl: finalReceiptUrl || undefined,
       receiptName: statusModalReceiptName || undefined,
       receiptType: statusModalReceiptType || undefined,
       updatedAt: new Date().toISOString(),
@@ -625,7 +642,7 @@ export default function InvoicesPage() {
       status: newStatus,
       paidAmount: paidAmt,
       paymentDate: newStatus === 'paid' ? paymentDate : statusModalInvoice.paymentDate,
-      receiptUrl: statusModalReceiptUrl || statusModalInvoice.receiptUrl,
+      receiptUrl: finalReceiptUrl || statusModalInvoice.receiptUrl,
       receiptName: statusModalReceiptName || statusModalInvoice.receiptName,
       receiptType: statusModalReceiptType || statusModalInvoice.receiptType,
       statusHistory: [historyEntry, ...(statusModalInvoice.statusHistory || [])],

@@ -250,10 +250,6 @@ export default function SavingsPage() {
     reader.onload = (e) => {
       const result = e.target?.result as string;
       onSuccess(result, file.name, type);
-      uploadToDriveFiles(file.name, result, file.type, {
-        category: 'Savings',
-        uploadedAt: new Date().toISOString(),
-      });
     };
     reader.readAsDataURL(file);
   };
@@ -286,12 +282,33 @@ export default function SavingsPage() {
     setIsModalOpen(true);
   };
 
-  const handleSaveGoal = (e: React.FormEvent) => {
+  const handleSaveGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     const tAmt = parseFloat(targetAmount);
     if (!tAmt || tAmt <= 0) {
       addToast('Invalid Target', 'Please enter a target amount.', 'error');
       return;
+    }
+
+    let finalDocUrl = goalDocUrl;
+    if (goalDocUrl && goalDocUrl.startsWith('data:')) {
+      try {
+        const uploadRes = await uploadToDriveFiles(
+          goalDocName || `savings_doc_${Date.now()}.pdf`,
+          goalDocUrl,
+          goalDocType === 'pdf' ? 'application/pdf' : 'image/jpeg',
+          undefined,
+          {
+            category: 'Savings',
+            uploadedAt: new Date().toISOString(),
+          }
+        );
+        if (uploadRes.success && uploadRes.fileId) {
+          finalDocUrl = `/api/backup/google-drive/view-file?fileId=${uploadRes.fileId}`;
+        }
+      } catch (err) {
+        console.warn('Could not upload savings doc to drive:', err);
+      }
     }
 
     if (editingGoal) {
@@ -303,7 +320,7 @@ export default function SavingsPage() {
         category,
         deadline,
         notes: notes.trim(),
-        documentUrl: goalDocUrl || undefined,
+        documentUrl: finalDocUrl || undefined,
         documentName: goalDocName || undefined,
         documentType: goalDocType || undefined,
       };
@@ -331,7 +348,7 @@ export default function SavingsPage() {
         category,
         deadline,
         notes: notes.trim(),
-        documentUrl: goalDocUrl || undefined,
+        documentUrl: finalDocUrl || undefined,
         documentName: goalDocName || undefined,
         documentType: goalDocType || undefined,
         deposits: initialDeposits,

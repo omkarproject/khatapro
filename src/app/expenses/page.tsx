@@ -229,10 +229,6 @@ export default function ExpensesPage() {
             });
           };
           img.src = result;
-          uploadToDriveFiles(file.name, result, file.type, {
-            category: 'Expenses',
-            uploadedAt: new Date().toISOString(),
-          });
         }
       };
       reader.readAsDataURL(file);
@@ -245,12 +241,39 @@ export default function ExpensesPage() {
     setFormReceipts(prev => prev.filter((_, idx) => idx !== idxToRemove));
   };
 
-  const handleSaveExpense = (e: React.FormEvent) => {
+  const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = parseFloat(formAmount);
     if (!amt || amt <= 0) {
       addToast('Invalid Amount', 'Please enter a valid amount.', 'error');
       return;
+    }
+
+    // Upload receipts to Google Drive only now upon explicit save
+    const uploadedReceipts: string[] = [];
+    for (let i = 0; i < formReceipts.length; i++) {
+      const receipt = formReceipts[i];
+      if (receipt.startsWith('data:')) {
+        try {
+          const uploadRes = await uploadToDriveFiles(
+            `expense_${Date.now()}_${i + 1}.jpg`,
+            receipt,
+            'image/jpeg',
+            undefined,
+            {
+              category: 'Expenses',
+              uploadedAt: new Date().toISOString(),
+            }
+          );
+          if (uploadRes.success && uploadRes.fileId) {
+            uploadedReceipts.push(`/api/backup/google-drive/view-file?fileId=${uploadRes.fileId}`);
+            continue;
+          }
+        } catch (err) {
+          console.warn('Error uploading expense receipt to drive:', err);
+        }
+      }
+      uploadedReceipts.push(receipt);
     }
 
     const newExpense: Expense = {
@@ -261,8 +284,8 @@ export default function ExpensesPage() {
       date: formDate,
       paymentMode: formMode,
       notes: formNotes.trim(),
-      receiptUrl: formReceipts[0] || '',
-      receiptUrls: formReceipts,
+      receiptUrl: uploadedReceipts[0] || '',
+      receiptUrls: uploadedReceipts,
       isRecurring: formIsRecurring,
       tags: formTags.split(',').map(t => t.trim()),
       createdAt: new Date().toISOString(),

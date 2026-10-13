@@ -216,7 +216,102 @@ export default function CustomersPage() {
   const [formRating, setFormRating] = useState('5');
   const [formNotes, setFormNotes] = useState('');
 
-  // Handle avatar upload in customer Add/Edit modal
+  // Customer Profile Photo Review / Change / Delete Modal State
+  const [reviewAvatarCustomer, setReviewAvatarCustomer] = useState<Customer | null>(null);
+  const [isUpdatingAvatarInReview, setIsUpdatingAvatarInReview] = useState(false);
+  const reviewAvatarInputRef = useRef<HTMLInputElement>(null);
+
+  const handleOpenAvatarReview = (cust: Customer) => {
+    setReviewAvatarCustomer(cust);
+  };
+
+  const handleChangeAvatarInReview = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !reviewAvatarCustomer) return;
+    if (file.size > 10 * 1024 * 1024) {
+      addToast('File too large', 'Please select an image under 10MB.', 'warning');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const base64 = evt.target?.result as string;
+      setIsUpdatingAvatarInReview(true);
+      addToast('Uploading...', `Uploading new photo to Google Drive for ${reviewAvatarCustomer.name}...`, 'info');
+
+      try {
+        const driveRes = await uploadToDriveFiles(
+          `${reviewAvatarCustomer.name.replace(/\s+/g, '_')}_profile.jpg`,
+          base64,
+          file.type || 'image/jpeg',
+          {
+            customerName: reviewAvatarCustomer.name,
+            customerId: reviewAvatarCustomer.id,
+            folderName: 'Profile Picture',
+            category: 'Profile Picture',
+            appFileId: `avatar_${reviewAvatarCustomer.id}`,
+            uploadedAt: new Date().toISOString(),
+          }
+        );
+
+        let finalAvatar = base64;
+        let driveAvatarId: string | undefined = undefined;
+        if (driveRes.success && driveRes.fileId) {
+          driveAvatarId = driveRes.fileId;
+          finalAvatar = `/api/backup/google-drive/view-file?fileId=${driveRes.fileId}`;
+        }
+
+        const updatedCustomer: Customer = {
+          ...reviewAvatarCustomer,
+          avatar: finalAvatar,
+          avatarUrl: finalAvatar,
+          driveAvatarId,
+        };
+
+        saveCustomer(updatedCustomer);
+        setReviewAvatarCustomer(updatedCustomer);
+        if (activeCustomer && activeCustomer.id === updatedCustomer.id) {
+          setActiveCustomer(updatedCustomer);
+        }
+        addToast('Photo Updated', `${reviewAvatarCustomer.name}'s profile photo updated and saved to Google Drive!`, 'success');
+      } catch (err) {
+        console.error('Error changing avatar:', err);
+        addToast('Upload Failed', 'Could not upload photo to Google Drive.', 'error');
+      } finally {
+        setIsUpdatingAvatarInReview(false);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleDeleteAvatarInReview = async () => {
+    if (!reviewAvatarCustomer) return;
+    if (!confirm(`Are you sure you want to remove ${reviewAvatarCustomer.name}'s profile photo?`)) return;
+
+    if (reviewAvatarCustomer.driveAvatarId) {
+      deleteFromDriveFiles({ fileId: reviewAvatarCustomer.driveAvatarId });
+    } else if (reviewAvatarCustomer.avatar && reviewAvatarCustomer.avatar.includes('view-file?fileId=')) {
+      const match = reviewAvatarCustomer.avatar.match(/fileId=([a-zA-Z0-9_-]+)/);
+      if (match) deleteFromDriveFiles({ fileId: match[1] });
+    }
+
+    const updatedCustomer: Customer = {
+      ...reviewAvatarCustomer,
+      avatar: undefined,
+      avatarUrl: undefined,
+      driveAvatarId: undefined,
+    };
+
+    saveCustomer(updatedCustomer);
+    setReviewAvatarCustomer(null);
+    if (activeCustomer && activeCustomer.id === updatedCustomer.id) {
+      setActiveCustomer(updatedCustomer);
+    }
+    addToast('Photo Removed', `${reviewAvatarCustomer.name}'s profile photo has been deleted.`, 'info');
+  };
+
+  // Handle avatar upload in customer Add/Edit modal (purely local preview until Save is clicked)
   const handleFormAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -225,40 +320,10 @@ export default function CustomersPage() {
         return;
       }
       const reader = new FileReader();
-      reader.onload = async (evt) => {
+      reader.onload = (evt) => {
         const base64 = evt.target?.result as string;
         setFormAvatar(base64);
-        addToast('Photo Selected', 'Uploading profile picture to Google Drive...', 'info');
-
-        const targetId = editingId || `cust_${Date.now()}`;
-        const targetName = formName.trim() || 'Customer';
-
-        setIsUploadingAvatar(true);
-        try {
-          const driveRes = await uploadToDriveFiles(
-            `${targetName.replace(/\s+/g, '_')}_profile.jpg`,
-            base64,
-            file.type || 'image/jpeg',
-            {
-              customerName: targetName,
-              customerId: targetId,
-              folderName: 'Profile Picture',
-              category: 'Profile Picture',
-              appFileId: `avatar_${targetId}`,
-              uploadedAt: new Date().toISOString(),
-            }
-          );
-
-          if (driveRes.success && driveRes.fileId) {
-            setFormDriveAvatarId(driveRes.fileId);
-            setFormAvatar(`/api/backup/google-drive/view-file?fileId=${driveRes.fileId}`);
-            addToast('Profile Pic Uploaded', 'Saved to Google Drive in customer Profile Picture folder!', 'success');
-          }
-        } catch (err) {
-          console.warn('Profile picture upload deferred:', err);
-        } finally {
-          setIsUploadingAvatar(false);
-        }
+        addToast('Photo Selected', 'Preview updated. Photo will be saved to Google Drive when you click Save.', 'info');
       };
       reader.readAsDataURL(file);
     }
@@ -1237,7 +1302,14 @@ export default function CustomersPage() {
                 {/* Header */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl fintech-gradient-primary text-white font-extrabold flex items-center justify-center text-sm shadow-md overflow-hidden relative shrink-0">
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenAvatarReview(cust);
+                      }}
+                      className="w-11 h-11 rounded-2xl fintech-gradient-primary text-white font-extrabold flex items-center justify-center text-sm shadow-md overflow-hidden relative shrink-0 cursor-pointer hover:ring-2 hover:ring-indigo-500 hover:scale-105 transition-all group"
+                      title="Click to view full photo / change / delete"
+                    >
                       {(cust.avatar || cust.avatarUrl) ? (
                         <img
                           src={cust.avatar || cust.avatarUrl}
@@ -1412,12 +1484,16 @@ export default function CustomersPage() {
           <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 max-w-2xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl fintech-gradient-primary text-white font-black flex items-center justify-center text-lg overflow-hidden relative shrink-0 shadow-md">
+                <div 
+                  onClick={() => handleOpenAvatarReview(activeCustomer)}
+                  className="w-12 h-12 rounded-2xl fintech-gradient-primary text-white font-black flex items-center justify-center text-lg overflow-hidden relative shrink-0 shadow-md cursor-pointer hover:ring-2 hover:ring-emerald-500/50 transition-all group"
+                  title="Click to view, change, or remove profile picture"
+                >
                   {(activeCustomer.avatar || activeCustomer.avatarUrl) ? (
                     <img
                       src={activeCustomer.avatar || activeCustomer.avatarUrl}
                       alt={activeCustomer.name}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                       onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                     />
                   ) : (
@@ -3499,6 +3575,100 @@ export default function CustomersPage() {
                 type="button"
                 onClick={() => setEnlargedQr(null)}
                 className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden File Input for Avatar Review Modal Change */}
+      <input
+        ref={reviewAvatarInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleChangeAvatarInReview}
+      />
+
+      {/* Customer Profile Photo Review Modal */}
+      {reviewAvatarCustomer && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5 text-center relative">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 text-left">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <User className="w-4 h-4 text-emerald-500" />
+                  <span>Profile Photo</span>
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {reviewAvatarCustomer.name} ({reviewAvatarCustomer.id})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReviewAvatarCustomer(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Photo View Box */}
+            <div className="relative mx-auto w-56 h-56 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-inner group">
+              {(reviewAvatarCustomer.avatar || reviewAvatarCustomer.avatarUrl) ? (
+                <img
+                  src={reviewAvatarCustomer.avatar || reviewAvatarCustomer.avatarUrl}
+                  alt={reviewAvatarCustomer.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="text-center p-4">
+                  <div className="w-20 h-20 mx-auto rounded-full fintech-gradient-primary text-white font-black text-3xl flex items-center justify-center shadow-lg mb-2">
+                    {reviewAvatarCustomer.name.charAt(0)}
+                  </div>
+                  <p className="text-xs text-slate-400">No profile photo uploaded</p>
+                </div>
+              )}
+
+              {isUpdatingAvatarInReview && (
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center text-white gap-2">
+                  <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
+                  <span className="text-xs font-semibold">Updating Google Drive...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Actions: Change / Delete / Close */}
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isUpdatingAvatarInReview}
+                onClick={() => reviewAvatarInputRef.current?.click()}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-md shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
+              >
+                <Camera className="w-4 h-4" />
+                <span>{(reviewAvatarCustomer.avatar || reviewAvatarCustomer.avatarUrl) ? 'Change Photo' : 'Upload Photo'}</span>
+              </button>
+
+              {(reviewAvatarCustomer.avatar || reviewAvatarCustomer.avatarUrl) && (
+                <button
+                  type="button"
+                  disabled={isUpdatingAvatarInReview}
+                  onClick={handleDeleteAvatarInReview}
+                  className="flex items-center justify-center gap-1.5 py-2.5 px-3.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-400 transition-all cursor-pointer disabled:opacity-50"
+                  title="Remove Profile Photo"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Remove</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setReviewAvatarCustomer(null)}
+                className="py-2.5 px-4 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
               >
                 Close
               </button>
