@@ -10,7 +10,7 @@ const DEFAULT_CONFIG = {
   betaTestingEnabled: false,
 };
 
-// GET: Returns the global system config (maintenanceMode & betaTestingEnabled) from Supabase
+// GET: Returns the global system config (maintenanceMode, betaTestingEnabled, websiteBranding, broadcasts, supportTickets)
 export async function GET() {
   try {
     if (isSupabaseConfigured()) {
@@ -23,10 +23,19 @@ export async function GET() {
           .single();
 
         if (data && !error) {
+          const maintObj = data.maintenance_mode || {};
           return NextResponse.json({
             success: true,
-            maintenanceMode: data.maintenance_mode || DEFAULT_CONFIG.maintenanceMode,
+            maintenanceMode: {
+              enabled: Boolean(maintObj.enabled),
+              durationMinutes: maintObj.durationMinutes || 15,
+              reason: maintObj.reason || DEFAULT_CONFIG.maintenanceMode.reason,
+              endTime: maintObj.endTime,
+            },
             betaTestingEnabled: Boolean(data.beta_testing_enabled),
+            websiteBranding: maintObj.websiteBranding || null,
+            broadcasts: Array.isArray(maintObj.broadcasts) ? maintObj.broadcasts : [],
+            supportTickets: Array.isArray(maintObj.supportTickets) ? maintObj.supportTickets : [],
           });
         }
       }
@@ -35,12 +44,18 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       ...DEFAULT_CONFIG,
+      websiteBranding: null,
+      broadcasts: [],
+      supportTickets: [],
     });
   } catch (error: any) {
     console.error('System config GET error:', error);
     return NextResponse.json({
       success: true,
       ...DEFAULT_CONFIG,
+      websiteBranding: null,
+      broadcasts: [],
+      supportTickets: [],
     });
   }
 }
@@ -49,7 +64,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { maintenanceMode, betaTestingEnabled } = body;
+    const { maintenanceMode, betaTestingEnabled, websiteBranding, broadcasts, supportTickets } = body;
 
     if (!isSupabaseConfigured()) {
       return NextResponse.json({
@@ -66,14 +81,39 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
-    const updatePayload: any = {
-      id: 'global_config',
-      updated_at: new Date().toISOString(),
+    // Read current global config to preserve existing properties
+    const { data: existingData } = await supabase
+      .from('global_config')
+      .select('*')
+      .eq('id', 'global_config')
+      .single();
+
+    const currentMaint = (existingData && typeof existingData.maintenance_mode === 'object' && existingData.maintenance_mode !== null)
+      ? existingData.maintenance_mode
+      : {};
+
+    const updatedMaint = {
+      ...currentMaint,
+      ...(maintenanceMode !== undefined ? maintenanceMode : {}),
     };
 
-    if (maintenanceMode !== undefined) {
-      updatePayload.maintenance_mode = maintenanceMode;
+    if (websiteBranding !== undefined) {
+      updatedMaint.websiteBranding = websiteBranding;
     }
+
+    if (broadcasts !== undefined) {
+      updatedMaint.broadcasts = broadcasts;
+    }
+
+    if (supportTickets !== undefined) {
+      updatedMaint.supportTickets = supportTickets;
+    }
+
+    const updatePayload: any = {
+      id: 'global_config',
+      maintenance_mode: updatedMaint,
+      updated_at: new Date().toISOString(),
+    };
 
     if (betaTestingEnabled !== undefined) {
       updatePayload.beta_testing_enabled = Boolean(betaTestingEnabled);
@@ -92,10 +132,20 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
+    const savedMaint = data?.maintenance_mode || {};
+
     return NextResponse.json({
       success: true,
-      maintenanceMode: data?.maintenance_mode,
+      maintenanceMode: {
+        enabled: Boolean(savedMaint.enabled),
+        durationMinutes: savedMaint.durationMinutes || 15,
+        reason: savedMaint.reason || DEFAULT_CONFIG.maintenanceMode.reason,
+        endTime: savedMaint.endTime,
+      },
       betaTestingEnabled: Boolean(data?.beta_testing_enabled),
+      websiteBranding: savedMaint.websiteBranding || null,
+      broadcasts: savedMaint.broadcasts || [],
+      supportTickets: savedMaint.supportTickets || [],
     });
   } catch (error: any) {
     console.error('System config POST error:', error);

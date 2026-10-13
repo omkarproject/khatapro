@@ -1,4 +1,4 @@
-export type UserRole = 'super_admin' | 'admin' | 'user' | 'business_owner' | 'manager' | 'accountant' | 'staff';
+export type UserRole = 'admin' | 'user' | 'super_admin' | 'business_owner'; // Simplified to 2 primary roles in UI: Admin and Merchant (user)
 
 export interface UserProfile {
   id: string;
@@ -10,7 +10,57 @@ export interface UserProfile {
   businessName: string;
   businessGst?: string;
   businessAddress?: string;
+  isBlocked?: boolean;
+  blockedReason?: string;
   createdAt: string;
+}
+
+export type BroadcastType = 'banner' | 'popup' | 'notification';
+export type BroadcastSeverity = 'info' | 'success' | 'warning' | 'error'; // green=success, yellow=warning, red=error, blue=info
+
+export interface BroadcastMessage {
+  id: string;
+  title: string;
+  content: string; // Plain text or HTML
+  type: BroadcastType; // banner, popup, notification
+  severity: BroadcastSeverity; // green=success, yellow=warning, red=error, blue=info
+  targetType: 'all' | 'specific_user';
+  targetUserId?: string; // If targeting specific merchant
+  targetUserName?: string;
+  isClosable: boolean;
+  isActive: boolean;
+  expiresAt?: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface SupportMessage {
+  id: string;
+  ticketId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: 'admin' | 'merchant';
+  text: string;
+  attachments?: string[]; // Image URLs or Drive file proxies
+  createdAt: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  ticketNo: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userPhone?: string;
+  subject: string;
+  status: 'open' | 'closed' | 'in_progress';
+  priority: 'low' | 'medium' | 'high';
+  category: 'Billing' | 'Technical' | 'Account' | 'General';
+  unreadByAdmin: boolean;
+  unreadByMerchant: boolean;
+  messages: SupportMessage[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CustomerBankAccount {
@@ -355,6 +405,8 @@ export interface SystemSettings {
   websiteName?: string;
   websiteLogo?: string;
   websiteFavicon?: string;
+  broadcasts?: BroadcastMessage[];
+  supportTickets?: SupportTicket[];
 }
 
 export interface NoteItem {

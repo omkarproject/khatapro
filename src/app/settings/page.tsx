@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { StorageService } from '@/services/storage';
-import { BackendProvider, SystemSettings, PaymentSettings, PaymentCollectionMode, TelegramBackupSettings, BackupFrequency, BackupDayOfWeek } from '@/types';
+import { BackendProvider, SystemSettings, PaymentSettings, PaymentCollectionMode, TelegramBackupSettings, BackupFrequency, BackupDayOfWeek, BroadcastMessage, BroadcastType, BroadcastSeverity } from '@/types';
 import { LocalAdapter, SupabaseAdapter, FirebaseAdapter, MongoAdapter } from '@/services/backendManager';
 import {
   Settings,
@@ -52,14 +52,25 @@ import {
   Zap,
   HardHat,
   Users,
+  User,
   UserCheck,
   UserX,
+  Trash2,
   Search,
   Filter,
   Palette,
   Info,
   HelpCircle,
   Link2,
+  Megaphone,
+  Radio,
+  Bell,
+  Ban,
+  Unlock,
+  ShieldAlert,
+  LifeBuoy,
+  Headphones,
+  Trash,
 } from 'lucide-react';
 import GoogleDriveBackupPanel from '@/components/GoogleDriveBackupPanel';
 
@@ -74,8 +85,35 @@ export default function SettingsPage() {
 
   const [mainTab, setMainTab] = useState<'business' | 'backup' | 'branding' | 'admin'>('business');
   const [businessSubTab, setBusinessSubTab] = useState<'enterprise' | 'payments' | 'security'>('enterprise');
+  const [brandingSubTab, setBrandingSubTab] = useState<'visuals' | 'broadcast'>('visuals');
   const [adminSubTab, setAdminSubTab] = useState<'supabase' | 'drive' | 'users' | 'maintenance'>('supabase');
   const [isSyncingData, setIsSyncingData] = useState(false);
+
+  // Broadcasts State
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastContent, setBroadcastContent] = useState('');
+  const [broadcastType, setBroadcastType] = useState<BroadcastType>('banner');
+  const [broadcastSeverity, setBroadcastSeverity] = useState<BroadcastSeverity>('info');
+  const [broadcastTargetType, setBroadcastTargetType] = useState<'all' | 'specific_user'>('all');
+  const [broadcastTargetUserId, setBroadcastTargetUserId] = useState<string>('');
+  const [broadcastTargetUserName, setBroadcastTargetUserName] = useState<string>('');
+  const [broadcastIsClosable, setBroadcastIsClosable] = useState(true);
+
+  // Merchant Actions Modal State (In CRM: Password change, Personal Broadcast, Profile view/edit)
+  const [selectedMerchantForAction, setSelectedMerchantForAction] = useState<any | null>(null);
+  const [merchantActionType, setMerchantActionType] = useState<'password' | 'broadcast' | 'profile' | null>(null);
+  const [newMerchantPassword, setNewMerchantPassword] = useState('');
+  const [isSubmittingMerchantAction, setIsSubmittingMerchantAction] = useState(false);
+  const [merchantEditProfile, setMerchantEditProfile] = useState<{
+    name: string;
+    businessName: string;
+    phone: string;
+    businessAddress: string;
+  }>({ name: '', businessName: '', phone: '', businessAddress: '' });
+  const [personalBroadcastTitle, setPersonalBroadcastTitle] = useState('');
+  const [personalBroadcastContent, setPersonalBroadcastContent] = useState('');
+  const [personalBroadcastType, setPersonalBroadcastType] = useState<BroadcastType>('notification');
+  const [personalBroadcastSeverity, setPersonalBroadcastSeverity] = useState<BroadcastSeverity>('info');
 
   // User Management CRM State (Admin Only)
   const [crmUsers, setCrmUsers] = useState<any[]>([]);
@@ -138,6 +176,140 @@ export default function SettingsPage() {
       fetchCrmUsers();
     } catch (err: any) {
       addToast('Delete Failed', err.message || 'Could not delete user', 'error');
+    }
+  };
+
+  // Toggle Block/Unblock Merchant
+  const handleToggleBlockMerchant = async (u: any) => {
+    const isCurrentlyBlocked = Boolean(u.is_blocked || u.isBlocked);
+    const actionLabel = isCurrentlyBlocked ? 'unblock' : 'block';
+    if (!confirm(`Are you sure you want to ${actionLabel} merchant "${u.full_name || u.name || u.email}"?`)) return;
+
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: u.id,
+          action: 'toggle_block',
+          isBlocked: !isCurrentlyBlocked,
+          blockedReason: !isCurrentlyBlocked ? 'Account suspended by administrator' : null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || `Failed to ${actionLabel} user`);
+      addToast(
+        isCurrentlyBlocked ? 'Merchant Unblocked' : 'Merchant Blocked',
+        isCurrentlyBlocked ? `${u.name || u.email} can now log in and access their store.` : `${u.name || u.email} has been suspended.`,
+        isCurrentlyBlocked ? 'success' : 'warning'
+      );
+      fetchCrmUsers();
+    } catch (err: any) {
+      addToast('Action Failed', err.message || 'Could not update block status', 'error');
+    }
+  };
+
+  // Change Password for Merchant
+  const handleChangeMerchantPassword = async () => {
+    if (!selectedMerchantForAction) return;
+    if (!newMerchantPassword || newMerchantPassword.trim().length < 6) {
+      addToast('Password Too Short', 'Password must be at least 6 characters long.', 'error');
+      return;
+    }
+    setIsSubmittingMerchantAction(true);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedMerchantForAction.id,
+          action: 'change_password',
+          newPassword: newMerchantPassword.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || 'Failed to update password');
+      addToast('Password Updated', `New password saved for ${selectedMerchantForAction.name || selectedMerchantForAction.email}.`, 'success');
+      setNewMerchantPassword('');
+      setSelectedMerchantForAction(null);
+      setMerchantActionType(null);
+    } catch (err: any) {
+      addToast('Password Change Error', err.message || 'Could not change merchant password', 'error');
+    } finally {
+      setIsSubmittingMerchantAction(false);
+    }
+  };
+
+  // Update Merchant Profile
+  const handleSaveMerchantProfile = async () => {
+    if (!selectedMerchantForAction) return;
+    setIsSubmittingMerchantAction(true);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedMerchantForAction.id,
+          action: 'update_profile',
+          profileData: merchantEditProfile,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || 'Failed to update profile');
+      addToast('Profile Updated', 'Merchant information updated in database.', 'success');
+      setSelectedMerchantForAction(null);
+      setMerchantActionType(null);
+      fetchCrmUsers();
+    } catch (err: any) {
+      addToast('Profile Update Error', err.message || 'Could not update merchant profile', 'error');
+    } finally {
+      setIsSubmittingMerchantAction(false);
+    }
+  };
+
+  // Send Personal Broadcast to Merchant
+  const handleSendPersonalBroadcast = async () => {
+    if (!selectedMerchantForAction) return;
+    if (!personalBroadcastTitle.trim() || !personalBroadcastContent.trim()) {
+      addToast('Missing Details', 'Please provide a title and announcement message.', 'error');
+      return;
+    }
+    setIsSubmittingMerchantAction(true);
+    try {
+      const newBroadcast: BroadcastMessage = {
+        id: 'bc_' + Date.now(),
+        title: personalBroadcastTitle.trim(),
+        content: personalBroadcastContent.trim(),
+        type: personalBroadcastType,
+        severity: personalBroadcastSeverity,
+        targetType: 'specific_user',
+        targetUserId: selectedMerchantForAction.id,
+        targetUserName: selectedMerchantForAction.name || selectedMerchantForAction.full_name || selectedMerchantForAction.email,
+        isClosable: true,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        createdBy: currentUser?.name || 'Admin',
+      };
+
+      const updated = [newBroadcast, ...(settings.broadcasts || [])];
+      updateSettings({ ...settings, broadcasts: updated });
+
+      // Sync to cloud global_config
+      fetch('/api/system/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ broadcasts: updated }),
+      }).catch(() => {});
+
+      addToast('Personal Broadcast Sent! 📢', `Sent to ${newBroadcast.targetUserName}.`, 'success');
+      setPersonalBroadcastTitle('');
+      setPersonalBroadcastContent('');
+      setSelectedMerchantForAction(null);
+      setMerchantActionType(null);
+    } catch (err: any) {
+      addToast('Broadcast Failed', err.message || 'Could not send broadcast', 'error');
+    } finally {
+      setIsSubmittingMerchantAction(false);
     }
   };
 
@@ -996,17 +1168,20 @@ export default function SettingsPage() {
           <span>Cloud Backup</span>
         </button>
 
-        <button
-          onClick={() => setMainTab('branding')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer ${
-            mainTab === 'branding'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Palette className="w-4 h-4 text-pink-400" />
-          <span>Website Branding</span>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setMainTab('branding')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+              mainTab === 'branding'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Palette className="w-4 h-4 text-pink-400" />
+            <span>Website Branding</span>
+            <span className="text-[10px] font-bold px-1.5 py-0.2 bg-pink-500/20 text-pink-600 dark:text-pink-400 rounded-md">Admin</span>
+          </button>
+        )}
 
         {isAdmin && (
           <button
@@ -1067,6 +1242,42 @@ export default function SettingsPage() {
           >
             <KeyRound className="w-3.5 h-3.5" />
             <span>Security &amp; Password</span>
+          </button>
+        </div>
+      )}
+
+      {/* Sub-Tabs: Inside Website Branding (Admin Only) */}
+      {mainTab === 'branding' && isAdmin && (
+        <div className="flex gap-1.5 p-1 bg-slate-100/80 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 w-fit overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setBrandingSubTab('visuals')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              brandingSubTab === 'visuals'
+                ? 'bg-white dark:bg-slate-900 text-pink-600 dark:text-pink-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Palette className="w-3.5 h-3.5 text-pink-500" />
+            <span>Website Name &amp; Logos</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setBrandingSubTab('broadcast')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              brandingSubTab === 'broadcast'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Megaphone className="w-3.5 h-3.5 text-indigo-500" />
+            <span>Merchant Broadcasts</span>
+            {(settings.broadcasts?.length || 0) > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-indigo-500/20 text-indigo-600 dark:text-indigo-400">
+                {settings.broadcasts?.length}
+              </span>
+            )}
           </button>
         </div>
       )}
@@ -2308,8 +2519,8 @@ export default function SettingsPage() {
         </form>
       )}
 
-      {/* Tab: Website Branding */}
-      {mainTab === 'branding' && (
+      {/* Tab: Website Branding (Admin Only) */}
+      {mainTab === 'branding' && isAdmin && brandingSubTab === 'visuals' && (
         <form onSubmit={handleSaveBranding} className="space-y-6 animate-in fade-in">
           
           {/* Header Banner */}
@@ -2759,6 +2970,290 @@ export default function SettingsPage() {
         </form>
       )}
 
+      {/* Tab: Website Branding -> Sub-Tab: Broadcasts (Admin Only) */}
+      {mainTab === 'branding' && isAdmin && brandingSubTab === 'broadcast' && (
+        <div className="space-y-6 animate-in fade-in">
+          
+          {/* Header Banner */}
+          <div className="p-5 rounded-3xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-200/80 dark:border-indigo-900/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Megaphone className="w-4 h-4 text-indigo-500" />
+                <span className="text-xs font-mono font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                  Live Merchant Announcements
+                </span>
+              </div>
+              <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                Merchant Broadcast System (Popups, Banners &amp; Alerts)
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xl">
+                Yahan se aap sabhi registered merchants ya kisi <strong>personal specific merchant</strong> ko notifications, top banner ya modal popup bhej sakte hain. HTML styling, close icon aur Green (Success), Yellow (Warning), Red (Critical) severity alerts supported hain.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Create Broadcast Form */}
+            <div className="lg:col-span-1 p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                <Radio className="w-4 h-4 text-indigo-500" />
+                <span>Create New Broadcast</span>
+              </h3>
+
+              {/* Title */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Broadcast Title *
+                </label>
+                <input
+                  type="text"
+                  value={broadcastTitle}
+                  onChange={(e) => setBroadcastTitle(e.target.value)}
+                  placeholder="e.g. Server Maintenance Notice 🚀"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-semibold"
+                />
+              </div>
+
+              {/* Type & Severity */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Display Type
+                  </label>
+                  <select
+                    value={broadcastType}
+                    onChange={(e) => setBroadcastType(e.target.value as any)}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-bold"
+                  >
+                    <option value="banner">Top Banner</option>
+                    <option value="popup">Modal Pop-up</option>
+                    <option value="notification">Alert Toast</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Alert Color
+                  </label>
+                  <select
+                    value={broadcastSeverity}
+                    onChange={(e) => setBroadcastSeverity(e.target.value as any)}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-bold"
+                  >
+                    <option value="info">🔵 Blue (Info)</option>
+                    <option value="success">🟢 Green (Success)</option>
+                    <option value="warning">🟡 Yellow (Warning)</option>
+                    <option value="error">🔴 Red (Critical Alert)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Target Audience */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Target Merchants
+                </label>
+                <select
+                  value={broadcastTargetType}
+                  onChange={(e) => {
+                    const t = e.target.value as any;
+                    setBroadcastTargetType(t);
+                    if (t === 'all') {
+                      setBroadcastTargetUserId('');
+                      setBroadcastTargetUserName('');
+                    }
+                  }}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-bold"
+                >
+                  <option value="all">🌐 All Merchants (Global Broadcast)</option>
+                  <option value="specific_user">👤 Specific Merchant (Personal Broadcast)</option>
+                </select>
+              </div>
+
+              {broadcastTargetType === 'specific_user' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Select Merchant
+                  </label>
+                  <select
+                    value={broadcastTargetUserId}
+                    onChange={(e) => {
+                      const uid = e.target.value;
+                      setBroadcastTargetUserId(uid);
+                      const found = crmUsers.find(u => u.id === uid);
+                      setBroadcastTargetUserName(found?.full_name || found?.name || found?.email || '');
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-semibold"
+                  >
+                    <option value="">-- Choose Merchant --</option>
+                    {crmUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.full_name || u.name || u.email} ({u.business_name || 'Merchant'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* HTML / Plain Text Message Content */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Content (Text or HTML Supported) *
+                  </label>
+                  <span className="text-[10px] font-mono text-indigo-500">&lt;b&gt;, &lt;p&gt;, &lt;a&gt; allowed</span>
+                </div>
+                <textarea
+                  rows={4}
+                  value={broadcastContent}
+                  onChange={(e) => setBroadcastContent(e.target.value)}
+                  placeholder="Enter message details or paste HTML snippet..."
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-mono"
+                />
+              </div>
+
+              {/* Close Icon Checkbox */}
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="chkClosable"
+                  checked={broadcastIsClosable}
+                  onChange={(e) => setBroadcastIsClosable(e.target.checked)}
+                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                />
+                <label htmlFor="chkClosable" className="text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
+                  Show Close &apos;X&apos; button (Merchant can dismiss)
+                </label>
+              </div>
+
+              {/* Send Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!broadcastTitle.trim() || !broadcastContent.trim()) {
+                    addToast('Details Required', 'Please enter title and content for broadcast.', 'warning');
+                    return;
+                  }
+                  if (broadcastTargetType === 'specific_user' && !broadcastTargetUserId) {
+                    addToast('Select Merchant', 'Please select a specific merchant to target.', 'warning');
+                    return;
+                  }
+
+                  const newMsg: BroadcastMessage = {
+                    id: `bc_${Date.now()}`,
+                    title: broadcastTitle.trim(),
+                    content: broadcastContent.trim(),
+                    type: broadcastType,
+                    severity: broadcastSeverity,
+                    targetType: broadcastTargetType,
+                    targetUserId: broadcastTargetUserId || undefined,
+                    targetUserName: broadcastTargetUserName || undefined,
+                    isClosable: broadcastIsClosable,
+                    isActive: true,
+                    createdAt: new Date().toISOString(),
+                    createdBy: currentUser?.name || 'Administrator',
+                  };
+
+                  const updatedBroadcasts = [newMsg, ...(settings.broadcasts || [])];
+                  updateSettings({ ...settings, broadcasts: updatedBroadcasts });
+                  addToast('Broadcast Published! 📢', `Broadcast "${newMsg.title}" is now live for merchants.`, 'success');
+
+                  // Reset form
+                  setBroadcastTitle('');
+                  setBroadcastContent('');
+                }}
+                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Send className="w-4 h-4" />
+                <span>Publish Broadcast</span>
+              </button>
+            </div>
+
+            {/* Active Broadcasts List */}
+            <div className="lg:col-span-2 p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-indigo-500" />
+                  <span>Active Announcements ({settings.broadcasts?.length || 0})</span>
+                </h3>
+              </div>
+
+              {(!settings.broadcasts || settings.broadcasts.length === 0) ? (
+                <div className="p-12 text-center space-y-2">
+                  <Megaphone className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
+                  <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">No broadcasts published yet</h4>
+                  <p className="text-xs text-slate-400">
+                    Use the form on the left to broadcast top banners, popups, or alerts to merchants.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {settings.broadcasts.map((b) => {
+                    const sevBadge =
+                      b.severity === 'success'
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300'
+                        : b.severity === 'warning'
+                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300'
+                        : b.severity === 'error'
+                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300'
+                        : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-300';
+
+                    return (
+                      <div
+                        key={b.id}
+                        className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${sevBadge}`}>
+                              {b.severity}
+                            </span>
+                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                              {b.type.toUpperCase()}
+                            </span>
+                            <span className="text-xs font-bold text-slate-900 dark:text-white">
+                              {b.title}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = (settings.broadcasts || []).filter(item => item.id !== b.id);
+                              updateSettings({ ...settings, broadcasts: updated });
+                              addToast('Broadcast Deleted', 'Announcement has been removed.', 'info');
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all cursor-pointer"
+                            title="Delete Broadcast"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Content preview */}
+                        <div
+                          className="text-xs text-slate-600 dark:text-slate-300 prose dark:prose-invert max-w-none text-left"
+                          dangerouslySetInnerHTML={{ __html: b.content }}
+                        />
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-200/50 dark:border-slate-700/50">
+                          <span>
+                            Audience: <strong>{b.targetType === 'all' ? 'All Merchants' : `Specific Merchant (${b.targetUserName || b.targetUserId})`}</strong>
+                          </span>
+                          <span>Published {new Date(b.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
       {/* Tab: Cloud Backup */}
       {mainTab === 'backup' && (
         <div className="space-y-6 animate-in fade-in">
@@ -3178,12 +3673,11 @@ export default function SettingsPage() {
               )}
             </div>
 
-            {/* Filter Pills */}
+            {/* Filter Pills: 2 Roles (Admin & Merchant) */}
             <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
               {[
                 { id: 'all', label: 'All Users', count: crmUsers.length },
-                { id: 'super_admin', label: 'Super Admin', count: crmUsers.filter(u => u.role === 'super_admin').length },
-                { id: 'admin', label: 'Admins', count: crmUsers.filter(u => u.role === 'admin').length },
+                { id: 'admin', label: 'Admins', count: crmUsers.filter(u => u.role === 'admin' || u.role === 'super_admin').length },
                 { id: 'user', label: 'Merchants', count: crmUsers.filter(u => u.role === 'user' || !u.role).length },
               ].map((pill) => (
                 <button
@@ -3224,7 +3718,7 @@ export default function SettingsPage() {
                     ? true
                     : roleFilter === 'user'
                     ? u.role === 'user' || !u.role
-                    : u.role === roleFilter;
+                    : u.role === 'admin' || u.role === 'super_admin';
 
                 if (!matchesRole) return false;
                 if (!query) return true;
@@ -3270,6 +3764,7 @@ export default function SettingsPage() {
                         const businessName = u.business_name || 'Individual Merchant';
                         const avatarUrl = u.avatar_url || null;
                         const role = u.role || 'user';
+                        const isBlocked = Boolean(u.is_blocked || u.isBlocked);
                         const joinedDate = u.created_at
                           ? new Date(u.created_at).toLocaleDateString('en-IN', {
                               day: 'numeric',
@@ -3295,11 +3790,16 @@ export default function SettingsPage() {
                                   </div>
                                 )}
                                 <div>
-                                  <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                  <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
                                     <span>{displayName}</span>
                                     {isSelf && (
                                       <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-extrabold uppercase">
                                         You
+                                      </span>
+                                    )}
+                                    {isBlocked && (
+                                      <span className="text-[9px] px-2 py-0.2 rounded-full bg-rose-500/20 text-rose-600 dark:text-rose-400 font-black uppercase border border-rose-500/30 flex items-center gap-1">
+                                        <Ban className="w-2.5 h-2.5" /> Blocked
                                       </span>
                                     )}
                                   </div>
@@ -3325,16 +3825,11 @@ export default function SettingsPage() {
                               </div>
                             </td>
 
-                            {/* Role badge */}
+                            {/* Role badge: Admin or Merchant only */}
                             <td className="px-4 py-4">
-                              {role === 'super_admin' ? (
+                              {role === 'admin' || role === 'super_admin' ? (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                                   <Shield className="w-3 h-3 text-purple-600" />
-                                  Super Admin
-                                </span>
-                              ) : role === 'admin' ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                                  <Key className="w-3 h-3 text-amber-600" />
                                   Admin
                                 </span>
                               ) : (
@@ -3350,19 +3845,82 @@ export default function SettingsPage() {
                               {joinedDate}
                             </td>
 
-                            {/* Actions */}
+                            {/* Actions: Profile, Broadcast, Change Password, Block/Unblock, Role, Delete */}
                             <td className="px-5 py-4 text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                {/* Role Switcher Dropdown */}
+                              <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                {/* Profile View & Edit Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedMerchantForAction(u);
+                                    setMerchantEditProfile({
+                                      name: u.full_name || u.name || '',
+                                      businessName: u.business_name || '',
+                                      phone: u.phone || '',
+                                      businessAddress: u.business_address || '',
+                                    });
+                                    setMerchantActionType('profile');
+                                  }}
+                                  title="View & Edit Merchant Profile"
+                                  className="p-1.5 rounded-xl text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors cursor-pointer"
+                                >
+                                  <User className="w-4 h-4" />
+                                </button>
+
+                                {/* Personal Broadcast Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedMerchantForAction(u);
+                                    setPersonalBroadcastTitle('');
+                                    setPersonalBroadcastContent('');
+                                    setMerchantActionType('broadcast');
+                                  }}
+                                  title="Send Personal Broadcast Announcement"
+                                  className="p-1.5 rounded-xl text-purple-600 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950/50 transition-colors cursor-pointer"
+                                >
+                                  <Megaphone className="w-4 h-4" />
+                                </button>
+
+                                {/* Change Password Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedMerchantForAction(u);
+                                    setNewMerchantPassword('');
+                                    setMerchantActionType('password');
+                                  }}
+                                  title="Change Merchant Password"
+                                  className="p-1.5 rounded-xl text-amber-600 hover:text-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/50 transition-colors cursor-pointer"
+                                >
+                                  <Key className="w-4 h-4" />
+                                </button>
+
+                                {/* Block / Unblock Toggle Button */}
+                                {!isPrimaryAdmin && !isSelf && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleBlockMerchant(u)}
+                                    title={isBlocked ? "Unblock Merchant" : "Block Merchant Account"}
+                                    className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
+                                      isBlocked
+                                        ? 'text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50'
+                                        : 'text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50'
+                                    }`}
+                                  >
+                                    {isBlocked ? <Unlock className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+                                  </button>
+                                )}
+
+                                {/* Role Switcher Dropdown (2 roles only: Merchant & Admin) */}
                                 <select
-                                  value={role}
+                                  value={role === 'super_admin' ? 'admin' : role}
                                   disabled={updatingUserId === u.id || isPrimaryAdmin}
                                   onChange={(e) => handleUpdateUserRole(u.id, e.target.value)}
-                                  className="text-[11px] font-bold px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer disabled:opacity-50"
+                                  className="text-[11px] font-bold px-2 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer disabled:opacity-50"
                                 >
                                   <option value="user">Merchant</option>
                                   <option value="admin">Admin</option>
-                                  <option value="super_admin">Super Admin</option>
                                 </select>
 
                                 {/* Delete user button */}
@@ -3401,6 +3959,254 @@ export default function SettingsPage() {
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* ================= MODAL 1: VIEW & EDIT MERCHANT PROFILE ================= */}
+      {selectedMerchantForAction && merchantActionType === 'profile' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 text-slate-900 dark:text-white">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-extrabold flex items-center justify-center">
+                  <User className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black">Merchant Profile Details</h3>
+                  <p className="text-xs text-slate-400">{selectedMerchantForAction.email}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setSelectedMerchantForAction(null); setMerchantActionType(null); }}
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1">Merchant / Owner Name</label>
+                <input
+                  type="text"
+                  value={merchantEditProfile.name}
+                  onChange={(e) => setMerchantEditProfile({ ...merchantEditProfile, name: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1">Business / Shop Name</label>
+                <input
+                  type="text"
+                  value={merchantEditProfile.businessName}
+                  onChange={(e) => setMerchantEditProfile({ ...merchantEditProfile, businessName: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1">Phone Number</label>
+                <input
+                  type="text"
+                  value={merchantEditProfile.phone}
+                  onChange={(e) => setMerchantEditProfile({ ...merchantEditProfile, phone: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1">Business Address</label>
+                <textarea
+                  rows={2}
+                  value={merchantEditProfile.businessAddress}
+                  onChange={(e) => setMerchantEditProfile({ ...merchantEditProfile, businessAddress: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-medium resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setSelectedMerchantForAction(null); setMerchantActionType(null); }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingMerchantAction}
+                onClick={handleSaveMerchantProfile}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 cursor-pointer flex items-center gap-1.5"
+              >
+                {isSubmittingMerchantAction && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Save Profile Changes</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL 2: CHANGE MERCHANT PASSWORD ================= */}
+      {selectedMerchantForAction && merchantActionType === 'password' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-slate-900 dark:text-white">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 font-extrabold flex items-center justify-center">
+                  <Key className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black">Reset Merchant Password</h3>
+                  <p className="text-xs text-slate-400">{selectedMerchantForAction.email}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setSelectedMerchantForAction(null); setMerchantActionType(null); }}
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <p className="text-slate-500 leading-relaxed">
+                Set a new direct login password for <strong>{selectedMerchantForAction.full_name || selectedMerchantForAction.name || selectedMerchantForAction.email}</strong>.
+              </p>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1">New Password (Min 6 Characters)</label>
+                <input
+                  type="password"
+                  placeholder="Enter new strong password"
+                  value={newMerchantPassword}
+                  onChange={(e) => setNewMerchantPassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setSelectedMerchantForAction(null); setMerchantActionType(null); }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingMerchantAction || newMerchantPassword.length < 6}
+                onClick={handleChangeMerchantPassword}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 shadow-md shadow-amber-600/20 cursor-pointer flex items-center gap-1.5"
+              >
+                {isSubmittingMerchantAction && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Update Password</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL 3: SEND PERSONAL BROADCAST TO MERCHANT ================= */}
+      {selectedMerchantForAction && merchantActionType === 'broadcast' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 text-slate-900 dark:text-white">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 font-extrabold flex items-center justify-center">
+                  <Megaphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black">Personal Broadcast</h3>
+                  <p className="text-xs text-slate-400">Target: {selectedMerchantForAction.full_name || selectedMerchantForAction.name || selectedMerchantForAction.email}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setSelectedMerchantForAction(null); setMerchantActionType(null); }}
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1">Broadcast Title *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. KYC Verification Approved / Important Ledger Notice"
+                  value={personalBroadcastTitle}
+                  onChange={(e) => setPersonalBroadcastTitle(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1">Display Format</label>
+                  <select
+                    value={personalBroadcastType}
+                    onChange={(e) => setPersonalBroadcastType(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold"
+                  >
+                    <option value="notification">Floating Alert Card</option>
+                    <option value="banner">Top Page Banner</option>
+                    <option value="popup">Centered Modal Pop-up</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1">Alert Severity</label>
+                  <select
+                    value={personalBroadcastSeverity}
+                    onChange={(e) => setPersonalBroadcastSeverity(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold"
+                  >
+                    <option value="info">🔵 Blue (Information)</option>
+                    <option value="success">🟢 Green (Success / Verified)</option>
+                    <option value="warning">🟡 Yellow (Action Needed)</option>
+                    <option value="error">🔴 Red (Urgent Notice)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                  Message Content (Plain text or HTML) *
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Enter message for this merchant. HTML like <b>bold</b> or <a href='...'>link</a> is supported."
+                  value={personalBroadcastContent}
+                  onChange={(e) => setPersonalBroadcastContent(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-medium resize-none text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setSelectedMerchantForAction(null); setMerchantActionType(null); }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingMerchantAction || !personalBroadcastTitle.trim() || !personalBroadcastContent.trim()}
+                onClick={handleSendPersonalBroadcast}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 shadow-md shadow-purple-600/20 cursor-pointer flex items-center gap-1.5"
+              >
+                {isSubmittingMerchantAction && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Send Personal Broadcast</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

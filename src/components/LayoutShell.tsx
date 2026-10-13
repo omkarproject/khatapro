@@ -13,6 +13,8 @@ import MaintenanceOverlay from './MaintenanceOverlay';
 import PaymentDetailsModal from './PaymentDetailsModal';
 import AuthModal from './AuthModal';
 import AuthGuard from './AuthGuard';
+import BroadcastBanner from './BroadcastBanner';
+import SupportChatWidget from './SupportChatWidget';
 import { useApp } from '@/context/AppContext';
 
 export default function LayoutShell({ children }: { children: React.ReactNode }) {
@@ -78,6 +80,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
         )}
 
         <main className="flex-1 min-w-0 px-3 sm:px-6 lg:px-8 2xl:px-10 py-4 sm:py-6 pb-24 md:pb-12 overflow-x-hidden">
+          <BroadcastBanner />
           {isPublicRoute ? (
             children
           ) : (
@@ -94,6 +97,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
       <MaintenanceOverlay />
       <AuthModal />
       <ToastContainer />
+      <SupportChatWidget />
     </div>
   );
 }

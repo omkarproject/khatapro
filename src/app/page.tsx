@@ -23,8 +23,13 @@ import {
   AlertTriangle,
   Clock,
   ArrowRight,
-  Plus
+  Plus,
+  Headphones,
+  LifeBuoy,
+  MessageSquare,
+  CheckCircle2
 } from 'lucide-react';
+import { SupportTicket } from '@/types';
 import {
   AreaChart,
   Area,
@@ -96,6 +101,35 @@ export default function DashboardPage() {
     const day = new Date().getDate();
     return DAILY_BUSINESS_MOTIVATIONS[(day - 1) % DAILY_BUSINESS_MOTIVATIONS.length];
   }, []);
+
+  const isAdmin = Boolean(
+    currentUser?.role === 'admin' ||
+    currentUser?.role === 'super_admin' ||
+    currentUser?.email === 'anantyadav8924@gmail.com'
+  );
+
+  const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
+
+  React.useEffect(() => {
+    if (currentUser) {
+      fetch(`/api/support/tickets?userId=${encodeURIComponent(currentUser.id)}&isAdmin=${isAdmin}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.success && Array.isArray(data.tickets)) {
+            setSupportTickets(data.tickets);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [currentUser, isAdmin]);
+
+  const supportStats = useMemo(() => {
+    const open = supportTickets.filter(t => t.status === 'open').length;
+    const inProgress = supportTickets.filter(t => t.status === 'in_progress').length;
+    const closed = supportTickets.filter(t => t.status === 'closed').length;
+    const unread = supportTickets.filter(t => isAdmin ? t.unreadByAdmin : t.unreadByMerchant).length;
+    return { open, inProgress, closed, unread, total: supportTickets.length };
+  }, [supportTickets, isAdmin]);
 
   const activeBusinessName = settings?.businessName || profile?.businessName || currentUser?.businessName || 'My Business';
   const activeOwnerName = profile?.name || currentUser?.name || 'Merchant';
@@ -719,6 +753,146 @@ export default function DashboardPage() {
 
         </div>
 
+      </div>
+
+      {/* Live Support & Helpdesk Overview Section */}
+      <div className="glass-card p-5 sm:p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                <Headphones className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  Live Support &amp; Help Desk
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Online 24/7
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {isAdmin
+                    ? 'Super Admin view: Monitor customer queries, open tickets, resolve issues, and chat directly.'
+                    : 'Chat directly with support, report issues, and attach error screenshots for quick resolution.'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {isAdmin ? (
+              <Link
+                href="/settings?tab=users"
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 flex items-center gap-1.5 transition-all"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Merchant CRM</span>
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  const btn = document.querySelector('button[title*="24/7 Live Support"]') as HTMLButtonElement;
+                  if (btn) btn.click();
+                }}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Open Live Support</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Support Stats Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
+              New Alerts
+            </span>
+            <div className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400">
+              {supportStats.unread}
+            </div>
+            <div className="text-[10px] text-slate-400">Awaiting response</div>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Open Tickets
+            </span>
+            <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
+              {supportStats.open}
+            </div>
+            <div className="text-[10px] text-slate-400">Pending resolution</div>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              In Progress
+            </span>
+            <div className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400">
+              {supportStats.inProgress}
+            </div>
+            <div className="text-[10px] text-slate-400">Under investigation</div>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-indigo-500" />
+              Closed / Solved
+            </span>
+            <div className="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400">
+              {supportStats.closed}
+            </div>
+            <div className="text-[10px] text-slate-400">Resolved queries</div>
+          </div>
+        </div>
+
+        {/* Recent support activity preview */}
+        {supportTickets.length > 0 && (
+          <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="text-xs font-bold text-slate-500 dark:text-slate-400">
+              Recent Tickets Activity:
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {supportTickets.slice(0, 4).map((t) => (
+                <div
+                  key={t.id}
+                  className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs"
+                >
+                  <div className="min-w-0 pr-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-[10px] font-black text-indigo-600 dark:text-indigo-400">
+                        {t.ticketNo}
+                      </span>
+                      <span className="font-bold text-slate-900 dark:text-white truncate">
+                        {t.subject}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      {isAdmin ? `Merchant: ${t.userName}` : `Category: ${t.category}`} &bull; {new Date(t.updatedAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <span
+                    className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full shrink-0 ${
+                      t.status === 'open'
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                        : t.status === 'in_progress'
+                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                    }`}
+                  >
+                    {t.status.replace('_', ' ')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Quick Add Record Hub Modal */}
