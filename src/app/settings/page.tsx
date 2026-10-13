@@ -55,7 +55,11 @@ import {
   UserCheck,
   UserX,
   Search,
-  Filter
+  Filter,
+  Palette,
+  Info,
+  HelpCircle,
+  Link2,
 } from 'lucide-react';
 import GoogleDriveBackupPanel from '@/components/GoogleDriveBackupPanel';
 
@@ -68,7 +72,7 @@ export default function SettingsPage() {
     currentUser?.email === 'anantyadav8924@gmail.com'
   );
 
-  const [mainTab, setMainTab] = useState<'business' | 'backup' | 'admin'>('business');
+  const [mainTab, setMainTab] = useState<'business' | 'backup' | 'branding' | 'admin'>('business');
   const [businessSubTab, setBusinessSubTab] = useState<'enterprise' | 'payments' | 'security'>('enterprise');
   const [adminSubTab, setAdminSubTab] = useState<'supabase' | 'drive' | 'users' | 'maintenance'>('supabase');
   const [isSyncingData, setIsSyncingData] = useState(false);
@@ -647,6 +651,105 @@ export default function SettingsPage() {
     addToast('Logo Removed', 'Profile logo has been removed.', 'info');
   };
 
+  // Website Branding State
+  const [webName, setWebName] = useState(() => settings.websiteName || 'SmartKhata Pro');
+  const [webLogo, setWebLogo] = useState(() => settings.websiteLogo || '');
+  const [webLogoMode, setWebLogoMode] = useState<'upload' | 'link'>('upload');
+  const [webLogoLinkInput, setWebLogoLinkInput] = useState('');
+  const [webFavicon, setWebFavicon] = useState(() => settings.websiteFavicon || '');
+  const [webFaviconMode, setWebFaviconMode] = useState<'upload' | 'link'>('upload');
+  const [webFaviconLinkInput, setWebFaviconLinkInput] = useState('');
+  const [isSavingBranding, setIsSavingBranding] = useState(false);
+  const webLogoInputRef = useRef<HTMLInputElement>(null);
+  const webFaviconInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (settings.websiteName) setWebName(settings.websiteName);
+    if (settings.websiteLogo) setWebLogo(settings.websiteLogo);
+    if (settings.websiteFavicon) setWebFavicon(settings.websiteFavicon);
+  }, [settings.websiteName, settings.websiteLogo, settings.websiteFavicon]);
+
+  // Handle Website Logo Upload
+  const handleUploadWebLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        addToast('Invalid Image', 'Please upload a PNG, JPG, WEBP, or SVG image.', 'error');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (result) {
+          setWebLogo(result);
+          addToast('Website Logo Uploaded', 'Remember to click Save Branding Changes.', 'info');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+    e.target.value = '';
+  };
+
+  // Handle Website Favicon Upload
+  const handleUploadWebFavicon = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/') && !file.name.endsWith('.ico')) {
+        addToast('Invalid Icon', 'Please upload a valid favicon (ICO, PNG, SVG).', 'error');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (result) {
+          setWebFavicon(result);
+          addToast('Favicon Uploaded', 'Remember to click Save Branding Changes.', 'info');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+    e.target.value = '';
+  };
+
+  // Handle Save Website Branding
+  const handleSaveBranding = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingBranding(true);
+
+    const finalLogo = webLogoMode === 'link' ? (webLogoLinkInput.trim() || webLogo) : webLogo;
+    const finalFavicon = webFaviconMode === 'link' ? (webFaviconLinkInput.trim() || webFavicon) : webFavicon;
+    const finalName = webName.trim() || 'SmartKhata Pro';
+
+    const updated: SystemSettings = {
+      ...settings,
+      websiteName: finalName,
+      websiteLogo: finalLogo,
+      websiteFavicon: finalFavicon,
+    };
+
+    updateSettings(updated);
+    setWebName(finalName);
+    setWebLogo(finalLogo);
+    setWebFavicon(finalFavicon);
+
+    // Live update document title and favicon instantly
+    if (typeof document !== 'undefined') {
+      document.title = `${finalName} - Fintech & Digital Khata Operating System`;
+      if (finalFavicon) {
+        let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']");
+        if (!link) {
+          link = document.createElement('link');
+          link.rel = 'icon';
+          document.head.appendChild(link);
+        }
+        link.href = finalFavicon;
+      }
+    }
+
+    addToast('Website Branding Updated! 🎨', 'Website Name, Logo, aur Favicon pure portal par live update ho gaye hain!', 'success');
+    setIsSavingBranding(false);
+  };
+
   // Handle Business Save
   const handleSaveBusiness = (e: React.FormEvent) => {
     e.preventDefault();
@@ -893,6 +996,18 @@ export default function SettingsPage() {
           <span>Cloud Backup</span>
         </button>
 
+        <button
+          onClick={() => setMainTab('branding')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+            mainTab === 'branding'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Palette className="w-4 h-4 text-pink-400" />
+          <span>Website Branding</span>
+        </button>
+
         {isAdmin && (
           <button
             onClick={() => setMainTab('admin')}
@@ -903,7 +1018,7 @@ export default function SettingsPage() {
             }`}
           >
             <Database className="w-4 h-4 text-emerald-400" />
-            <span>Database &amp; Cloud Auth</span>
+            <span>Management</span>
             <span className="text-[10px] font-bold px-1.5 py-0.2 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-md">Admin</span>
             {maintEnabled && (
               <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
@@ -956,7 +1071,7 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Sub-Tabs: Inside Database & Cloud Auth (Admin Only) */}
+      {/* Sub-Tabs: Inside Management (Admin Only) */}
       {mainTab === 'admin' && isAdmin && (
         <div className="flex gap-1.5 p-1 bg-slate-100/80 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 w-fit overflow-x-auto">
           <button
@@ -2189,6 +2304,457 @@ export default function SettingsPage() {
                 </>
               )}
             </button>
+          </div>
+        </form>
+      )}
+
+      {/* Tab: Website Branding */}
+      {mainTab === 'branding' && (
+        <form onSubmit={handleSaveBranding} className="space-y-6 animate-in fade-in">
+          
+          {/* Header Banner */}
+          <div className="p-5 rounded-3xl bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-indigo-500/10 border border-pink-200/80 dark:border-pink-900/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Palette className="w-4 h-4 text-pink-500" />
+                <span className="text-xs font-mono font-black text-pink-600 dark:text-pink-400 uppercase tracking-wider">
+                  White-label &amp; Website Identity
+                </span>
+              </div>
+              <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                Website Branding &amp; Visual Assets
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xl">
+                Yahan se aap puri website ka <strong>Brand Name</strong>, <strong>Header Logo</strong>, aur <strong>Browser Favicon</strong> update kar sakte hain. Changes pure portal aur browser tabs me live reflect honge.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSavingBranding}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-pink-600 to-indigo-600 hover:from-pink-700 hover:to-indigo-700 text-white font-bold text-xs shadow-lg shadow-pink-500/20 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              <span>{isSavingBranding ? 'Saving Branding...' : 'Save Branding Changes'}</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* Card 1: Website Name */}
+            <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-pink-50 dark:bg-pink-950/40 text-pink-600 dark:text-pink-400">
+                    <Globe className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                      Website Name
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Navbar, Footer, aur browser title me dikhne wala brand name
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Brand Display Name *
+                </label>
+                <input
+                  type="text"
+                  value={webName}
+                  onChange={(e) => setWebName(e.target.value)}
+                  placeholder="e.g. SmartKhata Pro, ApnaKhata, VyaparPro"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-all font-semibold"
+                />
+                <p className="text-[10px] text-slate-400 mt-1.5">
+                  Default: <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">SmartKhata Pro</span>
+                </p>
+              </div>
+
+              {/* Live Preview Box */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div className="min-w-0">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Live Navbar Preview</span>
+                  <span className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5 truncate">
+                    {webName || 'SmartKhata Pro'}
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider fintech-gradient-primary text-white">
+                      PRO
+                    </span>
+                  </span>
+                </div>
+                <Sparkles className="w-4 h-4 text-pink-500 shrink-0" />
+              </div>
+            </div>
+
+            {/* Card 2: Website Logo */}
+            <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
+                    <ImageIcon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                      Website Header Logo
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Top navigation bar aur footer me dikhne wala logo
+                    </p>
+                  </div>
+                </div>
+
+                {/* Info Tooltip Icon */}
+                <div className="group relative">
+                  <button type="button" className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                    <Info className="w-4 h-4" />
+                  </button>
+                  <div className="absolute right-0 top-full mt-2 w-64 p-3 rounded-2xl bg-slate-900 text-white text-[11px] shadow-xl border border-slate-700 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                    <div className="font-bold text-indigo-300 mb-1 flex items-center gap-1">
+                      <Info className="w-3.5 h-3.5" /> Recommended Logo Dimensions
+                    </div>
+                    <ul className="space-y-1 text-slate-300">
+                      <li>• <strong>Size / Dimensions:</strong> 256x256 px ya 512x512 px (Square 1:1)</li>
+                      <li>• <strong>Height x Width:</strong> 36px to 64px display</li>
+                      <li>• <strong>Format:</strong> Transparent PNG, WEBP, SVG, ya JPG</li>
+                      <li>• <strong>File Size:</strong> Less than 2 MB</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mode Switcher: Upload vs Link */}
+              <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setWebLogoMode('upload')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition-all ${
+                    webLogoMode === 'upload'
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Upload File</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWebLogoMode('link')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition-all ${
+                    webLogoMode === 'link'
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  <span>Image URL / Link</span>
+                </button>
+              </div>
+
+              {/* Input section based on mode */}
+              {webLogoMode === 'upload' ? (
+                <div>
+                  <input
+                    ref={webLogoInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUploadWebLogo}
+                    className="hidden"
+                  />
+                  <div
+                    onClick={() => webLogoInputRef.current?.click()}
+                    className="p-4 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 transition-all text-center cursor-pointer bg-slate-50/50 dark:bg-slate-800/40 group"
+                  >
+                    <Upload className="w-6 h-6 mx-auto text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 group-hover:scale-110 transition-transform mb-1.5" />
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                      Click to Browse &amp; Upload Logo
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      PNG, JPG, WEBP, SVG (Max 2MB) • Square 256x256px best
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Direct Image URL
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={webLogoLinkInput}
+                      onChange={(e) => setWebLogoLinkInput(e.target.value)}
+                      placeholder="https://example.com/logo.png"
+                      className="flex-1 px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (webLogoLinkInput.trim()) {
+                          setWebLogo(webLogoLinkInput.trim());
+                          addToast('Logo Link Set', 'Preview updated.', 'info');
+                        }
+                      }}
+                      className="px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Logo Preview & Reset */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-1 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+                    {webLogo ? (
+                      <img
+                        src={webLogo}
+                        alt="Website Logo Preview"
+                        className="w-full h-full object-contain"
+                        onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <Sparkles className="w-6 h-6 text-indigo-500" />
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                      {webLogo ? 'Active Logo Loaded' : 'Default Sparkles Icon'}
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      Renders in Navbar (H: 36px, W: 36px)
+                    </span>
+                  </div>
+                </div>
+
+                {webLogo && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWebLogo('');
+                      setWebLogoLinkInput('');
+                      addToast('Logo Reset', 'Switched back to default icon.', 'info');
+                    }}
+                    className="p-1.5 text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl font-bold cursor-pointer transition-colors"
+                    title="Remove custom logo"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Card 3: Website Favicon */}
+            <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+                    <Globe className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                      Browser Favicon
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Browser tab aur bookmarks me dikhne wala chhota icon
+                    </p>
+                  </div>
+                </div>
+
+                {/* Info Tooltip Icon */}
+                <div className="group relative">
+                  <button type="button" className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
+                    <Info className="w-4 h-4" />
+                  </button>
+                  <div className="absolute right-0 top-full mt-2 w-64 p-3 rounded-2xl bg-slate-900 text-white text-[11px] shadow-xl border border-slate-700 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                    <div className="font-bold text-amber-300 mb-1 flex items-center gap-1">
+                      <Info className="w-3.5 h-3.5" /> Recommended Favicon Dimensions
+                    </div>
+                    <ul className="space-y-1 text-slate-300">
+                      <li>• <strong>Size / Dimensions:</strong> 32x32 px ya 64x64 px (Square 1:1)</li>
+                      <li>• <strong>Height x Width:</strong> 16x16 px to 32x32 px tab render</li>
+                      <li>• <strong>Format:</strong> .ICO, PNG, ya SVG</li>
+                      <li>• <strong>Transparent Background:</strong> Highly recommended</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mode Switcher: Upload vs Link */}
+              <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setWebFaviconMode('upload')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition-all ${
+                    webFaviconMode === 'upload'
+                      ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Upload File</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWebFaviconMode('link')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition-all ${
+                    webFaviconMode === 'link'
+                      ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  <span>Favicon URL / Link</span>
+                </button>
+              </div>
+
+              {/* Input section based on mode */}
+              {webFaviconMode === 'upload' ? (
+                <div>
+                  <input
+                    ref={webFaviconInputRef}
+                    type="file"
+                    accept="image/*,.ico"
+                    onChange={handleUploadWebFavicon}
+                    className="hidden"
+                  />
+                  <div
+                    onClick={() => webFaviconInputRef.current?.click()}
+                    className="p-4 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-amber-500 dark:hover:border-amber-500 transition-all text-center cursor-pointer bg-slate-50/50 dark:bg-slate-800/40 group"
+                  >
+                    <Upload className="w-6 h-6 mx-auto text-slate-400 group-hover:text-amber-600 dark:group-hover:text-amber-400 group-hover:scale-110 transition-transform mb-1.5" />
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                      Click to Browse &amp; Upload Favicon
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      ICO, PNG, SVG (Max 500KB) • 32x32px or 64x64px square
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Direct Favicon URL (.ico / .png)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={webFaviconLinkInput}
+                      onChange={(e) => setWebFaviconLinkInput(e.target.value)}
+                      placeholder="https://example.com/favicon.ico"
+                      className="flex-1 px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (webFaviconLinkInput.trim()) {
+                          setWebFavicon(webFaviconLinkInput.trim());
+                          addToast('Favicon Link Set', 'Preview updated.', 'info');
+                        }
+                      }}
+                      className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 cursor-pointer"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Favicon Preview & Reset */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-1 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+                    {webFavicon ? (
+                      <img
+                        src={webFavicon}
+                        alt="Favicon Preview"
+                        className="w-full h-full object-contain"
+                        onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <Globe className="w-5 h-5 text-amber-500" />
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                      {webFavicon ? 'Custom Favicon Loaded' : 'Default Browser Favicon'}
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      Renders in browser tab title bar (32x32 px)
+                    </span>
+                  </div>
+                </div>
+
+                {webFavicon && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWebFavicon('');
+                      setWebFaviconLinkInput('');
+                      addToast('Favicon Reset', 'Switched back to default favicon.', 'info');
+                    }}
+                    className="p-1.5 text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl font-bold cursor-pointer transition-colors"
+                    title="Remove custom favicon"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Card 4: Dimension & Size Guide Card */}
+            <div className="p-6 rounded-3xl bg-gradient-to-br from-indigo-50/50 via-white to-pink-50/40 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950/30 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
+                  <Info className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Dimensions &amp; Resolution Guide
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Sahi aspect ratio aur size guidelines taki website visually crisp dikhe
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700">
+                  <div className="font-bold text-slate-900 dark:text-white flex items-center justify-between">
+                    <span>1. Header Logo (Navbar / Footer)</span>
+                    <span className="font-mono text-[10px] text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md font-bold">256 × 256 px</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Square 1:1 ratio PNG ya SVG sabse best render hota hai. Height aur width website par auto-scale hoti hain. Transparent background prefer karein.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700">
+                  <div className="font-bold text-slate-900 dark:text-white flex items-center justify-between">
+                    <span>2. Browser Favicon (Tab Icon)</span>
+                    <span className="font-mono text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-md font-bold">32 × 32 px</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    32x32 ya 64x64 pixel square icon .ico, .png ya .svg format me. Browser tabs, bookmarks bar aur mobile home screen shortcuts me clean aur sharp dikhta hai.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700">
+                  <div className="font-bold text-slate-900 dark:text-white flex items-center justify-between">
+                    <span>3. Instant Realtime Update</span>
+                    <span className="font-mono text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md font-bold">Auto Live</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Save button click karte hi title tag, tab favicon, navbar brand aur footer sabhi jagah realtime me bina website restart kiye apply ho jata hai.
+                  </p>
+                </div>
+              </div>
+            </div>
+
           </div>
         </form>
       )}

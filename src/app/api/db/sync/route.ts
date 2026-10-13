@@ -760,6 +760,9 @@ export async function GET(req: NextRequest) {
       },
       darkMode: Boolean(sbSet.data.dark_mode),
       backendProvider: sbSet.data.backend_provider || 'supabase',
+      websiteName: sbSet.data.payment_settings?.websiteName || 'SmartKhata Pro',
+      websiteLogo: sbSet.data.payment_settings?.websiteLogo || '',
+      websiteFavicon: sbSet.data.payment_settings?.websiteFavicon || '',
     } : null;
 
     const finalData = {
@@ -927,6 +930,9 @@ export async function POST(req: NextRequest) {
         const paymentSettingsWithLogo = {
           ...(data.settings.paymentSettings || {}),
           businessLogo: logoToSave || data.settings.paymentSettings?.businessLogo || '',
+          websiteName: data.settings.websiteName || 'SmartKhata Pro',
+          websiteLogo: data.settings.websiteLogo || '',
+          websiteFavicon: data.settings.websiteFavicon || '',
         };
         promises.push(
           Promise.resolve(

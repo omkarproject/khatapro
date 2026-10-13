@@ -129,6 +129,9 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
     reason: 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️',
   },
   betaTestingEnabled: false,
+  websiteName: 'SmartKhata Pro',
+  websiteLogo: '',
+  websiteFavicon: '',
 });
 
 export const StorageService = {

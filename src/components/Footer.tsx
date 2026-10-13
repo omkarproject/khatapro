@@ -23,15 +23,25 @@ export default function Footer() {
           {/* Col 1: Business Branding & Description */}
           <div className="space-y-3 md:col-span-1">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white font-black text-sm flex items-center justify-center shadow-md">
-                SK
-              </div>
+              {settings.websiteLogo ? (
+                <div className="w-8 h-8 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center shadow-md">
+                  <img
+                    src={settings.websiteLogo}
+                    alt={settings.websiteName || 'Logo'}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white font-black text-sm flex items-center justify-center shadow-md">
+                  SK
+                </div>
+              )}
               <span className="font-extrabold text-sm text-slate-900 dark:text-white">
-                {businessName}
+                {settings.websiteName || businessName}
               </span>
             </div>
             <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-              SmartKhata Pro Fintech &amp; Digital Ledger Operating System. Track money, manage business invoices, inventory and automated online collections seamlessly.
+              {settings.websiteName || 'SmartKhata Pro'} Fintech &amp; Digital Ledger Operating System. Track money, manage business invoices, inventory and automated online collections seamlessly.
             </p>
             {businessGst ? (
               <div className="text-[10px] text-slate-400 font-mono">

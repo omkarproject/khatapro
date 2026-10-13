@@ -18,7 +18,27 @@ import { useApp } from '@/context/AppContext';
 export default function LayoutShell({ children }: { children: React.ReactNode }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const pathname = usePathname();
-  const { currentUser } = useApp();
+  const { currentUser, settings } = useApp();
+
+  // Dynamically update document title & favicon across entire website
+  React.useEffect(() => {
+    if (typeof document !== 'undefined') {
+      const siteName = settings.websiteName?.trim() || 'SmartKhata Pro';
+      if (siteName) {
+        document.title = `${siteName} - Fintech & Digital Khata Operating System`;
+      }
+
+      if (settings.websiteFavicon) {
+        let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']");
+        if (!link) {
+          link = document.createElement('link');
+          link.rel = 'icon';
+          document.head.appendChild(link);
+        }
+        link.href = settings.websiteFavicon;
+      }
+    }
+  }, [settings.websiteName, settings.websiteFavicon]);
 
   const isPayRoute = pathname?.startsWith('/pay');
   const isLoginPage = pathname === '/login' || pathname === '/login/';

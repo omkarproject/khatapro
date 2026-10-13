@@ -352,6 +352,9 @@ export interface SystemSettings {
   telegramBackup?: TelegramBackupSettings;
   maintenanceMode?: MaintenanceModeConfig;
   betaTestingEnabled?: boolean;
+  websiteName?: string;
+  websiteLogo?: string;
+  websiteFavicon?: string;
 }
 
 export interface NoteItem {
