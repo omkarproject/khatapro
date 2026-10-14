@@ -23,10 +23,11 @@ export async function getUserDriveTokens(userId: string): Promise<StoredDriveTok
         .select('*')
         .eq('user_id', userId)
         .eq('is_connected', true)
-        .single();
+        .order('updated_at', { ascending: false })
+        .limit(1);
 
-      if (data && !error) {
-        return data as StoredDriveTokens;
+      if (data && data.length > 0 && !error) {
+        return data[0] as StoredDriveTokens;
       }
     } catch {}
   }

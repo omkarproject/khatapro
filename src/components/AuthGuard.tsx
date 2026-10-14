@@ -15,16 +15,6 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     currentUser?.email?.toLowerCase().includes('anant')
   );
 
-  const isExistingOrActiveMerchant = Boolean(
-    isAdmin ||
-    (typeof window !== 'undefined' && currentUser?.id && (
-      localStorage.getItem(`skp_gdrive_connected_${currentUser.id}`) === 'true' ||
-      localStorage.getItem(`skp_gdrive_skipped_${currentUser.id}`) === 'true' ||
-      (localStorage.getItem('smartkhata_customers') && localStorage.getItem('smartkhata_customers') !== '[]') ||
-      (localStorage.getItem('smartkhata_transactions') && localStorage.getItem('smartkhata_transactions') !== '[]')
-    ))
-  );
-
   const [isDriveConnected, setIsDriveConnected] = useState<boolean | null>(() => {
     if (typeof window !== 'undefined') {
       const rawUser = localStorage.getItem('skp_auth_user');
@@ -37,9 +27,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
             u.email === 'anantyadav8924@gmail.com' ||
             u.name?.toLowerCase().includes('anant') ||
             u.email?.toLowerCase().includes('anant') ||
-            localStorage.getItem(`skp_gdrive_connected_${u.id}`) === 'true' ||
-            localStorage.getItem(`skp_gdrive_skipped_${u.id}`) === 'true' ||
-            (localStorage.getItem('smartkhata_customers') && localStorage.getItem('smartkhata_customers') !== '[]')
+            localStorage.getItem(`skp_gdrive_connected_${u.id}`) === 'true'
           ) {
             return true;
           }
@@ -60,8 +48,8 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!currentUser?.id) return;
 
-    // Existing active merchants or admins are never blocked
-    if (isExistingOrActiveMerchant) {
+    // Platform admin is exempt
+    if (isAdmin) {
       setIsDriveConnected(true);
       return;
     }
@@ -100,15 +88,15 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       .catch((err) => {
         console.warn('Failed to verify drive connection status in AuthGuard:', err);
         if (active) {
-          // Fallback to true if network/verification fails so user is not blocked
-          setIsDriveConnected(true);
+          const cached = typeof window !== 'undefined' ? localStorage.getItem('skp_gdrive_connected_' + currentUser.id) : null;
+          setIsDriveConnected(cached === 'true');
         }
       });
 
     return () => {
       active = false;
     };
-  }, [currentUser?.id, isExistingOrActiveMerchant, addToast]);
+  }, [currentUser?.id, isAdmin, addToast]);
 
   if (!currentUser) {
     return (
