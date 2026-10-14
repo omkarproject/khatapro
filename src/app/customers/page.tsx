@@ -1311,14 +1311,14 @@ export default function CustomersPage() {
                         e.stopPropagation();
                         handleOpenAvatarReview(cust);
                       }}
-                      className="w-11 h-11 rounded-2xl fintech-gradient-primary text-white font-extrabold flex items-center justify-center text-sm shadow-md overflow-hidden relative shrink-0 cursor-pointer hover:ring-2 hover:ring-indigo-500 hover:scale-105 transition-all group"
+                      className="w-12 h-12 rounded-2xl fintech-gradient-primary text-white font-extrabold flex items-center justify-center text-sm shadow-md overflow-hidden relative shrink-0 aspect-square border border-slate-200/60 dark:border-slate-700/60 cursor-pointer hover:ring-2 hover:ring-indigo-500 hover:scale-105 transition-all group"
                       title="Click to view full photo / change / delete"
                     >
                       {(cust.avatar || cust.avatarUrl) ? (
                         <img
                           src={cust.avatar || cust.avatarUrl}
                           alt={cust.name}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover object-center rounded-2xl"
                           onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                         />
                       ) : (

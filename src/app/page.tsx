@@ -710,9 +710,18 @@ export default function DashboardPage() {
               topCreditors.map((c) => (
               <div key={c.id} className="py-2.5 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex items-center justify-center shrink-0">
-                    {c.name.charAt(0)}
-                  </div>
+                  {c.avatarUrl || (c as any).avatar ? (
+                    <img
+                      src={c.avatarUrl || (c as any).avatar}
+                      alt={c.name}
+                      className="w-8 h-8 rounded-xl object-cover object-center border border-slate-200 dark:border-slate-800 shrink-0 aspect-square shadow-xs"
+                      onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex items-center justify-center shrink-0 aspect-square">
+                      {c.name.charAt(0)}
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
                       {c.name}

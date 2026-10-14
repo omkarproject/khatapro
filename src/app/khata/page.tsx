@@ -56,9 +56,9 @@ function getCustomerRatingColor(rating: number = 5): string {
 }
 
 function getCustomerRatingBorder(rating: number = 5): string {
-  if (rating <= 2) return 'ring-[2.5px] ring-rose-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 border-2 border-rose-500/20';
-  if (rating <= 3) return 'ring-[2.5px] ring-amber-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 border-2 border-amber-400/20';
-  return 'ring-[2.5px] ring-emerald-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 border-2 border-emerald-500/20';
+  if (rating <= 2) return 'ring-2 ring-rose-500 ring-offset-1 ring-offset-white dark:ring-offset-slate-900 border border-rose-500/20';
+  if (rating <= 3) return 'ring-2 ring-amber-400 ring-offset-1 ring-offset-white dark:ring-offset-slate-900 border border-amber-400/20';
+  return 'ring-2 ring-emerald-500 ring-offset-1 ring-offset-white dark:ring-offset-slate-900 border border-emerald-500/20';
 }
 
 function formatTime(dateStr: string): string {
@@ -165,6 +165,9 @@ interface AttachedBill {
     transactionId?: string;
   } | null>(null);
   const billFileInputRef = useRef<HTMLInputElement>(null);
+  const billDateInputRef = useRef<HTMLInputElement>(null);
+  const [isVoiceTyping, setIsVoiceTyping] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
   // Avatar Review Modal State
   const [reviewAvatarCustomer, setReviewAvatarCustomer] = useState<Customer | null>(null);
@@ -342,10 +345,79 @@ interface AttachedBill {
     }
   };
 
+  // Voice typing handler for Add Notes using Web Speech API
+  const handleToggleVoiceTyping = () => {
+    if (typeof window === 'undefined') return;
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      addToast('Voice Typing Not Supported', 'Your browser does not support voice input. Please use Google Chrome or Edge.', 'warning');
+      return;
+    }
+
+    if (isVoiceTyping) {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch {}
+      }
+      setIsVoiceTyping(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+      recognition.lang = 'hi-IN'; // Indian Hindi / Hinglish / English
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        setIsVoiceTyping(true);
+        addToast('Voice Typing Active 🎙️', 'Speak now / Bolna shuru karein...', 'info');
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results?.[0]?.[0]?.transcript;
+        if (transcript) {
+          setEntryNotes(prev => (prev ? `${prev} ${transcript}` : transcript));
+          addToast('Note Added ✓', `"${transcript}"`, 'success');
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('Speech recognition error:', event.error);
+        setIsVoiceTyping(false);
+        if (event.error !== 'no-speech') {
+          addToast('Voice Input Note', `Microphone event: ${event.error}`, 'info');
+        }
+      };
+
+      recognition.onend = () => {
+        setIsVoiceTyping(false);
+      };
+
+      recognition.start();
+    } catch (err: any) {
+      console.warn('Failed to start speech recognition:', err);
+      setIsVoiceTyping(false);
+      addToast('Mic Error', 'Could not access microphone.', 'error');
+    }
+  };
+
   // Physical keyboard listener on entry screen
   useEffect(() => {
     if (screenView !== 'entry') return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      // CRITICAL FIX: If user is typing in Add Notes, Date picker, or any form field, NEVER intercept for amount!
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
       if (e.key >= '0' && e.key <= '9') {
         handleKeypadPress(e.key);
       } else if (e.key === 'Backspace') {
@@ -2596,18 +2668,19 @@ interface AttachedBill {
                           e.stopPropagation();
                           handleOpenAvatarReview(cust);
                         }}
-                        className={`w-9 h-9 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-xs shrink-0 cursor-pointer hover:ring-2 hover:ring-emerald-500/50 transition-all ${getCustomerRatingBorder(cust.rating)}`}
+                        className={`w-11 h-11 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-sm shrink-0 aspect-square overflow-hidden cursor-pointer hover:ring-2 hover:ring-emerald-500/50 transition-all ${getCustomerRatingBorder(cust.rating)}`}
                         title="Click to view/change profile photo"
                       >
                         {(cust.avatar || cust.avatarUrl) ? (
                           <img
                             src={cust.avatar || cust.avatarUrl}
                             alt={cust.name}
-                            className="w-full h-full rounded-full object-cover"
+                            className="w-full h-full object-cover object-center rounded-full"
+                            style={{ imageRendering: 'auto' }}
                             onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                           />
                         ) : (
-                          cust.name.charAt(0)
+                          <span className="font-black text-sm">{cust.name.charAt(0)}</span>
                         )}
                       </div>
                       <div className="min-w-0">
@@ -3366,9 +3439,18 @@ interface AttachedBill {
                     </button>
 
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-xs">
-                        {activeCustomer.name.charAt(0)}
-                      </div>
+                      {activeCustomer.avatar || activeCustomer.avatarUrl ? (
+                        <img
+                          src={activeCustomer.avatar || activeCustomer.avatarUrl}
+                          alt={activeCustomer.name}
+                          className="w-9 h-9 rounded-full object-cover object-center border border-slate-200 dark:border-slate-700 shrink-0 aspect-square shadow-xs"
+                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-xs shrink-0 aspect-square">
+                          {activeCustomer.name.charAt(0)}
+                        </div>
+                      )}
                       <div>
                         <div className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
                           <span>{editingTxnId ? 'Edit Entry' : activeCustomer.name}</span>
@@ -3426,7 +3508,7 @@ interface AttachedBill {
                     {/* Form Cards (Image 3) */}
                     <div className="space-y-3 max-w-sm mx-auto">
                       
-                      {/* Card 1: Add Notes (Image 3) */}
+                      {/* Card 1: Add Notes with Voice Typing (Image 3) */}
                       <div className="bg-[#EDF6F3] dark:bg-slate-800/80 rounded-2xl px-4 py-3 border border-[#D5ECE3] dark:border-slate-700 flex items-center justify-between">
                         <div className="flex items-center gap-3 flex-1">
                           <FileText className="w-4 h-4 text-slate-600 dark:text-slate-400 shrink-0" />
@@ -3438,24 +3520,51 @@ interface AttachedBill {
                             className="bg-transparent text-xs font-semibold text-slate-800 dark:text-slate-200 placeholder-slate-500 focus:outline-none w-full"
                           />
                         </div>
-                        <Mic className="w-4 h-4 text-emerald-600 dark:text-emerald-400 cursor-pointer shrink-0" />
+                        <button
+                          type="button"
+                          onClick={handleToggleVoiceTyping}
+                          title={isVoiceTyping ? 'Listening... click to stop' : 'Click to speak (Voice typing)'}
+                          className={`p-1.5 rounded-full transition-all cursor-pointer shrink-0 ${
+                            isVoiceTyping
+                              ? 'bg-rose-500 text-white animate-pulse shadow-md shadow-rose-500/30'
+                              : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                          }`}
+                        >
+                          <Mic className={`w-4 h-4 ${isVoiceTyping ? 'animate-bounce' : ''}`} />
+                        </button>
                       </div>
 
                       {/* Card 2: Bill Date (Image 3) */}
-                      <div className="bg-[#EDF6F3] dark:bg-slate-800/80 rounded-2xl px-4 py-3 border border-[#D5ECE3] dark:border-slate-700 flex items-center justify-between">
+                      <div
+                        onClick={() => {
+                          try {
+                            if (billDateInputRef.current) {
+                              if ('showPicker' in HTMLInputElement.prototype) {
+                                billDateInputRef.current.showPicker();
+                              } else {
+                                billDateInputRef.current.focus();
+                              }
+                            }
+                          } catch (e) {
+                            billDateInputRef.current?.focus();
+                          }
+                        }}
+                        className="bg-[#EDF6F3] dark:bg-slate-800/80 rounded-2xl px-4 py-3 border border-[#D5ECE3] dark:border-slate-700 flex items-center justify-between cursor-pointer hover:border-emerald-500/50 hover:bg-[#E4F2EC] dark:hover:bg-slate-800/90 transition-all select-none"
+                      >
                         <div className="flex items-center gap-3">
-                          <Calendar className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                          <Calendar className="w-4 h-4 text-slate-600 dark:text-slate-400 shrink-0" />
                           <div>
                             <div className="text-[10px] text-slate-400">Bill Date</div>
                             <input
+                              ref={billDateInputRef}
                               type="date"
                               value={entryDate}
                               onChange={(e) => setEntryDate(e.target.value)}
-                              className="bg-transparent text-xs font-bold text-slate-900 dark:text-white focus:outline-none"
+                              className="bg-transparent text-xs font-bold text-slate-900 dark:text-white focus:outline-none cursor-pointer"
                             />
                           </div>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                        <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
                       </div>
 
                       {/* Card 3: Payment Follow-up & Reminder (Available during Received & Given entries) */}
