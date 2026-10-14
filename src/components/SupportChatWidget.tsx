@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { SupportTicket, SupportMessage } from '@/types';
 import {
@@ -27,12 +28,27 @@ import {
 
 export default function SupportChatWidget() {
   const { currentUser, addToast } = useApp();
+  const pathname = usePathname();
+  const isDashboard = pathname === '/' || pathname === '';
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
   const [ticketFilter, setTicketFilter] = useState<'all' | 'open' | 'in_progress' | 'closed'>('all');
   const [ticketSearch, setTicketSearch] = useState('');
+
+  // Listen for programmatic open requests (e.g. from Dashboard Support Card)
+  useEffect(() => {
+    const handleOpenSupport = (e: any) => {
+      setIsOpen(true);
+      setIsMinimized(false);
+      if (e?.detail?.ticketId) {
+        setActiveTicketId(e.detail.ticketId);
+      }
+    };
+    window.addEventListener('open_support_chat', handleOpenSupport);
+    return () => window.removeEventListener('open_support_chat', handleOpenSupport);
+  }, []);
 
   // New ticket state (Merchant)
   const [isCreatingTicket, setIsCreatingTicket] = useState(false);
@@ -286,8 +302,8 @@ export default function SupportChatWidget() {
 
   return (
     <>
-      {/* 1. FLOATING ACTION BUTTON */}
-      {!isOpen && (
+      {/* 1. FLOATING ACTION BUTTON (Restricted to Dashboard Only) */}
+      {!isOpen && isDashboard && (
         <button
           type="button"
           onClick={() => {

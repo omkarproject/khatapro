@@ -7,7 +7,26 @@ import DriveConnectVIPScreen from './DriveConnectVIPScreen';
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const { currentUser, isMounted, addToast } = useApp();
-  const [isDriveConnected, setIsDriveConnected] = useState<boolean | null>(null);
+  const isAdmin = Boolean(
+    currentUser?.role === 'admin' ||
+    currentUser?.role === 'super_admin' ||
+    currentUser?.email === 'anantyadav8924@gmail.com'
+  );
+
+  const [isDriveConnected, setIsDriveConnected] = useState<boolean | null>(() => {
+    if (typeof window !== 'undefined' && currentUser?.id) {
+      if (
+        currentUser.role === 'admin' ||
+        currentUser.role === 'super_admin' ||
+        currentUser.email === 'anantyadav8924@gmail.com'
+      ) {
+        return true;
+      }
+      const cached = localStorage.getItem('skp_gdrive_connected_' + currentUser.id);
+      if (cached === 'true') return true;
+    }
+    return null;
+  });
 
   useEffect(() => {
     if (isMounted && !currentUser) {
@@ -20,11 +39,19 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!currentUser?.id) return;
 
+    if (isAdmin) {
+      setIsDriveConnected(true);
+      return;
+    }
+
     // Check if user just returned from Google OAuth authorization
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('gdrive_status') === 'connected') {
         setIsDriveConnected(true);
+        try {
+          localStorage.setItem('skp_gdrive_connected_' + currentUser.id, 'true');
+        } catch {}
         addToast(
           'Google Drive Connected! 🎉',
           'Your private encrypted cloud vault is now active. Dashboard unlocked.',
@@ -39,20 +66,28 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       .then((res) => res.json())
       .then((data) => {
         if (active) {
-          setIsDriveConnected(Boolean(data?.isConnected));
+          const connected = Boolean(data?.isConnected);
+          setIsDriveConnected(connected);
+          try {
+            if (connected) {
+              localStorage.setItem('skp_gdrive_connected_' + currentUser.id, 'true');
+            } else {
+              localStorage.removeItem('skp_gdrive_connected_' + currentUser.id);
+            }
+          } catch {}
         }
       })
       .catch((err) => {
         console.warn('Failed to verify drive connection status in AuthGuard:', err);
         if (active) {
-          setIsDriveConnected(false);
+          setIsDriveConnected((prev) => (prev !== null ? prev : false));
         }
       });
 
     return () => {
       active = false;
     };
-  }, [currentUser?.id, addToast]);
+  }, [currentUser?.id, isAdmin, addToast]);
 
   if (!currentUser) {
     return (

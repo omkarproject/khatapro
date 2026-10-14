@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
+import { t } from '@/lib/i18n';
 import {
   LayoutDashboard,
   BookOpen,
@@ -33,6 +34,13 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
   const { settings, profile, currentUser } = useApp();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [, setLangTick] = useState(0);
+
+  useEffect(() => {
+    const handleLangChange = () => setLangTick((prev) => prev + 1);
+    window.addEventListener('khatapro_language_changed', handleLangChange);
+    return () => window.removeEventListener('khatapro_language_changed', handleLangChange);
+  }, []);
 
   useEffect(() => {
     try {
@@ -54,19 +62,19 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
   };
 
   const navItems = [
-    { label: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { label: 'Digital KhataBook', href: '/khata', icon: BookOpen, badge: 'Core' },
-    { label: 'Customers CRM', href: '/customers', icon: Users },
-    { label: 'Collect Payment', href: '/upi-collection', icon: QrCode },
-    { label: 'Billing & Invoices', href: '/invoices', icon: FileSpreadsheet },
-    { label: 'Notes & Tasks', href: '/notes-tasks', icon: ClipboardList, badge: 'New' },
-    { label: 'Expense Tracker', href: '/expenses', icon: Receipt },
-    { label: 'Savings Goals', href: '/savings', icon: PiggyBank },
-    { label: 'Inventory & Stock', href: '/inventory', icon: PackageCheck },
-    { label: 'Payment Reminders', href: '/reminders', icon: BellRing },
-    { label: 'Document Vault', href: '/documents', icon: FolderLock },
-    { label: 'Financial Analytics', href: '/analytics', icon: LineChart },
-    { label: 'Settings', href: '/settings', icon: Settings },
+    { label: t('dashboard', 'Dashboard'), href: '/', icon: LayoutDashboard },
+    { label: t('khata', 'Digital KhataBook'), href: '/khata', icon: BookOpen, badge: t('badgeCore', 'Core') },
+    { label: t('customers', 'Customers CRM'), href: '/customers', icon: Users },
+    { label: t('collectPayment', 'Collect Payment'), href: '/upi-collection', icon: QrCode },
+    { label: t('invoices', 'Billing & Invoices'), href: '/invoices', icon: FileSpreadsheet },
+    { label: t('notesTasks', 'Notes & Tasks'), href: '/notes-tasks', icon: ClipboardList, badge: t('badgeNew', 'New') },
+    { label: t('expenses', 'Expense Tracker'), href: '/expenses', icon: Receipt },
+    { label: t('savings', 'Savings Goals'), href: '/savings', icon: PiggyBank },
+    { label: t('inventory', 'Inventory & Stock'), href: '/inventory', icon: PackageCheck },
+    { label: t('reminders', 'Payment Reminders'), href: '/reminders', icon: BellRing },
+    { label: t('documents', 'Document Vault'), href: '/documents', icon: FolderLock },
+    { label: t('analytics', 'Financial Analytics'), href: '/analytics', icon: LineChart },
+    { label: t('settings', 'Settings'), href: '/settings', icon: Settings },
   ];
 
   const renderSidebarContent = (isMobileView: boolean) => {
@@ -79,7 +87,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
           <div className={`flex items-center justify-between py-2 ${collapsed ? 'px-1 justify-center' : 'px-3'}`}>
             {!collapsed && (
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate">
-                Main Modules
+                {t('mainModules', 'Main Modules')}
               </span>
             )}
             {!isMobileView && (
@@ -150,11 +158,11 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
               <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-indigo-50/80 to-cyan-50/40 dark:from-slate-800/60 dark:to-indigo-950/30 border border-indigo-100/80 dark:border-indigo-900/30">
                 <div className="flex items-center justify-between mb-0.5">
                   <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                    Status
+                    {t('status', 'Status')}
                   </span>
                   <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    ONLINE
+                    {t('online', 'ONLINE')}
                   </span>
                 </div>
                 <div className="text-xs font-bold text-slate-900 dark:text-white truncate leading-tight" suppressHydrationWarning>
@@ -168,7 +176,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
               <div className="flex items-center justify-between text-[10px] text-slate-400 px-1">
                 <span className="flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3 text-emerald-500" />
-                  100% Secure
+                  {t('secure100', '100% Secure')}
                 </span>
                 <span className="text-[9px] font-mono">v1.0 Pro</span>
               </div>

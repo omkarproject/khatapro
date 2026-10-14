@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 import QuickAddRecordModal from '@/components/QuickAddRecordModal';
 import {
   TrendingUp,
@@ -95,6 +96,18 @@ export default function DashboardPage() {
   } = useApp();
 
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [, setLangTick] = useState(0);
+
+  React.useEffect(() => {
+    const handleLangChange = () => setLangTick((prev) => prev + 1);
+    const handleCurrChange = () => setLangTick((prev) => prev + 1);
+    window.addEventListener('khatapro_language_changed', handleLangChange);
+    window.addEventListener('khatapro_currency_changed', handleCurrChange);
+    return () => {
+      window.removeEventListener('khatapro_language_changed', handleLangChange);
+      window.removeEventListener('khatapro_currency_changed', handleCurrChange);
+    };
+  }, []);
 
   // Daily Rotating Vyapar Motivation
   const dailyMotivation = useMemo(() => {
@@ -321,14 +334,14 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1 shrink-0">
                 <Sparkles className="w-3 h-3 text-indigo-400" />
-                Live Business Pulse
+                {t('livePulse', 'Live Business Pulse')}
               </span>
               <span className="text-xs font-bold text-amber-300/90 tracking-wide truncate max-w-[200px] sm:max-w-md" suppressHydrationWarning>
                 {activeBusinessName}
               </span>
             </div>
             <h1 className="text-base sm:text-lg lg:text-xl font-black tracking-tight" suppressHydrationWarning>
-              Good day, {activeOwnerName} 👋
+              {t('goodDay', 'Good day')}, {activeOwnerName} 👋
             </h1>
             <p className="text-[11px] sm:text-xs text-slate-300 truncate italic max-w-2xl pt-0.5" title={dailyMotivation}>
               {dailyMotivation}
@@ -342,14 +355,14 @@ export default function DashboardPage() {
               className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-cyan-500 hover:opacity-95 shadow-md shadow-indigo-500/25 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
             >
               <QrCode className="w-3.5 h-3.5" />
-              Collect Payment
+              {t('collectPayment', 'Collect Payment')}
             </button>
             <button
               onClick={() => setIsQuickAddOpen(true)}
               className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/25 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              Add
+              {t('add', 'Add')}
             </button>
           </div>
         </div>
@@ -362,7 +375,7 @@ export default function DashboardPage() {
         <div className="glass-card p-3 sm:p-3.5 rounded-2xl relative overflow-hidden group">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-              CREDIT
+              {t('credit', 'CREDIT')}
             </span>
             <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
               <ArrowDownLeft className="w-3.5 h-3.5" />
@@ -372,9 +385,9 @@ export default function DashboardPage() {
             {formatINR(metrics.totalCredit)}
           </div>
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            <span>Money In &amp; Received</span>
+            <span>{t('moneyIn', 'Money In & Received')}</span>
             <Link href="/khata" className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold">
-              View Khata →
+              {t('viewKhata', 'View Khata →')}
             </Link>
           </div>
         </div>
@@ -383,7 +396,7 @@ export default function DashboardPage() {
         <div className="glass-card p-3 sm:p-3.5 rounded-2xl relative overflow-hidden group">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
-              DEBIT
+              {t('debit', 'DEBIT')}
             </span>
             <div className="w-7 h-7 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center">
               <ArrowUpRight className="w-3.5 h-3.5" />
@@ -395,7 +408,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1">
             <span className="truncate mr-1">Khata: {formatINR(metrics.khataDue)} + Inv: {formatINR(metrics.invoiceDue)}</span>
             <span className={`font-semibold shrink-0 ${metrics.totalDebit === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {metrics.totalDebit === 0 ? 'Clear' : 'Pending'}
+              {metrics.totalDebit === 0 ? t('clear', 'Clear') : t('pending', 'Pending')}
             </span>
           </div>
         </div>
@@ -404,7 +417,7 @@ export default function DashboardPage() {
         <div className="glass-card p-3 sm:p-3.5 rounded-2xl relative overflow-hidden group">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              NET PROFIT
+              {t('netProfit', 'NET PROFIT')}
             </span>
             <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
               <TrendingUp className="w-3.5 h-3.5" />
@@ -414,7 +427,7 @@ export default function DashboardPage() {
             {formatINR(metrics.netProfit)}
           </div>
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            <span>Revenue: {formatINR(metrics.totalIncome)}</span>
+            <span>{t('revenue', 'Revenue')}: {formatINR(metrics.totalIncome)}</span>
             <span className={`text-[11px] font-bold ${
               metrics.totalIncome > 0 && metrics.netProfit > 0
                 ? 'text-emerald-500'
@@ -433,7 +446,7 @@ export default function DashboardPage() {
         <div className="glass-card p-3 sm:p-3.5 rounded-2xl relative overflow-hidden group">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              UPI COLLECTIONS
+              {t('upiCollections', 'UPI COLLECTIONS')}
             </span>
             <div className="w-7 h-7 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
               <QrCode className="w-3.5 h-3.5" />
@@ -443,9 +456,9 @@ export default function DashboardPage() {
             {formatINR(metrics.totalUPICollections)}
           </div>
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            <span>Direct Merchant QR</span>
+            <span>{t('directMerchantQr', 'Direct Merchant QR')}</span>
             <span className="text-cyan-600 dark:text-cyan-400 font-semibold">
-              {metrics.totalUPICollections > 0 ? 'Received' : 'Instant Bank Credit'}
+              {metrics.totalUPICollections > 0 ? t('received', 'Received') : t('instantBankCredit', 'Instant Bank Credit')}
             </span>
           </div>
         </div>
@@ -464,11 +477,11 @@ export default function DashboardPage() {
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
-                  Live Support &amp; Help Desk
+                  {t('supportDesk', 'Live Support & Help Desk')}
                 </h3>
                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center gap-1 shrink-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Online 24/7
+                  {t('online', 'Online')} 24/7
                 </span>
               </div>
               <p className="text-[10.5px] text-slate-500 dark:text-slate-400 truncate">
@@ -484,19 +497,19 @@ export default function DashboardPage() {
             <div className="flex items-center gap-1 bg-slate-100/70 dark:bg-slate-800/60 p-0.5 rounded-lg border border-slate-200/60 dark:border-slate-800 text-[10px]">
               <span className="px-1.5 py-0.5 rounded font-bold flex items-center gap-1 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50">
                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                {supportStats.unread} Alerts
+                {supportStats.unread} {t('alerts', 'Alerts')}
               </span>
               <span className="px-1.5 py-0.5 rounded font-bold flex items-center gap-1 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                {supportStats.open} Open
+                {supportStats.open} {t('open', 'Open')}
               </span>
               <span className="px-1.5 py-0.5 rounded font-bold flex items-center gap-1 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                {supportStats.inProgress} Progress
+                {supportStats.inProgress} {t('inProgress', 'Progress')}
               </span>
               <span className="px-1.5 py-0.5 rounded font-bold flex items-center gap-1 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50">
                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                {supportStats.closed} Solved
+                {supportStats.closed} {t('solved', 'Solved')}
               </span>
             </div>
 
@@ -512,13 +525,12 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => {
-                  const btn = document.querySelector('button[title*="24/7 Live Support"]') as HTMLButtonElement;
-                  if (btn) btn.click();
+                  window.dispatchEvent(new CustomEvent('open_support_chat'));
                 }}
                 className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm flex items-center gap-1 shrink-0 transition-all cursor-pointer"
               >
                 <MessageSquare className="w-3 h-3" />
-                <span>Open Chat</span>
+                <span>{t('openChat', 'Open Chat')}</span>
               </button>
             )}
           </div>
