@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `A 6-digit verification code has been dispatched to ${cleanEmail}. Please enter it below.`,
+      message: `A verification code (OTP) has been dispatched to ${cleanEmail}. Please enter it below.`,
       email: cleanEmail,
       purpose,
       expiresInSeconds: 600,

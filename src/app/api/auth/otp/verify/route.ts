@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
-import { verifyOtp as verifyLocalOtp, validatePasswordStrength } from '@/lib/otpStore';
+import { verifyOtp as verifyLocalOtp, getOtp, validatePasswordStrength } from '@/lib/otpStore';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, code, purpose: rawPurpose, newPassword } = body;
+    const { email, code, purpose: rawPurpose, newPassword, name: bodyName, businessName: bodyBusinessName, phone: bodyPhone, password: bodyPassword } = body;
 
     if (!email || !code) {
       return NextResponse.json({ success: false, message: 'Email and verification code are required' }, { status: 400 });
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       isCodeValid = true;
       storedRecord = localCheck.record;
     } else {
-      // Try verifying with Supabase verifyOtp
+      // Try verifying with Supabase verifyOtp (supports 6 to 8 digit email tokens)
       try {
         const otpType = purpose === 'forgot_password' ? 'recovery' : 'email';
         const { data: sbVerifyData, error: sbVerifyErr } = await supabase.auth.verifyOtp({
@@ -49,14 +49,18 @@ export async function POST(req: NextRequest) {
 
         if (!sbVerifyErr && sbVerifyData?.user) {
           isCodeValid = true;
+          // Retrieve metadata from local in-memory OTP store if available
+          storedRecord = getOtp(cleanEmail, purpose as any);
         }
-      } catch {}
+      } catch (err) {
+        console.warn('Supabase verifyOtp check error:', err);
+      }
     }
 
     if (!isCodeValid) {
       return NextResponse.json({
         success: false,
-        message: localCheck.message || 'Invalid or expired verification code. Please try again.',
+        message: localCheck.message || 'Invalid or expired verification code. Please check your email and try again.',
       }, { status: 400 });
     }
 
@@ -67,10 +71,14 @@ export async function POST(req: NextRequest) {
     // CASE A: SIGNUP
     if (purpose === 'signup') {
       const meta = storedRecord?.metadata || {};
-      const name = meta.name || 'Business Owner';
-      const businessName = meta.businessName || `${name}'s Business`;
-      const phone = meta.phone || '';
-      const password = meta.password || 'Pass@12345';
+      const name = (bodyName || meta.name || 'Business Owner').trim();
+      const businessName = (bodyBusinessName || meta.businessName || `${name}'s Business`).trim();
+      const phone = (bodyPhone || meta.phone || '').trim();
+      const password = bodyPassword || meta.password || 'Pass@12345';
+
+      // STRICT ROLE RULE: Only system owner (anantyadav8924@gmail.com) gets super_admin.
+      // Every other new account is ALWAYS created as 'user' (Merchant).
+      const userRole = cleanEmail === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user';
 
       let createdUserId: string | null = null;
 
@@ -84,7 +92,7 @@ export async function POST(req: NextRequest) {
             name,
             business_name: businessName,
             phone,
-            role: 'super_admin',
+            role: userRole,
           },
         });
 
@@ -105,14 +113,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: 'Failed to create user in database.' }, { status: 500 });
       }
 
-      // Upsert profiles
+      // Upsert profiles with merchant role
       await supabase.from('profiles').upsert({
         id: createdUserId,
         name,
         email: cleanEmail,
         phone,
         business_name: businessName,
-        role: 'super_admin',
+        role: userRole,
         updated_at: new Date().toISOString(),
       });
 
@@ -132,13 +140,13 @@ export async function POST(req: NextRequest) {
         email: cleanEmail,
         phone,
         businessName,
-        role: 'super_admin',
+        role: userRole,
         createdAt: new Date().toISOString(),
       };
 
       const res = NextResponse.json({
         success: true,
-        message: 'Email verified and account registered successfully!',
+        message: 'Email verified and merchant account registered successfully!',
         user: safeUser,
         token: `token_${createdUserId}_${Date.now()}`,
         provider: 'supabase',
@@ -166,12 +174,23 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: 'User profile not found.' }, { status: 404 });
       }
 
+      // Determine role: non-admin emails cannot be admin/super_admin
+      let userRole = profile.role || 'user';
+      if ((userRole === 'admin' || userRole === 'super_admin') && cleanEmail !== 'anantyadav8924@gmail.com') {
+        userRole = 'user';
+        // Auto-heal profile role in database
+        try {
+          await supabase.from('profiles').update({ role: 'user', updated_at: new Date().toISOString() }).eq('id', profile.id);
+          await supabase.auth.admin.updateUserById(profile.id, { user_metadata: { role: 'user' } });
+        } catch {}
+      }
+
       const safeUser = {
         id: profile.id,
         name: profile.name || 'Business Owner',
         email: profile.email || cleanEmail,
         phone: profile.phone || '',
-        role: profile.role || 'super_admin',
+        role: userRole,
         businessName: profile.business_name || 'SmartKhata Merchant',
         createdAt: profile.created_at,
       };

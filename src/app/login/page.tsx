@@ -213,7 +213,7 @@ export default function LoginPage() {
         throw new Error(data.message || 'Failed to send verification code.');
       }
 
-      setSuccessMsg(`A 6-digit verification code has been sent to ${email.trim()}.`);
+      setSuccessMsg(`A verification code (OTP) has been sent to ${email.trim()}.`);
       setStep('otp');
       setResendTimer(60);
     } catch (err: any) {
@@ -229,8 +229,8 @@ export default function LoginPage() {
     setErrorMsg('');
     setSuccessMsg('');
 
-    if (!otpCode.trim() || otpCode.trim().length < 6) {
-      setErrorMsg('Please enter the complete 6-digit verification code.');
+    if (!otpCode.trim() || otpCode.trim().length < 6 || otpCode.trim().length > 8) {
+      setErrorMsg('Please enter the complete 6 to 8-digit verification code.');
       return;
     }
 
@@ -254,6 +254,10 @@ export default function LoginPage() {
           email: email.trim(),
           code: otpCode.trim(),
           purpose: mode,
+          name: name.trim(),
+          businessName: businessName.trim(),
+          phone: phone.trim(),
+          password: password,
           newPassword: newPassword.trim(),
         }),
       });
@@ -744,23 +748,23 @@ export default function LoginPage() {
                       <span>Verification Code Sent!</span>
                     </div>
                     <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                      Check your email <strong className="font-mono">{email}</strong> for the 6-digit verification code.
+                      Check your email <strong className="font-mono">{email}</strong> for the verification code (OTP).
                     </p>
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
-                      Enter 6-Digit Code *
+                      Enter Verification Code (OTP) *
                     </label>
                     <div className="relative">
                       <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                       <input
                         type="text"
                         required
-                        maxLength={6}
+                        maxLength={8}
                         value={otpCode}
-                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                        placeholder="123456"
+                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                        placeholder="12345678"
                         autoFocus
                         className="w-full pl-10 pr-3 py-3 text-base font-mono tracking-widest text-center font-black rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
                       />

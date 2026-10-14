@@ -140,7 +140,15 @@ export const StorageService = {
     if (typeof window === 'undefined') return null;
     try {
       const raw = localStorage.getItem('skp_auth_user');
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return null;
+      const user = JSON.parse(raw);
+      // STRICT ROLE RULE: Only system owner (anantyadav8924@gmail.com) can have super_admin.
+      // Auto-correct any legacy merchant records accidentally cached as super_admin.
+      if (user && (user.role === 'admin' || user.role === 'super_admin') && user.email !== 'anantyadav8924@gmail.com') {
+        user.role = 'user';
+        try { localStorage.setItem('skp_auth_user', JSON.stringify(user)); } catch {}
+      }
+      return user;
     } catch {
       return null;
     }

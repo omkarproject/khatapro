@@ -166,7 +166,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [passwords, setPasswords] = useState<PasswordItem[]>([]);
   const [settings, setSettingsState] = useState<SystemSettings>(() => getCleanDefaultSettings());
   const [darkMode, setDarkMode] = useState(false);
-  const [activeRole, setActiveRole] = useState<UserRole>('super_admin');
+  const [activeRole, setActiveRole] = useState<UserRole>('user');
 
   // Collect Modal
   const [isCollectModalOpen, setIsCollectModalOpen] = useState(false);
@@ -436,7 +436,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Refresh profile in memory
     setProfileState(user);
-    setActiveRole('super_admin');
+    setActiveRole(user.role || (user.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user'));
 
     // Load isolated data from Supabase Cloud for this user
     await loadUserDataFromCloud(user.id);
@@ -473,7 +473,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     setProfileState(user);
-    setActiveRole('super_admin');
+    setActiveRole(user.role || (user.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user'));
 
     // Load user's fresh database records from Supabase Cloud
     await loadUserDataFromCloud(user.id);
@@ -490,7 +490,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       document.cookie = `skp_auth_session=${user.id || (user as any)._id}; Path=/; Max-Age=2592000; SameSite=Lax;`;
     }
     setProfileState(user);
-    setActiveRole('super_admin');
+    setActiveRole(user.role || (user.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user'));
     await loadUserDataFromCloud(user.id);
     addToast('Authentication Verified', `Welcome, ${user.name}! Connected to Supabase Cloud Database.`, 'success');
   };
@@ -502,6 +502,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (typeof document !== 'undefined') {
       document.cookie = 'skp_auth_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
     }
+    setActiveRole('user');
     setProfileState(defaultEmptyProfile);
     setCustomers([]);
     setTransactions([]);
@@ -632,6 +633,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (activeU?.currency) setActiveCurrency(activeU.currency);
     syncLiveExchangeRates();
     setCurrentUserState(activeU);
+    setActiveRole(activeU?.role || (activeU?.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user'));
     refreshData();
     setMounted(true);
 

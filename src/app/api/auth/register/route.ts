@@ -31,6 +31,10 @@ export async function POST(req: NextRequest) {
 
     let createdUserId: string | null = null;
 
+    // STRICT ROLE RULE: Only system owner (anantyadav8924@gmail.com) gets super_admin.
+    // Every other new account is ALWAYS created as 'user' (Merchant).
+    const userRole = cleanEmail === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user';
+
     // 1. Register user via Supabase Auth
     // Try Admin API first (auto-confirms email and avoids rate-limits)
     try {
@@ -42,7 +46,7 @@ export async function POST(req: NextRequest) {
           name: cleanName,
           business_name: cleanBusinessName,
           phone: cleanPhone,
-          role: 'super_admin',
+          role: userRole,
         },
       });
 
@@ -61,7 +65,7 @@ export async function POST(req: NextRequest) {
             name: cleanName,
             business_name: cleanBusinessName,
             phone: cleanPhone,
-            role: 'super_admin',
+            role: userRole,
           },
         },
       });
@@ -92,7 +96,7 @@ export async function POST(req: NextRequest) {
       email: cleanEmail,
       phone: cleanPhone,
       business_name: cleanBusinessName,
-      role: 'super_admin',
+      role: userRole,
       updated_at: new Date().toISOString(),
     });
 
@@ -112,13 +116,13 @@ export async function POST(req: NextRequest) {
       email: cleanEmail,
       phone: cleanPhone,
       businessName: cleanBusinessName,
-      role: 'super_admin',
+      role: userRole,
       createdAt: new Date().toISOString(),
     };
 
     const res = NextResponse.json({
       success: true,
-      message: `Account created successfully in Supabase Cloud PostgreSQL!`,
+      message: `Merchant account created successfully in Supabase Cloud PostgreSQL!`,
       user: safeUser,
       token: `token_${createdUserId}_${Date.now()}`,
       provider: 'supabase',

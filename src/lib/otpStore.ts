@@ -18,9 +18,9 @@ export interface OtpRecord {
 const globalOtpMap: Map<string, OtpRecord> = (globalThis as any).__skp_otp_map || new Map();
 (globalThis as any).__skp_otp_map = globalOtpMap;
 
-// Generate 6-digit numeric OTP code
+// Generate 8-digit numeric OTP code (compatible with 6-8 digit email OTP)
 export function generateOtpCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return Math.floor(10000000 + Math.random() * 90000000).toString();
 }
 
 // Password policy validator: 6-10 chars, 1 uppercase, 1 number, 1 special symbol

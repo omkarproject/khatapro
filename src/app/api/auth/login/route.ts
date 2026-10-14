@@ -48,12 +48,22 @@ export async function POST(req: NextRequest) {
       .eq('id', sbUser.id)
       .single();
 
+    // Determine role: non-admin emails cannot be admin/super_admin
+    let userRole = profile?.role || sbUser.user_metadata?.role || 'user';
+    if ((userRole === 'admin' || userRole === 'super_admin') && cleanEmail !== 'anantyadav8924@gmail.com') {
+      userRole = 'user';
+      try {
+        await supabase.from('profiles').update({ role: 'user', updated_at: new Date().toISOString() }).eq('id', sbUser.id);
+        await supabase.auth.admin.updateUserById(sbUser.id, { user_metadata: { role: 'user' } });
+      } catch {}
+    }
+
     const safeUser = {
       id: sbUser.id,
       name: profile?.name || sbUser.user_metadata?.name || 'Business Owner',
       email: sbUser.email || cleanEmail,
       phone: profile?.phone || sbUser.user_metadata?.phone || '',
-      role: profile?.role || 'super_admin',
+      role: userRole,
       businessName: profile?.business_name || sbUser.user_metadata?.business_name || 'SmartKhata Merchant',
       createdAt: sbUser.created_at,
     };
