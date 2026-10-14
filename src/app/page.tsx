@@ -93,6 +93,7 @@ export default function DashboardPage() {
     profile,
     currentUser,
     openCollectModal,
+    t,
   } = useApp();
 
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
@@ -546,24 +547,24 @@ export default function DashboardPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                Cash Flow Velocity
+                {t('cashFlowVelocity', 'Cash Flow Velocity')}
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400">
-                  Live Trend
+                  {t('livePulse', 'Live Trend')}
                 </span>
               </h3>
               <p className="text-[11px] text-slate-400">
-                Daily comparison of collections, general sales, and operational expenses
+                {t('cashFlowVelocity', 'Daily comparison of collections, general sales, and operational expenses')}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs font-semibold">
               <span className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
-                <span className="w-2 h-2 rounded-full bg-indigo-600" /> Collection
+                <span className="w-2 h-2 rounded-full bg-indigo-600" /> {t('collection', 'Collection')}
               </span>
               <span className="flex items-center gap-1.5 text-cyan-500">
-                <span className="w-2 h-2 rounded-full bg-cyan-500" /> Income
+                <span className="w-2 h-2 rounded-full bg-cyan-500" /> {t('income', 'Income')}
               </span>
               <span className="flex items-center gap-1.5 text-rose-500">
-                <span className="w-2 h-2 rounded-full bg-rose-500" /> Expense
+                <span className="w-2 h-2 rounded-full bg-rose-500" /> {t('expense', 'Expense')}
               </span>
             </div>
           </div>
@@ -617,10 +618,10 @@ export default function DashboardPage() {
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Expense Mix
+                {t('expenseBreakdown', 'Expense Mix')}
               </h3>
               <Link href="/expenses" className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
-                Details →
+                {t('viewAll', 'Details →')}
               </Link>
             </div>
             {expenseCategoryData.length === 0 ? (
@@ -629,16 +630,16 @@ export default function DashboardPage() {
                   <Receipt className="w-4 h-4" />
                 </div>
                 <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  No operational expenses logged
+                  {t('noExpensesRecorded', 'No operational expenses logged')}
                 </p>
                 <p className="text-[11px] text-slate-400 max-w-[220px] mx-auto leading-relaxed">
-                  Log expenses in Expense Tracker to see your live category distribution
+                  {t('expenses', 'Log expenses in Expense Tracker to see your live category distribution')}
                 </p>
                 <Link
                   href="/expenses"
                   className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline pt-0.5"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Log First Expense
+                  <Plus className="w-3.5 h-3.5" /> {t('addExpense', 'Log First Expense')}
                 </Link>
               </div>
             ) : (
@@ -683,27 +684,27 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                Top Credit Receivables
+                {t('topDebtors', 'Top Credit Receivables')}
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-50 text-rose-600 dark:bg-rose-950 dark:text-rose-400">
-                  Follow Up
+                  {t('pending', 'Follow Up')}
                 </span>
               </h3>
               <p className="text-[11px] text-slate-400">
-                Customers with highest pending balances in your KhataBook
+                {t('topDebtors', 'Customers with highest pending balances in your KhataBook')}
               </p>
             </div>
             <Link
               href="/khata"
               className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
             >
-              All Customers →
+              {t('viewKhata', 'All Customers →')}
             </Link>
           </div>
 
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {topCreditors.length === 0 ? (
               <div className="py-6 text-center text-xs text-slate-400">
-                No pending customer dues. All khata accounts are settled!
+                {t('noDebtorsRecorded', 'No pending customer dues. All khata accounts are settled!')}
               </div>
             ) : (
               topCreditors.map((c) => (
@@ -728,7 +729,7 @@ export default function DashboardPage() {
                       {formatINR(c.outstandingBalance)}
                     </div>
                     <div className="text-[9.5px] text-slate-400 uppercase tracking-wider font-semibold">
-                      Due
+                      {t('due', 'Due')}
                     </div>
                   </div>
                   <button
@@ -760,10 +761,10 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-2.5">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                Low Stock Thresholds
+                {t('inventory', 'Low Stock Thresholds')}
               </h3>
               <Link href="/inventory" className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
-                Manage Stock →
+                {t('viewAll', 'Manage Stock →')}
               </Link>
             </div>
 
@@ -783,14 +784,14 @@ export default function DashboardPage() {
                       href="/inventory"
                       className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-500 text-white shadow-sm"
                     >
-                      Stock In
+                      {t('addProduct', 'Stock In')}
                     </Link>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="py-6 text-center text-xs text-slate-400">
-                All inventory products are stocked safely above reorder points.
+                {t('noRecords', 'All inventory products are stocked safely above reorder points.')}
               </div>
             )}
           </div>
@@ -800,10 +801,10 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                 <PiggyBank className="w-3.5 h-3.5 text-emerald-500" />
-                Savings &amp; Reserve Progress
+                {t('savings', 'Savings & Reserve Progress')}
               </h3>
               <Link href="/savings" className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
-                View Goals →
+                {t('viewAll', 'View Goals →')}
               </Link>
             </div>
 

@@ -64,7 +64,8 @@ export default function QuickAddRecordModal({
     savingsGoals,
     saveSavingsGoal,
     addDocument,
-    addToast
+    addToast,
+    t
   } = useApp();
 
   const [activeOption, setActiveOption] = useState<QuickAddOption | null>(initialOption);
@@ -459,35 +460,35 @@ export default function QuickAddRecordModal({
   const optionsList = [
     {
       id: 'khata' as QuickAddOption,
-      title: 'Khata Entry',
-      subtitle: 'Record gave (उधार) or got (मिला) payment',
-      badge: 'Core Ledger',
+      title: t('addEntry', 'Khata Entry'),
+      subtitle: t('khata', 'Record gave (उधार) or got (मिला) payment'),
+      badge: t('badgeCore', 'Core Ledger'),
       icon: BookOpen,
       iconColor: 'text-emerald-500',
       bgGradient: 'hover:border-emerald-500/50 bg-emerald-500/5 dark:bg-emerald-500/10',
     },
     {
       id: 'invoice' as QuickAddOption,
-      title: 'New Invoice',
-      subtitle: 'Create GST sales invoice or quotation',
-      badge: 'Invoicing',
+      title: t('createInvoice', 'New Invoice'),
+      subtitle: t('invoices', 'Create GST sales invoice or quotation'),
+      badge: t('invoices', 'Invoicing'),
       icon: FileSpreadsheet,
       iconColor: 'text-indigo-500',
       bgGradient: 'hover:border-indigo-500/50 bg-indigo-500/5 dark:bg-indigo-500/10',
     },
     {
       id: 'expense' as QuickAddOption,
-      title: 'Expense Voucher',
-      subtitle: 'Log business outflow, rent or utility bills',
-      badge: 'Outflow',
+      title: t('addExpense', 'Expense Voucher'),
+      subtitle: t('expenses', 'Log business outflow, rent or utility bills'),
+      badge: t('expense', 'Outflow'),
       icon: Receipt,
       iconColor: 'text-rose-500',
       bgGradient: 'hover:border-rose-500/50 bg-rose-500/5 dark:bg-rose-500/10',
     },
     {
       id: 'customer' as QuickAddOption,
-      title: 'Customers CRM',
-      subtitle: 'Register new customer with credit limit',
+      title: t('addCustomer', 'Customers CRM'),
+      subtitle: t('customers', 'Register new customer with credit limit'),
       badge: 'CRM',
       icon: Users,
       iconColor: 'text-purple-500',
@@ -495,8 +496,8 @@ export default function QuickAddRecordModal({
     },
     {
       id: 'savings' as QuickAddOption,
-      title: 'Savings Goal',
-      subtitle: 'Set tax reserve, emergency or growth fund',
+      title: t('savings', 'Savings Goal'),
+      subtitle: t('savings', 'Set tax reserve, emergency or growth fund'),
       badge: 'Reserve',
       icon: PiggyBank,
       iconColor: 'text-amber-500',
@@ -504,8 +505,8 @@ export default function QuickAddRecordModal({
     },
     {
       id: 'document' as QuickAddOption,
-      title: 'Document Vault',
-      subtitle: 'Upload GST, PAN, licenses & certificates',
+      title: t('documents', 'Document Vault'),
+      subtitle: t('documents', 'Upload GST, PAN, licenses & certificates'),
       badge: 'Storage',
       icon: FolderLock,
       iconColor: 'text-cyan-500',
@@ -537,29 +538,29 @@ export default function QuickAddRecordModal({
             <div>
               <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
                 {activeOption === 'khata'
-                  ? 'Record Khata Entry'
+                  ? t('addEntry', 'Record Khata Entry')
                   : activeOption === 'invoice'
-                  ? 'Create New Invoice'
+                  ? t('createInvoice', 'Create New Invoice')
                   : activeOption === 'expense'
-                  ? 'Log Business Expense'
+                  ? t('addExpense', 'Log Business Expense')
                   : activeOption === 'savings'
                   ? savingsMode === 'add_fund' && savingsGoals.length > 0
-                    ? 'Add Funds to Savings Goal'
-                    : 'Create Savings Goal'
+                    ? t('addFunds', 'Add Funds to Savings Goal')
+                    : t('savings', 'Create Savings Goal')
                   : activeOption === 'document'
-                  ? 'Store in Document Vault'
+                  ? t('documents', 'Store in Document Vault')
                   : activeOption === 'customer'
-                  ? 'Add Customer to CRM'
-                  : 'Quick Add Record'}
+                  ? t('addCustomer', 'Add Customer to CRM')
+                  : t('quickAdd', 'Quick Add Record')}
               </h2>
               <p className="text-[11px] text-slate-400">
                 {activeOption === 'savings'
                   ? savingsMode === 'add_fund' && savingsGoals.length > 0
-                    ? 'Select an existing goal to deposit savings and grow reserves'
-                    : 'Set a new financial savings target for your business'
+                    ? t('savings', 'Select an existing goal to deposit savings and grow reserves')
+                    : t('savings', 'Set a new financial savings target for your business')
                   : activeOption
-                  ? 'Fill details to instantly record into your system'
-                  : 'Select what you would like to add right from your dashboard'}
+                  ? t('quickAdd', 'Fill details to instantly record into your system')
+                  : t('quickAdd', 'Select what you would like to add right from your dashboard')}
               </p>
             </div>
           </div>

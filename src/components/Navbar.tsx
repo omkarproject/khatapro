@@ -41,6 +41,7 @@ import { SavingsGoal, SavingsDeposit } from '@/types';
 import GlobalSearchModal from './GlobalSearchModal';
 import CurrencyLanguageModal from './CurrencyLanguageModal';
 import { getActiveCurrency, getActiveLanguage, t } from '@/lib/i18n';
+import { getLiveRateDisplay } from '@/lib/currencyService';
 
 const NAVBAR_MOTIVATIONS = [
   { text: 'Boond boond se sagar banta hai! Har ek rupee aapke business ki suraksha hai.', emoji: '🌱' },
@@ -687,8 +688,8 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                     {totalAlerts === 0 && (
                       <div className="py-7 text-center text-xs text-slate-400 space-y-1.5">
                         <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto opacity-75" />
-                        <div className="font-bold text-slate-700 dark:text-slate-300">Everything is in order</div>
-                        <div className="text-[11px]">No pending alerts or notifications!</div>
+                        <div className="font-bold text-slate-700 dark:text-slate-300">{t('everythingInOrder', 'Everything is in order')}</div>
+                        <div className="text-[11px]">{t('noPendingAlerts', 'No pending alerts or notifications!')}</div>
                       </div>
                     )}
                   </div>
@@ -743,7 +744,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                               isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'
                             }`}>
                               <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-                              {isOnline ? 'Online' : 'Offline'}
+                              {isOnline ? t('online', 'Online') : t('offline', 'Offline')}
                             </div>
                           </div>
                           <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 hidden sm:block" />
@@ -802,6 +803,10 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                           <div className="text-xs font-black text-slate-800 dark:text-slate-200 mt-0.5 truncate flex items-center gap-1">
                             <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">{activeCurrency.symbol}</span>
                             <span>{activeCurrency.code}</span>
+                          </div>
+                          <div className="text-[9.5px] font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-1 truncate flex items-center gap-1 bg-emerald-500/10 dark:bg-emerald-500/15 px-1.5 py-0.5 rounded-md">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                            <span>{getLiveRateDisplay(activeCurrency.code)}</span>
                           </div>
                         </button>
 

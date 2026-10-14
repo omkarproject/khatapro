@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 export default function RemindersPage() {
-  const { reminders, saveReminder, deleteReminder, customers, settings, addToast, openCollectModal } = useApp();
+  const { reminders, saveReminder, deleteReminder, customers, settings, addToast, openCollectModal, activeCurrency, activeLanguage } = useApp();
 
   const [filter, setFilter] = useState<'all' | 'overdue' | 'upcoming'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);

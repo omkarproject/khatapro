@@ -37,7 +37,7 @@ import {
 } from 'recharts';
 
 export default function AnalyticsPage() {
-  const { transactions, expenses, customers, invoices } = useApp();
+  const { transactions, expenses, customers, invoices, activeCurrency, activeLanguage } = useApp();
   const [timeframe, setTimeframe] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
   const [selectedMonth, setSelectedMonth] = useState<string>('all'); // 'all' or 'YYYY-MM'
 

@@ -94,6 +94,8 @@ function KhataPageInner() {
     reminders,
     saveReminder,
     deleteReminder,
+    activeCurrency,
+    activeLanguage,
   } = useApp();
 
   // Payment Reminder Modal State for Transactions

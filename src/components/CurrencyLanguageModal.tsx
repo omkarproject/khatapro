@@ -19,6 +19,7 @@ import {
   LanguageOption,
   CurrencyOption,
 } from '@/lib/i18n';
+import { getLiveRateDisplay, syncLiveExchangeRates } from '@/lib/currencyService';
 import { useApp } from '@/context/AppContext';
 
 interface CurrencyLanguageModalProps {
@@ -44,6 +45,7 @@ export default function CurrencyLanguageModal({
       setSearchQuery('');
       setSelectedLang(getActiveLanguage());
       setSelectedCurr(getActiveCurrency());
+      syncLiveExchangeRates().catch(() => {});
     }
   }, [isOpen, defaultTab]);
 
@@ -290,6 +292,12 @@ export default function CurrencyLanguageModal({
                             </div>
                             <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
                               {curr.name}
+                            </div>
+                            <div className="flex items-center gap-1 mt-1">
+                              <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <span>{getLiveRateDisplay(curr.code)}</span>
+                              </span>
                             </div>
                           </div>
                         </div>

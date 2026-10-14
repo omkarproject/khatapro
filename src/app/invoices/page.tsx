@@ -72,6 +72,8 @@ export default function InvoicesPage() {
     currentUser,
     addToast,
     openCollectModal,
+    activeCurrency,
+    activeLanguage,
   } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');

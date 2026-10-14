@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 export default function PaymentDetailsModal() {
-  const { activePaymentDetail, closePaymentDetail, settings, addToast, customers } = useApp();
+  const { activePaymentDetail, closePaymentDetail, settings, addToast, customers, t } = useApp();
   const [copiedRef, setCopiedRef] = useState(false);
 
   if (!activePaymentDetail) return null;
@@ -169,7 +169,7 @@ export default function PaymentDetailsModal() {
             className="px-4 py-2.5 rounded-xl font-bold bg-[#25D366] hover:bg-[#20bd5a] text-white flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
           >
             <Share2 className="w-3.5 h-3.5" />
-            <span>Share Receipt</span>
+            <span>{t('shareWhatsApp', 'Share Receipt')}</span>
           </button>
 
           <button
@@ -178,7 +178,7 @@ export default function PaymentDetailsModal() {
             className="px-4 py-2.5 rounded-xl font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
-            <span>Print</span>
+            <span>{t('print', 'Print')}</span>
           </button>
 
           <button
@@ -186,7 +186,7 @@ export default function PaymentDetailsModal() {
             onClick={closePaymentDetail}
             className="px-5 py-2.5 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all cursor-pointer"
           >
-            Done
+            {t('close', 'Done')}
           </button>
         </div>
 

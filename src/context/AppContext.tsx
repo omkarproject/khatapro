@@ -20,7 +20,7 @@ import {
 } from '@/types';
 import { StorageService, getCleanDefaultSettings } from '@/services/storage';
 import { deleteFromDriveFiles } from '@/lib/driveUploadClient';
-import { setActiveLanguage, setActiveCurrency } from '@/lib/i18n';
+import { setActiveLanguage, setActiveCurrency, getActiveLanguage, getActiveCurrency, LanguageOption, CurrencyOption, t } from '@/lib/i18n';
 import { syncLiveExchangeRates } from '@/lib/currencyService';
 
 export const defaultEmptyProfile: UserProfile = {
@@ -137,6 +137,13 @@ interface AppContextType {
   closePaymentDetail: () => void;
   playPaymentNotificationSound: () => void;
 
+  // Localization & Multi-Currency
+  activeLanguage: LanguageOption;
+  activeCurrency: CurrencyOption;
+  changeLanguage: (code: string) => LanguageOption;
+  changeCurrency: (code: string) => CurrencyOption;
+  t: (key: string, fallback?: string) => string;
+
   // Refresh / Reload
   refreshData: () => void;
 }
@@ -175,6 +182,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<UserProfile | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
+
+  // Localization & Multi-Currency State
+  const [activeLanguage, setActiveLanguageState] = useState<LanguageOption>(() => getActiveLanguage());
+  const [activeCurrency, setActiveCurrencyState] = useState<CurrencyOption>(() => getActiveCurrency());
+
+  useEffect(() => {
+    const handleLang = () => setActiveLanguageState(getActiveLanguage());
+    const handleCurr = () => setActiveCurrencyState(getActiveCurrency());
+    window.addEventListener('khatapro_language_changed', handleLang);
+    window.addEventListener('khatapro_currency_changed', handleCurr);
+    return () => {
+      window.removeEventListener('khatapro_language_changed', handleLang);
+      window.removeEventListener('khatapro_currency_changed', handleCurr);
+    };
+  }, []);
+
+  const changeLanguage = (code: string) => {
+    const item = setActiveLanguage(code);
+    setActiveLanguageState(item);
+    return item;
+  };
+
+  const changeCurrency = (code: string) => {
+    const item = setActiveCurrency(code);
+    setActiveCurrencyState(item);
+    return item;
+  };
 
   const openAuthModal = () => setIsAuthModalOpen(true);
   const closeAuthModal = () => setIsAuthModalOpen(false);
@@ -1205,6 +1239,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         syncWithDatabase,
         refreshData,
         isMounted: mounted,
+        activeLanguage,
+        activeCurrency,
+        changeLanguage,
+        changeCurrency,
+        t,
       }}
     >
       {children}

@@ -49,6 +49,7 @@ export default function QuickUPICollectModal() {
     addToast,
     transactions,
     openPaymentDetail,
+    t,
   } = useApp();
 
   const paymentSettings = settings.paymentSettings;

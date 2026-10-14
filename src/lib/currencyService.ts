@@ -171,3 +171,24 @@ export function getExcelNumFmt(currencyCode?: string): string {
   }
   return `"${sym}" #,##0.00`;
 }
+
+/**
+ * Returns compact live rate display badge string (e.g. "1$ = ₹86.85" or "1€ = ₹93.40")
+ * Updates in real-time according to active or selected currency.
+ */
+export function getLiveRateDisplay(currencyCode?: string): string {
+  const code = (currencyCode || getActiveCurrency().code).toUpperCase();
+  const rates = getExchangeRates();
+  const opt = SUPPORTED_CURRENCIES.find((c) => c.code === code);
+  const sym = opt?.symbol || code;
+
+  if (code === 'INR') {
+    const usdRate = rates['USD'] || BASE_INR_EXCHANGE_RATES['USD'] || 0.011514;
+    const inrPerUsd = (1 / usdRate).toFixed(2);
+    return `1$ = ₹${inrPerUsd}`;
+  }
+
+  const rate = rates[code] || BASE_INR_EXCHANGE_RATES[code] || 1.0;
+  const inrPerUnit = (1 / rate).toFixed(2);
+  return `1 ${sym} = ₹${inrPerUnit}`;
+}

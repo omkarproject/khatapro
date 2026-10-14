@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 
 export default function InventoryPage() {
-  const { products, saveProduct, deleteProduct, adjustStock, addToast } = useApp();
+  const { products, saveProduct, deleteProduct, adjustStock, addToast, activeCurrency, activeLanguage } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStock, setFilterStock] = useState<'all' | 'low'>('all');

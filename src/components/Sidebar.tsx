@@ -32,7 +32,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
-  const { settings, profile, currentUser } = useApp();
+  const { settings, profile, currentUser, activeLanguage, activeCurrency } = useApp();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [, setLangTick] = useState(0);
 

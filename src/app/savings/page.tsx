@@ -144,7 +144,7 @@ function getGoalReminderStatus(goal: SavingsGoal): ReminderStatus {
 }
 
 export default function SavingsPage() {
-  const { savingsGoals, saveSavingsGoal, deleteSavingsGoal, addToast, settings } = useApp();
+  const { savingsGoals, saveSavingsGoal, deleteSavingsGoal, addToast, settings, activeCurrency, activeLanguage } = useApp();
 
   // Dialog States
   const [isModalOpen, setIsModalOpen] = useState(false);

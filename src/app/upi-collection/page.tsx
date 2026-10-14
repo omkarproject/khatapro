@@ -32,6 +32,8 @@ export default function UpiCollectionPage() {
     addTransaction,
     deleteTransaction,
     addToast,
+    activeCurrency,
+    activeLanguage,
   } = useApp();
 
   const paymentSettings = settings.paymentSettings;

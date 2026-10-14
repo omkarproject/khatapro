@@ -40,7 +40,7 @@ import {
 } from 'recharts';
 
 export default function ExpensesPage() {
-  const { expenses, addExpense, deleteExpense, addToast, settings, updateSettings } = useApp();
+  const { expenses, addExpense, deleteExpense, addToast, settings, updateSettings, activeCurrency, activeLanguage } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');

@@ -129,6 +129,8 @@ export default function CustomersPage() {
     settings,
     addToast,
     syncWithDatabase,
+    activeCurrency,
+    activeLanguage,
   } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');

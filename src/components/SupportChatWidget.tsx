@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 
 export default function SupportChatWidget() {
-  const { currentUser, addToast } = useApp();
+  const { currentUser, addToast, t } = useApp();
   const pathname = usePathname();
   const isDashboard = pathname === '/' || pathname === '';
   const [isOpen, setIsOpen] = useState(false);
@@ -311,7 +311,7 @@ export default function SupportChatWidget() {
             setIsMinimized(false);
           }}
           className="fixed bottom-6 right-6 z-40 group flex items-center gap-3 px-4 py-3.5 rounded-full bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 text-white shadow-xl shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:scale-105 active:scale-95 transition-all cursor-pointer"
-          title="24/7 Live Support & Helpdesk"
+          title={t('supportDesk', '24/7 Live Support & Helpdesk')}
         >
           <div className="relative">
             <Headphones className="w-5 h-5 group-hover:rotate-12 transition-transform" />
@@ -319,7 +319,7 @@ export default function SupportChatWidget() {
           </div>
 
           <span className="text-xs font-black tracking-wide hidden sm:inline">
-            {isAdmin ? 'Support Desk' : 'Live Support'}
+            {isAdmin ? t('supportDesk', 'Support Desk') : t('liveSupport', 'Live Support')}
           </span>
 
           {unreadCount > 0 && (
@@ -360,14 +360,14 @@ export default function SupportChatWidget() {
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
                   <h4 className="text-xs sm:text-sm font-black truncate">
-                    {activeTicket ? activeTicket.subject : 'SmartKhata 24/7 Support'}
+                    {activeTicket ? activeTicket.subject : t('supportDesk', 'SmartKhata 24/7 Support')}
                   </h4>
                   <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
                 </div>
                 <div className="text-[10px] text-indigo-100 flex items-center gap-1">
-                  <span>{isAdmin ? 'Admin Helpdesk Mode' : 'Instant Merchant Care'}</span>
+                  <span>{isAdmin ? t('adminHelpdeskMode', 'Admin Helpdesk Mode') : t('instantMerchantCare', 'Instant Merchant Care')}</span>
                   <span>&bull;</span>
-                  <span className="font-mono text-emerald-300 font-bold">Online</span>
+                  <span className="font-mono text-emerald-300 font-bold">{t('online', 'Online')}</span>
                 </div>
               </div>
             </div>
@@ -551,7 +551,7 @@ export default function SupportChatWidget() {
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
                         className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer shrink-0"
-                        title="Attach Screenshot / Image"
+                        title={t('attachFile', 'Attach Screenshot / Image')}
                       >
                         <ImageIcon className="w-4 h-4 text-indigo-500" />
                       </button>
@@ -560,7 +560,7 @@ export default function SupportChatWidget() {
                         type="text"
                         value={messageText}
                         onChange={(e) => setMessageText(e.target.value)}
-                        placeholder="Type your message or query..."
+                        placeholder={t('typeMessage', 'Type your message or query...')}
                         className="flex-1 px-3.5 py-2.5 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
                       />
 
@@ -568,7 +568,7 @@ export default function SupportChatWidget() {
                         type="submit"
                         disabled={isSendingMessage || (!messageText.trim() && !attachedImage)}
                         className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white transition-colors cursor-pointer shadow-md shadow-indigo-600/30 shrink-0"
-                        title="Send Message"
+                        title={t('sendMessage', 'Send Message')}
                       >
                         {isSendingMessage ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -587,20 +587,20 @@ export default function SupportChatWidget() {
                 >
                   <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
                     <h5 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
-                      Create Support Ticket
+                      {t('createNewTicket', 'Create Support Ticket')}
                     </h5>
                     <button
                       type="button"
                       onClick={() => setIsCreatingTicket(false)}
                       className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold"
                     >
-                      Cancel
+                      {t('cancel', 'Cancel')}
                     </button>
                   </div>
 
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                      Subject / Problem Title *
+                      {t('subject', 'Subject / Problem Title *')}
                     </label>
                     <input
                       type="text"
@@ -614,7 +614,7 @@ export default function SupportChatWidget() {
 
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                      Issue Category
+                      {t('category', 'Issue Category')}
                     </label>
                     <div className="grid grid-cols-2 gap-2">
                       {(['General', 'Billing', 'Technical', 'Account'] as const).map((cat) => (
@@ -636,13 +636,13 @@ export default function SupportChatWidget() {
 
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                      Detailed Description *
+                      {t('description', 'Detailed Description *')}
                     </label>
                     <textarea
                       rows={3}
                       value={newInitialMsg}
                       onChange={(e) => setNewInitialMsg(e.target.value)}
-                      placeholder="Describe what happened or what error you are seeing..."
+                      placeholder={t('description', 'Describe what happened or what error you are seeing...')}
                       className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                     />
                   </div>
@@ -650,7 +650,7 @@ export default function SupportChatWidget() {
                   {/* Attachment */}
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                      Attach Error Screenshot / Photo (Optional)
+                      {t('attachFile', 'Attach Error Screenshot / Photo (Optional)')}
                     </label>
                     <input
                       type="file"
@@ -682,7 +682,7 @@ export default function SupportChatWidget() {
                         className="w-full py-3 border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-indigo-500 rounded-2xl flex items-center justify-center gap-2 text-xs text-slate-500 font-bold transition-all cursor-pointer"
                       >
                         <ImageIcon className="w-4 h-4 text-indigo-500" />
-                        <span>Click to attach screenshot</span>
+                        <span>{t('attachFile', 'Click to attach screenshot')}</span>
                       </button>
                     )}
                   </div>
@@ -695,12 +695,12 @@ export default function SupportChatWidget() {
                     {isSubmitting ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Submitting Ticket...</span>
+                        <span>{t('loading', 'Submitting Ticket...')}</span>
                       </>
                     ) : (
                       <>
                         <Send className="w-4 h-4" />
-                        <span>Submit Ticket to Admin</span>
+                        <span>{t('sendMessage', 'Submit Ticket to Admin')}</span>
                       </>
                     )}
                   </button>
@@ -714,7 +714,7 @@ export default function SupportChatWidget() {
                       <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type="text"
-                        placeholder="Search tickets by subject, user, ticket #..."
+                        placeholder={t('searchTickets', 'Search tickets by subject, user, ticket #...')}
                         value={ticketSearch}
                         onChange={(e) => setTicketSearch(e.target.value)}
                         className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none"
@@ -734,7 +734,7 @@ export default function SupportChatWidget() {
                               : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                           }`}
                         >
-                          {f.replace('_', ' ')}
+                          {f === 'all' ? t('allTickets', 'All') : f === 'open' ? t('open', 'Open') : f === 'in_progress' ? t('inProgress', 'In Progress') : t('closed', 'Closed')}
                         </button>
                       ))}
                     </div>
@@ -760,11 +760,11 @@ export default function SupportChatWidget() {
                           <div className="p-8 text-center space-y-2">
                             <LifeBuoy className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600" />
                             <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                              No tickets found
+                              {t('noTickets', 'No tickets found')}
                             </h5>
                             <p className="text-[11px] text-slate-400">
                               {!isAdmin
-                                ? 'Need help? Click "Open New Ticket" below to chat directly with admin.'
+                                ? 'Need help? Click below to chat directly with admin.'
                                 : 'No open support tickets at the moment.'}
                             </p>
                           </div>
@@ -804,7 +804,7 @@ export default function SupportChatWidget() {
                                     : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                                 }`}
                               >
-                                {t.status.replace('_', ' ')}
+                                {t.status === 'open' ? 'Open' : t.status === 'in_progress' ? 'In Progress' : 'Closed'}
                               </span>
                             </div>
 
@@ -839,7 +839,7 @@ export default function SupportChatWidget() {
                         className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
                       >
                         <MessageSquare className="w-3.5 h-3.5" />
-                        <span>Start New Support Request</span>
+                        <span>{t('createNewTicket', 'Start New Support Request')}</span>
                       </button>
                     </div>
                   )}
