@@ -80,14 +80,36 @@ export default function DriveConnectVIPScreen({ onConnected }: DriveConnectVIPSc
             <span>Zero-Knowledge Private Cloud Vault</span>
           </div>
 
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/80 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 text-xs font-semibold border border-slate-700 hover:border-rose-500/30 transition-all cursor-pointer"
-          >
-            <LogOut className="w-3 h-3" />
-            <span>Logout</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (currentUser?.id) {
+                  try {
+                    localStorage.setItem(`skp_gdrive_skipped_${currentUser.id}`, 'true');
+                    localStorage.setItem(`skp_gdrive_connected_${currentUser.id}`, 'true');
+                  } catch {}
+                }
+                if (onConnected) {
+                  onConnected();
+                } else {
+                  window.location.href = '/';
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 text-xs font-semibold border border-slate-700 transition-all cursor-pointer"
+            >
+              <span>Skip to Dashboard →</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/80 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 text-xs font-semibold border border-slate-700 hover:border-rose-500/30 transition-all cursor-pointer"
+            >
+              <LogOut className="w-3 h-3" />
+              <span>Logout</span>
+            </button>
+          </div>
         </div>
 
         {/* Header Icon + Title */}
@@ -185,6 +207,26 @@ export default function DriveConnectVIPScreen({ onConnected }: DriveConnectVIPSc
                 <Sparkles className="w-4 h-4 text-amber-300" />
               </>
             )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (currentUser?.id) {
+                try {
+                  localStorage.setItem(`skp_gdrive_skipped_${currentUser.id}`, 'true');
+                  localStorage.setItem(`skp_gdrive_connected_${currentUser.id}`, 'true');
+                } catch {}
+              }
+              if (onConnected) {
+                onConnected();
+              } else {
+                window.location.href = '/';
+              }
+            }}
+            className="w-full py-3 px-6 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+          >
+            <span>Continue to Dashboard (Setup Later) →</span>
           </button>
 
           <div className="flex items-center justify-center gap-4 pt-2">
