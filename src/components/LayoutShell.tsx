@@ -52,8 +52,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
     pathname?.startsWith('/refund-and-cancellation');
   const isPublicRoute = isPayRoute || isLoginPage || isPublicInfoPage;
 
-  // Pay pages and Login page render cleanly without dashboard navbar/sidebar
-  if (isPayRoute || isLoginPage) {
+  if (isPublicRoute) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-[#070B14] flex flex-col text-slate-900 dark:text-slate-100">
         <main className="flex-1 min-w-0">
@@ -71,36 +70,34 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0B0F19]">
-      {currentUser && <Navbar onToggleSidebar={() => setMobileSidebarOpen(prev => !prev)} />}
+      <AuthGuard>
+        {currentUser && <Navbar onToggleSidebar={() => setMobileSidebarOpen(prev => !prev)} />}
 
-      <div className="flex-1 flex w-full">
-        {currentUser && (
-          <Sidebar
-            isOpenMobile={mobileSidebarOpen}
-            onCloseMobile={() => setMobileSidebarOpen(false)}
-          />
-        )}
-
-        <main className="flex-1 min-w-0 px-3 sm:px-6 lg:px-8 2xl:px-10 py-4 sm:py-6 pb-24 md:pb-12 overflow-x-hidden">
-          <BroadcastBanner />
-          {isPublicRoute ? (
-            children
-          ) : (
-            <AuthGuard>{children}</AuthGuard>
+        <div className="flex-1 flex w-full">
+          {currentUser && (
+            <Sidebar
+              isOpenMobile={mobileSidebarOpen}
+              onCloseMobile={() => setMobileSidebarOpen(false)}
+            />
           )}
-        </main>
-      </div>
 
-      <Footer />
-      {currentUser && <MobileNav />}
-      <QuickUPICollectModal />
-      <PaymentDetailsModal />
-      <MaintenanceNoticeModal />
-      <MaintenanceOverlay />
-      <AuthModal />
+          <main className="flex-1 min-w-0 px-3 sm:px-6 lg:px-8 2xl:px-10 py-4 sm:py-6 pb-24 md:pb-12 overflow-x-hidden">
+            <BroadcastBanner />
+            {children}
+          </main>
+        </div>
+
+        <Footer />
+        {currentUser && <MobileNav />}
+        <QuickUPICollectModal />
+        <PaymentDetailsModal />
+        <MaintenanceNoticeModal />
+        <MaintenanceOverlay />
+        <AuthModal />
+        <SupportChatWidget />
+        <AutoBackupGuardian />
+      </AuthGuard>
       <ToastContainer />
-      <SupportChatWidget />
-      <AutoBackupGuardian />
     </div>
   );
 }

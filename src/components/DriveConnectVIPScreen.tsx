@@ -43,11 +43,18 @@ export default function DriveConnectVIPScreen({ onConnected }: DriveConnectVIPSc
       const res = await fetch(`/api/backup/google-drive/status?userId=${currentUser?.id || ''}`);
       const json = await res.json();
       if (json.isConnected) {
+        try {
+          if (currentUser?.id) {
+            localStorage.setItem('skp_gdrive_connected_' + currentUser.id, 'true');
+          }
+        } catch {}
         if (onConnected) {
           onConnected();
         } else {
           window.location.reload();
         }
+      } else {
+        alert('Google Drive connection status: Not Connected yet. Kripya niche diye gaye "Authorize & Connect Google Drive" button par click karke Google Drive connect karein.');
       }
     } catch (e) {
       console.warn('Status check failed:', e);
@@ -60,6 +67,7 @@ export default function DriveConnectVIPScreen({ onConnected }: DriveConnectVIPSc
     if (typeof window !== 'undefined') {
       localStorage.removeItem('skp_auth_user');
       localStorage.removeItem('skp_auth_token');
+      document.cookie = 'skp_auth_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
       window.location.replace('/login');
     }
   };
@@ -117,6 +125,9 @@ export default function DriveConnectVIPScreen({ onConnected }: DriveConnectVIPSc
           <p className="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto leading-relaxed">
             Welcome, <strong className="text-white font-semibold">{merchantName}</strong>! {websiteName} is designed with a <strong>Zero-Shared Cloud Architecture</strong>: your customer records, bills, receipts, and images are stored <strong className="text-emerald-400">strictly in your own private Google Drive</strong> — never on any central server or shared admin account.
           </p>
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-bold">
+            <span>🔒 अनिवार्य: डेटा सुरक्षा नीति के अनुसार Google Drive कनेक्ट करना अनिवार्य है। इसके बाद ही डैशबोर्ड चालू होगा।</span>
+          </div>
         </div>
 
         {/* Feature Cards Grid */}

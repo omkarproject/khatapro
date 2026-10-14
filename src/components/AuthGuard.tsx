@@ -8,11 +8,8 @@ import DriveConnectVIPScreen from './DriveConnectVIPScreen';
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const { currentUser, isMounted, addToast } = useApp();
   const isAdmin = Boolean(
-    currentUser?.role === 'admin' ||
-    currentUser?.role === 'super_admin' ||
     currentUser?.email === 'anantyadav8924@gmail.com' ||
-    currentUser?.name?.toLowerCase().includes('anant') ||
-    currentUser?.email?.toLowerCase().includes('anant')
+    (currentUser?.role === 'super_admin' && currentUser?.email?.toLowerCase().includes('anant'))
   );
 
   const [isDriveConnected, setIsDriveConnected] = useState<boolean | null>(() => {
@@ -21,14 +18,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       if (rawUser) {
         try {
           const u = JSON.parse(rawUser);
-          if (
-            u.role === 'admin' ||
-            u.role === 'super_admin' ||
-            u.email === 'anantyadav8924@gmail.com' ||
-            u.name?.toLowerCase().includes('anant') ||
-            u.email?.toLowerCase().includes('anant') ||
-            localStorage.getItem(`skp_gdrive_connected_${u.id}`) === 'true'
-          ) {
+          if (u.email === 'anantyadav8924@gmail.com') {
             return true;
           }
         } catch {}
@@ -67,7 +57,22 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
           'Your private encrypted cloud vault is now active. Dashboard unlocked.',
           'success'
         );
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
         return;
+      }
+      if (urlParams.get('gdrive_error')) {
+        setIsDriveConnected(false);
+        try {
+          localStorage.removeItem('skp_gdrive_connected_' + currentUser.id);
+        } catch {}
+        addToast(
+          'Google Drive Authorization Incomplete',
+          'Drive connection is mandatory to safeguard your financial ledger. Please try authorizing again.',
+          'warning'
+        );
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
       }
     }
 
@@ -81,6 +86,8 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
           try {
             if (connected) {
               localStorage.setItem('skp_gdrive_connected_' + currentUser.id, 'true');
+            } else {
+              localStorage.removeItem('skp_gdrive_connected_' + currentUser.id);
             }
           } catch {}
         }
