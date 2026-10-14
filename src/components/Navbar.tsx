@@ -32,11 +32,15 @@ import {
   CheckCircle2,
   Trash2,
   ClipboardList,
-  CheckSquare
+  CheckSquare,
+  Coins,
+  Globe
 } from 'lucide-react';
 import { formatINR, formatDate } from '@/lib/utils';
 import { SavingsGoal, SavingsDeposit } from '@/types';
 import GlobalSearchModal from './GlobalSearchModal';
+import CurrencyLanguageModal from './CurrencyLanguageModal';
+import { getActiveCurrency, getActiveLanguage } from '@/lib/i18n';
 
 const NAVBAR_MOTIVATIONS = [
   { text: 'Boond boond se sagar banta hai! Har ek rupee aapke business ki suraksha hai.', emoji: '🌱' },
@@ -77,6 +81,25 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+
+  // Currency & Language Selector Modal State
+  const [isCurrencyLanguageOpen, setIsCurrencyLanguageOpen] = useState(false);
+  const [currencyLanguageTab, setCurrencyLanguageTab] = useState<'language' | 'currency'>('language');
+  const [activeCurrency, setActiveCurrencyState] = useState(() => getActiveCurrency());
+  const [activeLanguage, setActiveLanguageState] = useState(() => getActiveLanguage());
+
+  useEffect(() => {
+    const updateCurrency = () => setActiveCurrencyState(getActiveCurrency());
+    const updateLanguage = () => setActiveLanguageState(getActiveLanguage());
+
+    window.addEventListener('khatapro_currency_changed', updateCurrency);
+    window.addEventListener('khatapro_language_changed', updateLanguage);
+
+    return () => {
+      window.removeEventListener('khatapro_currency_changed', updateCurrency);
+      window.removeEventListener('khatapro_language_changed', updateLanguage);
+    };
+  }, []);
 
   const notificationRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -761,6 +784,46 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                         </p>
                       </div>
 
+                      {/* Currency & Language Quick Selection */}
+                      <div className="grid grid-cols-2 gap-1.5 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCurrencyLanguageTab('currency');
+                            setIsCurrencyLanguageOpen(true);
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/80 text-left transition-all cursor-pointer group"
+                        >
+                          <div className="text-[10px] font-bold text-slate-400 flex items-center justify-between">
+                            <span>Currency</span>
+                            <Coins className="w-3 h-3 text-emerald-500" />
+                          </div>
+                          <div className="text-xs font-black text-slate-800 dark:text-slate-200 mt-0.5 truncate flex items-center gap-1">
+                            <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">{activeCurrency.symbol}</span>
+                            <span>{activeCurrency.code}</span>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCurrencyLanguageTab('language');
+                            setIsCurrencyLanguageOpen(true);
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-indigo-500/80 text-left transition-all cursor-pointer group"
+                        >
+                          <div className="text-[10px] font-bold text-slate-400 flex items-center justify-between">
+                            <span>Language</span>
+                            <Globe className="w-3 h-3 text-indigo-500" />
+                          </div>
+                          <div className="text-xs font-black text-slate-800 dark:text-slate-200 mt-0.5 truncate">
+                            {activeLanguage.nativeName}
+                          </div>
+                        </button>
+                      </div>
+
                       {/* Menu Actions */}
                       <div className="space-y-1 pt-2 border-t border-slate-100 dark:border-slate-800 mt-2">
                         <Link
@@ -813,6 +876,13 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
 
       {/* Global Search Modal */}
       <GlobalSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+
+      {/* Searchable Multi-Currency & Language Modal */}
+      <CurrencyLanguageModal
+        isOpen={isCurrencyLanguageOpen}
+        onClose={() => setIsCurrencyLanguageOpen(false)}
+        defaultTab={currencyLanguageTab}
+      />
 
       {/* Direct Add Funds to Goal Modal triggered from Notifications */}
       {activeDepositGoal && (

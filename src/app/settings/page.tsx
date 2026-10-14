@@ -75,6 +75,17 @@ import {
   Trash,
 } from 'lucide-react';
 import GoogleDriveBackupPanel from '@/components/GoogleDriveBackupPanel';
+import CurrencyLanguageModal from '@/components/CurrencyLanguageModal';
+import {
+  SUPPORTED_LANGUAGES,
+  SUPPORTED_CURRENCIES,
+  getActiveCurrency,
+  setActiveCurrency,
+  getActiveLanguage,
+  setActiveLanguage,
+  CurrencyOption,
+  LanguageOption
+} from '@/lib/i18n';
 
 export default function SettingsPage() {
   const { settings, updateSettings, saveDefaultUpiAndQr, profile, setProfile, addToast, syncWithDatabase, currentUser, refreshData } = useApp();
@@ -91,6 +102,25 @@ export default function SettingsPage() {
   const [adminSubTab, setAdminSubTab] = useState<'supabase' | 'drive' | 'users' | 'maintenance'>('supabase');
   const [backupSubTab, setBackupSubTab] = useState<'drive' | 'local'>('drive');
   const [isSyncingData, setIsSyncingData] = useState(false);
+
+  // Currency & Language Settings State
+  const [isSettingsCurrencyModalOpen, setIsSettingsCurrencyModalOpen] = useState(false);
+  const [settingsCurrencyLanguageTab, setSettingsCurrencyLanguageTab] = useState<'language' | 'currency'>('currency');
+  const [activeSettingsCurrency, setActiveSettingsCurrency] = useState<CurrencyOption>(() => getActiveCurrency());
+  const [activeSettingsLanguage, setActiveSettingsLanguage] = useState<LanguageOption>(() => getActiveLanguage());
+
+  useEffect(() => {
+    const onCurrencyChange = () => setActiveSettingsCurrency(getActiveCurrency());
+    const onLanguageChange = () => setActiveSettingsLanguage(getActiveLanguage());
+
+    window.addEventListener('khatapro_currency_changed', onCurrencyChange);
+    window.addEventListener('khatapro_language_changed', onLanguageChange);
+
+    return () => {
+      window.removeEventListener('khatapro_currency_changed', onCurrencyChange);
+      window.removeEventListener('khatapro_language_changed', onLanguageChange);
+    };
+  }, []);
 
   // Broadcasts State
   const [broadcastTitle, setBroadcastTitle] = useState('');
@@ -947,9 +977,12 @@ export default function SettingsPage() {
         ...settings.paymentSettings,
         businessGst: cleanBGst,
         payeeName: cleanBName || settings.paymentSettings?.payeeName || '',
+        currency: activeSettingsCurrency.code,
       },
     };
     updateSettings(updated);
+    setActiveCurrency(activeSettingsCurrency.code);
+    setActiveLanguage(activeSettingsLanguage.code);
     setProfile({
       ...profile,
       businessName: cleanBName,
@@ -958,6 +991,9 @@ export default function SettingsPage() {
       businessAddress: cleanBAddress,
       phone: cleanBPhone,
       email: cleanBEmail,
+      currency: activeSettingsCurrency.code,
+      currencySymbol: activeSettingsCurrency.symbol,
+      language: activeSettingsLanguage.code,
     });
     if (cleanBName) {
       setPayeeName(cleanBName);
@@ -1484,15 +1520,83 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                Currency
-              </label>
-              <input
-                type="text"
-                disabled
-                value="Indian Rupee (INR ₹)"
-                className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-500 font-semibold"
-              />
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400">
+                  Business Currency (मुद्रा)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSettingsCurrencyLanguageTab('currency');
+                    setIsSettingsCurrencyModalOpen(true);
+                  }}
+                  className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Search className="w-2.5 h-2.5" />
+                  <span>Search</span>
+                </button>
+              </div>
+              <select
+                value={activeSettingsCurrency.code}
+                onChange={(e) => {
+                  const c = setActiveCurrency(e.target.value);
+                  setActiveSettingsCurrency(c);
+                  addToast('Currency Updated', `Default monetary unit set to ${c.name} (${c.symbol}).`, 'success');
+                }}
+                className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+              >
+                {SUPPORTED_CURRENCIES.map((curr) => (
+                  <option key={curr.code} value={curr.code}>
+                    {curr.flag} {curr.symbol} {curr.code} — {curr.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Regional Language Field */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400">
+                  Preferred Language (भाषा)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSettingsCurrencyLanguageTab('language');
+                    setIsSettingsCurrencyModalOpen(true);
+                  }}
+                  className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Search className="w-2.5 h-2.5" />
+                  <span>Search All</span>
+                </button>
+              </div>
+              <select
+                value={activeSettingsLanguage.code}
+                onChange={(e) => {
+                  const l = setActiveLanguage(e.target.value);
+                  setActiveSettingsLanguage(l);
+                  addToast('Language Updated', `Language set to ${l.nativeName} (${l.name}).`, 'success');
+                }}
+                className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.nativeName} ({lang.name}) — {lang.region}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center p-3 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 mt-1 sm:mt-0">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                <p className="text-[11px] text-indigo-950 dark:text-indigo-300 leading-snug">
+                  Active Currency <strong>({activeSettingsCurrency.symbol} {activeSettingsCurrency.code})</strong> and Language <strong>({activeSettingsLanguage.nativeName})</strong> will format all invoices &amp; ledgers.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -3261,27 +3365,22 @@ export default function SettingsPage() {
       {mainTab === 'backup' && (
         <div className="space-y-6 animate-in fade-in">
           
-          {/* Active Database Banner */}
-          <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-emerald-500/10 border border-indigo-200/80 dark:border-indigo-900/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-                  Active Database: Supabase PostgreSQL (Cloud Active)
-                </span>
-              </div>
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                <CloudUpload className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                Database Backup &amp; Google Drive Cloud Sync
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Export full JSON backup, restore existing snapshots, or synchronize automated daily backups directly to your private Google Drive SmartKhata Pro folder.
-              </p>
+          {/* Active Database Banner (Compact & Sleek) */}
+          <div className="p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-emerald-500/10 border border-indigo-200/80 dark:border-indigo-900/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className="text-[11px] font-mono font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                Active Database: Supabase PostgreSQL (Cloud Active)
+              </span>
+              <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">&bull;</span>
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Google Drive Cloud Sync &amp; Local Backup
+              </span>
             </div>
 
-            <div className="flex items-center gap-2 self-start sm:self-auto">
-              <span className="text-[11px] text-slate-400 font-mono">Last Snapshot:</span>
-              <span className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-900 text-[11px] font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2 self-start sm:self-auto text-[10.5px]">
+              <span className="text-slate-400 font-mono">Last Snapshot:</span>
+              <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
                 {lastBackupDate}
               </span>
             </div>
@@ -4818,6 +4917,13 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {/* Searchable Multi-Currency & Language Modal */}
+      <CurrencyLanguageModal
+        isOpen={isSettingsCurrencyModalOpen}
+        onClose={() => setIsSettingsCurrencyModalOpen(false)}
+        defaultTab={settingsCurrencyLanguageTab}
+      />
 
     </div>
   );

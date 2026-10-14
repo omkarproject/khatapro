@@ -10,6 +10,9 @@ export interface UserProfile {
   businessName: string;
   businessGst?: string;
   businessAddress?: string;
+  currency?: string;
+  currencySymbol?: string;
+  language?: string;
   isBlocked?: boolean;
   blockedReason?: string;
   createdAt: string;

@@ -5,13 +5,22 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+import { getActiveCurrency } from './i18n';
+
 export function formatINR(amount: number): string {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 0,
-  }).format(amount);
+  try {
+    const active = getActiveCurrency();
+    return new Intl.NumberFormat(active.locale, {
+      style: 'currency',
+      currency: active.code,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    return `₹${amount.toLocaleString('en-IN')}`;
+  }
 }
+
+export const formatCurrency = formatINR;
 
 export function formatDate(dateStr: string): string {
   try {
