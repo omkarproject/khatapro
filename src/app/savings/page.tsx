@@ -3,6 +3,8 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate } from '@/lib/utils';
+import { getActiveCurrency, t } from '@/lib/i18n';
+import { convertCurrency, getExcelNumFmt, formatMoney } from '@/lib/currencyService';
 import { SavingsGoal, SavingsDeposit } from '@/types';
 import { uploadToDriveFiles } from '@/lib/driveUploadClient';
 import {
@@ -564,25 +566,29 @@ export default function SavingsPage() {
       subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: SUB_BLUE } };
 
       // Summary Stats Cards (Rows 5-8)
+      const activeCurr = getActiveCurrency();
+      const excelNumFmt = getExcelNumFmt(activeCurr.code);
+
       worksheet.mergeCells('A5:B5');
       worksheet.getCell('A5').value = 'Target Reserve Amount:';
       worksheet.getCell('A5').font = { bold: true };
-      worksheet.getCell('C5').value = goal.targetAmount;
-      worksheet.getCell('C5').numFmt = '₹ #,##0.00';
+      worksheet.getCell('C5').value = convertCurrency(goal.targetAmount, 'INR', activeCurr.code);
+      worksheet.getCell('C5').numFmt = excelNumFmt;
       worksheet.getCell('C5').font = { bold: true, color: { argb: NAVY_HEADER } };
 
       worksheet.mergeCells('A6:B6');
       worksheet.getCell('A6').value = 'Current Accumulated Saved:';
       worksheet.getCell('A6').font = { bold: true };
-      worksheet.getCell('C6').value = goal.currentAmount;
-      worksheet.getCell('C6').numFmt = '₹ #,##0.00';
+      worksheet.getCell('C6').value = convertCurrency(goal.currentAmount, 'INR', activeCurr.code);
+      worksheet.getCell('C6').numFmt = excelNumFmt;
       worksheet.getCell('C6').font = { bold: true, color: { argb: GREEN_TEXT } };
 
       worksheet.mergeCells('A7:B7');
       worksheet.getCell('A7').value = 'Progress Achieved:';
       worksheet.getCell('A7').font = { bold: true };
       const pct = goal.targetAmount > 0 ? Math.round((goal.currentAmount / goal.targetAmount) * 100) : 0;
-      worksheet.getCell('C7').value = `${pct}% Achieved (Remaining: ₹${Math.max(0, goal.targetAmount - goal.currentAmount).toLocaleString('en-IN')})`;
+      const remainingConverted = convertCurrency(Math.max(0, goal.targetAmount - goal.currentAmount), 'INR', activeCurr.code);
+      worksheet.getCell('C7').value = `${pct}% Achieved (Remaining: ${activeCurr.symbol}${remainingConverted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
 
       worksheet.mergeCells('A8:B8');
       worksheet.getCell('A8').value = 'Target Completion Date:';
@@ -591,7 +597,7 @@ export default function SavingsPage() {
 
       // Table Header Row 10
       const headerRow = worksheet.getRow(10);
-      headerRow.values = ['S.No', 'Deposit Date', 'Amount (₹)', 'Particulars / Notes', 'Receipt Attachment'];
+      headerRow.values = ['S.No', 'Deposit Date', `Amount (${activeCurr.symbol})`, 'Particulars / Notes', 'Receipt Attachment'];
       headerRow.font = { name: 'Calibri', size: 11, bold: true, color: { argb: WHITE } };
       headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
       headerRow.height = 24;
@@ -626,10 +632,10 @@ export default function SavingsPage() {
       let rowIndex = 11;
       if (deposits.length === 0 && goal.currentAmount > 0) {
         const row = worksheet.getRow(rowIndex);
-        row.values = [1, formatDate(goal.createdAt), goal.currentAmount, 'Initial Reserve Deposit', 'N/A'];
+        row.values = [1, formatDate(goal.createdAt), convertCurrency(goal.currentAmount, 'INR', activeCurr.code), 'Initial Reserve Deposit', 'N/A'];
         row.getCell(1).alignment = { horizontal: 'center' };
         row.getCell(2).alignment = { horizontal: 'center' };
-        row.getCell(3).numFmt = '₹ #,##0.00';
+        row.getCell(3).numFmt = excelNumFmt;
         row.getCell(3).font = { bold: true, color: { argb: GREEN_TEXT } };
         row.getCell(5).alignment = { horizontal: 'center' };
         rowIndex++;
@@ -643,13 +649,13 @@ export default function SavingsPage() {
           row.values = [
             idx + 1,
             formatDate(dep.date || dep.createdAt),
-            dep.amount,
+            convertCurrency(dep.amount, 'INR', activeCurr.code),
             dep.notes || 'Reserve Fund Contribution',
             dep.receiptUrl ? `Attached (${typeLabel})` : 'No Attachment',
           ];
           row.getCell(1).alignment = { horizontal: 'center' };
           row.getCell(2).alignment = { horizontal: 'center' };
-          row.getCell(3).numFmt = '₹ #,##0.00';
+          row.getCell(3).numFmt = excelNumFmt;
           row.getCell(3).font = { bold: true, color: { argb: GREEN_TEXT } };
 
           const receiptCell = row.getCell(5);
@@ -688,13 +694,14 @@ export default function SavingsPage() {
       totalRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
       totalRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY_HEADER } };
 
-      totalRow.getCell(3).value = goal.currentAmount;
-      totalRow.getCell(3).numFmt = '₹ #,##0.00';
+      totalRow.getCell(3).value = convertCurrency(goal.currentAmount, 'INR', activeCurr.code);
+      totalRow.getCell(3).numFmt = excelNumFmt;
       totalRow.getCell(3).font = { bold: true, size: 12, color: { argb: GREEN_TEXT } };
       totalRow.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREEN_BG } };
 
       worksheet.mergeCells(`D${rowIndex}:E${rowIndex}`);
-      totalRow.getCell(4).value = `Target: ₹${goal.targetAmount.toLocaleString('en-IN')}`;
+      const convertedTarget = convertCurrency(goal.targetAmount, 'INR', activeCurr.code);
+      totalRow.getCell(4).value = `Target: ${activeCurr.symbol}${convertedTarget.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       totalRow.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
       totalRow.getCell(4).font = { bold: true, color: { argb: '475569' } };
 
@@ -1214,7 +1221,7 @@ export default function SavingsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    Target (₹) *
+                    Target ({getActiveCurrency().symbol}) *
                   </label>
                   <input
                     type="number"
@@ -1227,7 +1234,7 @@ export default function SavingsPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    {editingGoal ? 'Current Saved (₹)' : 'Initial Deposit (₹)'}
+                    {editingGoal ? `Current Saved (${getActiveCurrency().symbol})` : `Initial Deposit (${getActiveCurrency().symbol})`}
                   </label>
                   <input
                     type="number"
@@ -1412,7 +1419,7 @@ export default function SavingsPage() {
             <form onSubmit={handleDepositSubmit} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  Deposit Amount (₹) *
+                  Deposit Amount ({getActiveCurrency().symbol}) *
                 </label>
                 <input
                   type="number"

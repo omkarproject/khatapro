@@ -3,6 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR } from '@/lib/utils';
+import { getActiveCurrency, t } from '@/lib/i18n';
+import { convertCurrency } from '@/lib/currencyService';
 import {
   LineChart as ChartIcon,
   TrendingUp,
@@ -605,9 +607,11 @@ export default function AnalyticsPage() {
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(v) => {
-                    if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
-                    if (v >= 1000) return `₹${(v / 1000).toFixed(0)}k`;
-                    return `₹${v}`;
+                    const sym = getActiveCurrency().symbol;
+                    const converted = convertCurrency(v, 'INR');
+                    if (converted >= 1000000) return `${sym}${(converted / 1000000).toFixed(1)}M`;
+                    if (converted >= 1000) return `${sym}${(converted / 1000).toFixed(0)}k`;
+                    return `${sym}${Math.round(converted)}`;
                   }}
                 />
                 <Tooltip

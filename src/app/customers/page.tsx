@@ -4,6 +4,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl } from '@/lib/utils';
+import { getActiveCurrency, t } from '@/lib/i18n';
 import { Customer, CustomerDriveFolder, CustomerDriveFile, CustomerBankAccount, CustomerUpiDetail } from '@/types';
 import { StorageService } from '@/services/storage';
 import { uploadToDriveFiles, deleteFromDriveFiles, renameInDriveFiles } from '@/lib/driveUploadClient';
@@ -1779,7 +1780,7 @@ export default function CustomersPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    Credit Limit (₹)
+                    {t('creditLimit', 'Credit Limit')} ({getActiveCurrency().symbol})
                   </label>
                   <input
                     type="number"

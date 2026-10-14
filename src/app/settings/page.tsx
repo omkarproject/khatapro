@@ -1541,6 +1541,9 @@ export default function SettingsPage() {
                 onChange={(e) => {
                   const c = setActiveCurrency(e.target.value);
                   setActiveSettingsCurrency(c);
+                  if (profile) {
+                    setProfile({ ...profile, currency: c.code, currencySymbol: c.symbol });
+                  }
                   addToast('Currency Updated', `Default monetary unit set to ${c.name} (${c.symbol}).`, 'success');
                 }}
                 className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
@@ -1578,6 +1581,9 @@ export default function SettingsPage() {
                 onChange={(e) => {
                   const l = setActiveLanguage(e.target.value);
                   setActiveSettingsLanguage(l);
+                  if (profile) {
+                    setProfile({ ...profile, language: l.code });
+                  }
                   addToast('Language Updated', `Language set to ${l.nativeName} (${l.name}).`, 'success');
                 }}
                 className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"

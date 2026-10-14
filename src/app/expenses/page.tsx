@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate } from '@/lib/utils';
+import { getActiveCurrency, t } from '@/lib/i18n';
 import { Expense, PaymentMode } from '@/types';
 import { uploadToDriveFiles } from '@/lib/driveUploadClient';
 import {
@@ -417,7 +418,7 @@ export default function ExpensesPage() {
           ) : (
             <div className="mt-2 space-y-2">
               <div className="relative">
-                <span className="absolute left-3 top-2 text-xs font-bold text-slate-400">₹</span>
+                <span className="absolute left-3 top-2 text-xs font-bold text-slate-400">{getActiveCurrency().symbol}</span>
                 <input
                   type="number"
                   autoFocus
@@ -829,7 +830,7 @@ export default function ExpensesPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    Amount (₹) *
+                    {t('amount', 'Amount')} ({getActiveCurrency().symbol}) *
                   </label>
                   <input
                     type="number"

@@ -4,6 +4,8 @@ import React, { useState, useMemo, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
+import { getActiveCurrency, t } from '@/lib/i18n';
+import { convertCurrency, getExcelNumFmt, formatMoney } from '@/lib/currencyService';
 import { Customer, Transaction, TransactionType, PaymentReminder } from '@/types';
 import { uploadToDriveFiles, deleteFromDriveFiles } from '@/lib/driveUploadClient';
 import QRCode from 'qrcode';
@@ -1532,13 +1534,16 @@ interface AttachedBill {
       });
 
       // 4. Prominent Net Due Banner (Row 10 merged A10:G10)
+      const activeCurr = getActiveCurrency();
+      const excelNumFmt = getExcelNumFmt(activeCurr.code);
       const isDue = activeCustomer.outstandingBalance > 0;
       const isAdvance = activeCustomer.outstandingBalance < 0;
+      const formattedDueBalance = formatMoney(Math.abs(activeCustomer.outstandingBalance));
       const dueStatusText = isDue
-        ? `⚠️ TOTAL DUE AMOUNT PAYABLE: ₹ ${activeCustomer.outstandingBalance.toLocaleString('en-IN')} (PAYMENT PENDING)`
+        ? `⚠️ TOTAL DUE AMOUNT PAYABLE: ${formattedDueBalance} (PAYMENT PENDING)`
         : isAdvance
-        ? `✓ ADVANCE CREDIT BALANCE: ₹ ${Math.abs(activeCustomer.outstandingBalance).toLocaleString('en-IN')}`
-        : '✓ ALL DUES SETTLED: ₹ 0';
+        ? `✓ ADVANCE CREDIT BALANCE: ${formattedDueBalance}`
+        : `✓ ALL DUES SETTLED: ${formatMoney(0)}`;
 
       worksheet.mergeCells('A10:G10');
       const dueCell = worksheet.getCell('A10');
@@ -1591,7 +1596,7 @@ interface AttachedBill {
       const upiDetails = [
         ['Payee Name:', settings.paymentSettings.payeeName],
         ['Store UPI ID (VPA):', settings.paymentSettings.upiId],
-        ['Payable Due Amount:', `₹ ${activeCustomer.outstandingBalance.toLocaleString('en-IN')}`],
+        ['Payable Due Amount:', formattedDueBalance],
         ['Supported Apps:', 'Google Pay • PhonePe • Paytm • BHIM • Cred • Any UPI App'],
         ['Payment Link (Tap to Pay):', '👉 Click Here to Open UPI App & Pay Directly'],
         ['Transaction Reference:', `Due bill for ${activeCustomer.name}`],
@@ -1682,13 +1687,13 @@ interface AttachedBill {
       const headerRow = worksheet.getRow(21);
       headerRow.height = 26;
       const tableHeaders = [
-        'Date',
-        'Transaction Type',
-        'Particulars / Notes',
-        'Debit / Received (₹)',
-        'Credit / Given (₹)',
-        'Payment Mode',
-        'Status',
+        t('date', 'Date'),
+        t('type', 'Transaction Type'),
+        t('particulars', 'Particulars / Notes'),
+        `${t('debit', 'Debit / Received')} (${activeCurr.symbol})`,
+        `${t('credit', 'Credit / Given')} (${activeCurr.symbol})`,
+        t('paymentMode', 'Payment Mode'),
+        t('status', 'Status'),
       ];
 
       tableHeaders.forEach((h, i) => {
@@ -1736,18 +1741,20 @@ interface AttachedBill {
         nCell.alignment = { horizontal: 'left', vertical: 'middle' };
         nCell.font = { name: 'Calibri', size: 10 };
 
+        const convertedAmount = convertCurrency(t.amount, 'INR', activeCurr.code);
+
         // Debit / Received (Right, Green)
         const debCell = row.getCell(4);
-        debCell.value = isGot ? t.amount : null;
-        debCell.numFmt = '₹ #,##0.00';
+        debCell.value = isGot ? convertedAmount : null;
+        debCell.numFmt = excelNumFmt;
         debCell.alignment = { horizontal: 'right', vertical: 'middle' };
         debCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: isGot ? GREEN_TEXT : '94A3B8' } };
         if (isGot) debCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F0FDF4' } };
 
         // Credit / Given (Right, Red)
         const credCell = row.getCell(5);
-        credCell.value = !isGot ? t.amount : null;
-        credCell.numFmt = '₹ #,##0.00';
+        credCell.value = !isGot ? convertedAmount : null;
+        credCell.numFmt = excelNumFmt;
         credCell.alignment = { horizontal: 'right', vertical: 'middle' };
         credCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: !isGot ? RED_TEXT : '94A3B8' } };
         if (!isGot) credCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FEF2F2' } };
@@ -1790,15 +1797,15 @@ interface AttachedBill {
       totLabel.alignment = { horizontal: 'right', vertical: 'middle' };
 
       const totDebCell = totalRow.getCell(4);
-      totDebCell.value = customerTotalReceived;
-      totDebCell.numFmt = '₹ #,##0.00';
+      totDebCell.value = convertCurrency(customerTotalReceived, 'INR', activeCurr.code);
+      totDebCell.numFmt = excelNumFmt;
       totDebCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: GREEN_TEXT } };
       totDebCell.alignment = { horizontal: 'right', vertical: 'middle' };
       totDebCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREEN_BG } };
 
       const totCredCell = totalRow.getCell(5);
-      totCredCell.value = customerTotalGiven;
-      totCredCell.numFmt = '₹ #,##0.00';
+      totCredCell.value = convertCurrency(customerTotalGiven, 'INR', activeCurr.code);
+      totCredCell.numFmt = excelNumFmt;
       totCredCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: RED_TEXT } };
       totCredCell.alignment = { horizontal: 'right', vertical: 'middle' };
       totCredCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: RED_BG } };
@@ -1816,8 +1823,8 @@ interface AttachedBill {
 
       worksheet.mergeCells(`E${currentRow}:G${currentRow}`);
       const finalVal = finalRow.getCell(5);
-      finalVal.value = activeCustomer.outstandingBalance;
-      finalVal.numFmt = '₹ #,##0.00';
+      finalVal.value = convertCurrency(activeCustomer.outstandingBalance, 'INR', activeCurr.code);
+      finalVal.numFmt = excelNumFmt;
       finalVal.font = { name: 'Calibri', size: 13, bold: true, color: { argb: isDue ? RED_TEXT : GREEN_TEXT } };
       finalVal.alignment = { horizontal: 'center', vertical: 'middle' };
       finalVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isDue ? RED_BG : GREEN_BG } };

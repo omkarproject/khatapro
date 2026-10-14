@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate } from '@/lib/utils';
+import { getActiveCurrency, t } from '@/lib/i18n';
 import { Product } from '@/types';
 import {
   PackageCheck,
@@ -360,7 +361,7 @@ export default function InventoryPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    Purchase Cost (₹) *
+                    {t('purchasePrice', 'Purchase Cost')} ({getActiveCurrency().symbol}) *
                   </label>
                   <input
                     type="number"
@@ -373,7 +374,7 @@ export default function InventoryPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    Selling Price (₹) *
+                    {t('sellingPrice', 'Selling Price')} ({getActiveCurrency().symbol}) *
                   </label>
                   <input
                     type="number"

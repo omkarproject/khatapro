@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
+import { getActiveCurrency, t } from '@/lib/i18n';
 import {
   QrCode,
   Upload,
@@ -113,7 +114,7 @@ export default function UpiCollectionPage() {
   // WhatsApp Share
   const handleShareWhatsApp = () => {
     const cust = customers.find(c => c.id === selectedCustomerId);
-    const shareMessage = `Dear ${cust?.name || 'Customer'},\n\nPlease pay ${numCollectAmount > 0 ? `₹${numCollectAmount.toLocaleString('en-IN')}` : 'your balance'} to *${payeeName}* via UPI.\n\n*UPI ID:* ${upiId}\n*Note:* ${collectNote}\n\n*Direct Payment Link:*\n${activeUpiUri}\n\nThank you,\n${settings.businessName}`;
+    const shareMessage = `Dear ${cust?.name || 'Customer'},\n\nPlease pay ${numCollectAmount > 0 ? formatINR(numCollectAmount) : 'your balance'} to *${payeeName}* via UPI.\n\n*UPI ID:* ${upiId}\n*Note:* ${collectNote}\n\n*Direct Payment Link:*\n${activeUpiUri}\n\nThank you,\n${settings.businessName}`;
     openWhatsApp(cust?.phone, shareMessage);
   };
 
@@ -140,7 +141,7 @@ export default function UpiCollectionPage() {
       createdAt: new Date().toISOString(),
     });
     setCollectAmount('');
-    addToast('Recorded in Khata', `₹${numCollectAmount.toLocaleString('en-IN')} recorded successfully.`, 'success');
+    addToast('Recorded in Khata', `${formatINR(numCollectAmount)} recorded successfully.`, 'success');
   };
 
   // Filter UPI collection transactions
@@ -366,7 +367,7 @@ export default function UpiCollectionPage() {
                   <option value="">-- Direct Payment / Any Customer --</option>
                   {customers.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name} (Due: ₹{c.outstandingBalance.toLocaleString('en-IN')})
+                      {c.name} (Due: {formatINR(c.outstandingBalance)})
                     </option>
                   ))}
                 </select>
@@ -374,7 +375,7 @@ export default function UpiCollectionPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  Amount to Request (₹)
+                  Amount to Request ({getActiveCurrency().symbol})
                 </label>
                 <input
                   type="number"
@@ -479,7 +480,7 @@ export default function UpiCollectionPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        if (confirm(`Delete UPI collection record of ₹${t.amount.toLocaleString('en-IN')}?`)) {
+                        if (confirm(`Delete UPI collection record of ${formatINR(t.amount)}?`)) {
                           deleteTransaction(t.id);
                         }
                       }}

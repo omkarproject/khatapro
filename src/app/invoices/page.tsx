@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
+import { getActiveCurrency, t } from '@/lib/i18n';
 import { uploadToDriveFiles } from '@/lib/driveUploadClient';
 import {
   Invoice,
@@ -554,8 +555,8 @@ export default function InvoicesPage() {
   const handleWhatsAppShare = (inv: Invoice) => {
     const upiUri = buildUpiUri(settings.paymentSettings.upiId, settings.paymentSettings.payeeName, inv.total, `Inv ${inv.invoiceNumber}`);
     const message = inv.status === 'paid'
-      ? `Dear ${inv.customerName},\n\nPlease find your official Tax Invoice *#${inv.invoiceNumber}* for *₹${inv.total.toLocaleString('en-IN')}*.\nStatus: *PAID (Payment Received & Settled)* ✅\n\nThank you for your business,\n${settings.businessName}`
-      : `Dear ${inv.customerName},\n\nPlease find your invoice *#${inv.invoiceNumber}* for *₹${inv.total.toLocaleString('en-IN')}*.\nDue Date: ${formatDate(inv.dueDate)}\n\n*Pay Directly via UPI:*\n${upiUri}\n\nThank you,\n${settings.businessName}`;
+      ? `Dear ${inv.customerName},\n\nPlease find your official Tax Invoice *#${inv.invoiceNumber}* for *${formatINR(inv.total)}*.\nStatus: *PAID (Payment Received & Settled)* ✅\n\nThank you for your business,\n${settings.businessName}`
+      : `Dear ${inv.customerName},\n\nPlease find your invoice *#${inv.invoiceNumber}* for *${formatINR(inv.total)}*.\nDue Date: ${formatDate(inv.dueDate)}\n\n*Pay Directly via UPI:*\n${upiUri}\n\nThank you,\n${settings.businessName}`;
     openWhatsApp(inv.customerPhone, message);
   };
 
@@ -1016,11 +1017,11 @@ export default function InvoicesPage() {
               <table className="w-full text-left text-xs border border-slate-200 rounded-lg overflow-hidden">
                 <thead className="bg-slate-100 text-slate-600 font-bold uppercase text-[10px]">
                   <tr>
-                    <th className="py-2.5 px-3">Item Description</th>
-                    <th className="py-2.5 px-2 text-center">Qty</th>
-                    <th className="py-2.5 px-3 text-right">Unit Price</th>
+                    <th className="py-2.5 px-3">{t('itemDescription', 'Item Description')}</th>
+                    <th className="py-2.5 px-2 text-center">{t('quantity', 'Qty')}</th>
+                    <th className="py-2.5 px-3 text-right">{t('unitPrice', 'Unit Price')}</th>
                     <th className="py-2.5 px-2 text-center">GST %</th>
-                    <th className="py-2.5 px-3 text-right">Total (₹)</th>
+                    <th className="py-2.5 px-3 text-right">{t('total', 'Total')} ({getActiveCurrency().symbol})</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -1078,12 +1079,12 @@ export default function InvoicesPage() {
                 {/* Subtotal / Tax Summary */}
                 <div className="space-y-1.5 text-xs text-slate-600">
                   <div className="flex justify-between">
-                    <span>Subtotal:</span>
+                    <span>{t('subtotal', 'Subtotal')}:</span>
                     <span className="font-mono font-semibold">{formatINR(activeInvoice.subtotal)}</span>
                   </div>
                   {activeInvoice.discountAmount > 0 && (
                     <div className="flex justify-between text-emerald-600">
-                      <span>Discount:</span>
+                      <span>{t('discount', 'Discount')}:</span>
                       <span className="font-mono font-semibold">-{formatINR(activeInvoice.discountAmount)}</span>
                     </div>
                   )}
@@ -1112,7 +1113,7 @@ export default function InvoicesPage() {
                     </div>
                   ))}
                   <div className="flex justify-between text-base font-black text-slate-900 pt-2 border-t border-slate-200">
-                    <span>Invoice Total:</span>
+                    <span>{t('total', 'Invoice Total')}:</span>
                     <span className="font-mono text-indigo-700">{formatINR(activeInvoice.total)}</span>
                   </div>
                 </div>

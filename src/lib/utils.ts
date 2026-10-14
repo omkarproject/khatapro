@@ -6,18 +6,16 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 import { getActiveCurrency } from './i18n';
+import { convertCurrency, formatMoney } from './currencyService';
+
+export { convertCurrency, formatMoney };
+
+export function getActiveCurrencySymbol(): string {
+  return getActiveCurrency().symbol;
+}
 
 export function formatINR(amount: number): string {
-  try {
-    const active = getActiveCurrency();
-    return new Intl.NumberFormat(active.locale, {
-      style: 'currency',
-      currency: active.code,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  } catch {
-    return `₹${amount.toLocaleString('en-IN')}`;
-  }
+  return formatMoney(amount, { fromCurrency: 'INR' });
 }
 
 export const formatCurrency = formatINR;

@@ -20,6 +20,8 @@ import {
 } from '@/types';
 import { StorageService, getCleanDefaultSettings } from '@/services/storage';
 import { deleteFromDriveFiles } from '@/lib/driveUploadClient';
+import { setActiveLanguage, setActiveCurrency } from '@/lib/i18n';
+import { syncLiveExchangeRates } from '@/lib/currencyService';
 
 export const defaultEmptyProfile: UserProfile = {
   id: '',
@@ -338,6 +340,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             });
           }
           if (d.user) {
+            if (d.user.language) setActiveLanguage(d.user.language);
+            if (d.user.currency) setActiveCurrency(d.user.currency);
             setProfileState(prev => {
               const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
               const incomingAvatar = d.user.avatarUrl || (d.user as any)?.avatar_url || d.settings?.businessLogo || '';
@@ -388,6 +392,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     const user: UserProfile = data.user;
+    if (user.language) setActiveLanguage(user.language);
+    if (user.currency) setActiveCurrency(user.currency);
     setCurrentUserState(user);
     StorageService.setCurrentUser(user);
     if (typeof document !== 'undefined') {
@@ -424,6 +430,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     const user: UserProfile = data.user;
+    if (user.language) setActiveLanguage(user.language);
+    if (user.currency) setActiveCurrency(user.currency);
     setCurrentUserState(user);
     StorageService.setCurrentUser(user);
     if (typeof document !== 'undefined') {
@@ -440,6 +448,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Direct authentication apply after OTP verification
   const applyAuthenticatedUser = async (user: UserProfile) => {
+    if (user.language) setActiveLanguage(user.language);
+    if (user.currency) setActiveCurrency(user.currency);
     setCurrentUserState(user);
     StorageService.setCurrentUser(user);
     if (typeof document !== 'undefined') {
@@ -584,6 +594,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const activeU = StorageService.getCurrentUser();
+    if (activeU?.language) setActiveLanguage(activeU.language);
+    if (activeU?.currency) setActiveCurrency(activeU.currency);
+    syncLiveExchangeRates();
     setCurrentUserState(activeU);
     refreshData();
     setMounted(true);
@@ -687,6 +700,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const setProfile = (p: UserProfile) => {
+    if (p.language) setActiveLanguage(p.language);
+    if (p.currency) setActiveCurrency(p.currency);
     setProfileState(p);
     StorageService.updateProfile(p);
     if (p.businessName && p.businessName.trim()) {

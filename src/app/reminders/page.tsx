@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, openWhatsApp } from '@/lib/utils';
+import { getActiveCurrency, t } from '@/lib/i18n';
 import { PaymentReminder } from '@/types';
 import {
   BellRing,
@@ -270,7 +271,7 @@ export default function RemindersPage() {
                 >
                   {customers.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name} (Due: ₹{c.outstandingBalance.toLocaleString('en-IN')})
+                      {c.name} (Due: {formatINR(c.outstandingBalance)})
                     </option>
                   ))}
                 </select>
@@ -279,7 +280,7 @@ export default function RemindersPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    Amount (₹) *
+                    {t('amount', 'Amount')} ({getActiveCurrency().symbol}) *
                   </label>
                   <input
                     type="number"
