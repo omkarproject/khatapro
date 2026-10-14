@@ -311,10 +311,10 @@ export default function DashboardPage() {
   }, [expenses]);
 
   return (
-    <div className="space-y-3 sm:space-y-4">
+    <div className="space-y-3 sm:space-y-3.5">
       
-      {/* Top Banner: Welcome & Quick Action Bar (Ultra-Compact Fit) */}
-      <div className="relative overflow-hidden rounded-2xl p-2.5 sm:p-3 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-md border border-slate-800">
+      {/* Top Banner: Welcome & Quick Action Bar */}
+      <div className="relative overflow-hidden rounded-2xl p-3 sm:p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-md border border-slate-800">
         <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <div className="space-y-0.5 min-w-0">
@@ -327,17 +327,12 @@ export default function DashboardPage() {
                 {activeBusinessName}
               </span>
             </div>
-            <h1 className="text-base sm:text-lg font-black tracking-tight" suppressHydrationWarning>
+            <h1 className="text-base sm:text-lg lg:text-xl font-black tracking-tight" suppressHydrationWarning>
               Good day, {activeOwnerName} 👋
             </h1>
-            <div className="flex items-center gap-2 pt-0.5 max-w-2xl">
-              <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30 tracking-wider shrink-0 flex items-center gap-1">
-                ⚡ Vyapar Funda
-              </span>
-              <p className="text-[11px] sm:text-xs text-slate-200 truncate italic" title={dailyMotivation}>
-                {dailyMotivation}
-              </p>
-            </div>
+            <p className="text-[11px] sm:text-xs text-slate-300 truncate italic max-w-2xl pt-0.5" title={dailyMotivation}>
+              {dailyMotivation}
+            </p>
           </div>
 
           {/* Action Hub Buttons */}
@@ -361,11 +356,11 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 lg:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
         
         {/* Total Credit - Money In / Received */}
-        <div className="glass-card p-3 sm:p-3.5 lg:p-4 relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-1.5">
+        <div className="glass-card p-3 sm:p-3.5 rounded-2xl relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
               CREDIT
             </span>
@@ -376,7 +371,7 @@ export default function DashboardPage() {
           <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
             {formatINR(metrics.totalCredit)}
           </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1">
             <span>Money In &amp; Received</span>
             <Link href="/khata" className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold">
               View Khata →
@@ -385,8 +380,8 @@ export default function DashboardPage() {
         </div>
 
         {/* Total Debit - Money Out / Pending Receivables */}
-        <div className="glass-card p-3 sm:p-3.5 lg:p-4 relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-1.5">
+        <div className="glass-card p-3 sm:p-3.5 rounded-2xl relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
               DEBIT
             </span>
@@ -397,7 +392,7 @@ export default function DashboardPage() {
           <div className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400">
             {formatINR(metrics.totalDebit)}
           </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1">
             <span className="truncate mr-1">Khata: {formatINR(metrics.khataDue)} + Inv: {formatINR(metrics.invoiceDue)}</span>
             <span className={`font-semibold shrink-0 ${metrics.totalDebit === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {metrics.totalDebit === 0 ? 'Clear' : 'Pending'}
@@ -406,8 +401,8 @@ export default function DashboardPage() {
         </div>
 
         {/* Net Business Profit */}
-        <div className="glass-card p-3 sm:p-3.5 lg:p-4 relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-1.5">
+        <div className="glass-card p-3 sm:p-3.5 rounded-2xl relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               NET PROFIT
             </span>
@@ -418,7 +413,7 @@ export default function DashboardPage() {
           <div className={`text-xl sm:text-2xl font-black ${metrics.netProfit > 0 ? 'text-emerald-600 dark:text-emerald-400' : metrics.netProfit < 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>
             {formatINR(metrics.netProfit)}
           </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1">
             <span>Revenue: {formatINR(metrics.totalIncome)}</span>
             <span className={`text-[11px] font-bold ${
               metrics.totalIncome > 0 && metrics.netProfit > 0
@@ -435,8 +430,8 @@ export default function DashboardPage() {
         </div>
 
         {/* UPI Direct Collections */}
-        <div className="glass-card p-3 sm:p-3.5 lg:p-4 relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-1.5">
+        <div className="glass-card p-3 sm:p-3.5 rounded-2xl relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               UPI COLLECTIONS
             </span>
@@ -447,7 +442,7 @@ export default function DashboardPage() {
           <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
             {formatINR(metrics.totalUPICollections)}
           </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1">
             <span>Direct Merchant QR</span>
             <span className="text-cyan-600 dark:text-cyan-400 font-semibold">
               {metrics.totalUPICollections > 0 ? 'Received' : 'Instant Bank Credit'}
@@ -457,12 +452,86 @@ export default function DashboardPage() {
 
       </div>
 
+      {/* Live Support & Helpdesk Overview (Directly Below KPI Cards) */}
+      <div className="glass-card p-2.5 sm:p-3 rounded-2xl border border-indigo-100/80 dark:border-indigo-900/40">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+          
+          {/* Left: Title & Status */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+              <Headphones className="w-3.5 h-3.5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
+                  Live Support &amp; Help Desk
+                </h3>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center gap-1 shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Online 24/7
+                </span>
+              </div>
+              <p className="text-[10.5px] text-slate-500 dark:text-slate-400 truncate">
+                {isAdmin
+                  ? 'Super Admin Portal: Monitor customer queries & tickets'
+                  : '24/7 helpdesk support: Chat with team & resolve issues'}
+              </p>
+            </div>
+          </div>
+
+          {/* Right: Compact Stats + Action Button */}
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
+            <div className="flex items-center gap-1 bg-slate-100/70 dark:bg-slate-800/60 p-0.5 rounded-lg border border-slate-200/60 dark:border-slate-800 text-[10px]">
+              <span className="px-1.5 py-0.5 rounded font-bold flex items-center gap-1 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                {supportStats.unread} Alerts
+              </span>
+              <span className="px-1.5 py-0.5 rounded font-bold flex items-center gap-1 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                {supportStats.open} Open
+              </span>
+              <span className="px-1.5 py-0.5 rounded font-bold flex items-center gap-1 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                {supportStats.inProgress} Progress
+              </span>
+              <span className="px-1.5 py-0.5 rounded font-bold flex items-center gap-1 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                {supportStats.closed} Solved
+              </span>
+            </div>
+
+            {isAdmin ? (
+              <Link
+                href="/settings?tab=users"
+                className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm flex items-center gap-1 shrink-0 transition-all"
+              >
+                <Users className="w-3 h-3" />
+                <span>Merchant CRM</span>
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  const btn = document.querySelector('button[title*="24/7 Live Support"]') as HTMLButtonElement;
+                  if (btn) btn.click();
+                }}
+                className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm flex items-center gap-1 shrink-0 transition-all cursor-pointer"
+              >
+                <MessageSquare className="w-3 h-3" />
+                <span>Open Chat</span>
+              </button>
+            )}
+          </div>
+
+        </div>
+      </div>
+
       {/* Second Row: Charts & Visual Analytics */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-3.5">
         
         {/* Cash Flow Velocity Chart */}
-        <div className="lg:col-span-8 glass-card p-3.5 sm:p-4 flex flex-col justify-between">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+        <div className="lg:col-span-8 glass-card p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                 Cash Flow Velocity
@@ -487,7 +556,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="w-full h-48 sm:h-52 lg:h-56">
+          <div className="w-full h-56 sm:h-60 lg:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={cashFlowData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                 <defs>
@@ -532,10 +601,10 @@ export default function DashboardPage() {
         </div>
 
         {/* Expense Category Breakdown */}
-        <div className="lg:col-span-4 glass-card p-4 sm:p-6 flex flex-col justify-between">
+        <div className="lg:col-span-4 glass-card p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                 Expense Mix
               </h3>
               <Link href="/expenses" className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
@@ -543,9 +612,9 @@ export default function DashboardPage() {
               </Link>
             </div>
             {expenseCategoryData.length === 0 ? (
-              <div className="py-10 text-center space-y-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 mx-auto flex items-center justify-center">
-                  <Receipt className="w-5 h-5" />
+              <div className="py-8 text-center space-y-2">
+                <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 mx-auto flex items-center justify-center">
+                  <Receipt className="w-4 h-4" />
                 </div>
                 <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
                   No operational expenses logged
@@ -555,13 +624,13 @@ export default function DashboardPage() {
                 </p>
                 <Link
                   href="/expenses"
-                  className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline pt-1"
+                  className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline pt-0.5"
                 >
                   <Plus className="w-3.5 h-3.5" /> Log First Expense
                 </Link>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {expenseCategoryData.map((item) => {
                   const totalExp = metrics.totalExpense || expenseCategoryData.reduce((a, b) => a + b.value, 0);
                   const percent = totalExp > 0 ? Math.round((item.value / totalExp) * 100) : 0;
@@ -571,7 +640,7 @@ export default function DashboardPage() {
                         <span className="text-slate-700 dark:text-slate-300">{item.name}</span>
                         <span className="font-mono text-slate-900 dark:text-white">₹{item.value.toLocaleString('en-IN')} ({percent}%)</span>
                       </div>
-                      <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                      <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all duration-500"
                           style={{ width: `${percent}%`, backgroundColor: item.color }}
@@ -584,8 +653,8 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-            <span className="text-slate-500">Total Monthly Burn</span>
+          <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+            <span className="text-slate-500 text-[11px]">Total Monthly Burn</span>
             <span className="font-mono font-bold text-slate-900 dark:text-white">
               {formatINR(metrics.totalExpense)}
             </span>
@@ -595,19 +664,19 @@ export default function DashboardPage() {
       </div>
 
       {/* Third Row: Top Outstanding Customers & Low Stock Alerts */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-3.5">
         
         {/* Top Outstanding Customers */}
-        <div className="lg:col-span-7 glass-card p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="lg:col-span-7 glass-card p-3.5 sm:p-4 rounded-2xl">
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 Top Credit Receivables
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-50 text-rose-600 dark:bg-rose-950 dark:text-rose-400">
                   Follow Up
                 </span>
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-[11px] text-slate-400">
                 Customers with highest pending balances in your KhataBook
               </p>
             </div>
@@ -621,32 +690,32 @@ export default function DashboardPage() {
 
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {topCreditors.length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-400">
+              <div className="py-6 text-center text-xs text-slate-400">
                 No pending customer dues. All khata accounts are settled!
               </div>
             ) : (
               topCreditors.map((c) => (
-              <div key={c.id} className="py-3.5 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold flex items-center justify-center shrink-0">
+              <div key={c.id} className="py-2.5 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex items-center justify-center shrink-0">
                     {c.name.charAt(0)}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                    <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
                       {c.name}
                     </div>
-                    <div className="text-xs text-slate-400 truncate">
+                    <div className="text-[10.5px] text-slate-400 truncate">
                       {c.businessName || c.phone} • {c.city || 'India'}
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5">
                   <div className="text-right">
-                    <div className="text-sm font-bold font-mono text-rose-600 dark:text-rose-400">
+                    <div className="text-xs sm:text-sm font-bold font-mono text-rose-600 dark:text-rose-400">
                       {formatINR(c.outstandingBalance)}
                     </div>
-                    <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                    <div className="text-[9.5px] text-slate-400 uppercase tracking-wider font-semibold">
                       Due
                     </div>
                   </div>
@@ -660,10 +729,10 @@ export default function DashboardPage() {
                         note: `Settlement for ${c.name}`,
                       })
                     }
-                    className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-400 transition-colors"
+                    className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-400 transition-colors"
                     title="Quick UPI Collection"
                   >
-                    <QrCode className="w-4 h-4" />
+                    <QrCode className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -672,13 +741,13 @@ export default function DashboardPage() {
         </div>
 
         {/* Low Stock Inventory & Business Reserves */}
-        <div className="lg:col-span-5 space-y-6">
+        <div className="lg:col-span-5 space-y-3 sm:space-y-3.5">
           
           {/* Low Stock Alerts */}
-          <div className="glass-card p-4 sm:p-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-500" />
+          <div className="glass-card p-3.5 sm:p-4 rounded-2xl">
+            <div className="flex items-center justify-between mb-2.5">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
                 Low Stock Thresholds
               </h3>
               <Link href="/inventory" className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
@@ -715,11 +784,11 @@ export default function DashboardPage() {
           </div>
 
           {/* Savings & Emergency Goal Snapshot */}
-          <div className="glass-card p-4 sm:p-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <PiggyBank className="w-4 h-4 text-emerald-500" />
-                Savings & Reserve Progress
+          <div className="glass-card p-3.5 sm:p-4 rounded-2xl">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <PiggyBank className="w-3.5 h-3.5 text-emerald-500" />
+                Savings &amp; Reserve Progress
               </h3>
               <Link href="/savings" className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
                 View Goals →
@@ -729,7 +798,7 @@ export default function DashboardPage() {
             {savingsGoals.slice(0, 2).map((goal) => {
               const progress = Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100));
               return (
-                <div key={goal.id} className="space-y-1.5 my-3">
+                <div key={goal.id} className="space-y-1 my-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-semibold text-slate-700 dark:text-slate-300">{goal.title}</span>
                     <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
@@ -755,145 +824,7 @@ export default function DashboardPage() {
 
       </div>
 
-      {/* Live Support & Helpdesk Overview Section */}
-      <div className="glass-card p-5 sm:p-6 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                <Headphones className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                  Live Support &amp; Help Desk
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Online 24/7
-                  </span>
-                </h3>
-                <p className="text-xs text-slate-400">
-                  {isAdmin
-                    ? 'Super Admin view: Monitor customer queries, open tickets, resolve issues, and chat directly.'
-                    : 'Chat directly with support, report issues, and attach error screenshots for quick resolution.'}
-                </p>
-              </div>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            {isAdmin ? (
-              <Link
-                href="/settings?tab=users"
-                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 flex items-center gap-1.5 transition-all"
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>Merchant CRM</span>
-              </Link>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  const btn = document.querySelector('button[title*="24/7 Live Support"]') as HTMLButtonElement;
-                  if (btn) btn.click();
-                }}
-                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 flex items-center gap-1.5 transition-all cursor-pointer"
-              >
-                <MessageSquare className="w-3.5 h-3.5" />
-                <span>Open Live Support</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Support Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-rose-500" />
-              New Alerts
-            </span>
-            <div className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400">
-              {supportStats.unread}
-            </div>
-            <div className="text-[10px] text-slate-400">Awaiting response</div>
-          </div>
-
-          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              Open Tickets
-            </span>
-            <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
-              {supportStats.open}
-            </div>
-            <div className="text-[10px] text-slate-400">Pending resolution</div>
-          </div>
-
-          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-500" />
-              In Progress
-            </span>
-            <div className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400">
-              {supportStats.inProgress}
-            </div>
-            <div className="text-[10px] text-slate-400">Under investigation</div>
-          </div>
-
-          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-indigo-500" />
-              Closed / Solved
-            </span>
-            <div className="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400">
-              {supportStats.closed}
-            </div>
-            <div className="text-[10px] text-slate-400">Resolved queries</div>
-          </div>
-        </div>
-
-        {/* Recent support activity preview */}
-        {supportTickets.length > 0 && (
-          <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-            <div className="text-xs font-bold text-slate-500 dark:text-slate-400">
-              Recent Tickets Activity:
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {supportTickets.slice(0, 4).map((t) => (
-                <div
-                  key={t.id}
-                  className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs"
-                >
-                  <div className="min-w-0 pr-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-mono text-[10px] font-black text-indigo-600 dark:text-indigo-400">
-                        {t.ticketNo}
-                      </span>
-                      <span className="font-bold text-slate-900 dark:text-white truncate">
-                        {t.subject}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">
-                      {isAdmin ? `Merchant: ${t.userName}` : `Category: ${t.category}`} &bull; {new Date(t.updatedAt).toLocaleDateString()}
-                    </div>
-                  </div>
-                  <span
-                    className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full shrink-0 ${
-                      t.status === 'open'
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                        : t.status === 'in_progress'
-                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                    }`}
-                  >
-                    {t.status.replace('_', ' ')}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Quick Add Record Hub Modal */}
       <QuickAddRecordModal

@@ -108,10 +108,10 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
                 href={item.href}
                 onClick={onCloseMobile}
                 title={collapsed ? item.label : undefined}
-                className={`flex items-center rounded-2xl text-xs font-semibold transition-all group ${
+                className={`flex items-center rounded-xl text-xs font-semibold transition-all group ${
                   collapsed
-                    ? 'justify-center p-2.5 my-1'
-                    : 'justify-between px-3.5 py-2.5'
+                    ? 'justify-center p-2 my-0.5'
+                    : 'justify-between px-3 py-2 my-0.5'
                 } ${
                   isActive
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
@@ -144,42 +144,42 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
         </div>
 
         {/* Bottom Section */}
-        <div className={`pt-4 border-t border-slate-200/80 dark:border-slate-800 space-y-3 ${collapsed ? 'p-1' : ''}`}>
+        <div className={`pt-2.5 border-t border-slate-200/80 dark:border-slate-800 space-y-2 ${collapsed ? 'p-1' : ''}`}>
           {!collapsed ? (
             <>
-              <div className="p-3 rounded-2xl bg-gradient-to-br from-indigo-50 to-cyan-50/50 dark:from-slate-800/80 dark:to-indigo-950/40 border border-indigo-100 dark:border-indigo-900/30">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-indigo-50/80 to-cyan-50/40 dark:from-slate-800/60 dark:to-indigo-950/30 border border-indigo-100/80 dark:border-indigo-900/30">
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                     Status
                   </span>
-                  <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                  <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     ONLINE
                   </span>
                 </div>
-                <div className="text-xs font-bold text-slate-900 dark:text-white truncate" suppressHydrationWarning>
+                <div className="text-xs font-bold text-slate-900 dark:text-white truncate leading-tight" suppressHydrationWarning>
                   {settings.businessName || profile?.businessName || currentUser?.businessName || 'SmartKhata Merchant'}
                 </div>
-                <div className="text-[11px] text-slate-500 truncate font-mono" suppressHydrationWarning>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate font-mono mt-0.5" suppressHydrationWarning>
                   {settings.paymentSettings?.upiId || settings.businessPhone || profile?.phone || currentUser?.phone || 'Configure in Settings'}
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+              <div className="flex items-center justify-between text-[10px] text-slate-400 px-1">
                 <span className="flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                  <ShieldCheck className="w-3 h-3 text-emerald-500" />
                   100% Secure
                 </span>
-                <span className="text-[10px] font-mono">v1.0 Pro</span>
+                <span className="text-[9px] font-mono">v1.0 Pro</span>
               </div>
             </>
           ) : (
-            <div className="flex flex-col items-center gap-2 py-1">
+            <div className="flex flex-col items-center gap-1 py-1">
               <div
-                className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center cursor-pointer"
+                className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center cursor-pointer"
                 title={`Status: Online (${settings.businessName || 'SmartKhata'})`}
               >
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               </div>
             </div>
           )}
