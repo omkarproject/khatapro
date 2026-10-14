@@ -14,12 +14,15 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const { searchParams } = new URL(req.url);
+    const searchParams = req.nextUrl.searchParams;
     const userId = searchParams.get('userId') || req.cookies.get('skp_auth_session')?.value || 'guest_user';
+    const returnUrl = searchParams.get('returnUrl') || '/';
 
-    // Cryptographic state token with embedded userId and random bytes
+    // Cryptographic state token with embedded userId, returnUrl, and random bytes
     const randomNonce = crypto.randomBytes(16).toString('hex');
-    const statePayload = Buffer.from(JSON.stringify({ userId, nonce: randomNonce, timestamp: Date.now() })).toString('base64url');
+    const statePayload = Buffer.from(
+      JSON.stringify({ userId, returnUrl, nonce: randomNonce, timestamp: Date.now() })
+    ).toString('base64url');
 
     const authUrl = getGoogleAuthUrl(statePayload);
 

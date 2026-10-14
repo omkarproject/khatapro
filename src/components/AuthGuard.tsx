@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { Loader2 } from 'lucide-react';
+import DriveConnectVIPScreen from './DriveConnectVIPScreen';
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { currentUser, isMounted } = useApp();
+  const { currentUser, isMounted, addToast } = useApp();
+  const [isDriveConnected, setIsDriveConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (isMounted && !currentUser) {
@@ -14,6 +16,43 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       }
     }
   }, [isMounted, currentUser]);
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    // Check if user just returned from Google OAuth authorization
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('gdrive_status') === 'connected') {
+        setIsDriveConnected(true);
+        addToast(
+          'Google Drive Connected! 🎉',
+          'Your private encrypted cloud vault is now active. Dashboard unlocked.',
+          'success'
+        );
+        return;
+      }
+    }
+
+    let active = true;
+    fetch(`/api/backup/google-drive/status?userId=${encodeURIComponent(currentUser.id)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (active) {
+          setIsDriveConnected(Boolean(data?.isConnected));
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to verify drive connection status in AuthGuard:', err);
+        if (active) {
+          setIsDriveConnected(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [currentUser?.id, addToast]);
 
   if (!currentUser) {
     return (
@@ -58,6 +97,23 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     );
+  }
+
+  // Loading Drive status check
+  if (isDriveConnected === null) {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center text-slate-900 dark:text-white">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-xl shadow-indigo-600/30 mb-4 animate-pulse">
+          <Loader2 className="w-6 h-6 animate-spin" />
+        </div>
+        <p className="text-xs font-mono uppercase tracking-wider text-slate-400">Verifying Encrypted Cloud Vault...</p>
+      </div>
+    );
+  }
+
+  // MANDATORY: If merchant has not connected Google Drive yet, block and render VIP Connect screen
+  if (!isDriveConnected) {
+    return <DriveConnectVIPScreen onConnected={() => setIsDriveConnected(true)} />;
   }
 
   return <>{children}</>;

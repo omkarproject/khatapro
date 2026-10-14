@@ -38,6 +38,8 @@ import {
   Camera,
   Image as ImageIcon,
   CloudUpload,
+  Cloud,
+  HardDrive,
   Download,
   RotateCcw,
   FileJson,
@@ -87,6 +89,7 @@ export default function SettingsPage() {
   const [businessSubTab, setBusinessSubTab] = useState<'enterprise' | 'payments' | 'security'>('enterprise');
   const [brandingSubTab, setBrandingSubTab] = useState<'visuals' | 'broadcast'>('visuals');
   const [adminSubTab, setAdminSubTab] = useState<'supabase' | 'drive' | 'users' | 'maintenance'>('supabase');
+  const [backupSubTab, setBackupSubTab] = useState<'drive' | 'local'>('drive');
   const [isSyncingData, setIsSyncingData] = useState(false);
 
   // Broadcasts State
@@ -3284,11 +3287,43 @@ export default function SettingsPage() {
             </div>
           </div>
           
-          {/* SECTION 1: GOOGLE DRIVE BACKUP & RESTORE */}
-          <GoogleDriveBackupPanel />
+          {/* SUB-TABS: 1) Google Drive Cloud Sync  2) Export / Import Local */}
+          <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+            <button
+              type="button"
+              onClick={() => setBackupSubTab('drive')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                backupSubTab === 'drive'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Cloud className="w-4 h-4 text-emerald-400" />
+              <span>1st Tab: Google Drive Cloud Sync</span>
+            </button>
 
-          {/* TWO CLEAN MANUAL OPTIONS: 1) EXPORT FULL JSON  2) IMPORT JSON */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <button
+              type="button"
+              onClick={() => setBackupSubTab('local')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                backupSubTab === 'local'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <HardDrive className="w-4 h-4 text-indigo-400" />
+              <span>2nd Tab: Export / Import Local (JSON/ZIP)</span>
+            </button>
+          </div>
+
+          {/* TAB 1: GOOGLE DRIVE BACKUP & RESTORE */}
+          {backupSubTab === 'drive' && (
+            <GoogleDriveBackupPanel />
+          )}
+
+          {/* TAB 2: MANUAL LOCAL EXPORT & IMPORT */}
+          {backupSubTab === 'local' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
 
             {/* OPTION 1: EXPORT FULL DATABASE */}
             <div className="glass-card p-6 sm:p-7 space-y-5 flex flex-col justify-between">
@@ -3443,6 +3478,7 @@ export default function SettingsPage() {
             </div>
 
           </div>
+          )}
         </div>
       )}
 

@@ -29,20 +29,6 @@ export async function getUserDriveTokens(userId: string): Promise<StoredDriveTok
         return data as StoredDriveTokens;
       }
     } catch {}
-
-    // Fallback: Check if there's any active token if userId is generic or migrated
-    try {
-      const { data, error } = await supabase
-        .from('google_drive_tokens')
-        .select('*')
-        .eq('is_connected', true)
-        .limit(1)
-        .single();
-
-      if (data && !error) {
-        return data as StoredDriveTokens;
-      }
-    } catch {}
   }
 
   return null;

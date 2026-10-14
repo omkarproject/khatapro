@@ -14,28 +14,34 @@ export async function GET(req: NextRequest) {
   const state = url.searchParams.get('state');
   const error = url.searchParams.get('error');
 
-  const redirectBase = `${url.origin}/settings?tab=backup`;
-
-  if (error) {
-    console.error('Google OAuth error from query:', error);
-    return NextResponse.redirect(`${redirectBase}&gdrive_error=${encodeURIComponent(error)}`);
-  }
-
-  if (!code || !state) {
-    return NextResponse.redirect(`${redirectBase}&gdrive_error=missing_code_or_state`);
-  }
+  let redirectBase = `${url.origin}/`;
 
   try {
     let userId = 'default_user';
-    try {
-      const stateObj = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
-      if (stateObj.userId) {
-        userId = stateObj.userId;
-      }
-    } catch {}
+    let returnUrl = '/';
+    if (state) {
+      try {
+        const stateObj = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
+        if (stateObj.userId) {
+          userId = stateObj.userId;
+        }
+        if (stateObj.returnUrl) {
+          returnUrl = stateObj.returnUrl;
+        }
+      } catch {}
+    }
+
+    const redirectTarget = returnUrl.startsWith('/') ? returnUrl : `/${returnUrl}`;
+    const sep = redirectTarget.includes('?') ? '&' : '?';
+    redirectBase = `${url.origin}${redirectTarget}${sep}`;
+
+    if (!code) {
+      throw new Error('Authorization code missing from Google callback');
+    }
 
     const oauth2Client = getOAuth2Client();
-    const { tokens } = await oauth2Client.getToken(code);
+    const tokenResponse: any = await oauth2Client.getToken(code);
+    const tokens = tokenResponse.tokens;
 
     const email = await getUserEmailFromTokens(tokens);
 
@@ -69,11 +75,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const res = NextResponse.redirect(`${redirectBase}&gdrive_status=connected&email=${encodeURIComponent(email)}`);
+    const res = NextResponse.redirect(`${redirectBase}gdrive_status=connected&email=${encodeURIComponent(email)}`);
     res.cookies.delete('skp_gdrive_state');
     return res;
   } catch (err: any) {
     console.error('Google OAuth callback exchange failed:', err);
-    return NextResponse.redirect(`${redirectBase}&gdrive_error=${encodeURIComponent(err.message || 'auth_failed')}`);
+    return NextResponse.redirect(`${redirectBase}gdrive_error=${encodeURIComponent(err.message || 'auth_failed')}`);
   }
 }

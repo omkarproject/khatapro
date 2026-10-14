@@ -311,47 +311,47 @@ export default function DashboardPage() {
   }, [expenses]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-4">
       
-      {/* Top Banner: Welcome & Quick Action Bar (Compact & Sleek) */}
-      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 lg:p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-lg border border-slate-800">
+      {/* Top Banner: Welcome & Quick Action Bar (Ultra-Compact Fit) */}
+      <div className="relative overflow-hidden rounded-2xl p-2.5 sm:p-3 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-md border border-slate-800">
         <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
-          <div className="space-y-1 sm:space-y-1.5 min-w-0">
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="space-y-0.5 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1 shrink-0">
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1 shrink-0">
                 <Sparkles className="w-3 h-3 text-indigo-400" />
                 Live Business Pulse
               </span>
-              <span className="text-xs font-bold text-amber-300/90 tracking-wide truncate max-w-[220px] sm:max-w-md" suppressHydrationWarning>
+              <span className="text-xs font-bold text-amber-300/90 tracking-wide truncate max-w-[200px] sm:max-w-md" suppressHydrationWarning>
                 {activeBusinessName}
               </span>
             </div>
-            <h1 className="text-lg sm:text-xl lg:text-2xl font-black tracking-tight" suppressHydrationWarning>
+            <h1 className="text-base sm:text-lg font-black tracking-tight" suppressHydrationWarning>
               Good day, {activeOwnerName} 👋
             </h1>
             <div className="flex items-center gap-2 pt-0.5 max-w-2xl">
-              <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30 tracking-wider shrink-0 flex items-center gap-1">
-                ⚡ Aaj Ka Vyapar Funda
+              <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30 tracking-wider shrink-0 flex items-center gap-1">
+                ⚡ Vyapar Funda
               </span>
-              <p className="text-xs sm:text-[13px] text-slate-200 truncate italic" title={dailyMotivation}>
+              <p className="text-[11px] sm:text-xs text-slate-200 truncate italic" title={dailyMotivation}>
                 {dailyMotivation}
               </p>
             </div>
           </div>
 
           {/* Action Hub Buttons */}
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => openCollectModal()}
-              className="flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-cyan-500 hover:opacity-95 shadow-md shadow-indigo-500/25 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
+              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-cyan-500 hover:opacity-95 shadow-md shadow-indigo-500/25 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
             >
               <QrCode className="w-3.5 h-3.5" />
               Collect Payment
             </button>
             <button
               onClick={() => setIsQuickAddOpen(true)}
-              className="flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/25 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
+              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/25 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               Add
@@ -361,23 +361,23 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 lg:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 lg:gap-4">
         
         {/* Total Credit - Money In / Received */}
-        <div className="glass-card p-4 sm:p-5 lg:p-6 relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-2.5 sm:mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+        <div className="glass-card p-3 sm:p-3.5 lg:p-4 relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
               CREDIT
             </span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-              <ArrowDownLeft className="w-4 h-4" />
+            <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <ArrowDownLeft className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400">
+          <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
             {formatINR(metrics.totalCredit)}
           </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-2">
-            <span>Money In & Received</span>
+          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+            <span>Money In &amp; Received</span>
             <Link href="/khata" className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold">
               View Khata →
             </Link>
@@ -385,19 +385,19 @@ export default function DashboardPage() {
         </div>
 
         {/* Total Debit - Money Out / Pending Receivables */}
-        <div className="glass-card p-4 sm:p-5 lg:p-6 relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-2.5 sm:mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+        <div className="glass-card p-3 sm:p-3.5 lg:p-4 relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
               DEBIT
             </span>
-            <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center">
-              <ArrowUpRight className="w-4 h-4" />
+            <div className="w-7 h-7 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+              <ArrowUpRight className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold text-rose-600 dark:text-rose-400">
+          <div className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400">
             {formatINR(metrics.totalDebit)}
           </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
             <span className="truncate mr-1">Khata: {formatINR(metrics.khataDue)} + Inv: {formatINR(metrics.invoiceDue)}</span>
             <span className={`font-semibold shrink-0 ${metrics.totalDebit === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {metrics.totalDebit === 0 ? 'Clear' : 'Pending'}
@@ -406,21 +406,21 @@ export default function DashboardPage() {
         </div>
 
         {/* Net Business Profit */}
-        <div className="glass-card p-4 sm:p-5 lg:p-6 relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-2.5 sm:mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <div className="glass-card p-3 sm:p-3.5 lg:p-4 relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               NET PROFIT
             </span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4" />
+            <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+              <TrendingUp className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className={`text-2xl sm:text-3xl font-extrabold ${metrics.netProfit > 0 ? 'text-emerald-600 dark:text-emerald-400' : metrics.netProfit < 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>
+          <div className={`text-xl sm:text-2xl font-black ${metrics.netProfit > 0 ? 'text-emerald-600 dark:text-emerald-400' : metrics.netProfit < 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>
             {formatINR(metrics.netProfit)}
           </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
             <span>Revenue: {formatINR(metrics.totalIncome)}</span>
-            <span className={`text-xs font-bold ${
+            <span className={`text-[11px] font-bold ${
               metrics.totalIncome > 0 && metrics.netProfit > 0
                 ? 'text-emerald-500'
                 : metrics.netProfit < 0
@@ -435,19 +435,19 @@ export default function DashboardPage() {
         </div>
 
         {/* UPI Direct Collections */}
-        <div className="glass-card p-4 sm:p-5 lg:p-6 relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-2.5 sm:mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <div className="glass-card p-3 sm:p-3.5 lg:p-4 relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               UPI COLLECTIONS
             </span>
-            <div className="w-8 h-8 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
-              <QrCode className="w-4 h-4" />
+            <div className="w-7 h-7 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
+              <QrCode className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
             {formatINR(metrics.totalUPICollections)}
           </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
             <span>Direct Merchant QR</span>
             <span className="text-cyan-600 dark:text-cyan-400 font-semibold">
               {metrics.totalUPICollections > 0 ? 'Received' : 'Instant Bank Credit'}
@@ -458,36 +458,36 @@ export default function DashboardPage() {
       </div>
 
       {/* Second Row: Charts & Visual Analytics */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
         
         {/* Cash Flow Velocity Chart */}
-        <div className="lg:col-span-8 glass-card p-4 sm:p-6 flex flex-col justify-between">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
+        <div className="lg:col-span-8 glass-card p-3.5 sm:p-4 flex flex-col justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                 Cash Flow Velocity
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400">
                   Live Trend
                 </span>
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-[11px] text-slate-400">
                 Daily comparison of collections, general sales, and operational expenses
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs font-semibold">
+            <div className="flex flex-wrap items-center gap-3 text-xs font-semibold">
               <span className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
-                <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" /> Collection
+                <span className="w-2 h-2 rounded-full bg-indigo-600" /> Collection
               </span>
               <span className="flex items-center gap-1.5 text-cyan-500">
-                <span className="w-2.5 h-2.5 rounded-full bg-cyan-500" /> Income
+                <span className="w-2 h-2 rounded-full bg-cyan-500" /> Income
               </span>
               <span className="flex items-center gap-1.5 text-rose-500">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Expense
+                <span className="w-2 h-2 rounded-full bg-rose-500" /> Expense
               </span>
             </div>
           </div>
 
-          <div className="w-full h-64 sm:h-72 lg:h-80">
+          <div className="w-full h-48 sm:h-52 lg:h-56">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={cashFlowData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                 <defs>
