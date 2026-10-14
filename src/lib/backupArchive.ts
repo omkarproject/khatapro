@@ -47,14 +47,17 @@ export interface FullBusinessData {
 /**
  * Creates a versioned ZIP backup containing all modules, manifest, and attachment files.
  */
-export async function createBackupArchive(data: FullBusinessData): Promise<{
+export async function createBackupArchive(
+  data: FullBusinessData,
+  customFilename?: string
+): Promise<{
   zipBuffer: Buffer;
   manifest: BackupManifest;
   filename: string;
 }> {
   const zip = new JSZip();
   const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
-  const filename = `SmartKhata-Backup-${dateStr}.zip`;
+  const filename = customFilename || `SmartKhata-Backup-${dateStr}.zip`;
 
   // Sanitize data: Never include tokens or credentials
   const cleanSettings = { ...(data.settings || {}) };
@@ -218,3 +221,116 @@ export async function parseBackupArchive(zipBuffer: Buffer): Promise<{
 
   return { manifest, data, isValid: true };
 }
+
+/**
+ * Creates a combined master system backup ZIP containing all tenants/merchants.
+ */
+export async function createMasterSystemBackupArchive(
+  allUsersData: Array<{ profile: any; data: FullBusinessData }>,
+  customFilename?: string
+): Promise<{
+  zipBuffer: Buffer;
+  manifest: any;
+  filename: string;
+}> {
+  const zip = new JSZip();
+  const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = customFilename || `SmartKhata-Master-System-Backup-${dateStr}.zip`;
+
+  let totalCustomers = 0;
+  let totalTransactions = 0;
+  let totalInvoices = 0;
+  let totalProducts = 0;
+  let totalExpenses = 0;
+
+  const merchantsSummary: any[] = [];
+
+  for (const item of allUsersData) {
+    const p = item.profile || {};
+    const d = item.data || {};
+    const custCount = (d.customers || []).length;
+    const txnCount = (d.transactions || []).length;
+    const invCount = (d.invoices || []).length;
+    const prodCount = (d.products || []).length;
+    const expCount = (d.expenses || []).length;
+
+    totalCustomers += custCount;
+    totalTransactions += txnCount;
+    totalInvoices += invCount;
+    totalProducts += prodCount;
+    totalExpenses += expCount;
+
+    const safeName = (p.business_name || p.name || p.email?.split('@')[0] || 'Merchant')
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .substring(0, 30);
+    const userFolder = `merchants/${safeName}_${p.id ? p.id.substring(0, 8) : 'usr'}`;
+
+    const cleanSettings = { ...(d.settings || {}) };
+    delete cleanSettings.supabaseAnonKey;
+    delete cleanSettings.supabaseServiceRoleKey;
+    delete cleanSettings.firebaseApiKey;
+
+    const cleanProfile = { ...p };
+    delete cleanProfile.password;
+
+    zip.file(`${userFolder}/profile.json`, JSON.stringify(cleanProfile, null, 2));
+    zip.file(`${userFolder}/settings.json`, JSON.stringify(cleanSettings, null, 2));
+    zip.file(`${userFolder}/customers.json`, JSON.stringify(d.customers || [], null, 2));
+    zip.file(`${userFolder}/transactions.json`, JSON.stringify(d.transactions || [], null, 2));
+    zip.file(`${userFolder}/invoices.json`, JSON.stringify(d.invoices || [], null, 2));
+    zip.file(`${userFolder}/products.json`, JSON.stringify(d.products || [], null, 2));
+    zip.file(`${userFolder}/expenses.json`, JSON.stringify(d.expenses || [], null, 2));
+    zip.file(`${userFolder}/savings.json`, JSON.stringify(d.savingsGoals || [], null, 2));
+    zip.file(`${userFolder}/reminders.json`, JSON.stringify(d.reminders || [], null, 2));
+    zip.file(`${userFolder}/documents.json`, JSON.stringify(d.documents || [], null, 2));
+    zip.file(`${userFolder}/notes.json`, JSON.stringify(d.notes || [], null, 2));
+    zip.file(`${userFolder}/tasks.json`, JSON.stringify(d.tasks || [], null, 2));
+    zip.file(`${userFolder}/passwords.json`, JSON.stringify(d.passwords || [], null, 2));
+
+    merchantsSummary.push({
+      userId: p.id,
+      email: p.email,
+      name: p.name,
+      businessName: p.business_name,
+      role: p.role,
+      counts: {
+        customers: custCount,
+        transactions: txnCount,
+        invoices: invCount,
+        products: prodCount,
+        expenses: expCount,
+      },
+    });
+  }
+
+  const masterManifest = {
+    formatVersion: '2.0.0-master',
+    appName: 'SmartKhata Pro',
+    backupType: 'MASTER_ALL_MERCHANTS_DAILY_SNAPSHOT',
+    backupTimestamp: new Date().toISOString(),
+    totalMerchants: allUsersData.length,
+    aggregateCounts: {
+      customers: totalCustomers,
+      transactions: totalTransactions,
+      invoices: totalInvoices,
+      products: totalProducts,
+      expenses: totalExpenses,
+    },
+    merchants: merchantsSummary,
+  };
+
+  zip.file('manifest.json', JSON.stringify(masterManifest, null, 2));
+
+  const zipBuffer = await zip.generateAsync({
+    type: 'nodebuffer',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 9 },
+  });
+
+  return {
+    zipBuffer,
+    manifest: masterManifest,
+    filename,
+  };
+}
+

@@ -114,6 +114,38 @@ export async function ensureSmartKhataFolders(drive: any): Promise<{
 export const ensureHisabKitabFolders = ensureSmartKhataFolders;
 
 /**
+ * Finds or creates a subfolder by name inside a parent Google Drive folder
+ */
+export async function findOrCreateDriveSubfolder(
+  drive: any,
+  folderName: string,
+  parentId: string
+): Promise<string> {
+  const safeName = folderName.replace(/'/g, "\\'");
+  const query = `name = '${safeName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false and '${parentId}' in parents`;
+  const res = await drive.files.list({
+    q: query,
+    fields: 'files(id, name)',
+    spaces: 'drive',
+  });
+
+  if (res.data.files && res.data.files.length > 0) {
+    return res.data.files[0].id;
+  }
+
+  const folderMetadata = {
+    name: folderName,
+    mimeType: 'application/vnd.google-apps.folder',
+    parents: [parentId],
+  };
+  const createRes = await drive.files.create({
+    requestBody: folderMetadata,
+    fields: 'id',
+  });
+  return createRes.data.id;
+}
+
+/**
  * Uploads a daily ZIP backup to SmartKhata Pro/Backups/
  * Replaces / overwrites previous backup ZIP so that multiple daily ZIP archives do not accumulate!
  */
@@ -469,7 +501,7 @@ export async function discoverBackupFiles(drive: any): Promise<Array<{
   createdTime: string;
 }>> {
   const res = await drive.files.list({
-    q: "name contains 'SmartKhata-Backup' and trashed = false and mimeType = 'application/zip'",
+    q: "(name contains 'SmartKhata-Backup' or name contains 'SmartKhata-Master') and trashed = false and mimeType = 'application/zip'",
     fields: 'files(id, name, size, createdTime)',
     orderBy: 'createdTime desc',
     pageSize: 30,

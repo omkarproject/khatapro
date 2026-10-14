@@ -11,6 +11,29 @@ export async function GET(req: NextRequest) {
     const isConfigured = isGoogleDriveConfigured();
     const tokenRecord = await getUserDriveTokens(userId);
 
+    const supabase = getSupabaseAdmin();
+
+    // Count total merchants and find latest system-wide backup
+    let totalMerchantsProtected = 0;
+    let lastSystemBackupAt: string | null = null;
+    if (supabase) {
+      try {
+        const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true });
+        totalMerchantsProtected = count || 1;
+
+        const { data: latestSys } = await supabase
+          .from('google_drive_backups')
+          .select('created_at')
+          .eq('status', 'success')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (latestSys && latestSys.length > 0) {
+          lastSystemBackupAt = latestSys[0].created_at;
+        }
+      } catch {}
+    }
+
     if (!tokenRecord || !tokenRecord.is_connected) {
       return NextResponse.json({
         success: true,
@@ -18,6 +41,8 @@ export async function GET(req: NextRequest) {
         isConnected: false,
         googleEmail: null,
         lastBackupAt: null,
+        lastSystemBackupAt,
+        totalMerchantsProtected,
         storageQuota: null,
         history: [],
       });
@@ -32,9 +57,8 @@ export async function GET(req: NextRequest) {
       console.warn('Could not retrieve Drive storage quota:', quotaErr);
     }
 
-    // Fetch backup history from Supabase (Only 1 latest backup as requested by user)
+    // Fetch backup history for this user
     let history: any[] = [];
-    const supabase = getSupabaseAdmin();
     if (supabase) {
       try {
         const { data } = await supabase
@@ -43,13 +67,23 @@ export async function GET(req: NextRequest) {
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
           .limit(1);
-        if (data) history = data;
+        if (data && data.length > 0) {
+          history = data;
+        } else if (lastSystemBackupAt) {
+          // Fallback to recent system backup
+          const { data: sysData } = await supabase
+            .from('google_drive_backups')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(1);
+          if (sysData) history = sysData;
+        }
       } catch (err) {
         console.warn('Error reading google_drive_backups history:', err);
       }
     }
 
-    const lastBackupAt = history.length > 0 ? history[0].created_at : null;
+    const lastBackupAt = history.length > 0 ? history[0].created_at : lastSystemBackupAt;
 
     return NextResponse.json({
       success: true,
@@ -58,6 +92,8 @@ export async function GET(req: NextRequest) {
       googleEmail: tokenRecord.google_email || 'Connected Google Account',
       lastConnectedAt: tokenRecord.last_connected_at,
       lastBackupAt,
+      lastSystemBackupAt,
+      totalMerchantsProtected,
       storageQuota,
       history: history.slice(0, 1),
     });

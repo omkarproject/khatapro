@@ -48,6 +48,7 @@ interface DiscoveredBackup {
 
 export default function GoogleDriveBackupPanel() {
   const { currentUser, addToast, refreshData } = useApp();
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
   const [isConnected, setIsConnected] = useState(false);
   const [isConfigured, setIsConfigured] = useState(true);
@@ -61,6 +62,11 @@ export default function GoogleDriveBackupPanel() {
     percentUsed: number;
   } | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
+
+  // Multi-tenant protection
+  const [totalMerchants, setTotalMerchants] = useState<number>(1);
+  const [lastSystemBackupAt, setLastSystemBackupAt] = useState<string | null>(null);
+  const [isBackingUpAll, setIsBackingUpAll] = useState(false);
 
   // Operations
   const [isBackingUp, setIsBackingUp] = useState(false);
@@ -103,6 +109,8 @@ export default function GoogleDriveBackupPanel() {
         setLastBackupAt(json.lastBackupAt);
         setStorageQuota(json.storageQuota || null);
         setHistory(json.history ? json.history.slice(0, 1) : []);
+        if (json.totalMerchantsProtected) setTotalMerchants(json.totalMerchantsProtected);
+        if (json.lastSystemBackupAt) setLastSystemBackupAt(json.lastSystemBackupAt);
       }
     } catch (err) {
       console.warn('Failed to load Google Drive status:', err);
@@ -187,6 +195,36 @@ export default function GoogleDriveBackupPanel() {
       addToast('Backup Failed', err.message || 'Could not upload backup archive.', 'error');
     } finally {
       setIsBackingUp(false);
+    }
+  };
+
+  // Backup All Merchants Now (Admin multi-tenant run)
+  const handleBackupAllUsersNow = async () => {
+    try {
+      setIsBackingUpAll(true);
+      setBackupError(null);
+      const res = await fetch('/api/backup/google-drive/cron?force=true', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || 'All-users backup failed');
+      }
+
+      setLastBackupAt(json.timestamp);
+      setLastSystemBackupAt(json.timestamp);
+      addToast(
+        'All Merchants Backed Up! ☁️',
+        `Successfully backed up all ${json.merchantsCount || totalMerchants} users into their Google Drive folders.`,
+        'success'
+      );
+      checkStatus();
+    } catch (err: any) {
+      setBackupError(err.message || 'All-merchants backup failed');
+      addToast('Backup Failed', err.message || 'Could not complete multi-tenant backup.', 'error');
+    } finally {
+      setIsBackingUpAll(false);
     }
   };
 
@@ -308,6 +346,49 @@ export default function GoogleDriveBackupPanel() {
 
       {/* Main Content Area */}
       <div className="mt-6 space-y-6">
+        {/* Multi-Tenant Automated Daily Backup Status */}
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-indigo-500/10 to-teal-500/10 border border-emerald-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Automated Daily Cloud Backups
+                </h4>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                  Active (All Users)
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Daily auto-backup runs automatically for all <strong>{totalMerchants} merchants</strong>. Isolated folders per merchant + master system archive.
+              </p>
+            </div>
+          </div>
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleBackupAllUsersNow}
+              disabled={isBackingUpAll}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-700 hover:to-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer shrink-0 disabled:opacity-50"
+            >
+              {isBackingUpAll ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Backing Up All Users...</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Backup All Merchants Now ({totalMerchants})</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
+
         {/* Connected Details Bar */}
         {isConnected ? (
           <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/40 flex flex-col md:flex-row md:items-center justify-between gap-4">

@@ -60,3 +60,61 @@ export async function getAuthenticatedDriveForUser(userId: string) {
 
   return { drive, tokenRecord: record };
 }
+
+/**
+ * Returns the Master Google Drive client.
+ * Prioritizes admin / super_admin tokens, then falls back to any connected token.
+ */
+export async function getMasterDriveClient() {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    throw new Error('Supabase admin client unavailable');
+  }
+
+  // 1. Try to find admin's connected token first
+  try {
+    const { data: adminProfiles } = await supabase
+      .from('profiles')
+      .select('id')
+      .in('role', ['admin', 'super_admin'])
+      .limit(5);
+
+    if (adminProfiles && adminProfiles.length > 0) {
+      for (const admin of adminProfiles) {
+        const { data: adminToken } = await supabase
+          .from('google_drive_tokens')
+          .select('*')
+          .eq('user_id', admin.id)
+          .eq('is_connected', true)
+          .single();
+
+        if (adminToken && adminToken.encrypted_tokens) {
+          const decryptedJson = decryptToken(adminToken.encrypted_tokens);
+          const tokens = JSON.parse(decryptedJson);
+          const drive = await getDriveClient(tokens);
+          return { drive, tokenRecord: adminToken };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Error checking admin drive token:', err);
+  }
+
+  // 2. Fallback: Any connected token in google_drive_tokens
+  const { data: anyTokens } = await supabase
+    .from('google_drive_tokens')
+    .select('*')
+    .eq('is_connected', true)
+    .limit(1);
+
+  if (anyTokens && anyTokens.length > 0 && anyTokens[0].encrypted_tokens) {
+    const tokenRecord = anyTokens[0];
+    const decryptedJson = decryptToken(tokenRecord.encrypted_tokens);
+    const tokens = JSON.parse(decryptedJson);
+    const drive = await getDriveClient(tokens);
+    return { drive, tokenRecord };
+  }
+
+  throw new Error('No Google Drive account is currently connected to the system. Please connect Google Drive in Settings -> Management.');
+}
+
