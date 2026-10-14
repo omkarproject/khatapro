@@ -207,7 +207,9 @@ async function handleCron(req: NextRequest) {
         const uploadResult = await uploadBackupZip(masterDrive, merchantFolderId, filename, zipBuffer);
         await uploadBackupManifest(masterDrive, merchantFolderId, 'manifest.json', manifest);
 
-        // If this specific merchant has their own personal Google Drive connected, also copy there
+        // If this specific merchant has their own personal Google Drive connected, also upload to their Drive
+        let finalFileId = uploadResult.fileId;
+        let isUploadedToPersonalDrive = false;
         try {
           const { data: personalToken } = await supabase
             .from('google_drive_tokens')
@@ -220,18 +222,22 @@ async function handleCron(req: NextRequest) {
             const decTokens = JSON.parse(decryptToken(personalToken.encrypted_tokens));
             const personalDrive = await getDriveClient(decTokens);
             const personalFolders = await ensureSmartKhataFolders(personalDrive);
-            await uploadBackupZip(personalDrive, personalFolders.backupsId, filename, zipBuffer);
+            const personalUpload = await uploadBackupZip(personalDrive, personalFolders.backupsId, filename, zipBuffer);
             await uploadBackupManifest(personalDrive, personalFolders.backupsId, 'manifest.json', manifest);
+            finalFileId = personalUpload.fileId;
+            isUploadedToPersonalDrive = true;
+          } else if (personalToken && personalToken.user_id === masterTokenRecord?.user_id) {
+            isUploadedToPersonalDrive = true;
           }
         } catch (personalErr) {
-          console.warn(`Could not upload duplicate copy to personal Drive for user ${userId}:`, personalErr);
+          console.warn(`Could not upload copy to personal Drive for user ${userId}:`, personalErr);
         }
 
         // Record history entry in Supabase
         const historyItem = {
           id: `bk_cron_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           user_id: userId,
-          drive_file_id: uploadResult.fileId,
+          drive_file_id: finalFileId,
           filename,
           size_bytes: uploadResult.size,
           record_counts: manifest.recordCounts,
@@ -248,6 +254,7 @@ async function handleCron(req: NextRequest) {
           status: 'success',
           filename,
           size: uploadResult.size,
+          uploadedToPersonalDrive: isUploadedToPersonalDrive,
           counts: manifest.recordCounts,
         });
       } catch (merchantErr: any) {
