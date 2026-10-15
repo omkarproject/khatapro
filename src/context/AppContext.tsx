@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import {
   UserProfile,
   Customer,
@@ -152,24 +152,21 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
-  const [profile, setProfileState] = useState<UserProfile>(() => StorageService.getProfile());
-  const [customers, setCustomers] = useState<Customer[]>(() => StorageService.getCustomers());
-  const [transactions, setTransactions] = useState<Transaction[]>(() => StorageService.getTransactions());
-  const [products, setProducts] = useState<Product[]>(() => StorageService.getProducts());
-  const [invoices, setInvoices] = useState<Invoice[]>(() => StorageService.getInvoices());
-  const [expenses, setExpenses] = useState<Expense[]>(() => StorageService.getExpenses());
-  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>(() => StorageService.getSavingsGoals());
-  const [reminders, setReminders] = useState<PaymentReminder[]>(() => StorageService.getReminders());
-  const [documents, setDocuments] = useState<DocumentItem[]>(() => StorageService.getDocuments());
-  const [notes, setNotes] = useState<NoteItem[]>(() => StorageService.getNotes());
-  const [tasks, setTasks] = useState<TaskItem[]>(() => StorageService.getTasks());
-  const [passwords, setPasswords] = useState<PasswordItem[]>(() => StorageService.getPasswords());
-  const [settings, setSettingsState] = useState<SystemSettings>(() => StorageService.getSettings());
-  const [darkMode, setDarkMode] = useState(() => StorageService.getSettings().darkMode);
-  const [activeRole, setActiveRole] = useState<UserRole>(() => {
-    const cur = StorageService.getCurrentUser();
-    return cur?.role || (cur?.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user');
-  });
+  const [profile, setProfileState] = useState<UserProfile>(defaultEmptyProfile);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
+  const [reminders, setReminders] = useState<PaymentReminder[]>([]);
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [notes, setNotes] = useState<NoteItem[]>([]);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [passwords, setPasswords] = useState<PasswordItem[]>([]);
+  const [settings, setSettingsState] = useState<SystemSettings>(() => getCleanDefaultSettings());
+  const [darkMode, setDarkMode] = useState(false);
+  const [activeRole, setActiveRole] = useState<UserRole>('user');
 
   // Collect Modal
   const [isCollectModalOpen, setIsCollectModalOpen] = useState(false);
@@ -182,7 +179,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }>({});
 
   // Current Auth User & Cloud Sync
-  const [currentUser, setCurrentUserState] = useState<UserProfile | null>(() => StorageService.getCurrentUser());
+  const [currentUser, setCurrentUserState] = useState<UserProfile | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
 
@@ -216,11 +213,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const openAuthModal = () => setIsAuthModalOpen(true);
   const closeAuthModal = () => setIsAuthModalOpen(false);
 
-  // Debounce ref for background database sync
-  const syncDebounceTimer = useRef<NodeJS.Timeout | null>(null);
-
   // Sync all in-memory and local data to Supabase Cloud PostgreSQL
-  const executeSync = async (targetUser?: UserProfile | null) => {
+  const syncWithDatabase = async (targetUser?: UserProfile | null) => {
     const curSettings = StorageService.getSettings();
     // In Local/Offline mode, keep data purely local (no cloud sync overhead)
     if (curSettings.backendProvider === 'local') {
@@ -235,6 +229,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setCloudSyncStatus('syncing');
       // Read latest data synchronously from StorageService to avoid React closure lag
       const curCustomers = StorageService.getCustomers();
+      const allDriveFolders: any[] = [];
+      const allDriveFiles: any[] = [];
+      curCustomers.forEach(c => {
+        const cd = StorageService.getCustomerDriveData(c.id);
+        if (Array.isArray(cd.folders)) {
+          cd.folders.forEach(f => allDriveFolders.push({ ...f, customerId: c.id }));
+        }
+        if (Array.isArray(cd.files)) {
+          cd.files.forEach(f => allDriveFiles.push({ ...f, customerId: c.id }));
+        }
+      });
 
       const payload = {
         userId,
@@ -250,6 +255,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           notes: StorageService.getNotes(),
           tasks: StorageService.getTasks(),
           passwords: StorageService.getPasswords(),
+          customerDriveFolders: allDriveFolders,
+          customerDriveFiles: allDriveFiles,
           settings: StorageService.getSettings(),
           profile: StorageService.getProfile(),
         },
@@ -270,18 +277,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       console.warn('Database background sync deferred:', e);
       setCloudSyncStatus('offline');
     }
-  };
-
-  const syncWithDatabase = async (targetUser?: UserProfile | null) => {
-    if (syncDebounceTimer.current) {
-      clearTimeout(syncDebounceTimer.current);
-    }
-    return new Promise<void>((resolve) => {
-      syncDebounceTimer.current = setTimeout(async () => {
-        await executeSync(targetUser);
-        resolve();
-      }, 250);
-    });
   };
 
   // Load user data from Supabase Cloud PostgreSQL
@@ -311,7 +306,53 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (Array.isArray(d.notes)) setNotes(d.notes);
           if (Array.isArray(d.tasks)) setTasks(d.tasks);
           if (Array.isArray(d.passwords)) setPasswords(d.passwords);
-          // Customer drive folders & files are loaded strictly on-demand per customer
+          if (Array.isArray(d.customerDriveFolders) || Array.isArray(d.customerDriveFiles)) {
+            const byCust: Record<string, { folders: any[]; files: any[] }> = {};
+            (d.customerDriveFolders || []).forEach((f: any) => {
+              if (f.customerId) {
+                if (!byCust[f.customerId]) byCust[f.customerId] = { folders: [], files: [] };
+                byCust[f.customerId].folders.push(f);
+              }
+            });
+            (d.customerDriveFiles || []).forEach((f: any) => {
+              if (f.customerId) {
+                if (!byCust[f.customerId]) byCust[f.customerId] = { folders: [], files: [] };
+                byCust[f.customerId].files.push(f);
+              }
+            });
+
+            const targetCustomerIds = new Set<string>([
+              ...Object.keys(byCust),
+              ...((d.customers || []).map((c: any) => c.id).filter(Boolean)),
+            ]);
+
+            targetCustomerIds.forEach((cid) => {
+              const cdata = byCust[cid] || { folders: [], files: [] };
+              const localExisting = StorageService.getCustomerDriveData(cid);
+
+              const defaultFolders = [
+                { id: 'fld_aadhar', name: 'AADHAR CARD', createdAt: new Date().toISOString() },
+                { id: 'fld_bills', name: 'BILLS', createdAt: new Date().toISOString() },
+                { id: 'fld_docs', name: 'DOCUMENTS', createdAt: new Date().toISOString() },
+              ];
+
+              const foldersToSave = cdata.folders && cdata.folders.length > 0
+                ? cdata.folders
+                : (localExisting.folders && localExisting.folders.length > 0 ? localExisting.folders : defaultFolders);
+
+              // If cloud returned files for this customer, use cloud files.
+              // If cloud returned 0 files, but cloud overall has 0 files (e.g. prior sync failure) and local has files, preserve local.
+              let filesToSave = cdata.files || [];
+              if (filesToSave.length === 0 && (!d.customerDriveFiles || d.customerDriveFiles.length === 0) && localExisting.files && localExisting.files.length > 0) {
+                filesToSave = localExisting.files;
+              }
+
+              StorageService.saveCustomerDriveData(cid, {
+                folders: foldersToSave,
+                files: filesToSave,
+              });
+            });
+          }
           if (d.settings) {
             setSettingsState(prev => {
               const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
@@ -587,7 +628,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    let activeU = StorageService.getCurrentUser();
+    const activeU = StorageService.getCurrentUser();
     if (activeU?.language) setActiveLanguage(activeU.language);
     if (activeU?.currency) setActiveCurrency(activeU.currency);
     syncLiveExchangeRates();
@@ -596,71 +637,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     refreshData();
     setMounted(true);
 
-    // Hydrate current active user directly from Supabase Cloud PostgreSQL if not in memory
-    const verifyCloudSession = async () => {
-      try {
-        const res = await fetch('/api/auth/me');
-        if (res.ok) {
-          const json = await res.json();
-          if (json.success && json.user) {
-            const freshUser = json.user;
-            StorageService.setCurrentUser(freshUser);
-            setCurrentUserState(freshUser);
-            setActiveRole(freshUser.role || (freshUser.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user'));
-            if (freshUser.language) setActiveLanguage(freshUser.language);
-            if (freshUser.currency) setActiveCurrency(freshUser.currency);
-            await loadUserDataFromCloud(freshUser.id);
-          }
-        }
-      } catch (err) {
-        console.warn('Could not verify session with /api/auth/me:', err);
-      }
-    };
+    const curSettings = StorageService.getSettings();
 
-    if (!activeU) {
-      verifyCloudSession();
-    } else {
+    if (typeof document !== 'undefined') {
+      if (activeU) {
+        document.cookie = `skp_auth_session=${activeU.id || (activeU as any)._id}; Path=/; Max-Age=2592000; SameSite=Lax;`;
+      } else {
+        document.cookie = 'skp_auth_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
+      }
+    }
+
+    // If user is logged in, sync with database
+    if (activeU) {
       loadUserDataFromCloud(activeU.id);
     }
 
-    // Live Realtime Polling: Keep in-memory ledger synchronized with Cloud DB & Drive
-    const liveSyncInterval = setInterval(() => {
-      const u = StorageService.getCurrentUser();
-      if (u?.id) {
-        loadUserDataFromCloud(u.id);
-      }
-    }, 15000);
-
-    const handleCustomDataChange = (e: any) => {
-      const detail = e?.detail;
-      if (detail?.transaction) {
-        const latest = detail.transaction;
-        if (latest && (latest.type === 'collection' || latest.type === 'credit' || latest.type === 'income')) {
-          playPaymentNotificationSound();
-          addToast(
-            '💰 Payment Received!',
-            `₹${latest.amount.toLocaleString('en-IN')} received from ${latest.customerName || 'Customer'}. Click to view details.`,
-            'success',
-            latest
-          );
-        }
-      }
-      refreshData();
-    };
-
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key && (e.key.startsWith('skp_') || e.key.startsWith('khatapro_'))) {
-        refreshData();
+      if (e.key === 'skp_transactions' && e.newValue) {
+        try {
+          const freshTxns: Transaction[] = JSON.parse(e.newValue);
+          const oldTxns = StorageService.getTransactions();
+          if (freshTxns.length > oldTxns.length) {
+            const latest = freshTxns[0];
+            if (latest && (latest.type === 'collection' || latest.type === 'credit' || latest.type === 'income')) {
+              playPaymentNotificationSound();
+              addToast(
+                '💰 Payment Received!',
+                `₹${latest.amount.toLocaleString('en-IN')} received from ${latest.customerName || 'Customer'}. Click to view details.`,
+                'success',
+                latest
+              );
+            }
+          }
+          refreshData();
+        } catch {
+          refreshData();
+        }
       }
     };
 
     window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('khatapro_data_sync', handleCustomDataChange);
-    return () => {
-      clearInterval(liveSyncInterval);
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('khatapro_data_sync', handleCustomDataChange);
-    };
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   useEffect(() => {
@@ -685,37 +702,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const globalPayload = {
             maintenanceMode: json.maintenanceMode,
             betaTestingEnabled: Boolean(json.betaTestingEnabled),
-            websiteBranding: json.websiteBranding || null,
           };
           if (typeof window !== 'undefined') {
-            try {
-              localStorage.setItem('skp_global_system_config', JSON.stringify(globalPayload));
-              if (json.websiteBranding) {
-                localStorage.setItem('skp_global_branding', JSON.stringify(json.websiteBranding));
-              }
-            } catch {}
+            localStorage.setItem('skp_global_system_config', JSON.stringify(globalPayload));
           }
           setSettingsState(prev => {
             const sameMaint = JSON.stringify(prev.maintenanceMode) === JSON.stringify(json.maintenanceMode);
             const sameBeta = prev.betaTestingEnabled === Boolean(json.betaTestingEnabled);
-            const brand = json.websiteBranding;
-            const sameBrand = !brand || (
-              prev.websiteName === brand.websiteName &&
-              prev.websiteLogo === brand.websiteLogo &&
-              prev.websiteFavicon === brand.websiteFavicon &&
-              prev.websiteBadgeText === brand.websiteBadgeText
-            );
-            if (sameMaint && sameBeta && sameBrand) return prev;
+            if (sameMaint && sameBeta) return prev;
             return {
               ...prev,
               maintenanceMode: json.maintenanceMode,
               betaTestingEnabled: Boolean(json.betaTestingEnabled),
-              ...(brand ? {
-                websiteName: brand.websiteName || prev.websiteName,
-                websiteLogo: brand.websiteLogo !== undefined ? brand.websiteLogo : prev.websiteLogo,
-                websiteFavicon: brand.websiteFavicon !== undefined ? brand.websiteFavicon : prev.websiteFavicon,
-                websiteBadgeText: brand.websiteBadgeText !== undefined ? brand.websiteBadgeText : prev.websiteBadgeText,
-              } : {}),
             };
           });
         }
@@ -726,47 +724,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     fetchGlobalSystemConfig();
     const interval = setInterval(fetchGlobalSystemConfig, 12000);
-
-    const handleBrandingChanged = (e: any) => {
-      const brand = e?.detail;
-      if (brand) {
-        setSettingsState(prev => ({
-          ...prev,
-          websiteName: brand.websiteName !== undefined ? brand.websiteName : prev.websiteName,
-          websiteLogo: brand.websiteLogo !== undefined ? brand.websiteLogo : prev.websiteLogo,
-          websiteFavicon: brand.websiteFavicon !== undefined ? brand.websiteFavicon : prev.websiteFavicon,
-          websiteBadgeText: brand.websiteBadgeText !== undefined ? brand.websiteBadgeText : prev.websiteBadgeText,
-        }));
-      }
-    };
-
-    const handleStorageEvent = (e: StorageEvent) => {
-      if (e.key === 'skp_global_branding' && e.newValue) {
-        try {
-          const brand = JSON.parse(e.newValue);
-          setSettingsState(prev => ({
-            ...prev,
-            websiteName: brand.websiteName !== undefined ? brand.websiteName : prev.websiteName,
-            websiteLogo: brand.websiteLogo !== undefined ? brand.websiteLogo : prev.websiteLogo,
-            websiteFavicon: brand.websiteFavicon !== undefined ? brand.websiteFavicon : prev.websiteFavicon,
-            websiteBadgeText: brand.websiteBadgeText !== undefined ? brand.websiteBadgeText : prev.websiteBadgeText,
-          }));
-        } catch {}
-      }
-    };
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('khatapro_branding_changed', handleBrandingChanged);
-      window.addEventListener('storage', handleStorageEvent);
-    }
-
-    return () => {
-      clearInterval(interval);
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('khatapro_branding_changed', handleBrandingChanged);
-        window.removeEventListener('storage', handleStorageEvent);
-      }
-    };
+    return () => clearInterval(interval);
   }, [mounted]);
 
   const toggleDarkMode = () => {
@@ -808,46 +766,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           maintenanceMode: merged.maintenanceMode,
           betaTestingEnabled: Boolean(merged.betaTestingEnabled),
         };
-        try {
-          localStorage.setItem('skp_global_system_config', JSON.stringify(globalPayload));
-        } catch {}
+        localStorage.setItem('skp_global_system_config', JSON.stringify(globalPayload));
         fetch('/api/system/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(globalPayload),
         }).catch(e => console.warn('Global config broadcast error:', e));
-      }
-    }
-
-    // If Website Branding was modified, persist globally and broadcast immediately across all portal tabs
-    if (
-      newSettings.websiteName !== undefined ||
-      newSettings.websiteLogo !== undefined ||
-      newSettings.websiteFavicon !== undefined ||
-      newSettings.websiteBadgeText !== undefined
-    ) {
-      if (typeof window !== 'undefined') {
-        const brandingPayload = {
-          websiteName: merged.websiteName || 'SmartKhata',
-          websiteLogo: merged.websiteLogo || '',
-          websiteFavicon: merged.websiteFavicon || '',
-          websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : '',
-        };
-        try {
-          localStorage.setItem('skp_global_branding', JSON.stringify(brandingPayload));
-          const existingGlobal = localStorage.getItem('skp_global_system_config');
-          const globalObj = existingGlobal ? JSON.parse(existingGlobal) : {};
-          globalObj.websiteBranding = brandingPayload;
-          localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
-        } catch {}
-
-        fetch('/api/system/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ websiteBranding: brandingPayload }),
-        }).catch(e => console.warn('Global branding broadcast error:', e));
-
-        window.dispatchEvent(new CustomEvent('khatapro_branding_changed', { detail: brandingPayload }));
       }
     }
 

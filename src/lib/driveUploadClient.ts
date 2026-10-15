@@ -1,5 +1,3 @@
-import { getActiveUserId } from '@/services/storage';
-
 /**
  * Helper to upload user attachments (invoices, bills, receipts, documents, customer drive files)
  * directly into the user's private Google Drive "SmartKhata Pro/Files/" folder.
@@ -46,10 +44,10 @@ export async function uploadToDriveFiles(
 
     if (typeof userIdOrOptions === 'object' && userIdOrOptions !== null) {
       options = userIdOrOptions;
-      effectiveUserId = typeof window !== 'undefined' ? (getActiveUserId() || undefined) : undefined;
+      effectiveUserId = typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('skp_auth_user') || '{}')?.id) : undefined;
     } else {
       effectiveUserId = (typeof userIdOrOptions === 'string' ? userIdOrOptions : undefined) || 
-        (typeof window !== 'undefined' ? (getActiveUserId() || undefined) : undefined);
+        (typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('skp_auth_user') || '{}')?.id) : undefined);
       options = maybeOptions;
     }
     const res = await fetch('/api/backup/google-drive/upload-file', {
@@ -95,7 +93,7 @@ export async function renameInDriveFiles(params: {
   message?: string;
 }> {
   try {
-    const effectiveUserId = params.userId || (typeof window !== 'undefined' ? (getActiveUserId() || undefined) : undefined);
+    const effectiveUserId = params.userId || (typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('skp_auth_user') || '{}')?.id) : undefined);
     const res = await fetch('/api/backup/google-drive/rename-file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -133,7 +131,7 @@ export async function deleteFromDriveFiles(params: {
   message?: string;
 }> {
   try {
-    const effectiveUserId = params.userId || (typeof window !== 'undefined' ? (getActiveUserId() || undefined) : undefined);
+    const effectiveUserId = params.userId || (typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('skp_auth_user') || '{}')?.id) : undefined);
     const res = await fetch('/api/backup/google-drive/delete-file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

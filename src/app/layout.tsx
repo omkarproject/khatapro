@@ -7,20 +7,8 @@ import LayoutShell from '@/components/LayoutShell';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'SmartKhata - Enterprise Fintech & Digital Khata Operating System',
+  title: 'SmartKhata Pro - Enterprise Fintech & Digital Khata Operating System',
   description: 'Track Money, Manage Business, Grow Faster. Enterprise-grade Expense Tracker, Digital KhataBook, Invoicing, Inventory, UPI Collections & CRM.',
-  icons: {
-    icon: [
-      { url: '/favicon.ico', type: 'image/x-icon' },
-      { url: '/brand-favicon.png', type: 'image/png' },
-      { url: '/icon.svg', type: 'image/svg+xml' }
-    ],
-    shortcut: ['/favicon.ico', '/brand-favicon.png'],
-    apple: [
-      { url: '/brand-favicon.png' },
-      { url: '/brand-logo.png' }
-    ],
-  },
 };
 
 export default function RootLayout({

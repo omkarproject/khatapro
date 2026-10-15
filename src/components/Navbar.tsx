@@ -324,10 +324,10 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
             </button>
 
             <Link href="/" className="flex items-center gap-2 sm:gap-2.5 group">
-              {(settings.websiteLogo || '/brand-logo.png') ? (
+              {settings.websiteLogo ? (
                 <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl overflow-hidden shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform shrink-0 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center">
                   <img
-                    src={settings.websiteLogo || '/brand-logo.png'}
+                    src={settings.websiteLogo}
                     alt={settings.websiteName || 'Logo'}
                     className="w-full h-full object-contain"
                     onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
@@ -341,11 +341,9 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
               <div className="block">
                 <div className="flex items-center gap-1 sm:gap-1.5 font-black tracking-tight text-slate-900 dark:text-white text-sm sm:text-base">
                   <span>{settings.websiteName || 'SmartKhata'}</span>
-                  {(settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : '') && (
-                    <span className="text-[7.5px] sm:text-[8px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wider fintech-gradient-primary text-white shadow-xs leading-none">
-                      {settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : ''}
-                    </span>
-                  )}
+                  <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider fintech-gradient-primary text-white">
+                    PRO
+                  </span>
                 </div>
                 <div className="hidden sm:block text-[10px] text-slate-400 font-medium tracking-tight">
                   Fintech Operating System
@@ -718,7 +716,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                       settings?.businessLogo ||
                       profile?.avatarUrl ||
                       currentUser?.avatarUrl ||
-                      '';
+                      (typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '');
                     return (
                       <>
                         <button

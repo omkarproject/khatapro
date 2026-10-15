@@ -241,8 +241,18 @@ export default function InvoicesPage() {
     ]);
   };
 
-  // Invoice Charges & Tax Configuration State (In-Memory Runtime)
-  const [invoiceChargesConfig, setInvoiceChargesConfig] = useState<InvoiceChargeConfig[]>(DEFAULT_INVOICE_CHARGES);
+  // Invoice Charges & Tax Configuration State
+  const [invoiceChargesConfig, setInvoiceChargesConfig] = useState<InvoiceChargeConfig[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('khatapro_invoice_charges_config');
+        if (saved) return JSON.parse(saved);
+      } catch (e) {
+        console.warn('Failed to load invoice charges config', e);
+      }
+    }
+    return DEFAULT_INVOICE_CHARGES;
+  });
   const [isChargesConfigModalOpen, setIsChargesConfigModalOpen] = useState(false);
 
   // New custom charge form in configuration modal
@@ -272,6 +282,13 @@ export default function InvoicesPage() {
 
   const saveChargesConfig = (newConfig: InvoiceChargeConfig[]) => {
     setInvoiceChargesConfig(newConfig);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('khatapro_invoice_charges_config', JSON.stringify(newConfig));
+      } catch (e) {
+        console.warn('Failed to save invoice charges config', e);
+      }
+    }
   };
 
   const handleAddCustomCharge = (e: React.FormEvent) => {

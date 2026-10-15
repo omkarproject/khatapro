@@ -7,7 +7,7 @@ import { ArrowLeft, Shield, Lock, EyeOff, Server } from 'lucide-react';
 
 export default function PrivacyPolicyPage() {
   const { settings, profile, currentUser } = useApp();
-  const businessName = settings.websiteName || settings.businessName || profile.businessName || currentUser?.businessName || 'SmartKhata';
+  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || 'SmartKhata Pro';
   const businessPhone = settings.businessPhone || profile.phone || currentUser?.phone || '';
   const businessEmail = settings.businessEmail || profile.email || currentUser?.email || 'support@smartkhatapro.in';
   const businessAddress = settings.businessAddress || profile.businessAddress || '';

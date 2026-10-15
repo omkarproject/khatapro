@@ -40,34 +40,17 @@ const STORAGE_KEYS = {
 };
 
 
-// In-memory runtime cache for true zero-localStorage client architecture.
-// Data is held strictly in memory and synced live in realtime with Supabase Cloud Database & Google Drive.
-const inMemoryStore: Record<string, any> = {};
-
-
-
 // Current Active User & Scoping Helper for strict multi-user isolation
 export function getActiveUserId(): string | null {
-  if (typeof window !== 'undefined') {
-    // Check in-memory store first
-    if (inMemoryStore['skp_auth_user']?.id) {
-      return inMemoryStore['skp_auth_user'].id;
-    }
-    // Check localStorage
-    try {
-      const raw = localStorage.getItem('skp_auth_user');
-      if (raw) {
-        const u = JSON.parse(raw);
-        if (u?.id) return u.id;
-      }
-    } catch {}
-    // Check document cookie for active session ID
-    const match = document.cookie.match(/(?:^|;\s*)skp_auth_session=([^;]+)/);
-    if (match && match[1]) {
-      return match[1];
-    }
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem('skp_auth_user');
+    if (!raw) return null;
+    const u = JSON.parse(raw);
+    return u?.id || null;
+  } catch {
+    return null;
   }
-  return inMemoryStore['skp_auth_user']?.id || null;
 }
 
 export function getScopedKey(baseKey: string): string {
@@ -78,186 +61,92 @@ export function getScopedKey(baseKey: string): string {
   return baseKey;
 }
 
-// Hybrid High-Speed Cache: In-Memory + LocalStorage instant cache for 0ms transitions
+// Safe localStorage helper for SSR
 function getLocalItem<T>(rawKey: string, defaultValue: T): T {
   const key = getScopedKey(rawKey);
-  if (key in inMemoryStore) {
-    return inMemoryStore[key] as T;
+  if (typeof window === 'undefined') return defaultValue;
+  try {
+    const item = localStorage.getItem(key);
+    return item ? (JSON.parse(item) as T) : defaultValue;
+  } catch (error) {
+    console.error(`Error reading ${key} from localStorage:`, error);
+    return defaultValue;
   }
-  if (typeof window !== 'undefined') {
-    try {
-      const item = localStorage.getItem(key);
-      if (item !== null) {
-        const parsed = JSON.parse(item) as T;
-        inMemoryStore[key] = parsed;
-        return parsed;
-      }
-    } catch {}
-  }
-  return defaultValue;
 }
 
 function setLocalItem<T>(rawKey: string, value: T): void {
   const key = getScopedKey(rawKey);
-  inMemoryStore[key] = value;
-  if (typeof window !== 'undefined') {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch {}
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.error(`Error writing ${key} to localStorage:`, error);
   }
 }
 
-export const getCleanDefaultSettings = (businessName: string = '', phone: string = '', email: string = ''): SystemSettings => {
-  let globalWebName = 'SmartKhata';
-  let globalWebLogo = '/brand-logo.png';
-  let globalWebFavicon = '/brand-favicon.png';
-  let globalWebBadge = '';
-
-  if (typeof window !== 'undefined') {
-    try {
-      if (typeof document !== 'undefined') {
-        const badgeMatch = document.cookie.match(/(?:^|;\s*)skp_brand_badge=([^;]+)/);
-        if (badgeMatch && badgeMatch[1]) {
-          globalWebBadge = decodeURIComponent(badgeMatch[1]);
-        }
-        const nameMatch = document.cookie.match(/(?:^|;\s*)skp_brand_name=([^;]+)/);
-        if (nameMatch && nameMatch[1]) {
-          globalWebName = decodeURIComponent(nameMatch[1]);
-        }
-      }
-      if (!globalWebBadge && typeof localStorage !== 'undefined') {
-        const storedBadge = localStorage.getItem('skp_brand_badge');
-        if (storedBadge) globalWebBadge = storedBadge;
-      }
-      if (typeof localStorage !== 'undefined') {
-        const storedName = localStorage.getItem('skp_brand_name');
-        if (storedName) globalWebName = storedName;
-      }
-      let b = inMemoryStore['skp_global_branding'];
-      if (!b && typeof localStorage !== 'undefined') {
-        const rawB = localStorage.getItem('skp_global_branding');
-        if (rawB) {
-          try { b = JSON.parse(rawB); } catch {}
-        }
-      }
-      if (b) {
-        if (b.websiteName) globalWebName = b.websiteName;
-        if (b.websiteLogo !== undefined) globalWebLogo = b.websiteLogo;
-        if (b.websiteFavicon !== undefined) globalWebFavicon = b.websiteFavicon;
-        if (b.websiteBadgeText !== undefined) globalWebBadge = b.websiteBadgeText;
-      }
-      let g = inMemoryStore['skp_global_system_config'];
-      if (!g && typeof localStorage !== 'undefined') {
-        const rawG = localStorage.getItem('skp_global_system_config');
-        if (rawG) {
-          try { g = JSON.parse(rawG); } catch {}
-        }
-      }
-      if (g && g.websiteBranding) {
-        if (g.websiteBranding.websiteName && (!b || !globalWebName)) globalWebName = g.websiteBranding.websiteName;
-        if (g.websiteBranding.websiteLogo && !globalWebLogo) globalWebLogo = g.websiteBranding.websiteLogo;
-        if (g.websiteBranding.websiteFavicon && !globalWebFavicon) globalWebFavicon = g.websiteBranding.websiteFavicon;
-        if (g.websiteBranding.websiteBadgeText !== undefined && !b) globalWebBadge = g.websiteBranding.websiteBadgeText;
-      }
-    } catch {}
-  }
-
-  // If favicon is not explicitly set, use the website logo as the favicon!
-  if (!globalWebFavicon && globalWebLogo) {
-    globalWebFavicon = globalWebLogo;
-  }
-
-  return {
-    backendProvider: 'supabase',
-    supabaseUrl: 'https://axpbydzszykqwojamblh.supabase.co',
-    supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTIzNTcsImV4cCI6MjEwNzI4ODM1N30.MOkM9DqTFr5nB4mYj-Z3n9FEta1Pi0tSSJ0tTWxsxF0',
-    supabaseServiceRoleKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTcxMjM1NywiZXhwIjoyMTA3Mjg4MzU3fQ.oUgYxGo6-WWyioLkhmPuldiCWf4pANvEl7vnPyNyyNs',
-    googleDriveSettings: {
-      clientId: '997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com',
-      clientSecret: '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',
-      redirectUri: 'https://khatapro-sandy.vercel.app/api/backup/google-drive/callback',
-    },
-    businessName: businessName || '',
-    businessLogo: '',
-    businessTagline: 'Track Money, Manage Business, Grow Faster',
-    businessPhone: phone || '',
-    businessEmail: email || '',
-    businessAddress: '',
-    paymentSettings: {
-      collectionMode: 'direct_upi',
-      upiId: '', // Clean blank: user sets their own UPI ID
-      payeeName: businessName || '',
-      customQrUrl: '', // Clean blank: user sets/uploads their own QR
-      isDefaultQrSaved: false,
-      businessGst: '',
-      currency: 'INR',
-      enableSoundAlerts: true,
-      cashfreeAppId: '', // Clean blank: user sets their own API keys
-      cashfreeSecretKey: '',
-      cashfreeEnv: 'production',
-      razorpayKeyId: '',
-      razorpayKeySecret: '',
-      razorpayWebhookSecret: '',
-      razorpayEnv: 'live',
-      upiGatewayProvider: 'Cashfree UPI Gateway',
-      upiGatewayKey: '',
-      upiGatewaySecret: '',
-      upiGatewayWebhookUrl: '',
-    },
-    monthlyBudgetCap: 150000,
-    darkMode: false,
-    maintenanceMode: {
-      enabled: false,
-      durationMinutes: 15,
-      reason: 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️',
-    },
-    betaTestingEnabled: false,
-    websiteName: globalWebName,
-    websiteLogo: globalWebLogo,
-    websiteFavicon: globalWebFavicon,
-    websiteBadgeText: globalWebBadge,
-  };
-};
+export const getCleanDefaultSettings = (businessName: string = '', phone: string = '', email: string = ''): SystemSettings => ({
+  backendProvider: 'supabase',
+  supabaseUrl: 'https://axpbydzszykqwojamblh.supabase.co',
+  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTIzNTcsImV4cCI6MjEwNzI4ODM1N30.MOkM9DqTFr5nB4mYj-Z3n9FEta1Pi0tSSJ0tTWxsxF0',
+  supabaseServiceRoleKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTcxMjM1NywiZXhwIjoyMTA3Mjg4MzU3fQ.oUgYxGo6-WWyioLkhmPuldiCWf4pANvEl7vnPyNyyNs',
+  googleDriveSettings: {
+    clientId: '997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com',
+    clientSecret: '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',
+    redirectUri: 'https://khatapro-sandy.vercel.app/api/backup/google-drive/callback',
+  },
+  businessName: businessName || '',
+  businessLogo: '',
+  businessTagline: 'Track Money, Manage Business, Grow Faster',
+  businessPhone: phone || '',
+  businessEmail: email || '',
+  businessAddress: '',
+  paymentSettings: {
+    collectionMode: 'direct_upi',
+    upiId: '', // Clean blank: user sets their own UPI ID
+    payeeName: businessName || '',
+    customQrUrl: '', // Clean blank: user sets/uploads their own QR
+    isDefaultQrSaved: false,
+    businessGst: '',
+    currency: 'INR',
+    enableSoundAlerts: true,
+    cashfreeAppId: '', // Clean blank: user sets their own API keys
+    cashfreeSecretKey: '',
+    cashfreeEnv: 'production',
+    razorpayKeyId: '',
+    razorpayKeySecret: '',
+    razorpayWebhookSecret: '',
+    razorpayEnv: 'live',
+    upiGatewayProvider: 'Cashfree UPI Gateway',
+    upiGatewayKey: '',
+    upiGatewaySecret: '',
+    upiGatewayWebhookUrl: '',
+  },
+  monthlyBudgetCap: 150000,
+  darkMode: false,
+  maintenanceMode: {
+    enabled: false,
+    durationMinutes: 15,
+    reason: 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️',
+  },
+  betaTestingEnabled: false,
+  websiteName: 'SmartKhata Pro',
+  websiteLogo: '',
+  websiteFavicon: '',
+});
 
 export const StorageService = {
-  // Auth User Session (Per-User Isolation via memory & secure session cookie)
+  // Auth User Session (Per-User Isolation)
   getCurrentUser: (): UserProfile | null => {
     if (typeof window === 'undefined') return null;
     try {
-      // 1. Check in-memory session first
-      let user = inMemoryStore['skp_auth_user'] || null;
-      if (!user) {
-        // Check localStorage
-        try {
-          const raw = localStorage.getItem('skp_auth_user');
-          if (raw) {
-            user = JSON.parse(raw);
-            inMemoryStore['skp_auth_user'] = user;
-          }
-        } catch {}
-      }
-      if (!user) {
-        // Fallback check if session cookie exists
-        const match = document.cookie.match(/(?:^|;\s*)skp_auth_session=([^;]+)/);
-        if (match && match[1]) {
-          const cookieId = match[1];
-          // Provide placeholder with ID until cloud sync populates full profile
-          user = {
-            id: cookieId,
-            name: 'Business Owner',
-            email: '',
-            role: 'user',
-            businessName: 'SmartKhata Merchant',
-            createdAt: new Date().toISOString(),
-          };
-          inMemoryStore['skp_auth_user'] = user;
-        }
-      }
-
-      // STRICT ROLE RULE: Only system owner can have super_admin/admin.
-      if (user && (user.role === 'admin' || user.role === 'super_admin') && user.email !== 'anantyadav8924@gmail.com' && !user.name?.toLowerCase().includes('anant') && !user.email?.toLowerCase().includes('anant')) {
+      const raw = localStorage.getItem('skp_auth_user');
+      if (!raw) return null;
+      const user = JSON.parse(raw);
+      // STRICT ROLE RULE: Only system owner (anantyadav8924@gmail.com) can have super_admin.
+      // Auto-correct any legacy merchant records accidentally cached as super_admin.
+      if (user && (user.role === 'admin' || user.role === 'super_admin') && user.email !== 'anantyadav8924@gmail.com') {
         user.role = 'user';
-        inMemoryStore['skp_auth_user'] = user;
+        try { localStorage.setItem('skp_auth_user', JSON.stringify(user)); } catch {}
       }
       return user;
     } catch {
@@ -267,17 +156,9 @@ export const StorageService = {
   setCurrentUser: (user: UserProfile | null): void => {
     if (typeof window === 'undefined') return;
     if (user) {
-      inMemoryStore['skp_auth_user'] = user;
-      try {
-        localStorage.setItem('skp_auth_user', JSON.stringify(user));
-      } catch {}
-      document.cookie = `skp_auth_session=${user.id || (user as any)._id}; Path=/; Max-Age=2592000; SameSite=Lax;`;
+      localStorage.setItem('skp_auth_user', JSON.stringify(user));
     } else {
-      delete inMemoryStore['skp_auth_user'];
-      try {
-        localStorage.removeItem('skp_auth_user');
-      } catch {}
-      document.cookie = 'skp_auth_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
+      localStorage.removeItem('skp_auth_user');
     }
   },
 
@@ -312,9 +193,13 @@ export const StorageService = {
     if (data.settings !== undefined) {
       const existingSettings = StorageService.getSettings();
       const existingProfile = StorageService.getProfile();
-      const globalLogo = '';
+      const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
       const incomingLogo = data.settings?.businessLogo || data.user?.avatarUrl || (data.user as any)?.avatar_url || '';
       const finalLogo = incomingLogo || existingSettings?.businessLogo || existingProfile?.avatarUrl || globalLogo;
+
+      if (finalLogo && typeof window !== 'undefined') {
+        try { localStorage.setItem('khatapro_business_logo', finalLogo); } catch {}
+      }
 
       const mergedPaymentSettings = {
         ...(existingSettings?.paymentSettings || {}),
@@ -336,7 +221,7 @@ export const StorageService = {
     if (data.user !== undefined) {
       const existingProfile = StorageService.getProfile();
       const existingSettings = StorageService.getSettings();
-      const globalLogo = '';
+      const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
       const incomingAvatar = data.user?.avatarUrl || (data.user as any)?.avatar_url || data.settings?.businessLogo || '';
       const finalAvatar = incomingAvatar || existingProfile?.avatarUrl || existingSettings?.businessLogo || globalLogo;
 
@@ -357,9 +242,7 @@ export const StorageService = {
   initializeDefaults: () => {
     if (typeof window === 'undefined') return;
     const curUser = StorageService.getCurrentUser();
-    const isInit = typeof window !== 'undefined'
-      ? localStorage.getItem(getScopedKey(STORAGE_KEYS.INITIALIZED))
-      : inMemoryStore[getScopedKey(STORAGE_KEYS.INITIALIZED)];
+    const isInit = localStorage.getItem(getScopedKey(STORAGE_KEYS.INITIALIZED));
     if (!isInit) {
       if (curUser) {
         setLocalItem(STORAGE_KEYS.PROFILE, curUser);
@@ -376,24 +259,14 @@ export const StorageService = {
       setLocalItem(STORAGE_KEYS.NOTES, []);
       setLocalItem(STORAGE_KEYS.TASKS, []);
       setLocalItem(STORAGE_KEYS.PASSWORDS, []);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem(getScopedKey(STORAGE_KEYS.INITIALIZED), 'true');
-        } catch {}
-      }
-      inMemoryStore[getScopedKey(STORAGE_KEYS.INITIALIZED)] = true;
+      localStorage.setItem(getScopedKey(STORAGE_KEYS.INITIALIZED), 'true');
     }
   },
 
   // Reset to clean user data
   resetDefaults: () => {
     if (typeof window === 'undefined') return;
-    delete inMemoryStore[getScopedKey(STORAGE_KEYS.INITIALIZED)];
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.removeItem(getScopedKey(STORAGE_KEYS.INITIALIZED));
-      } catch {}
-    }
+    localStorage.removeItem(getScopedKey(STORAGE_KEYS.INITIALIZED));
     StorageService.initializeDefaults();
   },
 
@@ -439,6 +312,9 @@ export const StorageService = {
     }
     if (profile.avatarUrl !== undefined) {
       settingsUpdate.businessLogo = profile.avatarUrl;
+      if (profile.avatarUrl) {
+        try { localStorage.setItem('khatapro_business_logo', profile.avatarUrl); } catch {}
+      }
     }
     if (Object.keys(settingsUpdate).length > 0) {
       setLocalItem(STORAGE_KEYS.SETTINGS, { ...curSettings, ...settingsUpdate });
@@ -450,50 +326,21 @@ export const StorageService = {
     const defaults = getCleanDefaultSettings(curUser?.businessName, curUser?.phone, curUser?.email);
     const s = getLocalItem(STORAGE_KEYS.SETTINGS, defaults);
 
-    // Merge cached global system config (maintenanceMode, betaTestingEnabled & websiteBranding)
+    // Merge cached global system config (maintenanceMode & betaTestingEnabled)
     if (typeof window !== 'undefined') {
       try {
-        let globalConf = inMemoryStore['skp_global_system_config'];
-        if (!globalConf) {
-          const rawGlobal = localStorage.getItem('skp_global_system_config');
-          if (rawGlobal) {
-            try { globalConf = JSON.parse(rawGlobal); } catch {}
-          }
-        }
-        if (globalConf) {
+        const rawGlobal = localStorage.getItem('skp_global_system_config');
+        if (rawGlobal) {
+          const globalConf = JSON.parse(rawGlobal);
           if (globalConf.maintenanceMode) {
             s.maintenanceMode = globalConf.maintenanceMode;
           }
           if (globalConf.betaTestingEnabled !== undefined) {
             s.betaTestingEnabled = Boolean(globalConf.betaTestingEnabled);
           }
-          if (globalConf.websiteBranding) {
-            if (globalConf.websiteBranding.websiteName) s.websiteName = globalConf.websiteBranding.websiteName;
-            if (globalConf.websiteBranding.websiteLogo !== undefined) s.websiteLogo = globalConf.websiteBranding.websiteLogo;
-            if (globalConf.websiteBranding.websiteFavicon !== undefined) s.websiteFavicon = globalConf.websiteBranding.websiteFavicon;
-            if (globalConf.websiteBranding.websiteBadgeText !== undefined) s.websiteBadgeText = globalConf.websiteBranding.websiteBadgeText;
-          }
-        }
-        let brandConf = inMemoryStore['skp_global_branding'];
-        if (!brandConf) {
-          const rawBrand = localStorage.getItem('skp_global_branding');
-          if (rawBrand) {
-            try { brandConf = JSON.parse(rawBrand); } catch {}
-          }
-        }
-        if (brandConf) {
-          if (brandConf.websiteName) s.websiteName = brandConf.websiteName;
-          if (brandConf.websiteLogo !== undefined) s.websiteLogo = brandConf.websiteLogo;
-          if (brandConf.websiteFavicon !== undefined) s.websiteFavicon = brandConf.websiteFavicon;
-          if (brandConf.websiteBadgeText !== undefined) s.websiteBadgeText = brandConf.websiteBadgeText;
         }
       } catch {}
     }
-
-    if (!s.websiteFavicon && s.websiteLogo) {
-      s.websiteFavicon = s.websiteLogo;
-    }
-
     return s;
   },
   updateSettings: (settings: Partial<SystemSettings>): SystemSettings => {
@@ -514,7 +361,7 @@ export const StorageService = {
     }
 
     if (merged.businessLogo !== undefined) {
-      if (merged.businessLogo && typeof window !== 'undefined') {
+      if (merged.businessLogo) {
         try { localStorage.setItem('khatapro_business_logo', merged.businessLogo); } catch {}
       }
       if (storedProfile) {
@@ -524,31 +371,6 @@ export const StorageService = {
         StorageService.setCurrentUser({ ...curUser, avatarUrl: merged.businessLogo });
       }
     }
-
-    if (
-      merged.websiteName !== undefined ||
-      merged.websiteLogo !== undefined ||
-      merged.websiteFavicon !== undefined ||
-      merged.websiteBadgeText !== undefined
-    ) {
-      try {
-        const brandObj = {
-          websiteName: merged.websiteName || 'SmartKhata',
-          websiteLogo: merged.websiteLogo || '',
-          websiteFavicon: merged.websiteFavicon || merged.websiteLogo || '',
-          websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : '',
-        };
-        inMemoryStore['skp_global_branding'] = brandObj;
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('skp_global_branding', JSON.stringify(brandObj));
-          const existingGlobal = localStorage.getItem('skp_global_system_config');
-          const globalObj = existingGlobal ? JSON.parse(existingGlobal) : {};
-          globalObj.websiteBranding = brandObj;
-          localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
-        }
-      } catch {}
-    }
-
     return merged;
   },
   
@@ -996,21 +818,13 @@ export const StorageService = {
 
   // Customer Drive & Vault (Per-customer folders & documents)
   getCustomerDriveData: (customerId: string): { folders: CustomerDriveFolder[]; files: CustomerDriveFile[] } => {
+    if (typeof window === 'undefined') return { folders: [], files: [] };
     const key = `skp_cust_drive_${customerId}`;
-    if (inMemoryStore[key]) {
-      return inMemoryStore[key];
-    }
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem(key);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          inMemoryStore[key] = parsed;
-          return parsed;
-        }
-      } catch (e) {
-        console.warn('Failed to read customer drive', e);
-      }
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.warn('Failed to read customer drive', e);
     }
     // Default initial folders if none exist (matches Windows-style folders: AADHAR CARD, BILLS, DOCUMENTS)
     const defaultFolders: CustomerDriveFolder[] = [
@@ -1019,26 +833,22 @@ export const StorageService = {
       { id: 'fld_docs', name: 'DOCUMENTS', createdAt: new Date().toISOString() },
     ];
     const initial = { folders: defaultFolders, files: [] };
-    inMemoryStore[key] = initial;
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(key, JSON.stringify(initial));
-      } catch (e) {}
-    }
+    try {
+      localStorage.setItem(key, JSON.stringify(initial));
+    } catch (e) {}
     return initial;
   },
   saveCustomerDriveData: (customerId: string, data: { folders: CustomerDriveFolder[]; files: CustomerDriveFile[] }): void => {
+    if (typeof window === 'undefined') return;
     const key = `skp_cust_drive_${customerId}`;
-    inMemoryStore[key] = data;
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(key, JSON.stringify(data));
-      } catch (e) {
-        console.error('Failed to save customer drive', e);
-      }
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {
+      console.error('Failed to save customer drive', e);
     }
   },
   getCustomerBankingData: (customerId: string): { bankAccounts: CustomerBankAccount[]; upiDetails: CustomerUpiDetail[] } => {
+    if (typeof window === 'undefined') return { bankAccounts: [], upiDetails: [] };
     const customers = StorageService.getCustomers();
     const cust = customers.find(c => c.id === customerId);
     if (cust && (cust.bankAccounts || cust.upiDetails)) {
@@ -1048,29 +858,20 @@ export const StorageService = {
       };
     }
     const key = `skp_cust_bank_${customerId}`;
-    if (inMemoryStore[key]) {
-      return inMemoryStore[key];
-    }
-    if (typeof window !== 'undefined') {
+    const raw = localStorage.getItem(key);
+    if (raw) {
       try {
-        const raw = localStorage.getItem(key);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          inMemoryStore[key] = parsed;
-          return parsed;
-        }
+        return JSON.parse(raw);
       } catch (e) {}
     }
     return { bankAccounts: [], upiDetails: [] };
   },
   saveCustomerBankingData: (customerId: string, data: { bankAccounts: CustomerBankAccount[]; upiDetails: CustomerUpiDetail[] }): void => {
+    if (typeof window === 'undefined') return;
     const key = `skp_cust_bank_${customerId}`;
-    inMemoryStore[key] = data;
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(key, JSON.stringify(data));
-      } catch (e) {}
-    }
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {}
     const customers = StorageService.getCustomers();
     const cust = customers.find(c => c.id === customerId);
     if (cust) {
@@ -1224,10 +1025,7 @@ export const StorageService = {
       if (data.notes) setLocalItem(STORAGE_KEYS.NOTES, data.notes);
       if (data.tasks) setLocalItem(STORAGE_KEYS.TASKS, data.tasks);
       if (data.passwords) setLocalItem(STORAGE_KEYS.PASSWORDS, data.passwords);
-      if (typeof window !== 'undefined') {
-        try { localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true'); } catch {}
-      }
-      inMemoryStore[STORAGE_KEYS.INITIALIZED] = true;
+      localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
       return true;
     } catch (e) {
       console.error('Failed to parse and restore database backup:', e);

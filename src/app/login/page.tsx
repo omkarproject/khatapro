@@ -41,7 +41,7 @@ function generateCaptcha() {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { currentUser, settings, login, applyAuthenticatedUser, logout } = useApp();
+  const { currentUser, login, applyAuthenticatedUser, logout } = useApp();
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot_password'>('signin');
   const [step, setStep] = useState<'input' | 'otp' | 'reset_direct'>('input');
@@ -72,93 +72,6 @@ export default function LoginPage() {
 
   // Resend Timer
   const [resendTimer, setResendTimer] = useState<number>(0);
-
-  // Dynamic Website Branding with Instant Local Fallback
-  const [localBrand, setLocalBrand] = useState<{ name?: string; logo?: string; badge?: string }>(() => {
-    if (typeof document !== 'undefined') {
-      const bMatch = document.cookie.match(/(?:^|;\s*)skp_brand_badge=([^;]+)/);
-      const nMatch = document.cookie.match(/(?:^|;\s*)skp_brand_name=([^;]+)/);
-      let localBadge: string | undefined = bMatch ? decodeURIComponent(bMatch[1]) : undefined;
-      let localName: string | undefined = nMatch ? decodeURIComponent(nMatch[1]) : undefined;
-      let localLogo: string | undefined = undefined;
-
-      try {
-        if (!localBadge && typeof localStorage !== 'undefined') {
-          const storedBadge = localStorage.getItem('skp_brand_badge');
-          if (storedBadge) localBadge = storedBadge;
-        }
-        if (!localName && typeof localStorage !== 'undefined') {
-          const storedName = localStorage.getItem('skp_brand_name');
-          if (storedName) localName = storedName;
-        }
-        if (typeof localStorage !== 'undefined') {
-          const cached = localStorage.getItem('skp_global_branding');
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (parsed.websiteBadgeText !== undefined && !localBadge) localBadge = parsed.websiteBadgeText;
-            if (parsed.websiteName && !localName) localName = parsed.websiteName;
-            if (parsed.websiteLogo && !localLogo) localLogo = parsed.websiteLogo;
-          }
-        }
-      } catch {}
-
-      return {
-        badge: localBadge,
-        name: localName,
-        logo: localLogo,
-      };
-    }
-    return {};
-  });
-
-  useEffect(() => {
-    const fetchBranding = async () => {
-      try {
-        const res = await fetch('/api/system/config');
-        if (res.ok) {
-          const json = await res.json();
-          if (json.websiteBranding) {
-            setLocalBrand({
-              name: json.websiteBranding.websiteName,
-              logo: json.websiteBranding.websiteLogo,
-              badge: json.websiteBranding.websiteBadgeText,
-            });
-            if (json.websiteBranding.websiteBadgeText !== undefined) {
-              try {
-                localStorage.setItem('skp_brand_badge', json.websiteBranding.websiteBadgeText);
-                document.cookie = `skp_brand_badge=${encodeURIComponent(json.websiteBranding.websiteBadgeText)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
-              } catch {}
-            }
-          }
-        }
-      } catch {}
-    };
-    fetchBranding();
-    const handleBrandingChanged = (e: any) => {
-      if (e?.detail) {
-        setLocalBrand({
-          name: e.detail.websiteName,
-          logo: e.detail.websiteLogo,
-          badge: e.detail.websiteBadgeText,
-        });
-      }
-    };
-    window.addEventListener('khatapro_branding_changed', handleBrandingChanged);
-    return () => {
-      window.removeEventListener('khatapro_branding_changed', handleBrandingChanged);
-    };
-  }, []);
-
-  const activeLogo = settings.websiteLogo || localBrand.logo || '/brand-logo.png';
-  const activeName = localBrand.name || settings.websiteName || 'SmartKhata';
-  const activeBadge = localBrand.badge !== undefined ? localBrand.badge : (settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : '');
-
-  // Auto-redirect to dashboard if user session already exists
-  useEffect(() => {
-    if (currentUser) {
-      router.replace('/');
-    }
-  }, [currentUser, router]);
 
   useEffect(() => {
     setCaptcha(generateCaptcha());
@@ -427,47 +340,26 @@ export default function LoginPage() {
       <div className="absolute top-1/4 -left-20 w-96 h-96 bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-indigo-600/10 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* Centered Top Branding Bar: Logo on Top, Name Below */}
-      <div className="w-full max-w-md mb-6 flex flex-col items-center justify-center text-center relative">
+      {/* Top Branding Bar */}
+      <div className="w-full max-w-md mb-4 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-md">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <span className="text-sm font-black tracking-wider uppercase bg-gradient-to-r from-cyan-500 to-indigo-600 bg-clip-text text-transparent">
+            SmartKhata Pro
+          </span>
+        </Link>
+
         {currentUser && (
           <Link
             href="/"
-            className="absolute right-0 top-0 inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
           >
             <span>Dashboard</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         )}
-
-        <Link href="/" className="group flex flex-col items-center justify-center">
-          {/* Logo on top */}
-          {activeLogo ? (
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden shadow-lg shadow-indigo-500/20 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center p-1.5 group-hover:scale-105 transition-all">
-              <img
-                src={activeLogo}
-                alt={activeName}
-                className="w-full h-full object-contain"
-                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-              />
-            </div>
-          ) : (
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-all">
-              <Sparkles className="w-7 h-7 sm:w-8 sm:h-8" />
-            </div>
-          )}
-
-          {/* Website Name & PRO Badge below logo */}
-          <div className="flex items-center justify-center gap-1.5 mt-2.5">
-            <span className="text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white">
-              {activeName}
-            </span>
-            {activeBadge && (
-              <span className="text-[7.5px] sm:text-[8px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wider fintech-gradient-primary text-white shadow-xs leading-none">
-                {activeBadge}
-              </span>
-            )}
-          </div>
-        </Link>
       </div>
 
       <div className="w-full max-w-md bg-white dark:bg-[#0C1222] rounded-[32px] shadow-2xl border border-slate-200/90 dark:border-indigo-500/30 overflow-hidden relative">
@@ -485,7 +377,7 @@ export default function LoginPage() {
                 : mode === 'forgot_password'
                 ? 'Reset Password'
                 : mode === 'signin'
-                ? `Sign In to ${activeName}`
+                ? 'Sign In to SmartKhata'
                 : 'Create Account'}
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -604,10 +496,7 @@ export default function LoginPage() {
                     <div className="relative">
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                       <input
-                        id="signin-email"
-                        name="email"
                         type="email"
-                        autoComplete="username email"
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -633,10 +522,7 @@ export default function LoginPage() {
                     <div className="relative">
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                       <input
-                        id="signin-password"
-                        name="password"
                         type={showPassword ? 'text' : 'password'}
-                        autoComplete="current-password"
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}

@@ -408,7 +408,6 @@ export interface SystemSettings {
   websiteName?: string;
   websiteLogo?: string;
   websiteFavicon?: string;
-  websiteBadgeText?: string;
   broadcasts?: BroadcastMessage[];
   supportTickets?: SupportTicket[];
 }

@@ -402,13 +402,13 @@ export default function SettingsPage() {
     }
   }, []);
 
-  // Keep logo state in sync when settings / profile updates
+  // Keep logo state in sync when settings / profile / localStorage updates
   useEffect(() => {
     const currentLogo =
       settings.businessLogo ||
       profile?.avatarUrl ||
       currentUser?.avatarUrl ||
-      '';
+      (typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '');
     if (currentLogo && !bLogo) {
       setBLogo(currentLogo);
     }
@@ -857,12 +857,11 @@ export default function SettingsPage() {
   };
 
   // Website Branding State
-  const [webName, setWebName] = useState(() => settings.websiteName || 'SmartKhata');
-  const [webBadgeText, setWebBadgeText] = useState(() => settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO');
-  const [webLogo, setWebLogo] = useState(() => settings.websiteLogo || '/brand-logo.png');
+  const [webName, setWebName] = useState(() => settings.websiteName || 'SmartKhata Pro');
+  const [webLogo, setWebLogo] = useState(() => settings.websiteLogo || '');
   const [webLogoMode, setWebLogoMode] = useState<'upload' | 'link'>('upload');
   const [webLogoLinkInput, setWebLogoLinkInput] = useState('');
-  const [webFavicon, setWebFavicon] = useState(() => settings.websiteFavicon || '/brand-favicon.png');
+  const [webFavicon, setWebFavicon] = useState(() => settings.websiteFavicon || '');
   const [webFaviconMode, setWebFaviconMode] = useState<'upload' | 'link'>('upload');
   const [webFaviconLinkInput, setWebFaviconLinkInput] = useState('');
   const [isSavingBranding, setIsSavingBranding] = useState(false);
@@ -871,12 +870,11 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (settings.websiteName) setWebName(settings.websiteName);
-    if (settings.websiteBadgeText !== undefined) setWebBadgeText(settings.websiteBadgeText);
     if (settings.websiteLogo) setWebLogo(settings.websiteLogo);
     if (settings.websiteFavicon) setWebFavicon(settings.websiteFavicon);
-  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteLogo, settings.websiteFavicon]);
+  }, [settings.websiteName, settings.websiteLogo, settings.websiteFavicon]);
 
-  // Handle Website Logo Upload with auto-compression
+  // Handle Website Logo Upload
   const handleUploadWebLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -886,59 +884,18 @@ export default function SettingsPage() {
       }
       const reader = new FileReader();
       reader.onload = (event) => {
-        const rawUrl = event.target?.result as string;
-        if (!rawUrl) return;
-
-        // If SVG, keep raw vector
-        if (file.type === 'image/svg+xml') {
-          setWebLogo(rawUrl);
-          if (!webFavicon) setWebFavicon(rawUrl);
+        const result = event.target?.result as string;
+        if (result) {
+          setWebLogo(result);
           addToast('Website Logo Uploaded', 'Remember to click Save Branding Changes.', 'info');
-          return;
         }
-
-        // Compress and resize raster images to max 192x192 for optimal performance & quota safety
-        const img = new Image();
-        img.onload = () => {
-          const maxDim = 192;
-          let w = img.width;
-          let h = img.height;
-          if (w > maxDim || h > maxDim) {
-            if (w > h) {
-              h = Math.round((h * maxDim) / w);
-              w = maxDim;
-            } else {
-              w = Math.round((w * maxDim) / h);
-              h = maxDim;
-            }
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, w, h);
-            const compressed = canvas.toDataURL('image/png');
-            setWebLogo(compressed);
-            if (!webFavicon) setWebFavicon(compressed);
-          } else {
-            setWebLogo(rawUrl);
-            if (!webFavicon) setWebFavicon(rawUrl);
-          }
-          addToast('Website Logo Uploaded', 'Remember to click Save Branding Changes.', 'info');
-        };
-        img.onerror = () => {
-          setWebLogo(rawUrl);
-          if (!webFavicon) setWebFavicon(rawUrl);
-        };
-        img.src = rawUrl;
       };
       reader.readAsDataURL(file);
     }
     e.target.value = '';
   };
 
-  // Handle Website Favicon Upload with auto-compression
+  // Handle Website Favicon Upload
   const handleUploadWebFavicon = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -948,46 +905,11 @@ export default function SettingsPage() {
       }
       const reader = new FileReader();
       reader.onload = (event) => {
-        const rawUrl = event.target?.result as string;
-        if (!rawUrl) return;
-
-        if (file.type === 'image/svg+xml' || file.name.endsWith('.ico')) {
-          setWebFavicon(rawUrl);
+        const result = event.target?.result as string;
+        if (result) {
+          setWebFavicon(result);
           addToast('Favicon Uploaded', 'Remember to click Save Branding Changes.', 'info');
-          return;
         }
-
-        const img = new Image();
-        img.onload = () => {
-          const maxDim = 64;
-          let w = img.width;
-          let h = img.height;
-          if (w > maxDim || h > maxDim) {
-            if (w > h) {
-              h = Math.round((h * maxDim) / w);
-              w = maxDim;
-            } else {
-              w = Math.round((w * maxDim) / h);
-              h = maxDim;
-            }
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, w, h);
-            const compressed = canvas.toDataURL('image/png');
-            setWebFavicon(compressed);
-          } else {
-            setWebFavicon(rawUrl);
-          }
-          addToast('Favicon Uploaded', 'Remember to click Save Branding Changes.', 'info');
-        };
-        img.onerror = () => {
-          setWebFavicon(rawUrl);
-        };
-        img.src = rawUrl;
       };
       reader.readAsDataURL(file);
     }
@@ -995,91 +917,41 @@ export default function SettingsPage() {
   };
 
   // Handle Save Website Branding
-  const handleSaveBranding = async (e: React.FormEvent) => {
+  const handleSaveBranding = (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingBranding(true);
 
     const finalLogo = webLogoMode === 'link' ? (webLogoLinkInput.trim() || webLogo) : webLogo;
-    let finalFavicon = webFaviconMode === 'link' ? (webFaviconLinkInput.trim() || webFavicon) : webFavicon;
-    // Auto-fallback: If no explicit favicon provided, use the header logo as favicon!
-    if (!finalFavicon && finalLogo) {
-      finalFavicon = finalLogo;
-    }
-    const finalName = webName.trim() || 'SmartKhata';
-    const finalBadge = webBadgeText.trim();
+    const finalFavicon = webFaviconMode === 'link' ? (webFaviconLinkInput.trim() || webFavicon) : webFavicon;
+    const finalName = webName.trim() || 'SmartKhata Pro';
 
     const updated: SystemSettings = {
       ...settings,
       websiteName: finalName,
       websiteLogo: finalLogo,
       websiteFavicon: finalFavicon,
-      websiteBadgeText: finalBadge,
     };
 
     updateSettings(updated);
     setWebName(finalName);
     setWebLogo(finalLogo);
     setWebFavicon(finalFavicon);
-    setWebBadgeText(finalBadge);
 
-    // Persist globally & broadcast immediately to Supabase global_config and all browser tabs
-    if (typeof window !== 'undefined') {
-      const brandPayload = {
-        websiteName: finalName,
-        websiteLogo: finalLogo,
-        websiteFavicon: finalFavicon,
-        websiteBadgeText: finalBadge,
-      };
-
-      try {
-        localStorage.setItem('skp_global_branding', JSON.stringify(brandPayload));
-        const rawGlobal = localStorage.getItem('skp_global_system_config');
-        const globalObj = rawGlobal ? JSON.parse(rawGlobal) : {};
-        globalObj.websiteBranding = brandPayload;
-        localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
-        localStorage.setItem('skp_brand_badge', finalBadge);
-        localStorage.setItem('skp_brand_name', finalName);
-      } catch {}
-
-      // Broadcast live to database and all browser tabs
-      try {
-        await fetch('/api/system/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ websiteBranding: brandPayload }),
-        });
-      } catch (err) {
-        console.warn('System config broadcast warning:', err);
-      }
-
-      document.cookie = `skp_brand_badge=${encodeURIComponent(finalBadge)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
-      document.cookie = `skp_brand_name=${encodeURIComponent(finalName)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
-
-      window.dispatchEvent(new CustomEvent('khatapro_branding_changed', { detail: brandPayload }));
-
-      const badgeSuffix = finalBadge ? ` ${finalBadge}` : '';
-      document.title = `${finalName}${badgeSuffix} - Enterprise Fintech & Digital Khata Operating System`;
-      const targetFav = finalFavicon || finalLogo || '/brand-favicon.png';
-      try {
-        const oldLinks = document.querySelectorAll("link[rel*='icon'], link[rel='apple-touch-icon']");
-        oldLinks.forEach((el) => el.remove());
-        let iconType = 'image/png';
-        if (targetFav.startsWith('data:image/svg') || targetFav.endsWith('.svg')) {
-          iconType = 'image/svg+xml';
-        } else if (targetFav.includes('.ico')) {
-          iconType = 'image/x-icon';
-        }
-        ['icon', 'shortcut icon', 'apple-touch-icon'].forEach((rel) => {
-          const link = document.createElement('link');
-          link.rel = rel;
-          link.type = iconType;
-          link.href = targetFav;
+    // Live update document title and favicon instantly
+    if (typeof document !== 'undefined') {
+      document.title = `${finalName} - Fintech & Digital Khata Operating System`;
+      if (finalFavicon) {
+        let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']");
+        if (!link) {
+          link = document.createElement('link');
+          link.rel = 'icon';
           document.head.appendChild(link);
-        });
-      } catch (e) {}
+        }
+        link.href = finalFavicon;
+      }
     }
 
-    addToast('Website Branding Updated! 🎨', 'Website Name, Logo, Favicon & Badge pure portal par live update ho gaye hain!', 'success');
+    addToast('Website Branding Updated! 🎨', 'Website Name, Logo, aur Favicon pure portal par live update ho gaye hain!', 'success');
     setIsSavingBranding(false);
   };
 
@@ -2793,7 +2665,7 @@ export default function SettingsPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
-            {/* Card 1: Website Name & Pro Badge */}
+            {/* Card 1: Website Name */}
             <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
@@ -2802,10 +2674,10 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                      Website Name &amp; Pro Badge
+                      Website Name
                     </h3>
                     <p className="text-[11px] text-slate-400">
-                      Navbar, Footer, Login aur browser title me dikhne wala brand name aur tag
+                      Navbar, Footer, aur browser title me dikhne wala brand name
                     </p>
                   </div>
                 </div>
@@ -2827,34 +2699,15 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Pro Badge / Tag Text (e.g. PRO, ERP, VIP, BIZ)
-                </label>
-                <input
-                  type="text"
-                  value={webBadgeText}
-                  onChange={(e) => setWebBadgeText(e.target.value)}
-                  placeholder="e.g. PRO, ERP, VIP (or leave blank to hide)"
-                  maxLength={10}
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-all font-bold tracking-wider uppercase"
-                />
-                <p className="text-[10px] text-slate-400 mt-1.5">
-                  Default: <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">PRO</span> • Brand name ke sath dikhne wala compact gradient tag (size chhota &amp; editable)
-                </p>
-              </div>
-
               {/* Live Preview Box */}
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
                 <div className="min-w-0">
                   <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Live Navbar Preview</span>
                   <span className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5 truncate">
-                    {webName || 'SmartKhata'}
-                    {webBadgeText && (
-                      <span className="text-[7.5px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wider fintech-gradient-primary text-white shadow-xs leading-none">
-                        {webBadgeText}
-                      </span>
-                    )}
+                    {webName || 'SmartKhata Pro'}
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider fintech-gradient-primary text-white">
+                      PRO
+                    </span>
                   </span>
                 </div>
                 <Sparkles className="w-4 h-4 text-pink-500 shrink-0" />
@@ -3174,6 +3027,55 @@ export default function SettingsPage() {
                     <X className="w-4 h-4" />
                   </button>
                 )}
+              </div>
+            </div>
+
+            {/* Card 4: Dimension & Size Guide Card */}
+            <div className="p-6 rounded-3xl bg-gradient-to-br from-indigo-50/50 via-white to-pink-50/40 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950/30 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
+                  <Info className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Dimensions &amp; Resolution Guide
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Sahi aspect ratio aur size guidelines taki website visually crisp dikhe
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700">
+                  <div className="font-bold text-slate-900 dark:text-white flex items-center justify-between">
+                    <span>1. Header Logo (Navbar / Footer)</span>
+                    <span className="font-mono text-[10px] text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md font-bold">256 × 256 px</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Square 1:1 ratio PNG ya SVG sabse best render hota hai. Height aur width website par auto-scale hoti hain. Transparent background prefer karein.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700">
+                  <div className="font-bold text-slate-900 dark:text-white flex items-center justify-between">
+                    <span>2. Browser Favicon (Tab Icon)</span>
+                    <span className="font-mono text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-md font-bold">32 × 32 px</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    32x32 ya 64x64 pixel square icon .ico, .png ya .svg format me. Browser tabs, bookmarks bar aur mobile home screen shortcuts me clean aur sharp dikhta hai.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700">
+                  <div className="font-bold text-slate-900 dark:text-white flex items-center justify-between">
+                    <span>3. Instant Realtime Update</span>
+                    <span className="font-mono text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md font-bold">Auto Live</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Save button click karte hi title tag, tab favicon, navbar brand aur footer sabhi jagah realtime me bina website restart kiye apply ho jata hai.
+                  </p>
+                </div>
               </div>
             </div>
 

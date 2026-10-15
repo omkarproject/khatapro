@@ -25,77 +25,23 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
 
   // Dynamically update document title & favicon across entire website
   React.useEffect(() => {
-    if (typeof document === 'undefined') return;
+    if (typeof document !== 'undefined') {
+      const siteName = settings.websiteName?.trim() || 'SmartKhata Pro';
+      if (siteName) {
+        document.title = `${siteName} - Fintech & Digital Khata Operating System`;
+      }
 
-    const applyBranding = (name?: string, favicon?: string, logo?: string, badge?: string) => {
-      const siteName = (name || settings.websiteName)?.trim() || 'SmartKhata';
-      const resolvedBadge = badge !== undefined ? badge : (settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : '');
-      const badgeSuffix = resolvedBadge ? ` ${resolvedBadge}` : '';
-      document.title = `${siteName}${badgeSuffix} - Enterprise Fintech & Digital Khata Operating System`;
-
-      const resolvedFavicon = favicon !== undefined ? favicon : settings.websiteFavicon;
-      const resolvedLogo = logo !== undefined ? logo : settings.websiteLogo;
-      const targetFavicon = resolvedFavicon || resolvedLogo || '/brand-favicon.png';
-      
-      try {
-        // Remove old icon link tags to force browser (Brave, Chrome, Edge) to refresh the tab favicon
-        const oldLinks = document.querySelectorAll("link[rel*='icon'], link[rel='apple-touch-icon']");
-        oldLinks.forEach((el) => el.remove());
-
-        let iconType = 'image/png';
-        if (targetFavicon.startsWith('data:image/svg') || targetFavicon.endsWith('.svg')) {
-          iconType = 'image/svg+xml';
-        } else if (targetFavicon.includes('.ico')) {
-          iconType = 'image/x-icon';
+      if (settings.websiteFavicon) {
+        let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']");
+        if (!link) {
+          link = document.createElement('link');
+          link.rel = 'icon';
+          document.head.appendChild(link);
         }
-
-        const link = document.createElement('link');
-        link.rel = 'icon';
-        link.type = iconType;
-        link.href = targetFavicon;
-        document.head.appendChild(link);
-
-        const shortcut = document.createElement('link');
-        shortcut.rel = 'shortcut icon';
-        shortcut.type = iconType;
-        shortcut.href = targetFavicon;
-        document.head.appendChild(shortcut);
-
-        const apple = document.createElement('link');
-        apple.rel = 'apple-touch-icon';
-        apple.href = targetFavicon;
-        document.head.appendChild(apple);
-      } catch (e) {
-        console.warn('Error updating document favicon:', e);
+        link.href = settings.websiteFavicon;
       }
-    };
-
-    applyBranding();
-
-    const handleBrandingEvent = (e: any) => {
-      const brand = e?.detail;
-      if (brand) {
-        applyBranding(brand.websiteName, brand.websiteFavicon, brand.websiteLogo, brand.websiteBadgeText);
-      }
-    };
-
-    const handleStorageEvent = (e: StorageEvent) => {
-      if (e.key === 'skp_global_branding' && e.newValue) {
-        try {
-          const brand = JSON.parse(e.newValue);
-          applyBranding(brand.websiteName, brand.websiteFavicon, brand.websiteLogo, brand.websiteBadgeText);
-        } catch {}
-      }
-    };
-
-    window.addEventListener('khatapro_branding_changed', handleBrandingEvent);
-    window.addEventListener('storage', handleStorageEvent);
-
-    return () => {
-      window.removeEventListener('khatapro_branding_changed', handleBrandingEvent);
-      window.removeEventListener('storage', handleStorageEvent);
-    };
-  }, [settings.websiteName, settings.websiteFavicon, settings.websiteLogo, settings.websiteBadgeText]);
+    }
+  }, [settings.websiteName, settings.websiteFavicon]);
 
   const isPayRoute = pathname?.startsWith('/pay');
   const isLoginPage = pathname === '/login' || pathname === '/login/';

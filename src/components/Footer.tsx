@@ -23,13 +23,12 @@ export default function Footer() {
           {/* Col 1: Business Branding & Description */}
           <div className="space-y-1.5 md:col-span-1">
             <div className="flex items-center gap-2">
-              {(settings.websiteLogo || '/brand-logo.png') ? (
+              {settings.websiteLogo ? (
                 <div className="w-7 h-7 rounded-lg overflow-hidden border border-slate-200/90 dark:border-slate-700/80 bg-white dark:bg-slate-900 flex items-center justify-center shadow-sm shrink-0">
                   <img
-                    src={settings.websiteLogo || '/brand-logo.png'}
+                    src={settings.websiteLogo}
                     alt={settings.websiteName || 'Website Logo'}
                     className="w-full h-full object-contain p-0.5"
-                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                   />
                 </div>
               ) : (
@@ -40,14 +39,9 @@ export default function Footer() {
               <span className="font-extrabold text-sm text-slate-900 dark:text-white truncate">
                 {settings.websiteName || businessName}
               </span>
-              {(settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : '') && (
-                <span className="text-[7px] px-1 py-0.5 rounded font-extrabold uppercase tracking-wide fintech-gradient-primary text-white shadow-xs leading-none">
-                  {settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : ''}
-                </span>
-              )}
             </div>
             <p className="text-[11px] leading-snug text-slate-500 dark:text-slate-400 line-clamp-2">
-              {settings.websiteName || 'SmartKhata'} — {t('digitalKhataLedger', 'Digital Ledger Operating System for merchants & enterprises')}.
+              {settings.websiteName || 'SmartKhata Pro'} — {t('digitalKhataLedger', 'Digital Ledger Operating System for merchants & enterprises')}.
             </p>
             {businessGst ? (
               <div className="text-[10px] text-slate-400 font-mono">

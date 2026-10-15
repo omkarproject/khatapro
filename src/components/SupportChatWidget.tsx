@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 
 export default function SupportChatWidget() {
-  const { currentUser, addToast, t, settings } = useApp();
+  const { currentUser, addToast, t } = useApp();
   const pathname = usePathname();
   const isDashboard = pathname === '/' || pathname === '';
   const [isOpen, setIsOpen] = useState(false);
@@ -441,7 +441,7 @@ export default function SupportChatWidget() {
                     {/* Welcome notice */}
                     <div className="p-3 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-center space-y-1">
                       <p className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200">
-                        {settings.websiteName || 'SmartKhata'} {(settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : '')} Support Assistant
+                        SmartKhata Pro Support Assistant
                       </p>
                       <p className="text-[10px] text-indigo-700/80 dark:text-indigo-400">
                         Aap problem ki screenshots aur details yaha bhej sakte hain. Our admin team monitors all tickets.

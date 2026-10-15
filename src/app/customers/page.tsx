@@ -460,15 +460,6 @@ export default function CustomersPage() {
   };
 
   // Customer Cloud Drive Handlers
-  const persistCustomerDriveData = (customerId: string, folders: CustomerDriveFolder[], files: CustomerDriveFile[]) => {
-    StorageService.saveCustomerDriveData(customerId, { folders, files });
-    fetch('/api/backup/google-drive/customer-files', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customerId, folders, files }),
-    }).catch(e => console.warn('Customer drive cloud sync deferred:', e));
-  };
-
   const handleOpenDriveModal = (cust: Customer) => {
     setDriveCustomer(cust);
     const data = StorageService.getCustomerDriveData(cust.id);
@@ -478,27 +469,6 @@ export default function CustomersPage() {
     setDriveSearch('');
     setSelectedFileIds([]);
     setSelectedFolderIds([]);
-
-    // On-demand fetch from cloud for this customer
-    fetch(`/api/backup/google-drive/customer-files?customerId=${encodeURIComponent(cust.id)}`)
-      .then(res => res.json())
-      .then(json => {
-        if (json.success && json.data) {
-          const cloudFolders = json.data.folders || [];
-          const cloudFiles = json.data.files || [];
-          if (cloudFolders.length > 0 || cloudFiles.length > 0) {
-            const mergedFolders = cloudFolders.length > 0 ? cloudFolders : data.folders;
-            const mergedFiles = cloudFiles.length > 0 ? cloudFiles : data.files;
-            setDriveFolders(mergedFolders);
-            setDriveFiles(mergedFiles);
-            StorageService.saveCustomerDriveData(cust.id, {
-              folders: mergedFolders,
-              files: mergedFiles,
-            });
-          }
-        }
-      })
-      .catch(e => console.warn('Customer drive fetch deferred:', e));
   };
 
   const handleNavigateFolder = (folderId: string | null) => {
@@ -523,7 +493,11 @@ export default function CustomersPage() {
     };
     const updatedFolders = [...driveFolders, newFolder];
     setDriveFolders(updatedFolders);
-    persistCustomerDriveData(driveCustomer.id, updatedFolders, driveFiles);
+    StorageService.saveCustomerDriveData(driveCustomer.id, {
+      folders: updatedFolders,
+      files: driveFiles,
+    });
+    syncWithDatabase();
     addToast('Folder Created', `Folder "${name}" created successfully.`, 'success');
     setNewFolderName('');
     setIsNewFolderModalOpen(false);
@@ -541,7 +515,11 @@ export default function CustomersPage() {
     if (currentFolderId === folderId) {
       setCurrentFolderId(null);
     }
-    persistCustomerDriveData(driveCustomer.id, updatedFolders, updatedFiles);
+    StorageService.saveCustomerDriveData(driveCustomer.id, {
+      folders: updatedFolders,
+      files: updatedFiles,
+    });
+    syncWithDatabase();
     if (filesToDelete.length > 0) {
       deleteFromDriveFiles({
         fileIds: filesToDelete.map(f => f.driveFileId).filter(Boolean) as string[],
@@ -567,7 +545,11 @@ export default function CustomersPage() {
         f.id === renamingItem.id ? { ...f, name: upperName } : f
       );
       setDriveFolders(updatedFolders);
-      persistCustomerDriveData(driveCustomer.id, updatedFolders, driveFiles);
+      StorageService.saveCustomerDriveData(driveCustomer.id, {
+        folders: updatedFolders,
+        files: driveFiles,
+      });
+      syncWithDatabase();
       addToast('Renamed', `Folder renamed to "${upperName}".`, 'success');
     } else {
       const targetFile = driveFiles.find(f => f.id === renamingItem.id);
@@ -575,7 +557,11 @@ export default function CustomersPage() {
         f.id === renamingItem.id ? { ...f, name: trimmed, updatedAt: new Date().toISOString() } : f
       );
       setDriveFiles(updatedFiles);
-      persistCustomerDriveData(driveCustomer.id, driveFolders, updatedFiles);
+      StorageService.saveCustomerDriveData(driveCustomer.id, {
+        folders: driveFolders,
+        files: updatedFiles,
+      });
+      syncWithDatabase();
 
       // Rename file in Google Drive via Drive API
       renameInDriveFiles({
@@ -656,7 +642,11 @@ export default function CustomersPage() {
     if (newUploadedFiles.length > 0) {
       const updatedFiles = [...driveFiles, ...newUploadedFiles];
       setDriveFiles(updatedFiles);
-      persistCustomerDriveData(driveCustomer.id, driveFolders, updatedFiles);
+      StorageService.saveCustomerDriveData(driveCustomer.id, {
+        folders: driveFolders,
+        files: updatedFiles,
+      });
+      syncWithDatabase();
       addToast(
         'Upload Complete',
         `${newUploadedFiles.length} file(s) saved with unique Drive IDs and timestamp records.`,
@@ -672,7 +662,10 @@ export default function CustomersPage() {
     const targetFile = driveFiles.find(f => f.id === fileId);
     const updatedFiles = driveFiles.filter(f => f.id !== fileId);
     setDriveFiles(updatedFiles);
-    persistCustomerDriveData(driveCustomer.id, driveFolders, updatedFiles);
+    StorageService.saveCustomerDriveData(driveCustomer.id, {
+      folders: driveFolders,
+      files: updatedFiles,
+    });
     if (previewFile?.id === fileId) {
       setPreviewFile(null);
     }
@@ -688,6 +681,7 @@ export default function CustomersPage() {
       });
     }
 
+    syncWithDatabase();
     addToast('File Deleted', `"${fileName}" has been deleted.`, 'info');
   };
 
@@ -841,7 +835,11 @@ export default function CustomersPage() {
     setSelectedFileIds([]);
     setSelectedFolderIds([]);
 
-    persistCustomerDriveData(driveCustomer.id, updatedFolders, updatedFiles);
+    StorageService.saveCustomerDriveData(driveCustomer.id, {
+      folders: updatedFolders,
+      files: updatedFiles,
+    });
+    syncWithDatabase();
 
     if (filesToDelete.length > 0) {
       deleteFromDriveFiles({
@@ -997,7 +995,11 @@ export default function CustomersPage() {
       setDriveFolders(updatedFolders);
       setDriveFiles(updatedFiles);
 
-      persistCustomerDriveData(driveCustomer.id, updatedFolders, updatedFiles);
+      StorageService.saveCustomerDriveData(driveCustomer.id, {
+        folders: updatedFolders,
+        files: updatedFiles,
+      });
+      syncWithDatabase();
 
       addToast('Pasted Successfully', `${pastedCount} item(s) copied to this location.`, 'success');
 
@@ -1038,7 +1040,11 @@ export default function CustomersPage() {
       setDriveFolders(updatedFolders);
       setDriveFiles(updatedFiles);
 
-      persistCustomerDriveData(driveCustomer.id, updatedFolders, updatedFiles);
+      StorageService.saveCustomerDriveData(driveCustomer.id, {
+        folders: updatedFolders,
+        files: updatedFiles,
+      });
+      syncWithDatabase();
 
       // Clear clipboard after cut & paste
       setDriveClipboard(null);

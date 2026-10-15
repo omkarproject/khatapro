@@ -27,7 +27,7 @@ export default function DriveConnectVIPScreen({ onConnected }: DriveConnectVIPSc
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
 
-  const websiteName = settings.websiteName || 'SmartKhata';
+  const websiteName = settings.websiteName || 'SmartKhata Pro';
   const merchantName = currentUser?.name || currentUser?.businessName || 'Merchant';
 
   const handleConnect = () => {
@@ -43,6 +43,11 @@ export default function DriveConnectVIPScreen({ onConnected }: DriveConnectVIPSc
       const res = await fetch(`/api/backup/google-drive/status?userId=${currentUser?.id || ''}`);
       const json = await res.json();
       if (json.isConnected) {
+        try {
+          if (currentUser?.id) {
+            localStorage.setItem('skp_gdrive_connected_' + currentUser.id, 'true');
+          }
+        } catch {}
         if (onConnected) {
           onConnected();
         } else {
@@ -60,6 +65,8 @@ export default function DriveConnectVIPScreen({ onConnected }: DriveConnectVIPSc
 
   const handleLogout = () => {
     if (typeof window !== 'undefined') {
+      localStorage.removeItem('skp_auth_user');
+      localStorage.removeItem('skp_auth_token');
       document.cookie = 'skp_auth_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
       window.location.replace('/login');
     }

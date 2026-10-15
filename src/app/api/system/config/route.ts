@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
-import fs from 'fs';
-import path from 'path';
 
 const DEFAULT_CONFIG = {
   maintenanceMode: {
@@ -26,8 +24,7 @@ export async function GET() {
 
         if (data && !error) {
           const maintObj = data.maintenance_mode || {};
-          const brand = maintObj.websiteBranding || null;
-          const resp = NextResponse.json({
+          return NextResponse.json({
             success: true,
             maintenanceMode: {
               enabled: Boolean(maintObj.enabled),
@@ -36,19 +33,10 @@ export async function GET() {
               endTime: maintObj.endTime,
             },
             betaTestingEnabled: Boolean(data.beta_testing_enabled),
-            websiteBranding: brand,
+            websiteBranding: maintObj.websiteBranding || null,
             broadcasts: Array.isArray(maintObj.broadcasts) ? maintObj.broadcasts : [],
             supportTickets: Array.isArray(maintObj.supportTickets) ? maintObj.supportTickets : [],
           });
-          if (brand) {
-            if (brand.websiteBadgeText !== undefined) {
-              resp.cookies.set('skp_brand_badge', brand.websiteBadgeText, { path: '/', maxAge: 31536000, sameSite: 'lax' });
-            }
-            if (brand.websiteName) {
-              resp.cookies.set('skp_brand_name', brand.websiteName, { path: '/', maxAge: 31536000, sameSite: 'lax' });
-            }
-          }
-          return resp;
         }
       }
     }
@@ -111,33 +99,6 @@ export async function POST(req: NextRequest) {
 
     if (websiteBranding !== undefined) {
       updatedMaint.websiteBranding = websiteBranding;
-
-      // Write physical image assets to public directory for instant SSR & reload
-      try {
-        if (websiteBranding?.websiteLogo && typeof websiteBranding.websiteLogo === 'string' && websiteBranding.websiteLogo.startsWith('data:image/')) {
-          const parts = websiteBranding.websiteLogo.split(',');
-          if (parts[1]) {
-            fs.writeFileSync(path.join(process.cwd(), 'public', 'brand-logo.png'), Buffer.from(parts[1], 'base64'));
-          }
-        }
-        if (websiteBranding?.websiteFavicon && typeof websiteBranding.websiteFavicon === 'string' && websiteBranding.websiteFavicon.startsWith('data:image/')) {
-          const parts = websiteBranding.websiteFavicon.split(',');
-          if (parts[1]) {
-            const buf = Buffer.from(parts[1], 'base64');
-            fs.writeFileSync(path.join(process.cwd(), 'public', 'brand-favicon.png'), buf);
-            fs.writeFileSync(path.join(process.cwd(), 'public', 'favicon.ico'), buf);
-            const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64"><image href="data:image/png;base64,${parts[1]}" width="64" height="64"/></svg>`;
-            fs.writeFileSync(path.join(process.cwd(), 'public', 'icon.svg'), svgContent);
-          }
-        }
-
-        const appIcon = path.join(process.cwd(), 'src', 'app', 'icon.svg');
-        if (fs.existsSync(appIcon)) {
-          try { fs.unlinkSync(appIcon); } catch {}
-        }
-      } catch (writeErr) {
-        console.warn('Could not write physical brand assets to public directory:', writeErr);
-      }
     }
 
     if (broadcasts !== undefined) {
@@ -173,7 +134,7 @@ export async function POST(req: NextRequest) {
 
     const savedMaint = data?.maintenance_mode || {};
 
-    const resp = NextResponse.json({
+    return NextResponse.json({
       success: true,
       maintenanceMode: {
         enabled: Boolean(savedMaint.enabled),
@@ -186,17 +147,6 @@ export async function POST(req: NextRequest) {
       broadcasts: savedMaint.broadcasts || [],
       supportTickets: savedMaint.supportTickets || [],
     });
-
-    if (savedMaint.websiteBranding) {
-      if (savedMaint.websiteBranding.websiteBadgeText !== undefined) {
-        resp.cookies.set('skp_brand_badge', String(savedMaint.websiteBranding.websiteBadgeText), { maxAge: 31536000, path: '/' });
-      }
-      if (savedMaint.websiteBranding.websiteName) {
-        resp.cookies.set('skp_brand_name', String(savedMaint.websiteBranding.websiteName), { maxAge: 31536000, path: '/' });
-      }
-    }
-
-    return resp;
   } catch (error: any) {
     console.error('System config POST error:', error);
     return NextResponse.json({

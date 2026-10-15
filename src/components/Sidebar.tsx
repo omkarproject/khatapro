@@ -178,7 +178,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
                   <ShieldCheck className="w-3 h-3 text-emerald-500" />
                   {t('secure100', '100% Secure')}
                 </span>
-                <span className="text-[9px] font-mono">v1.0 {settings.websiteBadgeText || ''}</span>
+                <span className="text-[9px] font-mono">v1.0 Pro</span>
               </div>
             </>
           ) : (
