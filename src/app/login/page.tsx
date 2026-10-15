@@ -73,6 +73,32 @@ export default function LoginPage() {
   // Resend Timer
   const [resendTimer, setResendTimer] = useState<number>(0);
 
+  // Dynamic Website Branding with Instant Local Fallback
+  const [localBrand, setLocalBrand] = useState<{ name?: string; logo?: string; badge?: string }>({});
+
+  useEffect(() => {
+    const readBranding = () => {
+      try {
+        const raw = localStorage.getItem('skp_global_branding');
+        if (raw) {
+          const b = JSON.parse(raw);
+          setLocalBrand({ name: b.websiteName, logo: b.websiteLogo, badge: b.websiteBadgeText });
+        }
+      } catch {}
+    };
+    readBranding();
+    window.addEventListener('khatapro_branding_changed', readBranding);
+    window.addEventListener('storage', readBranding);
+    return () => {
+      window.removeEventListener('khatapro_branding_changed', readBranding);
+      window.removeEventListener('storage', readBranding);
+    };
+  }, []);
+
+  const activeLogo = settings.websiteLogo || localBrand.logo || '';
+  const activeName = settings.websiteName || localBrand.name || 'SmartKhata';
+  const activeBadge = settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : (localBrand.badge !== undefined ? localBrand.badge : 'PRO');
+
   useEffect(() => {
     setCaptcha(generateCaptcha());
 
@@ -354,11 +380,11 @@ export default function LoginPage() {
 
         <Link href="/" className="group flex flex-col items-center justify-center">
           {/* Logo on top */}
-          {settings.websiteLogo ? (
+          {activeLogo ? (
             <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden shadow-lg shadow-indigo-500/20 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center p-1.5 group-hover:scale-105 transition-all">
               <img
-                src={settings.websiteLogo}
-                alt={settings.websiteName || 'Logo'}
+                src={activeLogo}
+                alt={activeName}
                 className="w-full h-full object-contain"
                 onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
               />
@@ -372,11 +398,11 @@ export default function LoginPage() {
           {/* Website Name & PRO Badge below logo */}
           <div className="flex items-center justify-center gap-1.5 mt-2.5">
             <span className="text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white">
-              {settings.websiteName || 'SmartKhata'}
+              {activeName}
             </span>
-            {(settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO') && (
+            {activeBadge && (
               <span className="text-[7.5px] sm:text-[8px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wider fintech-gradient-primary text-white shadow-xs leading-none">
-                {settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO'}
+                {activeBadge}
               </span>
             )}
           </div>
@@ -398,7 +424,7 @@ export default function LoginPage() {
                 : mode === 'forgot_password'
                 ? 'Reset Password'
                 : mode === 'signin'
-                ? `Sign In to ${settings.websiteName || 'SmartKhata'}`
+                ? `Sign In to ${activeName}`
                 : 'Create Account'}
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">

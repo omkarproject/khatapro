@@ -876,7 +876,7 @@ export default function SettingsPage() {
     if (settings.websiteFavicon) setWebFavicon(settings.websiteFavicon);
   }, [settings.websiteName, settings.websiteBadgeText, settings.websiteLogo, settings.websiteFavicon]);
 
-  // Handle Website Logo Upload
+  // Handle Website Logo Upload with auto-compression
   const handleUploadWebLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -886,18 +886,59 @@ export default function SettingsPage() {
       }
       const reader = new FileReader();
       reader.onload = (event) => {
-        const result = event.target?.result as string;
-        if (result) {
-          setWebLogo(result);
+        const rawUrl = event.target?.result as string;
+        if (!rawUrl) return;
+
+        // If SVG, keep raw vector
+        if (file.type === 'image/svg+xml') {
+          setWebLogo(rawUrl);
+          if (!webFavicon) setWebFavicon(rawUrl);
           addToast('Website Logo Uploaded', 'Remember to click Save Branding Changes.', 'info');
+          return;
         }
+
+        // Compress and resize raster images to max 256x256 for optimal performance & quota safety
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 256;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, w, h);
+            const compressed = canvas.toDataURL('image/png');
+            setWebLogo(compressed);
+            if (!webFavicon) setWebFavicon(compressed);
+          } else {
+            setWebLogo(rawUrl);
+            if (!webFavicon) setWebFavicon(rawUrl);
+          }
+          addToast('Website Logo Uploaded', 'Remember to click Save Branding Changes.', 'info');
+        };
+        img.onerror = () => {
+          setWebLogo(rawUrl);
+          if (!webFavicon) setWebFavicon(rawUrl);
+        };
+        img.src = rawUrl;
       };
       reader.readAsDataURL(file);
     }
     e.target.value = '';
   };
 
-  // Handle Website Favicon Upload
+  // Handle Website Favicon Upload with auto-compression
   const handleUploadWebFavicon = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -907,11 +948,46 @@ export default function SettingsPage() {
       }
       const reader = new FileReader();
       reader.onload = (event) => {
-        const result = event.target?.result as string;
-        if (result) {
-          setWebFavicon(result);
+        const rawUrl = event.target?.result as string;
+        if (!rawUrl) return;
+
+        if (file.type === 'image/svg+xml' || file.name.endsWith('.ico')) {
+          setWebFavicon(rawUrl);
           addToast('Favicon Uploaded', 'Remember to click Save Branding Changes.', 'info');
+          return;
         }
+
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 64;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, w, h);
+            const compressed = canvas.toDataURL('image/png');
+            setWebFavicon(compressed);
+          } else {
+            setWebFavicon(rawUrl);
+          }
+          addToast('Favicon Uploaded', 'Remember to click Save Branding Changes.', 'info');
+        };
+        img.onerror = () => {
+          setWebFavicon(rawUrl);
+        };
+        img.src = rawUrl;
       };
       reader.readAsDataURL(file);
     }
@@ -924,8 +1000,12 @@ export default function SettingsPage() {
     setIsSavingBranding(true);
 
     const finalLogo = webLogoMode === 'link' ? (webLogoLinkInput.trim() || webLogo) : webLogo;
-    const finalFavicon = webFaviconMode === 'link' ? (webFaviconLinkInput.trim() || webFavicon) : webFavicon;
-    const finalName = webName.trim() || 'SmartKhata Pro';
+    let finalFavicon = webFaviconMode === 'link' ? (webFaviconLinkInput.trim() || webFavicon) : webFavicon;
+    // Auto-fallback: If no explicit favicon provided, use the header logo as favicon!
+    if (!finalFavicon && finalLogo) {
+      finalFavicon = finalLogo;
+    }
+    const finalName = webName.trim() || 'SmartKhata';
     const finalBadge = webBadgeText.trim();
 
     const updated: SystemSettings = {
@@ -972,6 +1052,7 @@ export default function SettingsPage() {
       window.dispatchEvent(new CustomEvent('khatapro_branding_changed', { detail: brandPayload }));
 
       document.title = `${finalName} - Fintech & Digital Khata Operating System`;
+      const targetFav = finalFavicon || finalLogo || '/icon.svg';
       const rels = ['icon', 'shortcut icon', 'apple-touch-icon'];
       rels.forEach(rel => {
         let link: HTMLLinkElement | null = document.querySelector(`link[rel='${rel}']`);
@@ -980,7 +1061,14 @@ export default function SettingsPage() {
           link.rel = rel;
           document.head.appendChild(link);
         }
-        link.href = finalFavicon || '/icon.svg';
+        link.href = targetFav;
+        if (targetFav.startsWith('data:image/svg') || targetFav.endsWith('.svg')) {
+          link.type = 'image/svg+xml';
+        } else if (targetFav.startsWith('data:image/png') || targetFav.endsWith('.png')) {
+          link.type = 'image/png';
+        } else if (targetFav.includes('.ico')) {
+          link.type = 'image/x-icon';
+        }
       });
     }
 

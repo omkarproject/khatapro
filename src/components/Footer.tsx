@@ -29,6 +29,7 @@ export default function Footer() {
                     src={settings.websiteLogo}
                     alt={settings.websiteName || 'Website Logo'}
                     className="w-full h-full object-contain p-0.5"
+                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                   />
                 </div>
               ) : (
@@ -46,7 +47,7 @@ export default function Footer() {
               )}
             </div>
             <p className="text-[11px] leading-snug text-slate-500 dark:text-slate-400 line-clamp-2">
-              {settings.websiteName || 'SmartKhata Pro'} — {t('digitalKhataLedger', 'Digital Ledger Operating System for merchants & enterprises')}.
+              {settings.websiteName || 'SmartKhata'} — {t('digitalKhataLedger', 'Digital Ledger Operating System for merchants & enterprises')}.
             </p>
             {businessGst ? (
               <div className="text-[10px] text-slate-400 font-mono">

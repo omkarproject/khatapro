@@ -7,7 +7,7 @@ import { ArrowLeft, ShieldCheck, FileText, Scale } from 'lucide-react';
 
 export default function TermsAndConditionsPage() {
   const { settings, profile, currentUser } = useApp();
-  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || 'SmartKhata Pro';
+  const businessName = settings.websiteName || settings.businessName || profile.businessName || currentUser?.businessName || 'SmartKhata';
   const businessPhone = settings.businessPhone || profile.phone || currentUser?.phone || '';
   const businessEmail = settings.businessEmail || profile.email || currentUser?.email || 'support@smartkhatapro.in';
   const businessAddress = settings.businessAddress || profile.businessAddress || '';

@@ -754,14 +754,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }));
       }
     };
+
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'skp_global_branding' && e.newValue) {
+        try {
+          const brand = JSON.parse(e.newValue);
+          setSettingsState(prev => ({
+            ...prev,
+            websiteName: brand.websiteName !== undefined ? brand.websiteName : prev.websiteName,
+            websiteLogo: brand.websiteLogo !== undefined ? brand.websiteLogo : prev.websiteLogo,
+            websiteFavicon: brand.websiteFavicon !== undefined ? brand.websiteFavicon : prev.websiteFavicon,
+            websiteBadgeText: brand.websiteBadgeText !== undefined ? brand.websiteBadgeText : prev.websiteBadgeText,
+          }));
+        } catch {}
+      }
+    };
+
     if (typeof window !== 'undefined') {
       window.addEventListener('khatapro_branding_changed', handleBrandingChanged);
+      window.addEventListener('storage', handleStorageEvent);
     }
 
     return () => {
       clearInterval(interval);
       if (typeof window !== 'undefined') {
         window.removeEventListener('khatapro_branding_changed', handleBrandingChanged);
+        window.removeEventListener('storage', handleStorageEvent);
       }
     };
   }, [mounted]);

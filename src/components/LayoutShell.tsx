@@ -27,11 +27,13 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
   React.useEffect(() => {
     if (typeof document === 'undefined') return;
 
-    const applyBranding = (name?: string, favicon?: string) => {
-      const siteName = (name || settings.websiteName)?.trim() || 'SmartKhata Pro';
+    const applyBranding = (name?: string, favicon?: string, logo?: string) => {
+      const siteName = (name || settings.websiteName)?.trim() || 'SmartKhata';
       document.title = `${siteName} - Fintech & Digital Khata Operating System`;
 
-      const targetFavicon = favicon !== undefined ? favicon : (settings.websiteFavicon || '/icon.svg');
+      const resolvedFavicon = favicon !== undefined ? favicon : settings.websiteFavicon;
+      const resolvedLogo = logo !== undefined ? logo : settings.websiteLogo;
+      const targetFavicon = resolvedFavicon || resolvedLogo || '/icon.svg';
       
       const rels = ['icon', 'shortcut icon', 'apple-touch-icon'];
       rels.forEach(rel => {
@@ -41,7 +43,14 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
           link.rel = rel;
           document.head.appendChild(link);
         }
-        link.href = targetFavicon || '/icon.svg';
+        link.href = targetFavicon;
+        if (targetFavicon.startsWith('data:image/svg') || targetFavicon.endsWith('.svg')) {
+          link.type = 'image/svg+xml';
+        } else if (targetFavicon.startsWith('data:image/png') || targetFavicon.endsWith('.png')) {
+          link.type = 'image/png';
+        } else if (targetFavicon.includes('.ico')) {
+          link.type = 'image/x-icon';
+        }
       });
     };
 
@@ -50,15 +59,27 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
     const handleBrandingEvent = (e: any) => {
       const brand = e?.detail;
       if (brand) {
-        applyBranding(brand.websiteName, brand.websiteFavicon);
+        applyBranding(brand.websiteName, brand.websiteFavicon, brand.websiteLogo);
+      }
+    };
+
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'skp_global_branding' && e.newValue) {
+        try {
+          const brand = JSON.parse(e.newValue);
+          applyBranding(brand.websiteName, brand.websiteFavicon, brand.websiteLogo);
+        } catch {}
       }
     };
 
     window.addEventListener('khatapro_branding_changed', handleBrandingEvent);
+    window.addEventListener('storage', handleStorageEvent);
+
     return () => {
       window.removeEventListener('khatapro_branding_changed', handleBrandingEvent);
+      window.removeEventListener('storage', handleStorageEvent);
     };
-  }, [settings.websiteName, settings.websiteFavicon]);
+  }, [settings.websiteName, settings.websiteFavicon, settings.websiteLogo]);
 
   const isPayRoute = pathname?.startsWith('/pay');
   const isLoginPage = pathname === '/login' || pathname === '/login/';
