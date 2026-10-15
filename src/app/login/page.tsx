@@ -12,7 +12,6 @@ import {
   Phone,
   Eye,
   EyeOff,
-  Sparkles,
   ArrowRight,
   CheckCircle2,
   AlertCircle,
@@ -454,15 +453,10 @@ export default function LoginPage() {
                 id="login-brand-logo-img"
                 src={brandState.logo || ''}
                 alt={brandState.name || 'Logo'}
-                className={`w-full h-full object-contain ${brandState.logo ? 'block' : 'hidden'}`}
+                className="w-full h-full object-contain"
+                style={{ display: brandState.logo ? 'block' : 'none' }}
                 onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
               />
-              <div
-                id="login-brand-logo-fallback"
-                className={`w-full h-full rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-inner ${brandState.logo ? 'hidden' : 'flex'}`}
-              >
-                <Sparkles className="w-8 h-8 text-white animate-[spin_8s_linear_infinite]" />
-              </div>
             </div>
           </div>
 
@@ -508,9 +502,7 @@ export default function LoginPage() {
 
                     if (logo) {
                       var img = document.getElementById('login-brand-logo-img');
-                      var fb = document.getElementById('login-brand-logo-fallback');
                       if (img) { img.src = logo; img.style.display = 'block'; }
-                      if (fb) { fb.style.display = 'none'; }
                     }
                     if (name) {
                       var n = document.getElementById('login-brand-name-display');

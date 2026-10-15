@@ -333,11 +333,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                     onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                   />
                 </div>
-              ) : (
-                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl fintech-gradient-primary flex items-center justify-center text-white font-bold shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform shrink-0">
-                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
-                </div>
-              )}
+              ) : null}
               <div className="block">
                 <div className="flex items-center gap-1 sm:gap-1.5 font-black tracking-tight text-slate-900 dark:text-white text-sm sm:text-base">
                   <span>{settings.websiteName || ''}</span>
