@@ -74,8 +74,14 @@ import {
   Headphones,
   Trash,
 } from 'lucide-react';
-import GoogleDriveBackupPanel from '@/components/GoogleDriveBackupPanel';
-import CurrencyLanguageModal from '@/components/CurrencyLanguageModal';
+import dynamic from 'next/dynamic';
+const GoogleDriveBackupPanel = dynamic(() => import('@/components/GoogleDriveBackupPanel'), {
+  loading: () => <div className="p-8 text-center text-xs text-slate-400">Loading Cloud Drive Vault...</div>,
+  ssr: false,
+});
+const CurrencyLanguageModal = dynamic(() => import('@/components/CurrencyLanguageModal'), {
+  ssr: false,
+});
 import {
   SUPPORTED_LANGUAGES,
   SUPPORTED_CURRENCIES,

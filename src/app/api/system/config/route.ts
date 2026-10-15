@@ -26,7 +26,8 @@ export async function GET() {
 
         if (data && !error) {
           const maintObj = data.maintenance_mode || {};
-          return NextResponse.json({
+          const brand = maintObj.websiteBranding || null;
+          const resp = NextResponse.json({
             success: true,
             maintenanceMode: {
               enabled: Boolean(maintObj.enabled),
@@ -35,10 +36,19 @@ export async function GET() {
               endTime: maintObj.endTime,
             },
             betaTestingEnabled: Boolean(data.beta_testing_enabled),
-            websiteBranding: maintObj.websiteBranding || null,
+            websiteBranding: brand,
             broadcasts: Array.isArray(maintObj.broadcasts) ? maintObj.broadcasts : [],
             supportTickets: Array.isArray(maintObj.supportTickets) ? maintObj.supportTickets : [],
           });
+          if (brand) {
+            if (brand.websiteBadgeText !== undefined) {
+              resp.cookies.set('skp_brand_badge', brand.websiteBadgeText, { path: '/', maxAge: 31536000, sameSite: 'lax' });
+            }
+            if (brand.websiteName) {
+              resp.cookies.set('skp_brand_name', brand.websiteName, { path: '/', maxAge: 31536000, sameSite: 'lax' });
+            }
+          }
+          return resp;
         }
       }
     }

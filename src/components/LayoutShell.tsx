@@ -29,7 +29,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
 
     const applyBranding = (name?: string, favicon?: string, logo?: string, badge?: string) => {
       const siteName = (name || settings.websiteName)?.trim() || 'SmartKhata';
-      const resolvedBadge = badge !== undefined ? badge : (settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO');
+      const resolvedBadge = badge !== undefined ? badge : (settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : '');
       const badgeSuffix = resolvedBadge ? ` ${resolvedBadge}` : '';
       document.title = `${siteName}${badgeSuffix} - Enterprise Fintech & Digital Khata Operating System`;
 

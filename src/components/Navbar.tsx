@@ -341,9 +341,9 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
               <div className="block">
                 <div className="flex items-center gap-1 sm:gap-1.5 font-black tracking-tight text-slate-900 dark:text-white text-sm sm:text-base">
                   <span>{settings.websiteName || 'SmartKhata'}</span>
-                  {(settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO') && (
+                  {(settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : '') && (
                     <span className="text-[7.5px] sm:text-[8px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wider fintech-gradient-primary text-white shadow-xs leading-none">
-                      {settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO'}
+                      {settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : ''}
                     </span>
                   )}
                 </div>

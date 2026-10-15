@@ -40,9 +40,9 @@ export default function Footer() {
               <span className="font-extrabold text-sm text-slate-900 dark:text-white truncate">
                 {settings.websiteName || businessName}
               </span>
-              {(settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO') && (
+              {(settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : '') && (
                 <span className="text-[7px] px-1 py-0.5 rounded font-extrabold uppercase tracking-wide fintech-gradient-primary text-white shadow-xs leading-none">
-                  {settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO'}
+                  {settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : ''}
                 </span>
               )}
             </div>

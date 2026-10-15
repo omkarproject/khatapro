@@ -816,7 +816,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           websiteName: merged.websiteName || 'SmartKhata Pro',
           websiteLogo: merged.websiteLogo || '',
           websiteFavicon: merged.websiteFavicon || '',
-          websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : 'PRO',
+          websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : '',
         };
         // in-memory synchronized via /api/system/config and CustomEvent broadcast
 

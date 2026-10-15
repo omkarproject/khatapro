@@ -78,9 +78,34 @@ export default function LoginPage() {
     if (typeof document !== 'undefined') {
       const bMatch = document.cookie.match(/(?:^|;\s*)skp_brand_badge=([^;]+)/);
       const nMatch = document.cookie.match(/(?:^|;\s*)skp_brand_name=([^;]+)/);
+      let localBadge: string | undefined = bMatch ? decodeURIComponent(bMatch[1]) : undefined;
+      let localName: string | undefined = nMatch ? decodeURIComponent(nMatch[1]) : undefined;
+      let localLogo: string | undefined = undefined;
+
+      try {
+        if (!localBadge && typeof localStorage !== 'undefined') {
+          const storedBadge = localStorage.getItem('skp_brand_badge');
+          if (storedBadge) localBadge = storedBadge;
+        }
+        if (!localName && typeof localStorage !== 'undefined') {
+          const storedName = localStorage.getItem('skp_brand_name');
+          if (storedName) localName = storedName;
+        }
+        if (typeof localStorage !== 'undefined') {
+          const cached = localStorage.getItem('skp_global_branding');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed.websiteBadgeText !== undefined && !localBadge) localBadge = parsed.websiteBadgeText;
+            if (parsed.websiteName && !localName) localName = parsed.websiteName;
+            if (parsed.websiteLogo && !localLogo) localLogo = parsed.websiteLogo;
+          }
+        }
+      } catch {}
+
       return {
-        badge: bMatch ? decodeURIComponent(bMatch[1]) : undefined,
-        name: nMatch ? decodeURIComponent(nMatch[1]) : undefined,
+        badge: localBadge,
+        name: localName,
+        logo: localLogo,
       };
     }
     return {};
@@ -98,6 +123,12 @@ export default function LoginPage() {
               logo: json.websiteBranding.websiteLogo,
               badge: json.websiteBranding.websiteBadgeText,
             });
+            if (json.websiteBranding.websiteBadgeText !== undefined) {
+              try {
+                localStorage.setItem('skp_brand_badge', json.websiteBranding.websiteBadgeText);
+                document.cookie = `skp_brand_badge=${encodeURIComponent(json.websiteBranding.websiteBadgeText)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+              } catch {}
+            }
           }
         }
       } catch {}
@@ -120,7 +151,7 @@ export default function LoginPage() {
 
   const activeLogo = settings.websiteLogo || localBrand.logo || '/brand-logo.png';
   const activeName = localBrand.name || settings.websiteName || 'SmartKhata';
-  const activeBadge = localBrand.badge !== undefined ? localBrand.badge : (settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO');
+  const activeBadge = localBrand.badge !== undefined ? localBrand.badge : (settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : '');
 
   // Auto-redirect to dashboard if user session already exists
   useEffect(() => {

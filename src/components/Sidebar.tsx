@@ -22,7 +22,8 @@ import {
   Zap,
   ChevronLeft,
   ChevronRight,
-  ClipboardList
+  ClipboardList,
+  Loader2
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -35,6 +36,11 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
   const { settings, profile, currentUser, activeLanguage, activeCurrency } = useApp();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [, setLangTick] = useState(0);
+  const [pendingRoute, setPendingRoute] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPendingRoute(null);
+  }, [pathname]);
 
   useEffect(() => {
     const handleLangChange = () => setLangTick((prev) => prev + 1);
@@ -107,14 +113,19 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
           </div>
 
           {navItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isPending = pendingRoute === item.href && pathname !== item.href;
+            const isActive = pendingRoute === item.href || (pendingRoute === null && pathname === item.href);
             const Icon = item.icon;
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={onCloseMobile}
+                prefetch={true}
+                onClick={() => {
+                  setPendingRoute(item.href);
+                  onCloseMobile?.();
+                }}
                 title={collapsed ? item.label : undefined}
                 className={`flex items-center rounded-xl text-xs font-semibold transition-all group ${
                   collapsed
@@ -127,11 +138,15 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
                 }`}
               >
                 <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
-                  <Icon
-                    className={`w-4 h-4 transition-transform group-hover:scale-110 shrink-0 ${
-                      isActive ? 'text-white' : 'text-slate-400 dark:text-slate-500 group-hover:text-indigo-500'
-                    }`}
-                  />
+                  {isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-white shrink-0" />
+                  ) : (
+                    <Icon
+                      className={`w-4 h-4 transition-transform group-hover:scale-110 shrink-0 ${
+                        isActive ? 'text-white' : 'text-slate-400 dark:text-slate-500 group-hover:text-indigo-500'
+                      }`}
+                    />
+                  )}
                   {!collapsed && <span className="truncate">{item.label}</span>}
                 </div>
 
@@ -178,7 +193,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
                   <ShieldCheck className="w-3 h-3 text-emerald-500" />
                   {t('secure100', '100% Secure')}
                 </span>
-                <span className="text-[9px] font-mono">v1.0 {settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'Pro'}</span>
+                <span className="text-[9px] font-mono">v1.0 {settings.websiteBadgeText || ''}</span>
               </div>
             </>
           ) : (

@@ -121,7 +121,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
   let globalWebName = 'SmartKhata';
   let globalWebLogo = '/brand-logo.png';
   let globalWebFavicon = '/brand-favicon.png';
-  let globalWebBadge = 'PRO';
+  let globalWebBadge = '';
 
   if (typeof window !== 'undefined') {
     try {
@@ -134,6 +134,14 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
         if (nameMatch && nameMatch[1]) {
           globalWebName = decodeURIComponent(nameMatch[1]);
         }
+      }
+      if (!globalWebBadge && typeof localStorage !== 'undefined') {
+        const storedBadge = localStorage.getItem('skp_brand_badge');
+        if (storedBadge) globalWebBadge = storedBadge;
+      }
+      if (typeof localStorage !== 'undefined') {
+        const storedName = localStorage.getItem('skp_brand_name');
+        if (storedName) globalWebName = storedName;
       }
       const b = inMemoryStore['skp_global_branding'];
       if (b) {
@@ -485,7 +493,7 @@ export const StorageService = {
           websiteName: merged.websiteName || 'SmartKhata',
           websiteLogo: merged.websiteLogo || '',
           websiteFavicon: merged.websiteFavicon || merged.websiteLogo || '',
-          websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : 'PRO',
+          websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : '',
         };
         inMemoryStore['skp_global_branding'] = brandObj;
       } catch {}
