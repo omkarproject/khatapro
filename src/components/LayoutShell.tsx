@@ -27,31 +27,47 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
   React.useEffect(() => {
     if (typeof document === 'undefined') return;
 
-    const applyBranding = (name?: string, favicon?: string, logo?: string) => {
+    const applyBranding = (name?: string, favicon?: string, logo?: string, badge?: string) => {
       const siteName = (name || settings.websiteName)?.trim() || 'SmartKhata';
-      document.title = `${siteName} - Fintech & Digital Khata Operating System`;
+      const resolvedBadge = badge !== undefined ? badge : (settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO');
+      const badgeSuffix = resolvedBadge ? ` ${resolvedBadge}` : '';
+      document.title = `${siteName}${badgeSuffix} - Enterprise Fintech & Digital Khata Operating System`;
 
       const resolvedFavicon = favicon !== undefined ? favicon : settings.websiteFavicon;
       const resolvedLogo = logo !== undefined ? logo : settings.websiteLogo;
       const targetFavicon = resolvedFavicon || resolvedLogo || '/brand-favicon.png';
       
-      const rels = ['icon', 'shortcut icon', 'apple-touch-icon'];
-      rels.forEach(rel => {
-        let link: HTMLLinkElement | null = document.querySelector(`link[rel='${rel}']`);
-        if (!link) {
-          link = document.createElement('link');
-          link.rel = rel;
-          document.head.appendChild(link);
-        }
-        link.href = targetFavicon;
+      try {
+        // Remove old icon link tags to force browser (Brave, Chrome, Edge) to refresh the tab favicon
+        const oldLinks = document.querySelectorAll("link[rel*='icon'], link[rel='apple-touch-icon']");
+        oldLinks.forEach((el) => el.remove());
+
+        let iconType = 'image/png';
         if (targetFavicon.startsWith('data:image/svg') || targetFavicon.endsWith('.svg')) {
-          link.type = 'image/svg+xml';
-        } else if (targetFavicon.startsWith('data:image/png') || targetFavicon.endsWith('.png')) {
-          link.type = 'image/png';
+          iconType = 'image/svg+xml';
         } else if (targetFavicon.includes('.ico')) {
-          link.type = 'image/x-icon';
+          iconType = 'image/x-icon';
         }
-      });
+
+        const link = document.createElement('link');
+        link.rel = 'icon';
+        link.type = iconType;
+        link.href = targetFavicon;
+        document.head.appendChild(link);
+
+        const shortcut = document.createElement('link');
+        shortcut.rel = 'shortcut icon';
+        shortcut.type = iconType;
+        shortcut.href = targetFavicon;
+        document.head.appendChild(shortcut);
+
+        const apple = document.createElement('link');
+        apple.rel = 'apple-touch-icon';
+        apple.href = targetFavicon;
+        document.head.appendChild(apple);
+      } catch (e) {
+        console.warn('Error updating document favicon:', e);
+      }
     };
 
     applyBranding();
@@ -59,7 +75,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
     const handleBrandingEvent = (e: any) => {
       const brand = e?.detail;
       if (brand) {
-        applyBranding(brand.websiteName, brand.websiteFavicon, brand.websiteLogo);
+        applyBranding(brand.websiteName, brand.websiteFavicon, brand.websiteLogo, brand.websiteBadgeText);
       }
     };
 
@@ -67,7 +83,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
       if (e.key === 'skp_global_branding' && e.newValue) {
         try {
           const brand = JSON.parse(e.newValue);
-          applyBranding(brand.websiteName, brand.websiteFavicon, brand.websiteLogo);
+          applyBranding(brand.websiteName, brand.websiteFavicon, brand.websiteLogo, brand.websiteBadgeText);
         } catch {}
       }
     };
@@ -79,7 +95,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
       window.removeEventListener('khatapro_branding_changed', handleBrandingEvent);
       window.removeEventListener('storage', handleStorageEvent);
     };
-  }, [settings.websiteName, settings.websiteFavicon, settings.websiteLogo]);
+  }, [settings.websiteName, settings.websiteFavicon, settings.websiteLogo, settings.websiteBadgeText]);
 
   const isPayRoute = pathname?.startsWith('/pay');
   const isLoginPage = pathname === '/login' || pathname === '/login/';

@@ -1044,25 +1044,26 @@ export default function SettingsPage() {
 
       window.dispatchEvent(new CustomEvent('khatapro_branding_changed', { detail: brandPayload }));
 
-      document.title = `${finalName} - Fintech & Digital Khata Operating System`;
-      const targetFav = finalFavicon || finalLogo || '/icon.svg';
-      const rels = ['icon', 'shortcut icon', 'apple-touch-icon'];
-      rels.forEach(rel => {
-        let link: HTMLLinkElement | null = document.querySelector(`link[rel='${rel}']`);
-        if (!link) {
-          link = document.createElement('link');
-          link.rel = rel;
-          document.head.appendChild(link);
-        }
-        link.href = targetFav;
+      const badgeSuffix = finalBadge ? ` ${finalBadge}` : '';
+      document.title = `${finalName}${badgeSuffix} - Enterprise Fintech & Digital Khata Operating System`;
+      const targetFav = finalFavicon || finalLogo || '/brand-favicon.png';
+      try {
+        const oldLinks = document.querySelectorAll("link[rel*='icon'], link[rel='apple-touch-icon']");
+        oldLinks.forEach((el) => el.remove());
+        let iconType = 'image/png';
         if (targetFav.startsWith('data:image/svg') || targetFav.endsWith('.svg')) {
-          link.type = 'image/svg+xml';
-        } else if (targetFav.startsWith('data:image/png') || targetFav.endsWith('.png')) {
-          link.type = 'image/png';
+          iconType = 'image/svg+xml';
         } else if (targetFav.includes('.ico')) {
-          link.type = 'image/x-icon';
+          iconType = 'image/x-icon';
         }
-      });
+        ['icon', 'shortcut icon', 'apple-touch-icon'].forEach((rel) => {
+          const link = document.createElement('link');
+          link.rel = rel;
+          link.type = iconType;
+          link.href = targetFav;
+          document.head.appendChild(link);
+        });
+      } catch (e) {}
     }
 
     addToast('Website Branding Updated! 🎨', 'Website Name, Logo, Favicon & Badge pure portal par live update ho gaye hain!', 'success');

@@ -113,8 +113,17 @@ export async function POST(req: NextRequest) {
         if (websiteBranding?.websiteFavicon && typeof websiteBranding.websiteFavicon === 'string' && websiteBranding.websiteFavicon.startsWith('data:image/')) {
           const parts = websiteBranding.websiteFavicon.split(',');
           if (parts[1]) {
-            fs.writeFileSync(path.join(process.cwd(), 'public', 'brand-favicon.png'), Buffer.from(parts[1], 'base64'));
+            const buf = Buffer.from(parts[1], 'base64');
+            fs.writeFileSync(path.join(process.cwd(), 'public', 'brand-favicon.png'), buf);
+            fs.writeFileSync(path.join(process.cwd(), 'public', 'favicon.ico'), buf);
+            const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64"><image href="data:image/png;base64,${parts[1]}" width="64" height="64"/></svg>`;
+            fs.writeFileSync(path.join(process.cwd(), 'public', 'icon.svg'), svgContent);
           }
+        }
+
+        const appIcon = path.join(process.cwd(), 'src', 'app', 'icon.svg');
+        if (fs.existsSync(appIcon)) {
+          try { fs.unlinkSync(appIcon); } catch {}
         }
       } catch (writeErr) {
         console.warn('Could not write physical brand assets to public directory:', writeErr);
