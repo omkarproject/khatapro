@@ -355,7 +355,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
           if (d.settings) {
             setSettingsState(prev => {
-              const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
+              const globalLogo = '';
               const incomingLogo = d.settings.businessLogo || d.user?.avatarUrl || (d.user as any)?.avatar_url || '';
               const preservedLogo = incomingLogo || prev.businessLogo || globalLogo;
               return {
@@ -377,7 +377,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             if (d.user.language) setActiveLanguage(d.user.language);
             if (d.user.currency) setActiveCurrency(d.user.currency);
             setProfileState(prev => {
-              const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
+              const globalLogo = '';
               const incomingAvatar = d.user.avatarUrl || (d.user as any)?.avatar_url || d.settings?.businessLogo || '';
               const preservedAvatar = incomingAvatar || prev.avatarUrl || globalLogo;
               return {
@@ -388,7 +388,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             });
             setCurrentUserState(prev => {
               if (!prev) return null;
-              const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
+              const globalLogo = '';
               const incomingAvatar = d.user.avatarUrl || (d.user as any)?.avatar_url || d.settings?.businessLogo || '';
               const preservedAvatar = incomingAvatar || prev.avatarUrl || globalLogo;
               return {
@@ -628,7 +628,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    const activeU = StorageService.getCurrentUser();
+    let activeU = StorageService.getCurrentUser();
     if (activeU?.language) setActiveLanguage(activeU.language);
     if (activeU?.currency) setActiveCurrency(activeU.currency);
     syncLiveExchangeRates();
@@ -637,47 +637,63 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     refreshData();
     setMounted(true);
 
-    const curSettings = StorageService.getSettings();
-
-    if (typeof document !== 'undefined') {
-      if (activeU) {
-        document.cookie = `skp_auth_session=${activeU.id || (activeU as any)._id}; Path=/; Max-Age=2592000; SameSite=Lax;`;
-      } else {
-        document.cookie = 'skp_auth_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
-      }
-    }
-
-    // If user is logged in, sync with database
-    if (activeU) {
-      loadUserDataFromCloud(activeU.id);
-    }
-
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'skp_transactions' && e.newValue) {
-        try {
-          const freshTxns: Transaction[] = JSON.parse(e.newValue);
-          const oldTxns = StorageService.getTransactions();
-          if (freshTxns.length > oldTxns.length) {
-            const latest = freshTxns[0];
-            if (latest && (latest.type === 'collection' || latest.type === 'credit' || latest.type === 'income')) {
-              playPaymentNotificationSound();
-              addToast(
-                '💰 Payment Received!',
-                `₹${latest.amount.toLocaleString('en-IN')} received from ${latest.customerName || 'Customer'}. Click to view details.`,
-                'success',
-                latest
-              );
-            }
+    // Hydrate current active user directly from Supabase Cloud PostgreSQL if not in memory
+    const verifyCloudSession = async () => {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.user) {
+            const freshUser = json.user;
+            StorageService.setCurrentUser(freshUser);
+            setCurrentUserState(freshUser);
+            setActiveRole(freshUser.role || (freshUser.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user'));
+            if (freshUser.language) setActiveLanguage(freshUser.language);
+            if (freshUser.currency) setActiveCurrency(freshUser.currency);
+            await loadUserDataFromCloud(freshUser.id);
           }
-          refreshData();
-        } catch {
-          refreshData();
         }
+      } catch (err) {
+        console.warn('Could not verify session with /api/auth/me:', err);
       }
     };
 
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    if (!activeU) {
+      verifyCloudSession();
+    } else {
+      loadUserDataFromCloud(activeU.id);
+    }
+
+    // Live Realtime Polling: Keep in-memory ledger synchronized with Cloud DB & Drive
+    const liveSyncInterval = setInterval(() => {
+      const u = StorageService.getCurrentUser();
+      if (u?.id) {
+        loadUserDataFromCloud(u.id);
+      }
+    }, 15000);
+
+    const handleCustomDataChange = (e: any) => {
+      const detail = e?.detail;
+      if (detail?.transaction) {
+        const latest = detail.transaction;
+        if (latest && (latest.type === 'collection' || latest.type === 'credit' || latest.type === 'income')) {
+          playPaymentNotificationSound();
+          addToast(
+            '💰 Payment Received!',
+            `₹${latest.amount.toLocaleString('en-IN')} received from ${latest.customerName || 'Customer'}. Click to view details.`,
+            'success',
+            latest
+          );
+        }
+      }
+      refreshData();
+    };
+
+    window.addEventListener('khatapro_data_sync', handleCustomDataChange);
+    return () => {
+      clearInterval(liveSyncInterval);
+      window.removeEventListener('khatapro_data_sync', handleCustomDataChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -705,9 +721,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             websiteBranding: json.websiteBranding || null,
           };
           if (typeof window !== 'undefined') {
-            localStorage.setItem('skp_global_system_config', JSON.stringify(globalPayload));
+            // in-memory synchronized
             if (json.websiteBranding) {
-              localStorage.setItem('skp_global_branding', JSON.stringify(json.websiteBranding));
+              // in-memory synchronized
             }
           }
           setSettingsState(prev => {
@@ -823,7 +839,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           maintenanceMode: merged.maintenanceMode,
           betaTestingEnabled: Boolean(merged.betaTestingEnabled),
         };
-        localStorage.setItem('skp_global_system_config', JSON.stringify(globalPayload));
+        // in-memory synchronized
         fetch('/api/system/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -846,13 +862,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           websiteFavicon: merged.websiteFavicon || '',
           websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : 'PRO',
         };
-        try {
-          localStorage.setItem('skp_global_branding', JSON.stringify(brandingPayload));
-          const existingGlobal = localStorage.getItem('skp_global_system_config');
-          const globalObj = existingGlobal ? JSON.parse(existingGlobal) : {};
-          globalObj.websiteBranding = brandingPayload;
-          localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
-        } catch {}
+        // in-memory synchronized via /api/system/config and CustomEvent broadcast
 
         fetch('/api/system/config', {
           method: 'POST',

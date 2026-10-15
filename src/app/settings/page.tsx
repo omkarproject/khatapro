@@ -402,13 +402,13 @@ export default function SettingsPage() {
     }
   }, []);
 
-  // Keep logo state in sync when settings / profile / localStorage updates
+  // Keep logo state in sync when settings / profile updates
   useEffect(() => {
     const currentLogo =
       settings.businessLogo ||
       profile?.avatarUrl ||
       currentUser?.avatarUrl ||
-      (typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '');
+      '';
     if (currentLogo && !bLogo) {
       setBLogo(currentLogo);
     }
@@ -1031,14 +1031,7 @@ export default function SettingsPage() {
         websiteBadgeText: finalBadge,
       };
 
-      try {
-        localStorage.setItem('skp_global_branding', JSON.stringify(brandPayload));
-        const rawGlobal = localStorage.getItem('skp_global_system_config');
-        const globalObj = rawGlobal ? JSON.parse(rawGlobal) : {};
-        globalObj.websiteBranding = brandPayload;
-        localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
-      } catch {}
-
+      // Broadcast live to database and all browser tabs without localStorage
       try {
         await fetch('/api/system/config', {
           method: 'POST',

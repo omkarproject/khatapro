@@ -59,27 +59,25 @@ export const SUPPORTED_CURRENCIES: CurrencyOption[] = [
  * Returns currently active currency option
  */
 
+const inMemoryI18n: { currency?: string; language?: string } = {};
+
 export function getActiveUserId(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem('skp_auth_user');
-    if (!raw) return null;
-    const u = JSON.parse(raw);
-    return u?.id || null;
+    const match = document.cookie.match(/(?:^|;\s*)skp_auth_session=([^;]+)/);
+    if (match && match[1]) {
+      return match[1];
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
 export function getActiveCurrency(): CurrencyOption {
-  if (typeof window !== 'undefined') {
-    try {
-      const uid = getActiveUserId();
-      const scopedKey = uid ? `khatapro_currency_${uid}` : 'khatapro_currency';
-      const code = localStorage.getItem(scopedKey) || localStorage.getItem('khatapro_currency') || 'INR';
-      const found = SUPPORTED_CURRENCIES.find((c) => c.code === code);
-      if (found) return found;
-    } catch {}
+  if (inMemoryI18n.currency) {
+    const found = SUPPORTED_CURRENCIES.find((c) => c.code === inMemoryI18n.currency);
+    if (found) return found;
   }
   return SUPPORTED_CURRENCIES[0]; // Default INR
 }
@@ -89,15 +87,9 @@ export function getActiveCurrency(): CurrencyOption {
  */
 export function setActiveCurrency(currencyCode: string): CurrencyOption {
   const item = SUPPORTED_CURRENCIES.find((c) => c.code === currencyCode) || SUPPORTED_CURRENCIES[0];
+  inMemoryI18n.currency = item.code;
   if (typeof window !== 'undefined') {
     try {
-      const uid = getActiveUserId();
-      if (uid) {
-        localStorage.setItem(`khatapro_currency_${uid}`, item.code);
-        localStorage.setItem(`khatapro_currency_symbol_${uid}`, item.symbol);
-      }
-      localStorage.setItem('khatapro_currency', item.code);
-      localStorage.setItem('khatapro_currency_symbol', item.symbol);
       window.dispatchEvent(new Event('khatapro_currency_changed'));
     } catch {}
   }
@@ -108,14 +100,9 @@ export function setActiveCurrency(currencyCode: string): CurrencyOption {
  * Returns currently active language option
  */
 export function getActiveLanguage(): LanguageOption {
-  if (typeof window !== 'undefined') {
-    try {
-      const uid = getActiveUserId();
-      const scopedKey = uid ? `khatapro_language_${uid}` : 'khatapro_language';
-      const code = localStorage.getItem(scopedKey) || localStorage.getItem('khatapro_language') || 'en';
-      const found = SUPPORTED_LANGUAGES.find((l) => l.code === code);
-      if (found) return found;
-    } catch {}
+  if (inMemoryI18n.language) {
+    const found = SUPPORTED_LANGUAGES.find((l) => l.code === inMemoryI18n.language);
+    if (found) return found;
   }
   return SUPPORTED_LANGUAGES[0]; // Default English
 }
@@ -125,13 +112,9 @@ export function getActiveLanguage(): LanguageOption {
  */
 export function setActiveLanguage(langCode: string): LanguageOption {
   const item = SUPPORTED_LANGUAGES.find((l) => l.code === langCode) || SUPPORTED_LANGUAGES[0];
+  inMemoryI18n.language = item.code;
   if (typeof window !== 'undefined') {
     try {
-      const uid = getActiveUserId();
-      if (uid) {
-        localStorage.setItem(`khatapro_language_${uid}`, item.code);
-      }
-      localStorage.setItem('khatapro_language', item.code);
       window.dispatchEvent(new Event('khatapro_language_changed'));
     } catch {}
   }

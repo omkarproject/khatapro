@@ -77,21 +77,34 @@ export default function LoginPage() {
   const [localBrand, setLocalBrand] = useState<{ name?: string; logo?: string; badge?: string }>({});
 
   useEffect(() => {
-    const readBranding = () => {
+    const fetchBranding = async () => {
       try {
-        const raw = localStorage.getItem('skp_global_branding');
-        if (raw) {
-          const b = JSON.parse(raw);
-          setLocalBrand({ name: b.websiteName, logo: b.websiteLogo, badge: b.websiteBadgeText });
+        const res = await fetch('/api/system/config');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.websiteBranding) {
+            setLocalBrand({
+              name: json.websiteBranding.websiteName,
+              logo: json.websiteBranding.websiteLogo,
+              badge: json.websiteBranding.websiteBadgeText,
+            });
+          }
         }
       } catch {}
     };
-    readBranding();
-    window.addEventListener('khatapro_branding_changed', readBranding);
-    window.addEventListener('storage', readBranding);
+    fetchBranding();
+    const handleBrandingChanged = (e: any) => {
+      if (e?.detail) {
+        setLocalBrand({
+          name: e.detail.websiteName,
+          logo: e.detail.websiteLogo,
+          badge: e.detail.websiteBadgeText,
+        });
+      }
+    };
+    window.addEventListener('khatapro_branding_changed', handleBrandingChanged);
     return () => {
-      window.removeEventListener('khatapro_branding_changed', readBranding);
-      window.removeEventListener('storage', readBranding);
+      window.removeEventListener('khatapro_branding_changed', handleBrandingChanged);
     };
   }, []);
 

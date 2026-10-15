@@ -40,17 +40,59 @@ const STORAGE_KEYS = {
 };
 
 
+// In-memory runtime cache for true zero-localStorage client architecture.
+// Data is held strictly in memory and synced live in realtime with Supabase Cloud Database & Google Drive.
+const inMemoryStore: Record<string, any> = {};
+
+// Clean up legacy localStorage keys on startup so client storage stays clean
+if (typeof window !== 'undefined') {
+  try {
+    const legacyKeysToPurge = [
+      'skp_customers',
+      'skp_transactions',
+      'skp_products',
+      'skp_invoices',
+      'skp_expenses',
+      'skp_savings',
+      'skp_reminders',
+      'skp_documents',
+      'skp_settings',
+      'skp_notes',
+      'skp_tasks',
+      'skp_passwords',
+      'skp_user_profile',
+      'skp_db_v1_initialized',
+      'khatapro_currency',
+      'khatapro_currency_symbol',
+      'khatapro_language',
+      'khatapro_business_logo',
+      'khatapro_dismissed_alerts',
+      'khatapro_dismissed_broadcasts',
+    ];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (legacyKeysToPurge.some(p => k.startsWith(p)) || k.startsWith('skp_cust_drive_') || k.startsWith('skp_cust_bank_') || k.startsWith('skp_gdrive_connected_'))) {
+        localStorage.removeItem(k);
+        i--;
+      }
+    }
+  } catch {}
+}
+
 // Current Active User & Scoping Helper for strict multi-user isolation
 export function getActiveUserId(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem('skp_auth_user');
-    if (!raw) return null;
-    const u = JSON.parse(raw);
-    return u?.id || null;
-  } catch {
-    return null;
+  if (typeof window !== 'undefined') {
+    // Check in-memory store first
+    if (inMemoryStore['skp_auth_user']) {
+      return inMemoryStore['skp_auth_user']?.id || null;
+    }
+    // Check document cookie for active session ID
+    const match = document.cookie.match(/(?:^|;\s*)skp_auth_session=([^;]+)/);
+    if (match && match[1]) {
+      return match[1];
+    }
   }
+  return inMemoryStore['skp_auth_user']?.id || null;
 }
 
 export function getScopedKey(baseKey: string): string {
@@ -61,27 +103,18 @@ export function getScopedKey(baseKey: string): string {
   return baseKey;
 }
 
-// Safe localStorage helper for SSR
+// In-Memory getter & setter (Zero localStorage persistence)
 function getLocalItem<T>(rawKey: string, defaultValue: T): T {
   const key = getScopedKey(rawKey);
-  if (typeof window === 'undefined') return defaultValue;
-  try {
-    const item = localStorage.getItem(key);
-    return item ? (JSON.parse(item) as T) : defaultValue;
-  } catch (error) {
-    console.error(`Error reading ${key} from localStorage:`, error);
-    return defaultValue;
+  if (key in inMemoryStore) {
+    return inMemoryStore[key] as T;
   }
+  return defaultValue;
 }
 
 function setLocalItem<T>(rawKey: string, value: T): void {
   const key = getScopedKey(rawKey);
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.error(`Error writing ${key} to localStorage:`, error);
-  }
+  inMemoryStore[key] = value;
 }
 
 export const getCleanDefaultSettings = (businessName: string = '', phone: string = '', email: string = ''): SystemSettings => {
@@ -92,23 +125,19 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
 
   if (typeof window !== 'undefined') {
     try {
-      const rawB = localStorage.getItem('skp_global_branding');
-      if (rawB) {
-        const b = JSON.parse(rawB);
+      const b = inMemoryStore['skp_global_branding'];
+      if (b) {
         if (b.websiteName) globalWebName = b.websiteName;
         if (b.websiteLogo !== undefined) globalWebLogo = b.websiteLogo;
         if (b.websiteFavicon !== undefined) globalWebFavicon = b.websiteFavicon;
         if (b.websiteBadgeText !== undefined) globalWebBadge = b.websiteBadgeText;
       }
-      const rawG = localStorage.getItem('skp_global_system_config');
-      if (rawG) {
-        const g = JSON.parse(rawG);
-        if (g.websiteBranding) {
-          if (g.websiteBranding.websiteName && (!rawB || !globalWebName)) globalWebName = g.websiteBranding.websiteName;
-          if (g.websiteBranding.websiteLogo && !globalWebLogo) globalWebLogo = g.websiteBranding.websiteLogo;
-          if (g.websiteBranding.websiteFavicon && !globalWebFavicon) globalWebFavicon = g.websiteBranding.websiteFavicon;
-          if (g.websiteBranding.websiteBadgeText !== undefined && !rawB) globalWebBadge = g.websiteBranding.websiteBadgeText;
-        }
+      const g = inMemoryStore['skp_global_system_config'];
+      if (g && g.websiteBranding) {
+        if (g.websiteBranding.websiteName && (!b || !globalWebName)) globalWebName = g.websiteBranding.websiteName;
+        if (g.websiteBranding.websiteLogo && !globalWebLogo) globalWebLogo = g.websiteBranding.websiteLogo;
+        if (g.websiteBranding.websiteFavicon && !globalWebFavicon) globalWebFavicon = g.websiteBranding.websiteFavicon;
+        if (g.websiteBranding.websiteBadgeText !== undefined && !b) globalWebBadge = g.websiteBranding.websiteBadgeText;
       }
     } catch {}
   }
@@ -171,18 +200,34 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
 };
 
 export const StorageService = {
-  // Auth User Session (Per-User Isolation)
+  // Auth User Session (Per-User Isolation via memory & secure session cookie)
   getCurrentUser: (): UserProfile | null => {
     if (typeof window === 'undefined') return null;
     try {
-      const raw = localStorage.getItem('skp_auth_user');
-      if (!raw) return null;
-      const user = JSON.parse(raw);
+      // 1. Check in-memory session first
+      let user = inMemoryStore['skp_auth_user'] || null;
+      if (!user) {
+        // Fallback check if session cookie exists
+        const match = document.cookie.match(/(?:^|;\s*)skp_auth_session=([^;]+)/);
+        if (match && match[1]) {
+          const cookieId = match[1];
+          // Provide placeholder with ID until cloud sync populates full profile
+          user = {
+            id: cookieId,
+            name: 'Business Owner',
+            email: '',
+            role: 'user',
+            businessName: 'SmartKhata Merchant',
+            createdAt: new Date().toISOString(),
+          };
+          inMemoryStore['skp_auth_user'] = user;
+        }
+      }
+
       // STRICT ROLE RULE: Only system owner (anantyadav8924@gmail.com) can have super_admin.
-      // Auto-correct any legacy merchant records accidentally cached as super_admin.
       if (user && (user.role === 'admin' || user.role === 'super_admin') && user.email !== 'anantyadav8924@gmail.com') {
         user.role = 'user';
-        try { localStorage.setItem('skp_auth_user', JSON.stringify(user)); } catch {}
+        inMemoryStore['skp_auth_user'] = user;
       }
       return user;
     } catch {
@@ -192,9 +237,11 @@ export const StorageService = {
   setCurrentUser: (user: UserProfile | null): void => {
     if (typeof window === 'undefined') return;
     if (user) {
-      localStorage.setItem('skp_auth_user', JSON.stringify(user));
+      inMemoryStore['skp_auth_user'] = user;
+      document.cookie = `skp_auth_session=${user.id || (user as any)._id}; Path=/; Max-Age=2592000; SameSite=Lax;`;
     } else {
-      localStorage.removeItem('skp_auth_user');
+      delete inMemoryStore['skp_auth_user'];
+      document.cookie = 'skp_auth_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
     }
   },
 
@@ -229,13 +276,9 @@ export const StorageService = {
     if (data.settings !== undefined) {
       const existingSettings = StorageService.getSettings();
       const existingProfile = StorageService.getProfile();
-      const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
+      const globalLogo = '';
       const incomingLogo = data.settings?.businessLogo || data.user?.avatarUrl || (data.user as any)?.avatar_url || '';
       const finalLogo = incomingLogo || existingSettings?.businessLogo || existingProfile?.avatarUrl || globalLogo;
-
-      if (finalLogo && typeof window !== 'undefined') {
-        try { localStorage.setItem('khatapro_business_logo', finalLogo); } catch {}
-      }
 
       const mergedPaymentSettings = {
         ...(existingSettings?.paymentSettings || {}),
@@ -257,7 +300,7 @@ export const StorageService = {
     if (data.user !== undefined) {
       const existingProfile = StorageService.getProfile();
       const existingSettings = StorageService.getSettings();
-      const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
+      const globalLogo = '';
       const incomingAvatar = data.user?.avatarUrl || (data.user as any)?.avatar_url || data.settings?.businessLogo || '';
       const finalAvatar = incomingAvatar || existingProfile?.avatarUrl || existingSettings?.businessLogo || globalLogo;
 
@@ -278,7 +321,7 @@ export const StorageService = {
   initializeDefaults: () => {
     if (typeof window === 'undefined') return;
     const curUser = StorageService.getCurrentUser();
-    const isInit = localStorage.getItem(getScopedKey(STORAGE_KEYS.INITIALIZED));
+    const isInit = inMemoryStore[getScopedKey(STORAGE_KEYS.INITIALIZED)];
     if (!isInit) {
       if (curUser) {
         setLocalItem(STORAGE_KEYS.PROFILE, curUser);
@@ -295,14 +338,14 @@ export const StorageService = {
       setLocalItem(STORAGE_KEYS.NOTES, []);
       setLocalItem(STORAGE_KEYS.TASKS, []);
       setLocalItem(STORAGE_KEYS.PASSWORDS, []);
-      localStorage.setItem(getScopedKey(STORAGE_KEYS.INITIALIZED), 'true');
+      inMemoryStore[getScopedKey(STORAGE_KEYS.INITIALIZED)] = true;
     }
   },
 
   // Reset to clean user data
   resetDefaults: () => {
     if (typeof window === 'undefined') return;
-    localStorage.removeItem(getScopedKey(STORAGE_KEYS.INITIALIZED));
+    delete inMemoryStore[getScopedKey(STORAGE_KEYS.INITIALIZED)];
     StorageService.initializeDefaults();
   },
 
@@ -348,9 +391,6 @@ export const StorageService = {
     }
     if (profile.avatarUrl !== undefined) {
       settingsUpdate.businessLogo = profile.avatarUrl;
-      if (profile.avatarUrl) {
-        try { localStorage.setItem('khatapro_business_logo', profile.avatarUrl); } catch {}
-      }
     }
     if (Object.keys(settingsUpdate).length > 0) {
       setLocalItem(STORAGE_KEYS.SETTINGS, { ...curSettings, ...settingsUpdate });
@@ -365,9 +405,9 @@ export const StorageService = {
     // Merge cached global system config (maintenanceMode, betaTestingEnabled & websiteBranding)
     if (typeof window !== 'undefined') {
       try {
-        const rawGlobal = localStorage.getItem('skp_global_system_config');
-        if (rawGlobal) {
-          const globalConf = JSON.parse(rawGlobal);
+        const globalConf = inMemoryStore['skp_global_system_config'];
+        if (globalConf) {
+          // In-memory read
           if (globalConf.maintenanceMode) {
             s.maintenanceMode = globalConf.maintenanceMode;
           }
@@ -381,9 +421,9 @@ export const StorageService = {
             if (globalConf.websiteBranding.websiteBadgeText !== undefined) s.websiteBadgeText = globalConf.websiteBranding.websiteBadgeText;
           }
         }
-        const rawBranding = localStorage.getItem('skp_global_branding');
-        if (rawBranding) {
-          const brandConf = JSON.parse(rawBranding);
+        const brandConf = inMemoryStore['skp_global_branding'];
+        if (brandConf) {
+          // In-memory read
           if (brandConf.websiteName) s.websiteName = brandConf.websiteName;
           if (brandConf.websiteLogo !== undefined) s.websiteLogo = brandConf.websiteLogo;
           if (brandConf.websiteFavicon !== undefined) s.websiteFavicon = brandConf.websiteFavicon;
@@ -416,9 +456,6 @@ export const StorageService = {
     }
 
     if (merged.businessLogo !== undefined) {
-      if (merged.businessLogo) {
-        try { localStorage.setItem('khatapro_business_logo', merged.businessLogo); } catch {}
-      }
       if (storedProfile) {
         setLocalItem(STORAGE_KEYS.PROFILE, { ...storedProfile, avatarUrl: merged.businessLogo });
       }
@@ -440,7 +477,7 @@ export const StorageService = {
           websiteFavicon: merged.websiteFavicon || merged.websiteLogo || '',
           websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : 'PRO',
         };
-        localStorage.setItem('skp_global_branding', JSON.stringify(brandObj));
+        inMemoryStore['skp_global_branding'] = brandObj;
       } catch {}
     }
 
@@ -889,15 +926,11 @@ export const StorageService = {
     return list;
   },
 
-  // Customer Drive & Vault (Per-customer folders & documents)
+  // Customer Drive & Vault (Per-customer folders & documents held in memory, synced live to Drive & Database)
   getCustomerDriveData: (customerId: string): { folders: CustomerDriveFolder[]; files: CustomerDriveFile[] } => {
-    if (typeof window === 'undefined') return { folders: [], files: [] };
     const key = `skp_cust_drive_${customerId}`;
-    try {
-      const stored = localStorage.getItem(key);
-      if (stored) return JSON.parse(stored);
-    } catch (e) {
-      console.warn('Failed to read customer drive', e);
+    if (inMemoryStore[key]) {
+      return inMemoryStore[key];
     }
     // Default initial folders if none exist (matches Windows-style folders: AADHAR CARD, BILLS, DOCUMENTS)
     const defaultFolders: CustomerDriveFolder[] = [
@@ -906,22 +939,14 @@ export const StorageService = {
       { id: 'fld_docs', name: 'DOCUMENTS', createdAt: new Date().toISOString() },
     ];
     const initial = { folders: defaultFolders, files: [] };
-    try {
-      localStorage.setItem(key, JSON.stringify(initial));
-    } catch (e) {}
+    inMemoryStore[key] = initial;
     return initial;
   },
   saveCustomerDriveData: (customerId: string, data: { folders: CustomerDriveFolder[]; files: CustomerDriveFile[] }): void => {
-    if (typeof window === 'undefined') return;
     const key = `skp_cust_drive_${customerId}`;
-    try {
-      localStorage.setItem(key, JSON.stringify(data));
-    } catch (e) {
-      console.error('Failed to save customer drive', e);
-    }
+    inMemoryStore[key] = data;
   },
   getCustomerBankingData: (customerId: string): { bankAccounts: CustomerBankAccount[]; upiDetails: CustomerUpiDetail[] } => {
-    if (typeof window === 'undefined') return { bankAccounts: [], upiDetails: [] };
     const customers = StorageService.getCustomers();
     const cust = customers.find(c => c.id === customerId);
     if (cust && (cust.bankAccounts || cust.upiDetails)) {
@@ -931,20 +956,14 @@ export const StorageService = {
       };
     }
     const key = `skp_cust_bank_${customerId}`;
-    const raw = localStorage.getItem(key);
-    if (raw) {
-      try {
-        return JSON.parse(raw);
-      } catch (e) {}
+    if (inMemoryStore[key]) {
+      return inMemoryStore[key];
     }
     return { bankAccounts: [], upiDetails: [] };
   },
   saveCustomerBankingData: (customerId: string, data: { bankAccounts: CustomerBankAccount[]; upiDetails: CustomerUpiDetail[] }): void => {
-    if (typeof window === 'undefined') return;
     const key = `skp_cust_bank_${customerId}`;
-    try {
-      localStorage.setItem(key, JSON.stringify(data));
-    } catch (e) {}
+    inMemoryStore[key] = data;
     const customers = StorageService.getCustomers();
     const cust = customers.find(c => c.id === customerId);
     if (cust) {
@@ -1098,7 +1117,7 @@ export const StorageService = {
       if (data.notes) setLocalItem(STORAGE_KEYS.NOTES, data.notes);
       if (data.tasks) setLocalItem(STORAGE_KEYS.TASKS, data.tasks);
       if (data.passwords) setLocalItem(STORAGE_KEYS.PASSWORDS, data.passwords);
-      localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
+      inMemoryStore[STORAGE_KEYS.INITIALIZED] = true;
       return true;
     } catch (e) {
       console.error('Failed to parse and restore database backup:', e);

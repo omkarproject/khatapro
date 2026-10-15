@@ -718,7 +718,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                       settings?.businessLogo ||
                       profile?.avatarUrl ||
                       currentUser?.avatarUrl ||
-                      (typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '');
+                      '';
                     return (
                       <>
                         <button
