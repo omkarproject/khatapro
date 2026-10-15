@@ -712,8 +712,6 @@ export async function GET(req: NextRequest) {
       sbNotes,
       sbTasks,
       sbPass,
-      sbDriveFld,
-      sbDriveFile,
       sbSet,
       sbProfile,
     ] = await Promise.all([
@@ -728,8 +726,6 @@ export async function GET(req: NextRequest) {
       supabase.from('notes').select('*').eq('user_id', userId),
       supabase.from('tasks').select('*').eq('user_id', userId),
       supabase.from('passwords').select('*').eq('user_id', userId),
-      supabase.from('customer_drive_folders').select('*').eq('user_id', userId),
-      supabase.from('customer_drive_files').select('*').eq('user_id', userId),
       supabase.from('system_settings').select('*').eq('user_id', userId).single(),
       supabase.from('profiles').select('*').eq('id', userId).single(),
     ]);
@@ -778,8 +774,8 @@ export async function GET(req: NextRequest) {
       notes: (sbNotes.data || []).map(noteFromDb),
       tasks: (sbTasks.data || []).map(taskFromDb),
       passwords: (sbPass.data || []).map(passwordFromDb),
-      customerDriveFolders: (sbDriveFld.data || []).map(customerDriveFolderFromDb),
-      customerDriveFiles: (sbDriveFile.data || []).map(customerDriveFileFromDb),
+      customerDriveFolders: [],
+      customerDriveFiles: [],
       settings: finalSettings,
       user: finalUser,
     };
@@ -915,12 +911,12 @@ export async function POST(req: NextRequest) {
         promises.push(syncRowsWithDeletions('passwords', rows));
       }
 
-      if (Array.isArray(data.customerDriveFolders)) {
+      if (Array.isArray(data.customerDriveFolders) && data.customerDriveFolders.length > 0) {
         const rows = data.customerDriveFolders.filter((f: any) => f && f.id).map((f: any) => customerDriveFolderToDb(f, userId));
         promises.push(syncRowsWithDeletions('customer_drive_folders', rows));
       }
 
-      if (Array.isArray(data.customerDriveFiles)) {
+      if (Array.isArray(data.customerDriveFiles) && data.customerDriveFiles.length > 0) {
         const rows = data.customerDriveFiles.filter((f: any) => f && f.id).map((f: any) => customerDriveFileToDb(f, userId));
         promises.push(syncRowsWithDeletions('customer_drive_files', rows));
       }
@@ -931,7 +927,7 @@ export async function POST(req: NextRequest) {
         const paymentSettingsWithLogo = {
           ...(data.settings.paymentSettings || {}),
           businessLogo: logoToSave || data.settings.paymentSettings?.businessLogo || '',
-          websiteName: data.settings.websiteName || 'SmartKhata Pro',
+          websiteName: data.settings.websiteName || 'SmartKhata',
           websiteLogo: data.settings.websiteLogo || '',
           websiteFavicon: data.settings.websiteFavicon || '',
           websiteBadgeText: data.settings.websiteBadgeText !== undefined ? data.settings.websiteBadgeText : 'PRO',

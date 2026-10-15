@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from 'react';
 import {
   UserProfile,
   Customer,
@@ -213,8 +213,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const openAuthModal = () => setIsAuthModalOpen(true);
   const closeAuthModal = () => setIsAuthModalOpen(false);
 
+  // Debounce ref for background database sync
+  const syncDebounceTimer = useRef<NodeJS.Timeout | null>(null);
+
   // Sync all in-memory and local data to Supabase Cloud PostgreSQL
-  const syncWithDatabase = async (targetUser?: UserProfile | null) => {
+  const executeSync = async (targetUser?: UserProfile | null) => {
     const curSettings = StorageService.getSettings();
     // In Local/Offline mode, keep data purely local (no cloud sync overhead)
     if (curSettings.backendProvider === 'local') {
@@ -229,17 +232,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setCloudSyncStatus('syncing');
       // Read latest data synchronously from StorageService to avoid React closure lag
       const curCustomers = StorageService.getCustomers();
-      const allDriveFolders: any[] = [];
-      const allDriveFiles: any[] = [];
-      curCustomers.forEach(c => {
-        const cd = StorageService.getCustomerDriveData(c.id);
-        if (Array.isArray(cd.folders)) {
-          cd.folders.forEach(f => allDriveFolders.push({ ...f, customerId: c.id }));
-        }
-        if (Array.isArray(cd.files)) {
-          cd.files.forEach(f => allDriveFiles.push({ ...f, customerId: c.id }));
-        }
-      });
 
       const payload = {
         userId,
@@ -255,8 +247,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           notes: StorageService.getNotes(),
           tasks: StorageService.getTasks(),
           passwords: StorageService.getPasswords(),
-          customerDriveFolders: allDriveFolders,
-          customerDriveFiles: allDriveFiles,
           settings: StorageService.getSettings(),
           profile: StorageService.getProfile(),
         },
@@ -277,6 +267,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       console.warn('Database background sync deferred:', e);
       setCloudSyncStatus('offline');
     }
+  };
+
+  const syncWithDatabase = async (targetUser?: UserProfile | null) => {
+    if (syncDebounceTimer.current) {
+      clearTimeout(syncDebounceTimer.current);
+    }
+    return new Promise<void>((resolve) => {
+      syncDebounceTimer.current = setTimeout(async () => {
+        await executeSync(targetUser);
+        resolve();
+      }, 250);
+    });
   };
 
   // Load user data from Supabase Cloud PostgreSQL
@@ -306,53 +308,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (Array.isArray(d.notes)) setNotes(d.notes);
           if (Array.isArray(d.tasks)) setTasks(d.tasks);
           if (Array.isArray(d.passwords)) setPasswords(d.passwords);
-          if (Array.isArray(d.customerDriveFolders) || Array.isArray(d.customerDriveFiles)) {
-            const byCust: Record<string, { folders: any[]; files: any[] }> = {};
-            (d.customerDriveFolders || []).forEach((f: any) => {
-              if (f.customerId) {
-                if (!byCust[f.customerId]) byCust[f.customerId] = { folders: [], files: [] };
-                byCust[f.customerId].folders.push(f);
-              }
-            });
-            (d.customerDriveFiles || []).forEach((f: any) => {
-              if (f.customerId) {
-                if (!byCust[f.customerId]) byCust[f.customerId] = { folders: [], files: [] };
-                byCust[f.customerId].files.push(f);
-              }
-            });
-
-            const targetCustomerIds = new Set<string>([
-              ...Object.keys(byCust),
-              ...((d.customers || []).map((c: any) => c.id).filter(Boolean)),
-            ]);
-
-            targetCustomerIds.forEach((cid) => {
-              const cdata = byCust[cid] || { folders: [], files: [] };
-              const localExisting = StorageService.getCustomerDriveData(cid);
-
-              const defaultFolders = [
-                { id: 'fld_aadhar', name: 'AADHAR CARD', createdAt: new Date().toISOString() },
-                { id: 'fld_bills', name: 'BILLS', createdAt: new Date().toISOString() },
-                { id: 'fld_docs', name: 'DOCUMENTS', createdAt: new Date().toISOString() },
-              ];
-
-              const foldersToSave = cdata.folders && cdata.folders.length > 0
-                ? cdata.folders
-                : (localExisting.folders && localExisting.folders.length > 0 ? localExisting.folders : defaultFolders);
-
-              // If cloud returned files for this customer, use cloud files.
-              // If cloud returned 0 files, but cloud overall has 0 files (e.g. prior sync failure) and local has files, preserve local.
-              let filesToSave = cdata.files || [];
-              if (filesToSave.length === 0 && (!d.customerDriveFiles || d.customerDriveFiles.length === 0) && localExisting.files && localExisting.files.length > 0) {
-                filesToSave = localExisting.files;
-              }
-
-              StorageService.saveCustomerDriveData(cid, {
-                folders: foldersToSave,
-                files: filesToSave,
-              });
-            });
-          }
+          // Customer drive folders & files are loaded strictly on-demand per customer
           if (d.settings) {
             setSettingsState(prev => {
               const globalLogo = '';

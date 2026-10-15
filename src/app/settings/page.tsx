@@ -1042,6 +1042,9 @@ export default function SettingsPage() {
         console.warn('System config broadcast warning:', err);
       }
 
+      document.cookie = `skp_brand_badge=${encodeURIComponent(finalBadge)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+      document.cookie = `skp_brand_name=${encodeURIComponent(finalName)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+
       window.dispatchEvent(new CustomEvent('khatapro_branding_changed', { detail: brandPayload }));
 
       const badgeSuffix = finalBadge ? ` ${finalBadge}` : '';

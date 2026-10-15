@@ -74,7 +74,17 @@ export default function LoginPage() {
   const [resendTimer, setResendTimer] = useState<number>(0);
 
   // Dynamic Website Branding with Instant Local Fallback
-  const [localBrand, setLocalBrand] = useState<{ name?: string; logo?: string; badge?: string }>({});
+  const [localBrand, setLocalBrand] = useState<{ name?: string; logo?: string; badge?: string }>(() => {
+    if (typeof document !== 'undefined') {
+      const bMatch = document.cookie.match(/(?:^|;\s*)skp_brand_badge=([^;]+)/);
+      const nMatch = document.cookie.match(/(?:^|;\s*)skp_brand_name=([^;]+)/);
+      return {
+        badge: bMatch ? decodeURIComponent(bMatch[1]) : undefined,
+        name: nMatch ? decodeURIComponent(nMatch[1]) : undefined,
+      };
+    }
+    return {};
+  });
 
   useEffect(() => {
     const fetchBranding = async () => {
@@ -109,8 +119,15 @@ export default function LoginPage() {
   }, []);
 
   const activeLogo = settings.websiteLogo || localBrand.logo || '/brand-logo.png';
-  const activeName = settings.websiteName || localBrand.name || 'SmartKhata';
-  const activeBadge = settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : (localBrand.badge !== undefined ? localBrand.badge : 'PRO');
+  const activeName = localBrand.name || settings.websiteName || 'SmartKhata';
+  const activeBadge = localBrand.badge !== undefined ? localBrand.badge : (settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO');
+
+  // Auto-redirect to dashboard if user session already exists
+  useEffect(() => {
+    if (currentUser) {
+      router.replace('/');
+    }
+  }, [currentUser, router]);
 
   useEffect(() => {
     setCaptcha(generateCaptcha());
@@ -556,7 +573,10 @@ export default function LoginPage() {
                     <div className="relative">
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                       <input
+                        id="signin-email"
+                        name="email"
                         type="email"
+                        autoComplete="username email"
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -582,7 +602,10 @@ export default function LoginPage() {
                     <div className="relative">
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                       <input
+                        id="signin-password"
+                        name="password"
                         type={showPassword ? 'text' : 'password'}
+                        autoComplete="current-password"
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}

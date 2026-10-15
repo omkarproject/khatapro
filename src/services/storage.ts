@@ -125,6 +125,16 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
 
   if (typeof window !== 'undefined') {
     try {
+      if (typeof document !== 'undefined') {
+        const badgeMatch = document.cookie.match(/(?:^|;\s*)skp_brand_badge=([^;]+)/);
+        if (badgeMatch && badgeMatch[1]) {
+          globalWebBadge = decodeURIComponent(badgeMatch[1]);
+        }
+        const nameMatch = document.cookie.match(/(?:^|;\s*)skp_brand_name=([^;]+)/);
+        if (nameMatch && nameMatch[1]) {
+          globalWebName = decodeURIComponent(nameMatch[1]);
+        }
+      }
       const b = inMemoryStore['skp_global_branding'];
       if (b) {
         if (b.websiteName) globalWebName = b.websiteName;

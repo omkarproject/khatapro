@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
 
     const savedMaint = data?.maintenance_mode || {};
 
-    return NextResponse.json({
+    const resp = NextResponse.json({
       success: true,
       maintenanceMode: {
         enabled: Boolean(savedMaint.enabled),
@@ -176,6 +176,17 @@ export async function POST(req: NextRequest) {
       broadcasts: savedMaint.broadcasts || [],
       supportTickets: savedMaint.supportTickets || [],
     });
+
+    if (savedMaint.websiteBranding) {
+      if (savedMaint.websiteBranding.websiteBadgeText !== undefined) {
+        resp.cookies.set('skp_brand_badge', String(savedMaint.websiteBranding.websiteBadgeText), { maxAge: 31536000, path: '/' });
+      }
+      if (savedMaint.websiteBranding.websiteName) {
+        resp.cookies.set('skp_brand_name', String(savedMaint.websiteBranding.websiteName), { maxAge: 31536000, path: '/' });
+      }
+    }
+
+    return resp;
   } catch (error: any) {
     console.error('System config POST error:', error);
     return NextResponse.json({
