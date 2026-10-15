@@ -23,10 +23,10 @@ export default function Footer() {
           {/* Col 1: Business Branding & Description */}
           <div className="space-y-1.5 md:col-span-1">
             <div className="flex items-center gap-2">
-              {settings.websiteLogo ? (
+              {(settings.websiteLogo || '/brand-logo.png') ? (
                 <div className="w-7 h-7 rounded-lg overflow-hidden border border-slate-200/90 dark:border-slate-700/80 bg-white dark:bg-slate-900 flex items-center justify-center shadow-sm shrink-0">
                   <img
-                    src={settings.websiteLogo}
+                    src={settings.websiteLogo || '/brand-logo.png'}
                     alt={settings.websiteName || 'Website Logo'}
                     className="w-full h-full object-contain p-0.5"
                     onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}

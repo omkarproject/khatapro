@@ -11,6 +11,16 @@ export async function GET(req: NextRequest) {
     const isConfigured = isGoogleDriveConfigured();
     const tokenRecord = await getUserDriveTokens(userId);
 
+    // Fast-path for AuthGuard / quick connection verification (sub-100ms response)
+    if (searchParams.get('quick') === 'true' || searchParams.get('quick') === '1') {
+      return NextResponse.json({
+        success: true,
+        isConfigured,
+        isConnected: Boolean(tokenRecord && tokenRecord.is_connected),
+        googleEmail: tokenRecord?.google_email || null,
+      });
+    }
+
     const supabase = getSupabaseAdmin();
 
     // Count total merchants and find latest system-wide backup

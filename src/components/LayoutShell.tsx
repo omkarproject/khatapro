@@ -33,7 +33,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
 
       const resolvedFavicon = favicon !== undefined ? favicon : settings.websiteFavicon;
       const resolvedLogo = logo !== undefined ? logo : settings.websiteLogo;
-      const targetFavicon = resolvedFavicon || resolvedLogo || '/icon.svg';
+      const targetFavicon = resolvedFavicon || resolvedLogo || '/brand-favicon.png';
       
       const rels = ['icon', 'shortcut icon', 'apple-touch-icon'];
       rels.forEach(rel => {

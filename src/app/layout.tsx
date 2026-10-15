@@ -11,11 +11,13 @@ export const metadata: Metadata = {
   description: 'Track Money, Manage Business, Grow Faster. Enterprise-grade Expense Tracker, Digital KhataBook, Invoicing, Inventory, UPI Collections & CRM.',
   icons: {
     icon: [
+      { url: '/brand-favicon.png', type: 'image/png' },
       { url: '/icon.svg', type: 'image/svg+xml' }
     ],
-    shortcut: ['/icon.svg'],
+    shortcut: ['/brand-favicon.png'],
     apple: [
-      { url: '/icon.svg' }
+      { url: '/brand-favicon.png' },
+      { url: '/brand-logo.png' }
     ],
   },
 };

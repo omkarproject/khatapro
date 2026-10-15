@@ -324,10 +324,10 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
             </button>
 
             <Link href="/" className="flex items-center gap-2 sm:gap-2.5 group">
-              {settings.websiteLogo ? (
+              {(settings.websiteLogo || '/brand-logo.png') ? (
                 <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl overflow-hidden shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform shrink-0 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center">
                   <img
-                    src={settings.websiteLogo}
+                    src={settings.websiteLogo || '/brand-logo.png'}
                     alt={settings.websiteName || 'Logo'}
                     className="w-full h-full object-contain"
                     onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}

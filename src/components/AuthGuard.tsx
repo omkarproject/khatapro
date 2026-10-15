@@ -14,6 +14,10 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   const [isDriveConnected, setIsDriveConnected] = useState<boolean | null>(() => {
     if (isAdmin) return true;
+    if (typeof window !== 'undefined' && currentUser?.id) {
+      const cached = sessionStorage.getItem(`skp_gdrive_connected_${currentUser.id}`);
+      if (cached === 'true') return true;
+    }
     return null;
   });
 
@@ -39,6 +43,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('gdrive_status') === 'connected') {
         setIsDriveConnected(true);
+        sessionStorage.setItem(`skp_gdrive_connected_${currentUser.id}`, 'true');
         addToast(
           'Google Drive Connected! 🎉',
           'Your private encrypted cloud vault is now active. Dashboard unlocked.',
@@ -50,6 +55,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       }
       if (urlParams.get('gdrive_error')) {
         setIsDriveConnected(false);
+        sessionStorage.removeItem(`skp_gdrive_connected_${currentUser.id}`);
         addToast(
           'Google Drive Authorization Incomplete',
           'Drive connection is mandatory to safeguard your financial ledger. Please try authorizing again.',
@@ -61,12 +67,17 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     }
 
     let active = true;
-    fetch(`/api/backup/google-drive/status?userId=${encodeURIComponent(currentUser.id)}`)
+    fetch(`/api/backup/google-drive/status?userId=${encodeURIComponent(currentUser.id)}&quick=true`)
       .then((res) => res.json())
       .then((data) => {
         if (active) {
           const connected = Boolean(data?.isConnected);
           setIsDriveConnected(connected);
+          if (connected && typeof window !== 'undefined') {
+            sessionStorage.setItem(`skp_gdrive_connected_${currentUser.id}`, 'true');
+          } else if (typeof window !== 'undefined') {
+            sessionStorage.removeItem(`skp_gdrive_connected_${currentUser.id}`);
+          }
         }
       })
       .catch((err) => {

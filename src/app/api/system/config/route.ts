@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
+import fs from 'fs';
+import path from 'path';
 
 const DEFAULT_CONFIG = {
   maintenanceMode: {
@@ -99,6 +101,24 @@ export async function POST(req: NextRequest) {
 
     if (websiteBranding !== undefined) {
       updatedMaint.websiteBranding = websiteBranding;
+
+      // Write physical image assets to public directory for instant SSR & reload
+      try {
+        if (websiteBranding?.websiteLogo && typeof websiteBranding.websiteLogo === 'string' && websiteBranding.websiteLogo.startsWith('data:image/')) {
+          const parts = websiteBranding.websiteLogo.split(',');
+          if (parts[1]) {
+            fs.writeFileSync(path.join(process.cwd(), 'public', 'brand-logo.png'), Buffer.from(parts[1], 'base64'));
+          }
+        }
+        if (websiteBranding?.websiteFavicon && typeof websiteBranding.websiteFavicon === 'string' && websiteBranding.websiteFavicon.startsWith('data:image/')) {
+          const parts = websiteBranding.websiteFavicon.split(',');
+          if (parts[1]) {
+            fs.writeFileSync(path.join(process.cwd(), 'public', 'brand-favicon.png'), Buffer.from(parts[1], 'base64'));
+          }
+        }
+      } catch (writeErr) {
+        console.warn('Could not write physical brand assets to public directory:', writeErr);
+      }
     }
 
     if (broadcasts !== undefined) {

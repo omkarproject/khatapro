@@ -119,8 +119,8 @@ function setLocalItem<T>(rawKey: string, value: T): void {
 
 export const getCleanDefaultSettings = (businessName: string = '', phone: string = '', email: string = ''): SystemSettings => {
   let globalWebName = 'SmartKhata';
-  let globalWebLogo = '';
-  let globalWebFavicon = '';
+  let globalWebLogo = '/brand-logo.png';
+  let globalWebFavicon = '/brand-favicon.png';
   let globalWebBadge = 'PRO';
 
   if (typeof window !== 'undefined') {

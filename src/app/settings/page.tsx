@@ -857,12 +857,12 @@ export default function SettingsPage() {
   };
 
   // Website Branding State
-  const [webName, setWebName] = useState(() => settings.websiteName || 'SmartKhata Pro');
+  const [webName, setWebName] = useState(() => settings.websiteName || 'SmartKhata');
   const [webBadgeText, setWebBadgeText] = useState(() => settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO');
-  const [webLogo, setWebLogo] = useState(() => settings.websiteLogo || '');
+  const [webLogo, setWebLogo] = useState(() => settings.websiteLogo || '/brand-logo.png');
   const [webLogoMode, setWebLogoMode] = useState<'upload' | 'link'>('upload');
   const [webLogoLinkInput, setWebLogoLinkInput] = useState('');
-  const [webFavicon, setWebFavicon] = useState(() => settings.websiteFavicon || '');
+  const [webFavicon, setWebFavicon] = useState(() => settings.websiteFavicon || '/brand-favicon.png');
   const [webFaviconMode, setWebFaviconMode] = useState<'upload' | 'link'>('upload');
   const [webFaviconLinkInput, setWebFaviconLinkInput] = useState('');
   const [isSavingBranding, setIsSavingBranding] = useState(false);
@@ -897,10 +897,10 @@ export default function SettingsPage() {
           return;
         }
 
-        // Compress and resize raster images to max 256x256 for optimal performance & quota safety
+        // Compress and resize raster images to max 192x192 for optimal performance & quota safety
         const img = new Image();
         img.onload = () => {
-          const maxDim = 256;
+          const maxDim = 192;
           let w = img.width;
           let h = img.height;
           if (w > maxDim || h > maxDim) {
@@ -2835,7 +2835,7 @@ export default function SettingsPage() {
                 <div className="min-w-0">
                   <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Live Navbar Preview</span>
                   <span className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5 truncate">
-                    {webName || 'SmartKhata Pro'}
+                    {webName || 'SmartKhata'}
                     {webBadgeText && (
                       <span className="text-[7.5px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wider fintech-gradient-primary text-white shadow-xs leading-none">
                         {webBadgeText}

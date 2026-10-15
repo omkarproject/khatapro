@@ -108,7 +108,7 @@ export default function LoginPage() {
     };
   }, []);
 
-  const activeLogo = settings.websiteLogo || localBrand.logo || '';
+  const activeLogo = settings.websiteLogo || localBrand.logo || '/brand-logo.png';
   const activeName = settings.websiteName || localBrand.name || 'SmartKhata';
   const activeBadge = settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : (localBrand.badge !== undefined ? localBrand.badge : 'PRO');
 
