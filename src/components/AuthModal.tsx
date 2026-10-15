@@ -46,6 +46,7 @@ export default function AuthModal() {
     login,
     applyAuthenticatedUser,
     logout,
+    settings,
   } = useApp();
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot_password'>('signin');
@@ -297,7 +298,7 @@ export default function AuthModal() {
                   : mode === 'forgot_password'
                   ? 'Reset Password'
                   : mode === 'signin'
-                  ? 'Sign In to SmartKhata'
+                  ? `Sign In to ${settings?.websiteName || 'SmartKhata'}`
                   : 'Create Account'}
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">

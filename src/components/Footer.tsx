@@ -36,12 +36,17 @@ export default function Footer() {
                   SK
                 </div>
               )}
-              <span className="font-extrabold text-sm text-slate-900 dark:text-white truncate">
-                {settings.websiteName || businessName}
+              <span className="font-extrabold text-sm text-slate-900 dark:text-white truncate flex items-center gap-1.5">
+                <span>{settings.websiteName || 'SmartKhata'}</span>
+                {settings.websiteBadgeText?.trim() && (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded-md font-bold uppercase tracking-wider fintech-gradient-primary text-white shadow-xs">
+                    {settings.websiteBadgeText.trim()}
+                  </span>
+                )}
               </span>
             </div>
             <p className="text-[11px] leading-snug text-slate-500 dark:text-slate-400 line-clamp-2">
-              {settings.websiteName || 'SmartKhata Pro'} — {t('digitalKhataLedger', 'Digital Ledger Operating System for merchants & enterprises')}.
+              {settings.websiteName || 'SmartKhata'}{settings.websiteBadgeText?.trim() ? ` ${settings.websiteBadgeText.trim()}` : ''} — {t('digitalKhataLedger', 'Digital Ledger Operating System for merchants & enterprises')}.
             </p>
             {businessGst ? (
               <div className="text-[10px] text-slate-400 font-mono">
@@ -146,7 +151,7 @@ export default function Footer() {
         {/* Bottom Section: Security Badges & Copyright */}
         <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10.5px]">
           <div className="flex items-center gap-2">
-            <span>&copy; {new Date().getFullYear()} {settings.websiteName || businessName}. {t('allRightsReserved', 'All rights reserved.')}</span>
+            <span>&copy; {new Date().getFullYear()} {settings.websiteName || 'SmartKhata'}{settings.websiteBadgeText?.trim() ? ` ${settings.websiteBadgeText.trim()}` : ''}. {t('allRightsReserved', 'All rights reserved.')}</span>
             <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">&bull;</span>
             <span className="hidden sm:inline">{t('madeInIndia', 'Made in India')}</span>
           </div>

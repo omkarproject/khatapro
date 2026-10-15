@@ -84,55 +84,107 @@ function setLocalItem<T>(rawKey: string, value: T): void {
   }
 }
 
-export const getCleanDefaultSettings = (businessName: string = '', phone: string = '', email: string = ''): SystemSettings => ({
-  backendProvider: 'supabase',
-  supabaseUrl: 'https://axpbydzszykqwojamblh.supabase.co',
-  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTIzNTcsImV4cCI6MjEwNzI4ODM1N30.MOkM9DqTFr5nB4mYj-Z3n9FEta1Pi0tSSJ0tTWxsxF0',
-  supabaseServiceRoleKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTcxMjM1NywiZXhwIjoyMTA3Mjg4MzU3fQ.oUgYxGo6-WWyioLkhmPuldiCWf4pANvEl7vnPyNyyNs',
-  googleDriveSettings: {
-    clientId: '997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com',
-    clientSecret: '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',
-    redirectUri: 'https://khatapro-sandy.vercel.app/api/backup/google-drive/callback',
-  },
-  businessName: businessName || '',
-  businessLogo: '',
-  businessTagline: 'Track Money, Manage Business, Grow Faster',
-  businessPhone: phone || '',
-  businessEmail: email || '',
-  businessAddress: '',
-  paymentSettings: {
-    collectionMode: 'direct_upi',
-    upiId: '', // Clean blank: user sets their own UPI ID
-    payeeName: businessName || '',
-    customQrUrl: '', // Clean blank: user sets/uploads their own QR
-    isDefaultQrSaved: false,
-    businessGst: '',
-    currency: 'INR',
-    enableSoundAlerts: true,
-    cashfreeAppId: '', // Clean blank: user sets their own API keys
-    cashfreeSecretKey: '',
-    cashfreeEnv: 'production',
-    razorpayKeyId: '',
-    razorpayKeySecret: '',
-    razorpayWebhookSecret: '',
-    razorpayEnv: 'live',
-    upiGatewayProvider: 'Cashfree UPI Gateway',
-    upiGatewayKey: '',
-    upiGatewaySecret: '',
-    upiGatewayWebhookUrl: '',
-  },
-  monthlyBudgetCap: 150000,
-  darkMode: false,
-  maintenanceMode: {
-    enabled: false,
-    durationMinutes: 15,
-    reason: 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️',
-  },
-  betaTestingEnabled: false,
-  websiteName: 'SmartKhata Pro',
-  websiteLogo: '',
-  websiteFavicon: '',
-});
+export const getCleanDefaultSettings = (businessName: string = '', phone: string = '', email: string = ''): SystemSettings => {
+  let globalWebName = 'SmartKhata';
+  let globalWebLogo = '';
+  let globalWebFavicon = '';
+  let globalWebBadge = 'PRO';
+
+  if (typeof window !== 'undefined') {
+    try {
+      if (typeof document !== 'undefined') {
+        const badgeMatch = document.cookie.match(/(?:^|;\s*)skp_brand_badge=([^;]+)/);
+        if (badgeMatch && badgeMatch[1]) {
+          globalWebBadge = decodeURIComponent(badgeMatch[1]);
+        }
+        const nameMatch = document.cookie.match(/(?:^|;\s*)skp_brand_name=([^;]+)/);
+        if (nameMatch && nameMatch[1]) {
+          globalWebName = decodeURIComponent(nameMatch[1]);
+        }
+      }
+      if (typeof localStorage !== 'undefined') {
+        const storedBadge = localStorage.getItem('skp_brand_badge');
+        if (storedBadge !== null && storedBadge !== undefined) globalWebBadge = storedBadge;
+        const storedName = localStorage.getItem('skp_brand_name');
+        if (storedName) globalWebName = storedName;
+        const rawB = localStorage.getItem('skp_global_branding');
+        if (rawB) {
+          const b = JSON.parse(rawB);
+          if (b.websiteName) globalWebName = b.websiteName;
+          if (b.websiteLogo !== undefined) globalWebLogo = b.websiteLogo;
+          if (b.websiteFavicon !== undefined) globalWebFavicon = b.websiteFavicon;
+          if (b.websiteBadgeText !== undefined) globalWebBadge = b.websiteBadgeText;
+        }
+        const rawG = localStorage.getItem('skp_global_system_config');
+        if (rawG) {
+          const g = JSON.parse(rawG);
+          if (g.websiteBranding) {
+            if (g.websiteBranding.websiteName && (!rawB || !globalWebName)) globalWebName = g.websiteBranding.websiteName;
+            if (g.websiteBranding.websiteLogo && !globalWebLogo) globalWebLogo = g.websiteBranding.websiteLogo;
+            if (g.websiteBranding.websiteFavicon && !globalWebFavicon) globalWebFavicon = g.websiteBranding.websiteFavicon;
+            if (g.websiteBranding.websiteBadgeText !== undefined && !rawB) globalWebBadge = g.websiteBranding.websiteBadgeText;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // If favicon is not explicitly set, use the website logo as the favicon!
+  if (!globalWebFavicon && globalWebLogo) {
+    globalWebFavicon = globalWebLogo;
+  }
+
+  return {
+    backendProvider: 'supabase',
+    supabaseUrl: 'https://axpbydzszykqwojamblh.supabase.co',
+    supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTIzNTcsImV4cCI6MjEwNzI4ODM1N30.MOkM9DqTFr5nB4mYj-Z3n9FEta1Pi0tSSJ0tTWxsxF0',
+    supabaseServiceRoleKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTcxMjM1NywiZXhwIjoyMTA3Mjg4MzU3fQ.oUgYxGo6-WWyioLkhmPuldiCWf4pANvEl7vnPyNyyNs',
+    googleDriveSettings: {
+      clientId: '997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com',
+      clientSecret: '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',
+      redirectUri: 'https://khatapro-sandy.vercel.app/api/backup/google-drive/callback',
+    },
+    businessName: businessName || '',
+    businessLogo: '',
+    businessTagline: 'Track Money, Manage Business, Grow Faster',
+    businessPhone: phone || '',
+    businessEmail: email || '',
+    businessAddress: '',
+    paymentSettings: {
+      collectionMode: 'direct_upi',
+      upiId: '', // Clean blank: user sets their own UPI ID
+      payeeName: businessName || '',
+      customQrUrl: '', // Clean blank: user sets/uploads their own QR
+      isDefaultQrSaved: false,
+      businessGst: '',
+      currency: 'INR',
+      enableSoundAlerts: true,
+      cashfreeAppId: '', // Clean blank: user sets their own API keys
+      cashfreeSecretKey: '',
+      cashfreeEnv: 'production',
+      razorpayKeyId: '',
+      razorpayKeySecret: '',
+      razorpayWebhookSecret: '',
+      razorpayEnv: 'live',
+      upiGatewayProvider: 'Cashfree UPI Gateway',
+      upiGatewayKey: '',
+      upiGatewaySecret: '',
+      upiGatewayWebhookUrl: '',
+    },
+    monthlyBudgetCap: 150000,
+    darkMode: false,
+    maintenanceMode: {
+      enabled: false,
+      durationMinutes: 15,
+      reason: 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️',
+    },
+    betaTestingEnabled: false,
+    websiteName: globalWebName,
+    websiteLogo: globalWebLogo,
+    websiteFavicon: globalWebFavicon,
+    websiteBadgeText: globalWebBadge,
+  };
+};
 
 export const StorageService = {
   // Auth User Session (Per-User Isolation)
@@ -217,6 +269,31 @@ export const StorageService = {
         paymentSettings: mergedPaymentSettings,
       };
       setLocalItem(STORAGE_KEYS.SETTINGS, mergedSettings);
+
+      if (
+        data.settings.websiteName ||
+        data.settings.websiteLogo ||
+        data.settings.websiteFavicon ||
+        data.settings.websiteBadgeText !== undefined
+      ) {
+        try {
+          const brandObj = {
+            websiteName: data.settings.websiteName || existingSettings?.websiteName || 'SmartKhata',
+            websiteLogo: data.settings.websiteLogo || existingSettings?.websiteLogo || '',
+            websiteFavicon: data.settings.websiteFavicon || existingSettings?.websiteFavicon || '',
+            websiteBadgeText: data.settings.websiteBadgeText !== undefined ? data.settings.websiteBadgeText : (existingSettings?.websiteBadgeText || 'PRO'),
+          };
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('skp_global_branding', JSON.stringify(brandObj));
+            if (brandObj.websiteBadgeText !== undefined) localStorage.setItem('skp_brand_badge', brandObj.websiteBadgeText);
+            if (brandObj.websiteName) localStorage.setItem('skp_brand_name', brandObj.websiteName);
+          }
+          if (typeof document !== 'undefined') {
+            document.cookie = `skp_brand_badge=${encodeURIComponent(brandObj.websiteBadgeText)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+            document.cookie = `skp_brand_name=${encodeURIComponent(brandObj.websiteName)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+          }
+        } catch {}
+      }
     }
     if (data.user !== undefined) {
       const existingProfile = StorageService.getProfile();
@@ -326,7 +403,7 @@ export const StorageService = {
     const defaults = getCleanDefaultSettings(curUser?.businessName, curUser?.phone, curUser?.email);
     const s = getLocalItem(STORAGE_KEYS.SETTINGS, defaults);
 
-    // Merge cached global system config (maintenanceMode & betaTestingEnabled)
+    // Merge cached global system config (maintenanceMode & betaTestingEnabled & websiteBranding)
     if (typeof window !== 'undefined') {
       try {
         const rawGlobal = localStorage.getItem('skp_global_system_config');
@@ -338,9 +415,28 @@ export const StorageService = {
           if (globalConf.betaTestingEnabled !== undefined) {
             s.betaTestingEnabled = Boolean(globalConf.betaTestingEnabled);
           }
+          if (globalConf.websiteBranding) {
+            if (globalConf.websiteBranding.websiteName) s.websiteName = globalConf.websiteBranding.websiteName;
+            if (globalConf.websiteBranding.websiteLogo !== undefined) s.websiteLogo = globalConf.websiteBranding.websiteLogo;
+            if (globalConf.websiteBranding.websiteFavicon !== undefined) s.websiteFavicon = globalConf.websiteBranding.websiteFavicon;
+            if (globalConf.websiteBranding.websiteBadgeText !== undefined) s.websiteBadgeText = globalConf.websiteBranding.websiteBadgeText;
+          }
+        }
+        const rawBranding = localStorage.getItem('skp_global_branding');
+        if (rawBranding) {
+          const brandConf = JSON.parse(rawBranding);
+          if (brandConf.websiteName) s.websiteName = brandConf.websiteName;
+          if (brandConf.websiteLogo !== undefined) s.websiteLogo = brandConf.websiteLogo;
+          if (brandConf.websiteFavicon !== undefined) s.websiteFavicon = brandConf.websiteFavicon;
+          if (brandConf.websiteBadgeText !== undefined) s.websiteBadgeText = brandConf.websiteBadgeText;
         }
       } catch {}
     }
+
+    if (!s.websiteFavicon && s.websiteLogo) {
+      s.websiteFavicon = s.websiteLogo;
+    }
+
     return s;
   },
   updateSettings: (settings: Partial<SystemSettings>): SystemSettings => {
@@ -371,6 +467,40 @@ export const StorageService = {
         StorageService.setCurrentUser({ ...curUser, avatarUrl: merged.businessLogo });
       }
     }
+
+    if (
+      merged.websiteName !== undefined ||
+      merged.websiteLogo !== undefined ||
+      merged.websiteFavicon !== undefined ||
+      merged.websiteBadgeText !== undefined
+    ) {
+      try {
+        const brandObj = {
+          websiteName: merged.websiteName || 'SmartKhata',
+          websiteLogo: merged.websiteLogo || '',
+          websiteFavicon: merged.websiteFavicon || merged.websiteLogo || '',
+          websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : 'PRO',
+        };
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('skp_global_branding', JSON.stringify(brandObj));
+          const existingGlobal = localStorage.getItem('skp_global_system_config');
+          const globalObj = existingGlobal ? JSON.parse(existingGlobal) : {};
+          globalObj.websiteBranding = brandObj;
+          localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
+          if (brandObj.websiteBadgeText !== undefined) {
+            localStorage.setItem('skp_brand_badge', brandObj.websiteBadgeText);
+          }
+          if (brandObj.websiteName) {
+            localStorage.setItem('skp_brand_name', brandObj.websiteName);
+          }
+        }
+        if (typeof document !== 'undefined') {
+          document.cookie = `skp_brand_badge=${encodeURIComponent(brandObj.websiteBadgeText)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+          document.cookie = `skp_brand_name=${encodeURIComponent(brandObj.websiteName)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+        }
+      } catch {}
+    }
+
     return merged;
   },
   

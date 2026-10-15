@@ -41,7 +41,75 @@ function generateCaptcha() {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { currentUser, login, applyAuthenticatedUser, logout } = useApp();
+  const { currentUser, login, applyAuthenticatedUser, logout, settings } = useApp();
+
+  // Instant frame-0 branding state from localStorage/cookies to prevent any loading flash
+  const [brandState, setBrandState] = useState(() => {
+    let name = 'SmartKhata';
+    let badge = 'PRO';
+    let logo = '';
+    let favicon = '';
+
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('skp_global_branding');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.websiteName) name = parsed.websiteName;
+          if (parsed.websiteBadgeText !== undefined) badge = parsed.websiteBadgeText;
+          if (parsed.websiteLogo) logo = parsed.websiteLogo;
+          if (parsed.websiteFavicon) favicon = parsed.websiteFavicon;
+        }
+        if (!name || name === 'SmartKhata') {
+          const storedName = localStorage.getItem('skp_brand_name');
+          if (storedName) name = storedName;
+        }
+        const storedBadge = localStorage.getItem('skp_brand_badge');
+        if (storedBadge !== null && storedBadge !== undefined) {
+          badge = storedBadge;
+        }
+
+        // Cookie fallback
+        if (!name || name === 'SmartKhata' || !badge) {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+            const c = cookies[i].trim();
+            if (c.indexOf('skp_brand_name=') === 0 && (!name || name === 'SmartKhata')) {
+              name = decodeURIComponent(c.substring('skp_brand_name='.length));
+            }
+            if (c.indexOf('skp_brand_badge=') === 0 && !badge) {
+              badge = decodeURIComponent(c.substring('skp_brand_badge='.length));
+            }
+          }
+        }
+      } catch {}
+    }
+    return { name, badge, logo, favicon };
+  });
+
+  useEffect(() => {
+    if (settings.websiteName || settings.websiteBadgeText !== undefined || settings.websiteLogo) {
+      setBrandState({
+        name: settings.websiteName || 'SmartKhata',
+        badge: settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO',
+        logo: settings.websiteLogo || '',
+        favicon: settings.websiteFavicon || '',
+      });
+    }
+
+    const onBrandChange = (e: any) => {
+      if (e.detail) {
+        setBrandState({
+          name: e.detail.websiteName || 'SmartKhata',
+          badge: e.detail.websiteBadgeText !== undefined ? e.detail.websiteBadgeText : 'PRO',
+          logo: e.detail.websiteLogo || '',
+          favicon: e.detail.websiteFavicon || '',
+        });
+      }
+    };
+    window.addEventListener('khatapro_branding_changed', onBrandChange);
+    return () => window.removeEventListener('khatapro_branding_changed', onBrandChange);
+  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteLogo, settings.websiteFavicon]);
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot_password'>('signin');
   const [step, setStep] = useState<'input' | 'otp' | 'reset_direct'>('input');
@@ -340,25 +408,58 @@ export default function LoginPage() {
       <div className="absolute top-1/4 -left-20 w-96 h-96 bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-indigo-600/10 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* Top Branding Bar */}
-      <div className="w-full max-w-md mb-4 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-md">
-            <Sparkles className="w-4 h-4" />
+      {/* Top Center Animated Glow Branding */}
+      <div className="w-full max-w-md mb-6 flex flex-col items-center justify-center text-center">
+        <Link href="/" className="group flex flex-col items-center">
+          {/* Logo with Ambient Glowing Ring */}
+          <div className="relative flex items-center justify-center mb-3">
+            {/* Glowing animated halo */}
+            <div className="absolute -inset-2.5 rounded-3xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-pink-500 opacity-75 blur-xl group-hover:opacity-100 animate-pulse transition-opacity duration-700" />
+            
+            {/* Logo container */}
+            <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white dark:bg-[#0C1222] border-2 border-white/80 dark:border-indigo-500/40 shadow-2xl flex items-center justify-center overflow-hidden p-2.5 group-hover:scale-105 transition-all duration-300">
+              {brandState.logo ? (
+                <img
+                  src={brandState.logo}
+                  alt={brandState.name}
+                  className="w-full h-full object-contain"
+                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                />
+              ) : (
+                <div className="w-full h-full rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-inner">
+                  <Sparkles className="w-8 h-8 text-white animate-[spin_8s_linear_infinite]" />
+                </div>
+              )}
+            </div>
           </div>
-          <span className="text-sm font-black tracking-wider uppercase bg-gradient-to-r from-cyan-500 to-indigo-600 bg-clip-text text-transparent">
-            SmartKhata Pro
-          </span>
+
+          {/* Website Name & Badge underneath Logo */}
+          <div className="flex items-center gap-2">
+            <span className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white drop-shadow-sm">
+              {brandState.name}
+            </span>
+            {brandState.badge?.trim() && (
+              <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-lg font-black uppercase tracking-wider fintech-gradient-primary text-white shadow-md shadow-indigo-500/25">
+                {brandState.badge.trim()}
+              </span>
+            )}
+          </div>
+          
+          <p className="text-[11px] font-semibold text-slate-400 tracking-wider uppercase font-mono mt-0.5">
+            Fintech Operating System
+          </p>
         </Link>
 
         {currentUser && (
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
-          >
-            <span>Dashboard</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
+          <div className="mt-3">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
+            >
+              <span>Go to My Dashboard</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         )}
       </div>
 
@@ -377,8 +478,8 @@ export default function LoginPage() {
                 : mode === 'forgot_password'
                 ? 'Reset Password'
                 : mode === 'signin'
-                ? 'Sign In to SmartKhata'
-                : 'Create Account'}
+                ? `Sign In to ${brandState.name}`
+                : `Create your ${brandState.name} account`}
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               {mode === 'forgot_password'
@@ -1008,6 +1109,11 @@ export default function LoginPage() {
 
         </div>
 
+      </div>
+
+      {/* Bottom Footer Note */}
+      <div className="mt-6 text-center text-xs text-slate-400 dark:text-slate-500">
+        <span>&copy; {new Date().getFullYear()} {brandState.name}{brandState.badge?.trim() ? ` ${brandState.badge.trim()}` : ''}. All rights reserved.</span>
       </div>
     </div>
   );

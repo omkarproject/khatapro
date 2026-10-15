@@ -26,9 +26,11 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
   // Dynamically update document title & favicon across entire website
   React.useEffect(() => {
     if (typeof document !== 'undefined') {
-      const siteName = settings.websiteName?.trim() || 'SmartKhata Pro';
-      if (siteName) {
-        document.title = `${siteName} - Fintech & Digital Khata Operating System`;
+      const siteName = settings.websiteName?.trim() || 'SmartKhata';
+      const badge = settings.websiteBadgeText !== undefined ? settings.websiteBadgeText.trim() : 'PRO';
+      const fullName = badge ? `${siteName} ${badge}` : siteName;
+      if (fullName) {
+        document.title = `${fullName} - Fintech & Digital Khata Operating System`;
       }
 
       if (settings.websiteFavicon) {
@@ -41,7 +43,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
         link.href = settings.websiteFavicon;
       }
     }
-  }, [settings.websiteName, settings.websiteFavicon]);
+  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteFavicon]);
 
   const isPayRoute = pathname?.startsWith('/pay');
   const isLoginPage = pathname === '/login' || pathname === '/login/';

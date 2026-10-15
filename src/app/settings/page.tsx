@@ -857,7 +857,8 @@ export default function SettingsPage() {
   };
 
   // Website Branding State
-  const [webName, setWebName] = useState(() => settings.websiteName || 'SmartKhata Pro');
+  const [webName, setWebName] = useState(() => settings.websiteName || 'SmartKhata');
+  const [webBadgeText, setWebBadgeText] = useState(() => settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO');
   const [webLogo, setWebLogo] = useState(() => settings.websiteLogo || '');
   const [webLogoMode, setWebLogoMode] = useState<'upload' | 'link'>('upload');
   const [webLogoLinkInput, setWebLogoLinkInput] = useState('');
@@ -870,11 +871,12 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (settings.websiteName) setWebName(settings.websiteName);
+    if (settings.websiteBadgeText !== undefined) setWebBadgeText(settings.websiteBadgeText);
     if (settings.websiteLogo) setWebLogo(settings.websiteLogo);
     if (settings.websiteFavicon) setWebFavicon(settings.websiteFavicon);
-  }, [settings.websiteName, settings.websiteLogo, settings.websiteFavicon]);
+  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteLogo, settings.websiteFavicon]);
 
-  // Handle Website Logo Upload
+  // Handle Website Logo Upload with auto-resize
   const handleUploadWebLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -882,20 +884,53 @@ export default function SettingsPage() {
         addToast('Invalid Image', 'Please upload a PNG, JPG, WEBP, or SVG image.', 'error');
         return;
       }
+
       const reader = new FileReader();
       reader.onload = (event) => {
         const result = event.target?.result as string;
-        if (result) {
+        if (!result) return;
+
+        if (file.type.includes('svg')) {
           setWebLogo(result);
           addToast('Website Logo Uploaded', 'Remember to click Save Branding Changes.', 'info');
+          return;
         }
+
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 192;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, w, h);
+            const compressed = canvas.toDataURL('image/png', 0.9);
+            setWebLogo(compressed);
+          } else {
+            setWebLogo(result);
+          }
+          addToast('Website Logo Uploaded', 'Remember to click Save Branding Changes.', 'info');
+        };
+        img.src = result;
       };
       reader.readAsDataURL(file);
     }
     e.target.value = '';
   };
 
-  // Handle Website Favicon Upload
+  // Handle Website Favicon Upload with auto-resize
   const handleUploadWebFavicon = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -906,10 +941,42 @@ export default function SettingsPage() {
       const reader = new FileReader();
       reader.onload = (event) => {
         const result = event.target?.result as string;
-        if (result) {
+        if (!result) return;
+
+        if (file.type.includes('svg') || file.name.endsWith('.ico')) {
           setWebFavicon(result);
           addToast('Favicon Uploaded', 'Remember to click Save Branding Changes.', 'info');
+          return;
         }
+
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 64;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, w, h);
+            const compressed = canvas.toDataURL('image/png', 0.9);
+            setWebFavicon(compressed);
+          } else {
+            setWebFavicon(result);
+          }
+          addToast('Favicon Uploaded', 'Remember to click Save Branding Changes.', 'info');
+        };
+        img.src = result;
       };
       reader.readAsDataURL(file);
     }
@@ -922,36 +989,71 @@ export default function SettingsPage() {
     setIsSavingBranding(true);
 
     const finalLogo = webLogoMode === 'link' ? (webLogoLinkInput.trim() || webLogo) : webLogo;
-    const finalFavicon = webFaviconMode === 'link' ? (webFaviconLinkInput.trim() || webFavicon) : webFavicon;
-    const finalName = webName.trim() || 'SmartKhata Pro';
+    const finalFavicon = webFaviconMode === 'link' ? (webFaviconLinkInput.trim() || webFavicon) : (webFavicon || finalLogo);
+    const finalName = webName.trim() || 'SmartKhata';
+    const finalBadge = webBadgeText.trim();
 
     const updated: SystemSettings = {
       ...settings,
       websiteName: finalName,
+      websiteBadgeText: finalBadge,
       websiteLogo: finalLogo,
       websiteFavicon: finalFavicon,
     };
 
     updateSettings(updated);
     setWebName(finalName);
+    setWebBadgeText(finalBadge);
     setWebLogo(finalLogo);
     setWebFavicon(finalFavicon);
 
-    // Live update document title and favicon instantly
+    const brandPayload = {
+      websiteName: finalName,
+      websiteBadgeText: finalBadge,
+      websiteLogo: finalLogo,
+      websiteFavicon: finalFavicon,
+    };
+
+    try {
+      localStorage.setItem('skp_global_branding', JSON.stringify(brandPayload));
+      const rawGlobal = localStorage.getItem('skp_global_system_config');
+      const globalObj = rawGlobal ? JSON.parse(rawGlobal) : {};
+      globalObj.websiteBranding = brandPayload;
+      localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
+      localStorage.setItem('skp_brand_badge', finalBadge);
+      localStorage.setItem('skp_brand_name', finalName);
+    } catch {}
+
     if (typeof document !== 'undefined') {
-      document.title = `${finalName} - Fintech & Digital Khata Operating System`;
-      if (finalFavicon) {
-        let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']");
-        if (!link) {
-          link = document.createElement('link');
-          link.rel = 'icon';
-          document.head.appendChild(link);
-        }
-        link.href = finalFavicon;
-      }
+      document.cookie = `skp_brand_badge=${encodeURIComponent(finalBadge)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+      document.cookie = `skp_brand_name=${encodeURIComponent(finalName)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
     }
 
-    addToast('Website Branding Updated! 🎨', 'Website Name, Logo, aur Favicon pure portal par live update ho gaye hain!', 'success');
+    try {
+      fetch('/api/system/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ websiteBranding: brandPayload }),
+      }).catch(err => console.warn('System config broadcast warning:', err));
+    } catch (err) {}
+
+    window.dispatchEvent(new CustomEvent('khatapro_branding_changed', { detail: brandPayload }));
+
+    const badgeSuffix = finalBadge ? ` ${finalBadge}` : '';
+    document.title = `${finalName}${badgeSuffix} - Enterprise Fintech & Digital Khata Operating System`;
+    const targetFav = finalFavicon || finalLogo || '/icon.svg';
+    try {
+      const oldLinks = document.querySelectorAll("link[rel*='icon'], link[rel='apple-touch-icon']");
+      oldLinks.forEach((el) => el.remove());
+      ['icon', 'shortcut icon', 'apple-touch-icon'].forEach((rel) => {
+        const link = document.createElement('link');
+        link.rel = rel;
+        link.href = targetFav;
+        document.head.appendChild(link);
+      });
+    } catch (e) {}
+
+    addToast('Website Branding Updated! 🎨', 'Website Name, Logo, Favicon & Badge pure portal par live update ho gaye hain!', 'success');
     setIsSavingBranding(false);
   };
 
@@ -2691,11 +2793,34 @@ export default function SettingsPage() {
                   type="text"
                   value={webName}
                   onChange={(e) => setWebName(e.target.value)}
-                  placeholder="e.g. SmartKhata Pro, ApnaKhata, VyaparPro"
+                  placeholder="e.g. SmartKhata, ApnaKhata, VyaparPro"
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-all font-semibold"
                 />
                 <p className="text-[10px] text-slate-400 mt-1.5">
-                  Default: <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">SmartKhata Pro</span>
+                  Default: <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">SmartKhata</span>
+                </p>
+              </div>
+
+              {/* Pro Badge / Tag Text Input */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Pro Badge / Tag Text (e.g. PRO, ERP, VIP, BIZ)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={webBadgeText}
+                    onChange={(e) => setWebBadgeText(e.target.value.toUpperCase())}
+                    placeholder="e.g. PRO, ERP, VIP"
+                    maxLength={10}
+                    className="w-44 px-3.5 py-2 text-xs uppercase rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-all font-black tracking-wider"
+                  />
+                  <span className="text-[11px] text-slate-400">
+                    (Max 10 chars; blank to hide badge)
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1.5">
+                  Default: <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">PRO</span>. Pure website me logo aur name ke sath show hoga.
                 </p>
               </div>
 
@@ -2704,10 +2829,12 @@ export default function SettingsPage() {
                 <div className="min-w-0">
                   <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Live Navbar Preview</span>
                   <span className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5 truncate">
-                    {webName || 'SmartKhata Pro'}
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider fintech-gradient-primary text-white">
-                      PRO
-                    </span>
+                    {webName || 'SmartKhata'}
+                    {webBadgeText?.trim() && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider fintech-gradient-primary text-white shadow-xs">
+                        {webBadgeText.trim()}
+                      </span>
+                    )}
                   </span>
                 </div>
                 <Sparkles className="w-4 h-4 text-pink-500 shrink-0" />
