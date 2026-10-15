@@ -91,6 +91,9 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
   let globalWebBadge = '';
   let globalWebBadgeBg = 'fintech-gradient-primary';
   let globalWebTagline = '';
+  let globalWebSupportLocation = '';
+  let globalWebSupportPhone = '';
+  let globalWebSupportEmail = '';
 
   if (typeof window !== 'undefined') {
     try {
@@ -133,6 +136,12 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
         if (storedLogo) globalWebLogo = storedLogo;
         const storedFav = localStorage.getItem('skp_brand_favicon');
         if (storedFav) globalWebFavicon = storedFav;
+        const storedSuppLoc = localStorage.getItem('skp_brand_support_location');
+        if (storedSuppLoc) globalWebSupportLocation = storedSuppLoc;
+        const storedSuppPhone = localStorage.getItem('skp_brand_support_phone');
+        if (storedSuppPhone) globalWebSupportPhone = storedSuppPhone;
+        const storedSuppEmail = localStorage.getItem('skp_brand_support_email');
+        if (storedSuppEmail) globalWebSupportEmail = storedSuppEmail;
         const rawB = localStorage.getItem('skp_global_branding');
         if (rawB) {
           const b = JSON.parse(rawB);
@@ -142,6 +151,9 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
           if (b.websiteBadgeText !== undefined) globalWebBadge = b.websiteBadgeText;
           if (b.websiteBadgeBg) globalWebBadgeBg = b.websiteBadgeBg;
           if (b.websiteTagline !== undefined) globalWebTagline = b.websiteTagline;
+          if (b.websiteSupportLocation !== undefined) globalWebSupportLocation = b.websiteSupportLocation;
+          if (b.websiteSupportPhone !== undefined) globalWebSupportPhone = b.websiteSupportPhone;
+          if (b.websiteSupportEmail !== undefined) globalWebSupportEmail = b.websiteSupportEmail;
         }
         const rawG = localStorage.getItem('skp_global_system_config');
         if (rawG) {
@@ -215,6 +227,9 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
     websiteBadgeText: globalWebBadge,
     websiteBadgeBg: globalWebBadgeBg,
     websiteTagline: globalWebTagline,
+    websiteSupportLocation: globalWebSupportLocation,
+    websiteSupportPhone: globalWebSupportPhone,
+    websiteSupportEmail: globalWebSupportEmail,
   };
 };
 
@@ -308,7 +323,10 @@ export const StorageService = {
         data.settings.websiteFavicon ||
         data.settings.websiteBadgeText !== undefined ||
         data.settings.websiteBadgeBg !== undefined ||
-        data.settings.websiteTagline !== undefined
+        data.settings.websiteTagline !== undefined ||
+        data.settings.websiteSupportLocation !== undefined ||
+        data.settings.websiteSupportPhone !== undefined ||
+        data.settings.websiteSupportEmail !== undefined
       ) {
         try {
           const brandObj = {
@@ -318,6 +336,9 @@ export const StorageService = {
             websiteBadgeText: data.settings.websiteBadgeText !== undefined ? data.settings.websiteBadgeText : (existingSettings?.websiteBadgeText || ''),
             websiteBadgeBg: data.settings.websiteBadgeBg || existingSettings?.websiteBadgeBg || 'fintech-gradient-primary',
             websiteTagline: data.settings.websiteTagline !== undefined ? data.settings.websiteTagline : (existingSettings?.websiteTagline || ''),
+            websiteSupportLocation: data.settings.websiteSupportLocation !== undefined ? data.settings.websiteSupportLocation : (existingSettings?.websiteSupportLocation || ''),
+            websiteSupportPhone: data.settings.websiteSupportPhone !== undefined ? data.settings.websiteSupportPhone : (existingSettings?.websiteSupportPhone || ''),
+            websiteSupportEmail: data.settings.websiteSupportEmail !== undefined ? data.settings.websiteSupportEmail : (existingSettings?.websiteSupportEmail || ''),
           };
           if (typeof localStorage !== 'undefined') {
             localStorage.setItem('skp_global_branding', JSON.stringify(brandObj));
@@ -327,6 +348,9 @@ export const StorageService = {
             if (brandObj.websiteName) localStorage.setItem('skp_brand_name', brandObj.websiteName);
             if (brandObj.websiteLogo) localStorage.setItem('skp_brand_logo', brandObj.websiteLogo);
             if (brandObj.websiteFavicon) localStorage.setItem('skp_brand_favicon', brandObj.websiteFavicon);
+            if (brandObj.websiteSupportLocation !== undefined) localStorage.setItem('skp_brand_support_location', brandObj.websiteSupportLocation);
+            if (brandObj.websiteSupportPhone !== undefined) localStorage.setItem('skp_brand_support_phone', brandObj.websiteSupportPhone);
+            if (brandObj.websiteSupportEmail !== undefined) localStorage.setItem('skp_brand_support_email', brandObj.websiteSupportEmail);
           }
           if (typeof document !== 'undefined') {
             document.cookie = `skp_brand_badge=${encodeURIComponent(brandObj.websiteBadgeText)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
@@ -526,7 +550,10 @@ export const StorageService = {
       merged.websiteFavicon !== undefined ||
       merged.websiteBadgeText !== undefined ||
       merged.websiteBadgeBg !== undefined ||
-      merged.websiteTagline !== undefined
+      merged.websiteTagline !== undefined ||
+      merged.websiteSupportLocation !== undefined ||
+      merged.websiteSupportPhone !== undefined ||
+      merged.websiteSupportEmail !== undefined
     ) {
       try {
         const brandObj = {
@@ -536,6 +563,9 @@ export const StorageService = {
           websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : '',
           websiteBadgeBg: merged.websiteBadgeBg || 'fintech-gradient-primary',
           websiteTagline: merged.websiteTagline !== undefined ? merged.websiteTagline : '',
+          websiteSupportLocation: merged.websiteSupportLocation !== undefined ? merged.websiteSupportLocation : '',
+          websiteSupportPhone: merged.websiteSupportPhone !== undefined ? merged.websiteSupportPhone : '',
+          websiteSupportEmail: merged.websiteSupportEmail !== undefined ? merged.websiteSupportEmail : '',
         };
         if (typeof localStorage !== 'undefined') {
           localStorage.setItem('skp_global_branding', JSON.stringify(brandObj));
@@ -560,6 +590,15 @@ export const StorageService = {
           }
           if (brandObj.websiteFavicon) {
             localStorage.setItem('skp_brand_favicon', brandObj.websiteFavicon);
+          }
+          if (brandObj.websiteSupportLocation !== undefined) {
+            localStorage.setItem('skp_brand_support_location', brandObj.websiteSupportLocation);
+          }
+          if (brandObj.websiteSupportPhone !== undefined) {
+            localStorage.setItem('skp_brand_support_phone', brandObj.websiteSupportPhone);
+          }
+          if (brandObj.websiteSupportEmail !== undefined) {
+            localStorage.setItem('skp_brand_support_email', brandObj.websiteSupportEmail);
           }
         }
         if (typeof document !== 'undefined') {

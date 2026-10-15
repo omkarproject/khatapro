@@ -7,10 +7,10 @@ import { ShieldCheck, Lock, Heart, Phone, Mail, MapPin } from 'lucide-react';
 
 export default function Footer() {
   const { settings, profile, currentUser, activeCurrency, t } = useApp();
-  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || settings.websiteName || '';
-  const businessPhone = settings.businessPhone || profile.phone || currentUser?.phone || '';
-  const businessEmail = settings.businessEmail || profile.email || currentUser?.email || '';
-  const businessAddress = settings.businessAddress || profile.businessAddress || '';
+  const businessName = settings.websiteName || settings.businessName || '';
+  const supportPhone = settings.websiteSupportPhone?.trim() || '';
+  const supportEmail = settings.websiteSupportEmail?.trim() || '';
+  const supportAddress = settings.websiteSupportLocation?.trim() || '';
   const businessGst = settings.paymentSettings?.businessGst || profile.businessGst || '';
 
   return (
@@ -114,37 +114,39 @@ export default function Footer() {
           </div>
 
           {/* Col 4: Registered Contact Details */}
-          <div className="space-y-1.5">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-900 dark:text-slate-200">
-              {t('helpdeskSupport', 'Helpdesk & Support')}
+          {(supportAddress || supportPhone || supportEmail) && (
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-900 dark:text-slate-200">
+                {t('helpdeskSupport', 'Helpdesk & Support')}
+              </div>
+              <div className="space-y-1 text-[11px]">
+                {supportAddress && (
+                  <div className="flex items-start gap-1.5">
+                    <MapPin className="w-3 h-3 text-slate-400 shrink-0 mt-0.5" />
+                    <span className="text-[10.5px] leading-tight text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
+                      {supportAddress}
+                    </span>
+                  </div>
+                )}
+                {supportPhone && (
+                  <div className="flex items-center gap-1.5">
+                    <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                    <a href={`tel:${supportPhone}`} className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium hover:underline">
+                      {supportPhone}
+                    </a>
+                  </div>
+                )}
+                {supportEmail && (
+                  <div className="flex items-center gap-1.5">
+                    <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                    <a href={`mailto:${supportEmail}`} className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium hover:underline truncate">
+                      {supportEmail}
+                    </a>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="space-y-1 text-[11px]">
-              {businessAddress && (
-                <div className="flex items-start gap-1.5">
-                  <MapPin className="w-3 h-3 text-slate-400 shrink-0 mt-0.5" />
-                  <span className="text-[10.5px] leading-tight text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
-                    {businessAddress}
-                  </span>
-                </div>
-              )}
-              {businessPhone && (
-                <div className="flex items-center gap-1.5">
-                  <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                  <a href={`tel:${businessPhone}`} className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium hover:underline">
-                    {businessPhone}
-                  </a>
-                </div>
-              )}
-              {businessEmail && (
-                <div className="flex items-center gap-1.5">
-                  <Mail className="w-3 h-3 text-slate-400 shrink-0" />
-                  <a href={`mailto:${businessEmail}`} className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium hover:underline truncate">
-                    {businessEmail}
-                  </a>
-                </div>
-              )}
-            </div>
-          </div>
+          )}
 
         </div>
 

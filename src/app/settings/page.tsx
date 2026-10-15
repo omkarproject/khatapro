@@ -22,6 +22,9 @@ import {
   Sparkles,
   Lock,
   Smartphone,
+  Phone,
+  Mail,
+  MapPin,
   FileText,
   Printer,
   ExternalLink,
@@ -872,6 +875,9 @@ export default function SettingsPage() {
   const [webBadgeText, setWebBadgeText] = useState(() => settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO');
   const [webBadgeBg, setWebBadgeBg] = useState(() => settings.websiteBadgeBg || 'fintech-gradient-primary');
   const [webTagline, setWebTagline] = useState(() => settings.websiteTagline !== undefined ? settings.websiteTagline : '');
+  const [webSupportLocation, setWebSupportLocation] = useState(() => settings.websiteSupportLocation || '');
+  const [webSupportPhone, setWebSupportPhone] = useState(() => settings.websiteSupportPhone || '');
+  const [webSupportEmail, setWebSupportEmail] = useState(() => settings.websiteSupportEmail || '');
   const [webLogo, setWebLogo] = useState(() => settings.websiteLogo || '');
   const [webLogoMode, setWebLogoMode] = useState<'upload' | 'link'>('upload');
   const [webLogoLinkInput, setWebLogoLinkInput] = useState('');
@@ -887,9 +893,12 @@ export default function SettingsPage() {
     if (settings.websiteBadgeText !== undefined) setWebBadgeText(settings.websiteBadgeText);
     if (settings.websiteBadgeBg) setWebBadgeBg(settings.websiteBadgeBg);
     if (settings.websiteTagline !== undefined) setWebTagline(settings.websiteTagline);
+    if (settings.websiteSupportLocation !== undefined) setWebSupportLocation(settings.websiteSupportLocation);
+    if (settings.websiteSupportPhone !== undefined) setWebSupportPhone(settings.websiteSupportPhone);
+    if (settings.websiteSupportEmail !== undefined) setWebSupportEmail(settings.websiteSupportEmail);
     if (settings.websiteLogo) setWebLogo(settings.websiteLogo);
     if (settings.websiteFavicon) setWebFavicon(settings.websiteFavicon);
-  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteBadgeBg, settings.websiteTagline, settings.websiteLogo, settings.websiteFavicon]);
+  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteBadgeBg, settings.websiteTagline, settings.websiteSupportLocation, settings.websiteSupportPhone, settings.websiteSupportEmail, settings.websiteLogo, settings.websiteFavicon]);
 
   // Handle Website Logo Upload with auto-resize
   const handleUploadWebLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1008,6 +1017,9 @@ export default function SettingsPage() {
     const finalName = webName.trim();
     const finalBadge = webBadgeText.trim();
     const finalTagline = webTagline.trim();
+    const finalSupportLocation = webSupportLocation.trim();
+    const finalSupportPhone = webSupportPhone.trim();
+    const finalSupportEmail = webSupportEmail.trim();
 
     const updated: SystemSettings = {
       ...settings,
@@ -1017,6 +1029,9 @@ export default function SettingsPage() {
       websiteTagline: finalTagline,
       websiteLogo: finalLogo,
       websiteFavicon: finalFavicon,
+      websiteSupportLocation: finalSupportLocation,
+      websiteSupportPhone: finalSupportPhone,
+      websiteSupportEmail: finalSupportEmail,
     };
 
     updateSettings(updated);
@@ -1024,6 +1039,9 @@ export default function SettingsPage() {
     setWebBadgeText(finalBadge);
     setWebBadgeBg(webBadgeBg);
     setWebTagline(finalTagline);
+    setWebSupportLocation(finalSupportLocation);
+    setWebSupportPhone(finalSupportPhone);
+    setWebSupportEmail(finalSupportEmail);
     setWebLogo(finalLogo);
     setWebFavicon(finalFavicon);
 
@@ -1034,6 +1052,9 @@ export default function SettingsPage() {
       websiteTagline: finalTagline,
       websiteLogo: finalLogo,
       websiteFavicon: finalFavicon,
+      websiteSupportLocation: finalSupportLocation,
+      websiteSupportPhone: finalSupportPhone,
+      websiteSupportEmail: finalSupportEmail,
     };
 
     try {
@@ -1046,6 +1067,12 @@ export default function SettingsPage() {
       localStorage.setItem('skp_brand_badge_bg', webBadgeBg);
       localStorage.setItem('skp_brand_tagline', finalTagline);
       localStorage.setItem('skp_brand_name', finalName);
+      if (finalSupportLocation) localStorage.setItem('skp_brand_support_location', finalSupportLocation);
+      else localStorage.removeItem('skp_brand_support_location');
+      if (finalSupportPhone) localStorage.setItem('skp_brand_support_phone', finalSupportPhone);
+      else localStorage.removeItem('skp_brand_support_phone');
+      if (finalSupportEmail) localStorage.setItem('skp_brand_support_email', finalSupportEmail);
+      else localStorage.removeItem('skp_brand_support_email');
       if (finalLogo) localStorage.setItem('skp_brand_logo', finalLogo);
       if (finalFavicon) localStorage.setItem('skp_brand_favicon', finalFavicon);
     } catch {}
@@ -3041,6 +3068,67 @@ export default function SettingsPage() {
                     <X className="w-4 h-4" />
                   </button>
                 )}
+              </div>
+
+              {/* Footer Helpdesk & Support Contact Section */}
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
+                    <Phone className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                      Footer Helpdesk &amp; Support Details
+                    </h4>
+                    <p className="text-[10px] text-slate-400">
+                      Footer ke &quot;Helpdesk &amp; Support&quot; me sirf ye details live show hongi (Blank to hide)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                      <MapPin className="w-3 h-3 text-slate-400" />
+                      <span>Support Location / City (Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={webSupportLocation}
+                      onChange={(e) => setWebSupportLocation(e.target.value)}
+                      placeholder="e.g. Bhiwandi, Maharashtra"
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                      <Phone className="w-3 h-3 text-slate-400" />
+                      <span>Support Phone Number (Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={webSupportPhone}
+                      onChange={(e) => setWebSupportPhone(e.target.value)}
+                      placeholder="e.g. +91 8371838314"
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                      <Mail className="w-3 h-3 text-slate-400" />
+                      <span>Support Email Address (Optional)</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={webSupportEmail}
+                      onChange={(e) => setWebSupportEmail(e.target.value)}
+                      placeholder="e.g. anantyadav8924@gmail.com"
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all font-medium"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 

@@ -411,6 +411,9 @@ export interface SystemSettings {
   websiteBadgeText?: string;
   websiteBadgeBg?: string;
   websiteTagline?: string;
+  websiteSupportLocation?: string;
+  websiteSupportPhone?: string;
+  websiteSupportEmail?: string;
   broadcasts?: BroadcastMessage[];
   supportTickets?: SupportTicket[];
 }

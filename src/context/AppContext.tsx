@@ -376,6 +376,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 websiteBadgeText: brandStored.websiteBadgeText !== undefined ? brandStored.websiteBadgeText : (d.settings.websiteBadgeText ?? prev.websiteBadgeText ?? ''),
                 websiteBadgeBg: brandStored.websiteBadgeBg || d.settings.websiteBadgeBg || prev.websiteBadgeBg || 'fintech-gradient-primary',
                 websiteTagline: brandStored.websiteTagline !== undefined ? brandStored.websiteTagline : (d.settings.websiteTagline ?? prev.websiteTagline ?? ''),
+                websiteSupportLocation: brandStored.websiteSupportLocation !== undefined ? brandStored.websiteSupportLocation : (d.settings.websiteSupportLocation ?? prev.websiteSupportLocation ?? ''),
+                websiteSupportPhone: brandStored.websiteSupportPhone !== undefined ? brandStored.websiteSupportPhone : (d.settings.websiteSupportPhone ?? prev.websiteSupportPhone ?? ''),
+                websiteSupportEmail: brandStored.websiteSupportEmail !== undefined ? brandStored.websiteSupportEmail : (d.settings.websiteSupportEmail ?? prev.websiteSupportEmail ?? ''),
                 businessLogo: preservedLogo,
                 paymentSettings: {
                   ...(prev.paymentSettings || {}),
