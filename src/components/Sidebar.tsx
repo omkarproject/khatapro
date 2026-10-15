@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { t } from '@/lib/i18n';
 import {
@@ -76,6 +76,16 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
     { label: t('analytics', 'Financial Analytics'), href: '/analytics', icon: LineChart },
     { label: t('settings', 'Settings'), href: '/settings', icon: Settings },
   ];
+
+  const router = useRouter();
+
+  useEffect(() => {
+    navItems.forEach((item) => {
+      try {
+        router.prefetch(item.href);
+      } catch {}
+    });
+  }, [router]);
 
   const renderSidebarContent = (isMobileView: boolean) => {
     const collapsed = !isMobileView && isCollapsed;
