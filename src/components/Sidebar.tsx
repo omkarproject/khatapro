@@ -187,7 +187,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
             <div className="flex flex-col items-center gap-1 py-1">
               <div
                 className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center cursor-pointer"
-                title={`Status: Online (${settings.businessName || 'SmartKhata'})`}
+                title={`Status: Online${settings.businessName || settings.websiteName ? ` (${settings.businessName || settings.websiteName})` : ''}`}
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               </div>

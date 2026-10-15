@@ -298,7 +298,7 @@ export default function AuthModal() {
                   : mode === 'forgot_password'
                   ? 'Reset Password'
                   : mode === 'signin'
-                  ? `Sign In to ${settings?.websiteName || 'SmartKhata'}`
+                  ? (settings?.websiteName ? `Sign In to ${settings.websiteName}` : 'Sign In')
                   : 'Create Account'}
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">

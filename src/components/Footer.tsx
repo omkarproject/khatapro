@@ -7,7 +7,7 @@ import { ShieldCheck, Lock, Heart, Phone, Mail, MapPin } from 'lucide-react';
 
 export default function Footer() {
   const { settings, profile, currentUser, activeCurrency, t } = useApp();
-  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || settings.websiteName || 'SmartKhata';
+  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || settings.websiteName || '';
   const businessPhone = settings.businessPhone || profile.phone || currentUser?.phone || '';
   const businessEmail = settings.businessEmail || profile.email || currentUser?.email || '';
   const businessAddress = settings.businessAddress || profile.businessAddress || '';

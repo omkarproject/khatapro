@@ -868,7 +868,7 @@ export default function SettingsPage() {
     { id: 'slate_dark', label: 'Stealth Dark', class: 'bg-gradient-to-r from-slate-800 to-slate-900 border border-slate-700', bg: 'linear-gradient(135deg, #1e293b, #0f172a)' },
   ];
 
-  const [webName, setWebName] = useState(() => settings.websiteName || 'SmartKhata');
+  const [webName, setWebName] = useState(() => settings.websiteName || '');
   const [webBadgeText, setWebBadgeText] = useState(() => settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO');
   const [webBadgeBg, setWebBadgeBg] = useState(() => settings.websiteBadgeBg || 'fintech-gradient-primary');
   const [webTagline, setWebTagline] = useState(() => settings.websiteTagline !== undefined ? settings.websiteTagline : '');
@@ -1005,7 +1005,7 @@ export default function SettingsPage() {
 
     const finalLogo = webLogoMode === 'link' ? (webLogoLinkInput.trim() || webLogo) : webLogo;
     const finalFavicon = webFaviconMode === 'link' ? (webFaviconLinkInput.trim() || webFavicon) : (webFavicon || finalLogo);
-    const finalName = webName.trim() || 'SmartKhata';
+    const finalName = webName.trim();
     const finalBadge = webBadgeText.trim();
     const finalTagline = webTagline.trim();
 
@@ -2820,12 +2820,9 @@ export default function SettingsPage() {
                   type="text"
                   value={webName}
                   onChange={(e) => setWebName(e.target.value)}
-                  placeholder="e.g. SmartKhata, ApnaKhata, VyaparPro"
+                  placeholder="e.g. MyBrand, ApnaKhata, VyaparPro"
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-all font-semibold"
                 />
-                <p className="text-[10px] text-slate-400 mt-1.5">
-                  Default: <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">SmartKhata</span>
-                </p>
               </div>
 
               <div>

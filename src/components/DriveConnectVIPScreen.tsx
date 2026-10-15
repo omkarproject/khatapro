@@ -27,7 +27,7 @@ export default function DriveConnectVIPScreen({ onConnected }: DriveConnectVIPSc
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
 
-  const websiteName = settings.websiteName || 'SmartKhata';
+  const websiteName = settings.websiteName || '';
   const merchantName = currentUser?.name || currentUser?.businessName || 'Merchant';
 
   const handleConnect = () => {
