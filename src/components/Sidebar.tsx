@@ -22,8 +22,7 @@ import {
   Zap,
   ChevronLeft,
   ChevronRight,
-  ClipboardList,
-  Loader2
+  ClipboardList
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -36,11 +35,6 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
   const { settings, profile, currentUser, activeLanguage, activeCurrency } = useApp();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [, setLangTick] = useState(0);
-  const [pendingRoute, setPendingRoute] = useState<string | null>(null);
-
-  useEffect(() => {
-    setPendingRoute(null);
-  }, [pathname]);
 
   useEffect(() => {
     const handleLangChange = () => setLangTick((prev) => prev + 1);
@@ -113,8 +107,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
           </div>
 
           {navItems.map((item) => {
-            const isPending = pendingRoute === item.href && pathname !== item.href;
-            const isActive = pendingRoute === item.href || (pendingRoute === null && pathname === item.href);
+            const isActive = pathname === item.href;
             const Icon = item.icon;
 
             return (
@@ -122,10 +115,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
                 key={item.href}
                 href={item.href}
                 prefetch={true}
-                onClick={() => {
-                  setPendingRoute(item.href);
-                  onCloseMobile?.();
-                }}
+                onClick={onCloseMobile}
                 title={collapsed ? item.label : undefined}
                 className={`flex items-center rounded-xl text-xs font-semibold transition-all group ${
                   collapsed
@@ -138,15 +128,11 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
                 }`}
               >
                 <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
-                  {isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-white shrink-0" />
-                  ) : (
-                    <Icon
-                      className={`w-4 h-4 transition-transform group-hover:scale-110 shrink-0 ${
-                        isActive ? 'text-white' : 'text-slate-400 dark:text-slate-500 group-hover:text-indigo-500'
-                      }`}
-                    />
-                  )}
+                  <Icon
+                    className={`w-4 h-4 transition-transform group-hover:scale-110 shrink-0 ${
+                      isActive ? 'text-white' : 'text-slate-400 dark:text-slate-500 group-hover:text-indigo-500'
+                    }`}
+                  />
                   {!collapsed && <span className="truncate">{item.label}</span>}
                 </div>
 
