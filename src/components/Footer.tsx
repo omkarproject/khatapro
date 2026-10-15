@@ -31,23 +31,23 @@ export default function Footer() {
                     className="w-full h-full object-contain p-0.5"
                   />
                 </div>
-              ) : (
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-600 text-white font-black text-xs flex items-center justify-center shadow-sm shrink-0">
-                  SK
-                </div>
-              )}
-              <span className="font-extrabold text-sm text-slate-900 dark:text-white truncate flex items-center gap-1.5">
-                <span>{settings.websiteName || 'SmartKhata'}</span>
-                {settings.websiteBadgeText?.trim() && (
-                  <span className={`text-[8.5px] px-1.5 py-0.5 rounded-md font-extrabold uppercase tracking-wider text-white shadow-xs ${settings.websiteBadgeBg || 'fintech-gradient-primary'}`}>
-                    {settings.websiteBadgeText.trim()}
-                  </span>
-                )}
-              </span>
+              ) : null}
+              {settings.websiteName?.trim() ? (
+                <span className="font-extrabold text-sm text-slate-900 dark:text-white truncate flex items-center gap-1.5">
+                  <span>{settings.websiteName.trim()}</span>
+                  {settings.websiteBadgeText?.trim() && (
+                    <span className={`text-[8.5px] px-1.5 py-0.5 rounded-md font-extrabold uppercase tracking-wider text-white shadow-xs ${settings.websiteBadgeBg || 'fintech-gradient-primary'}`}>
+                      {settings.websiteBadgeText.trim()}
+                    </span>
+                  )}
+                </span>
+              ) : null}
             </div>
-            <p className="text-[11px] leading-snug text-slate-500 dark:text-slate-400 line-clamp-2">
-              {settings.websiteName || 'SmartKhata'}{settings.websiteBadgeText?.trim() ? ` ${settings.websiteBadgeText.trim()}` : ''}{settings.websiteTagline?.trim() ? ` — ${settings.websiteTagline.trim()}` : ''}
-            </p>
+            {settings.websiteTagline?.trim() ? (
+              <p className="text-[11px] leading-snug text-slate-500 dark:text-slate-400 line-clamp-2">
+                {settings.websiteTagline.trim()}
+              </p>
+            ) : null}
             {businessGst ? (
               <div className="text-[10px] text-slate-400 font-mono">
                 GSTIN: <span className="font-bold text-slate-700 dark:text-slate-300">{businessGst}</span>
@@ -151,7 +151,7 @@ export default function Footer() {
         {/* Bottom Section: Security Badges & Copyright */}
         <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10.5px]">
           <div className="flex items-center gap-2">
-            <span>&copy; {new Date().getFullYear()} {settings.websiteName || 'SmartKhata'}{settings.websiteBadgeText?.trim() ? ` ${settings.websiteBadgeText.trim()}` : ''}. {t('allRightsReserved', 'All rights reserved.')}</span>
+            <span>&copy; {new Date().getFullYear()} {settings.websiteName ? `${settings.websiteName}${settings.websiteBadgeText?.trim() ? ` ${settings.websiteBadgeText.trim()}` : ''}. ` : ''}{t('allRightsReserved', 'All rights reserved.')}</span>
             <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">&bull;</span>
             <span className="hidden sm:inline">{t('madeInIndia', 'Made in India')}</span>
           </div>

@@ -358,9 +358,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
               const incomingLogo = d.settings.businessLogo || d.user?.avatarUrl || (d.user as any)?.avatar_url || '';
               const preservedLogo = incomingLogo || prev.businessLogo || globalLogo;
+
+              let brandStored: any = {};
+              if (typeof window !== 'undefined') {
+                try {
+                  const raw = localStorage.getItem('skp_global_branding');
+                  if (raw) brandStored = JSON.parse(raw);
+                } catch(e) {}
+              }
+
               return {
                 ...prev,
                 ...d.settings,
+                websiteName: brandStored.websiteName !== undefined ? brandStored.websiteName : (d.settings.websiteName || prev.websiteName || ''),
+                websiteLogo: brandStored.websiteLogo !== undefined ? brandStored.websiteLogo : (d.settings.websiteLogo || prev.websiteLogo || ''),
+                websiteFavicon: brandStored.websiteFavicon !== undefined ? brandStored.websiteFavicon : (d.settings.websiteFavicon || prev.websiteFavicon || ''),
+                websiteBadgeText: brandStored.websiteBadgeText !== undefined ? brandStored.websiteBadgeText : (d.settings.websiteBadgeText ?? prev.websiteBadgeText ?? ''),
+                websiteBadgeBg: brandStored.websiteBadgeBg || d.settings.websiteBadgeBg || prev.websiteBadgeBg || 'fintech-gradient-primary',
+                websiteTagline: brandStored.websiteTagline !== undefined ? brandStored.websiteTagline : (d.settings.websiteTagline ?? prev.websiteTagline ?? ''),
                 businessLogo: preservedLogo,
                 paymentSettings: {
                   ...(prev.paymentSettings || {}),

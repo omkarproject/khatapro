@@ -26,22 +26,23 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
   // Dynamically update document title & favicon across entire website
   React.useEffect(() => {
     if (typeof document !== 'undefined') {
-      const siteName = settings.websiteName?.trim() || 'SmartKhata';
+      const siteName = settings.websiteName?.trim() || '';
       const badge = settings.websiteBadgeText?.trim() || '';
-      const fullName = badge ? `${siteName} ${badge}` : siteName;
+      const fullName = badge ? (siteName ? `${siteName} ${badge}` : badge) : siteName;
       if (fullName) {
         const tagline = settings.websiteTagline?.trim() || '';
         document.title = tagline ? `${fullName} - ${tagline}` : fullName;
       }
 
-      if (settings.websiteFavicon) {
+      const targetFav = settings.websiteFavicon || settings.websiteLogo;
+      if (targetFav) {
         let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']");
         if (!link) {
           link = document.createElement('link');
           link.rel = 'icon';
           document.head.appendChild(link);
         }
-        link.href = settings.websiteFavicon;
+        link.href = targetFav;
       }
     }
   }, [settings.websiteName, settings.websiteBadgeText, settings.websiteFavicon]);

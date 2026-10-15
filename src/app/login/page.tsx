@@ -45,7 +45,7 @@ export default function LoginPage() {
 
   // Instant frame-0 branding state from localStorage/cookies to prevent any loading flash
   const [brandState, setBrandState] = useState(() => {
-    let name = 'SmartKhata';
+    let name = '';
     let badge = '';
     let badgeBg = 'fintech-gradient-primary';
     let tagline = '';
@@ -64,7 +64,7 @@ export default function LoginPage() {
           if (parsed.websiteLogo) logo = parsed.websiteLogo;
           if (parsed.websiteFavicon) favicon = parsed.websiteFavicon;
         }
-        if (!name || name === 'SmartKhata') {
+        if (!name) {
           const storedName = localStorage.getItem('skp_brand_name');
           if (storedName) name = storedName;
         }
@@ -469,7 +469,7 @@ export default function LoginPage() {
           {/* Website Name & Badge underneath Logo */}
           <div className="flex items-center gap-2">
             <span id="login-brand-name-display" className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white drop-shadow-sm">
-              {brandState.name || 'SmartKhata'}
+              {brandState.name || ''}
             </span>
             <span
               id="login-brand-badge-display"
@@ -540,6 +540,15 @@ export default function LoginPage() {
                     if (name) {
                       var fullTitle = name + (badge ? ' ' + badge : '') + (tagline ? ' - ' + tagline : '');
                       document.title = fullTitle;
+                      var cardTitle = document.getElementById('login-card-title');
+                      if (cardTitle) {
+                        var text = cardTitle.innerText;
+                        if (text.indexOf('Sign In') !== -1) {
+                          cardTitle.innerText = 'Sign In to ' + name;
+                        } else if (text.indexOf('Create') !== -1) {
+                          cardTitle.innerText = 'Create your ' + name + ' account';
+                        }
+                      }
                     }
                   } catch(e) {}
                 })();
@@ -579,14 +588,14 @@ export default function LoginPage() {
           
           {/* Card Title */}
           <div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white">
+            <h1 id="login-card-title" className="text-2xl font-black text-slate-900 dark:text-white">
               {currentUser
                 ? 'Active Account Session'
                 : mode === 'forgot_password'
                 ? 'Reset Password'
                 : mode === 'signin'
-                ? `Sign In to ${brandState.name}`
-                : `Create your ${brandState.name} account`}
+                ? (brandState.name ? `Sign In to ${brandState.name}` : 'Sign In')
+                : (brandState.name ? `Create your ${brandState.name} account` : 'Create Account')}
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               {mode === 'forgot_password'
@@ -1220,7 +1229,7 @@ export default function LoginPage() {
 
       {/* Bottom Footer Note */}
       <div className="mt-6 text-center text-xs text-slate-400 dark:text-slate-500">
-        <span>&copy; {new Date().getFullYear()} {brandState.name}{brandState.badge?.trim() ? ` ${brandState.badge.trim()}` : ''}. All rights reserved.</span>
+        <span>&copy; {new Date().getFullYear()} {brandState.name ? `${brandState.name}${brandState.badge?.trim() ? ` ${brandState.badge.trim()}` : ''}. ` : ''}All rights reserved.</span>
       </div>
     </div>
   );

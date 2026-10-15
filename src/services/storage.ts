@@ -85,7 +85,7 @@ function setLocalItem<T>(rawKey: string, value: T): void {
 }
 
 export const getCleanDefaultSettings = (businessName: string = '', phone: string = '', email: string = ''): SystemSettings => {
-  let globalWebName = 'SmartKhata';
+  let globalWebName = '';
   let globalWebLogo = '';
   let globalWebFavicon = '';
   let globalWebBadge = '';
@@ -312,7 +312,7 @@ export const StorageService = {
       ) {
         try {
           const brandObj = {
-            websiteName: data.settings.websiteName || existingSettings?.websiteName || 'SmartKhata',
+            websiteName: data.settings.websiteName || existingSettings?.websiteName || '',
             websiteLogo: data.settings.websiteLogo || existingSettings?.websiteLogo || '',
             websiteFavicon: data.settings.websiteFavicon || existingSettings?.websiteFavicon || '',
             websiteBadgeText: data.settings.websiteBadgeText !== undefined ? data.settings.websiteBadgeText : (existingSettings?.websiteBadgeText || ''),
@@ -530,7 +530,7 @@ export const StorageService = {
     ) {
       try {
         const brandObj = {
-          websiteName: merged.websiteName || 'SmartKhata',
+          websiteName: merged.websiteName || '',
           websiteLogo: merged.websiteLogo || '',
           websiteFavicon: merged.websiteFavicon || merged.websiteLogo || '',
           websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : '',

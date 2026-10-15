@@ -26,10 +26,10 @@ export async function generateMetadata(): Promise<Metadata> {
     if (favCookie?.value) brandFavicon = decodeURIComponent(favCookie.value);
   } catch {}
 
-  const displayName = brandName || 'SmartKhata';
+  const displayName = brandName || '';
   const displayBadge = brandBadge ? ` ${brandBadge}` : '';
   const displayTagline = brandTagline ? ` - ${brandTagline}` : '';
-  const title = `${displayName}${displayBadge}${displayTagline}`;
+  const title = displayName ? `${displayName}${displayBadge}${displayTagline}` : 'Fintech Operating System';
 
   return {
     title,
@@ -56,12 +56,13 @@ export default function RootLayout({
                   var brandTagline = '';
                   var brandFavicon = '';
                   var raw = localStorage.getItem('skp_global_branding');
+                  var parsed = null;
                   if (raw) {
-                    var parsed = JSON.parse(raw);
+                    parsed = JSON.parse(raw);
                     brandName = parsed.websiteName || '';
                     if (parsed.websiteBadgeText !== undefined) brandBadge = parsed.websiteBadgeText;
                     if (parsed.websiteTagline !== undefined) brandTagline = parsed.websiteTagline;
-                    brandFavicon = parsed.websiteFavicon || '';
+                    brandFavicon = parsed.websiteFavicon || parsed.websiteLogo || '';
                   }
                   if (!brandName) brandName = localStorage.getItem('skp_brand_name') || '';
                   if (!brandBadge) {
@@ -72,7 +73,10 @@ export default function RootLayout({
                     var tg = localStorage.getItem('skp_brand_tagline');
                     if (tg !== null && tg !== undefined) brandTagline = tg;
                   }
-                  if (!brandName || !brandBadge || !brandTagline) {
+                  if (!brandFavicon) {
+                    brandFavicon = localStorage.getItem('skp_brand_favicon') || localStorage.getItem('skp_brand_logo') || '';
+                  }
+                  if (!brandName || !brandBadge || !brandTagline || !brandFavicon) {
                     var cookies = document.cookie.split(';');
                     for (var i = 0; i < cookies.length; i++) {
                       var c = cookies[i].trim();
@@ -85,6 +89,12 @@ export default function RootLayout({
                       if (c.indexOf('skp_brand_tagline=') === 0 && !brandTagline) {
                         brandTagline = decodeURIComponent(c.substring('skp_brand_tagline='.length));
                       }
+                      if (c.indexOf('skp_brand_favicon=') === 0 && !brandFavicon) {
+                        brandFavicon = decodeURIComponent(c.substring('skp_brand_favicon='.length));
+                      }
+                      if (c.indexOf('skp_brand_logo=') === 0 && !brandFavicon) {
+                        brandFavicon = decodeURIComponent(c.substring('skp_brand_logo='.length));
+                      }
                     }
                   }
                   if (brandName) {
@@ -92,13 +102,20 @@ export default function RootLayout({
                     document.title = full;
                   }
                   if (brandFavicon) {
-                    var link = document.querySelector("link[rel*='icon']");
-                    if (!link) {
-                      link = document.createElement('link');
-                      link.rel = 'shortcut icon';
-                      document.head.appendChild(link);
+                    var oldIcons = document.querySelectorAll("link[rel*='icon']");
+                    for (var j = 0; j < oldIcons.length; j++) {
+                      if (oldIcons[j] && oldIcons[j].parentNode) {
+                        oldIcons[j].parentNode.removeChild(oldIcons[j]);
+                      }
                     }
-                    link.href = brandFavicon;
+                    var link1 = document.createElement('link');
+                    link1.rel = 'icon';
+                    link1.href = brandFavicon;
+                    document.head.appendChild(link1);
+                    var link2 = document.createElement('link');
+                    link2.rel = 'shortcut icon';
+                    link2.href = brandFavicon;
+                    document.head.appendChild(link2);
                   }
                 } catch(e) {}
               })();
