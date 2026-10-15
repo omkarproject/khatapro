@@ -46,7 +46,7 @@ export default function Footer() {
               </span>
             </div>
             <p className="text-[11px] leading-snug text-slate-500 dark:text-slate-400 line-clamp-2">
-              {settings.websiteName || 'SmartKhata'}{settings.websiteBadgeText?.trim() ? ` ${settings.websiteBadgeText.trim()}` : ''} — {t('digitalKhataLedger', 'Digital Ledger Operating System for merchants & enterprises')}.
+              {settings.websiteName || 'SmartKhata'}{settings.websiteBadgeText?.trim() ? ` ${settings.websiteBadgeText.trim()}` : ''}{settings.websiteTagline?.trim() ? ` — ${settings.websiteTagline.trim()}` : ''}
             </p>
             {businessGst ? (
               <div className="text-[10px] text-slate-400 font-mono">

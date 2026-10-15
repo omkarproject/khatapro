@@ -347,9 +347,11 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                     </span>
                   )}
                 </div>
-                <div className="hidden sm:block text-[10px] text-slate-400 font-medium tracking-tight">
-                  Fintech Operating System
-                </div>
+                {settings.websiteTagline?.trim() && (
+                  <div className="hidden sm:block text-[10px] text-slate-400 font-medium tracking-tight">
+                    {settings.websiteTagline.trim()}
+                  </div>
+                )}
               </div>
             </Link>
           </div>

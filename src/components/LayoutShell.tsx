@@ -30,7 +30,8 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
       const badge = settings.websiteBadgeText?.trim() || '';
       const fullName = badge ? `${siteName} ${badge}` : siteName;
       if (fullName) {
-        document.title = `${fullName} - Fintech & Digital Khata Operating System`;
+        const tagline = settings.websiteTagline?.trim() || '';
+        document.title = tagline ? `${fullName} - ${tagline}` : fullName;
       }
 
       if (settings.websiteFavicon) {

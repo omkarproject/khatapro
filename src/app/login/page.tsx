@@ -48,6 +48,7 @@ export default function LoginPage() {
     let name = 'SmartKhata';
     let badge = '';
     let badgeBg = 'fintech-gradient-primary';
+    let tagline = '';
     let logo = '';
     let favicon = '';
 
@@ -59,6 +60,7 @@ export default function LoginPage() {
           if (parsed.websiteName) name = parsed.websiteName;
           if (parsed.websiteBadgeText !== undefined) badge = parsed.websiteBadgeText;
           if (parsed.websiteBadgeBg) badgeBg = parsed.websiteBadgeBg;
+          if (parsed.websiteTagline !== undefined) tagline = parsed.websiteTagline;
           if (parsed.websiteLogo) logo = parsed.websiteLogo;
           if (parsed.websiteFavicon) favicon = parsed.websiteFavicon;
         }
@@ -74,13 +76,17 @@ export default function LoginPage() {
         if (storedBadgeBg) {
           badgeBg = storedBadgeBg;
         }
+        const storedTagline = localStorage.getItem('skp_brand_tagline');
+        if (storedTagline !== null && storedTagline !== undefined) {
+          tagline = storedTagline;
+        }
         const storedLogo = localStorage.getItem('skp_brand_logo');
         if (storedLogo && !logo) logo = storedLogo;
         const storedFav = localStorage.getItem('skp_brand_favicon');
         if (storedFav && !favicon) favicon = storedFav;
 
         // Cookie fallback
-        if (!name || name === 'SmartKhata' || !badge || !logo) {
+        if (!name || name === 'SmartKhata' || !badge || !logo || !tagline) {
           const cookies = document.cookie.split(';');
           for (let i = 0; i < cookies.length; i++) {
             const c = cookies[i].trim();
@@ -93,6 +99,9 @@ export default function LoginPage() {
             if (c.indexOf('skp_brand_badge_bg=') === 0 && !storedBadgeBg) {
               badgeBg = decodeURIComponent(c.substring('skp_brand_badge_bg='.length));
             }
+            if (c.indexOf('skp_brand_tagline=') === 0 && !tagline) {
+              tagline = decodeURIComponent(c.substring('skp_brand_tagline='.length));
+            }
             if (c.indexOf('skp_brand_logo=') === 0 && !logo) {
               logo = decodeURIComponent(c.substring('skp_brand_logo='.length));
             }
@@ -103,15 +112,16 @@ export default function LoginPage() {
         }
       } catch {}
     }
-    return { name, badge, badgeBg, logo, favicon };
+    return { name, badge, badgeBg, tagline, logo, favicon };
   });
 
   useEffect(() => {
-    if (settings.websiteName || settings.websiteBadgeText !== undefined || settings.websiteLogo) {
+    if (settings.websiteName || settings.websiteBadgeText !== undefined || settings.websiteLogo || settings.websiteTagline !== undefined) {
       setBrandState({
         name: settings.websiteName || 'SmartKhata',
         badge: settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : '',
         badgeBg: settings.websiteBadgeBg || 'fintech-gradient-primary',
+        tagline: settings.websiteTagline !== undefined ? settings.websiteTagline : '',
         logo: settings.websiteLogo || '',
         favicon: settings.websiteFavicon || '',
       });
@@ -123,6 +133,7 @@ export default function LoginPage() {
           name: e.detail.websiteName || 'SmartKhata',
           badge: e.detail.websiteBadgeText !== undefined ? e.detail.websiteBadgeText : '',
           badgeBg: e.detail.websiteBadgeBg || 'fintech-gradient-primary',
+          tagline: e.detail.websiteTagline !== undefined ? e.detail.websiteTagline : '',
           logo: e.detail.websiteLogo || '',
           favicon: e.detail.websiteFavicon || '',
         });
@@ -130,7 +141,7 @@ export default function LoginPage() {
     };
     window.addEventListener('khatapro_branding_changed', onBrandChange);
     return () => window.removeEventListener('khatapro_branding_changed', onBrandChange);
-  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteBadgeBg, settings.websiteLogo, settings.websiteFavicon]);
+  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteBadgeBg, settings.websiteTagline, settings.websiteLogo, settings.websiteFavicon]);
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot_password'>('signin');
   const [step, setStep] = useState<'input' | 'otp' | 'reset_direct'>('input');
@@ -481,9 +492,9 @@ export default function LoginPage() {
                     var logo = (p && p.websiteLogo) ? p.websiteLogo : (localStorage.getItem('skp_brand_logo') || '');
                     var name = (p && p.websiteName) ? p.websiteName : (localStorage.getItem('skp_brand_name') || '');
                     var badge = (p && p.websiteBadgeText !== undefined) ? p.websiteBadgeText : (localStorage.getItem('skp_brand_badge') || '');
-                    var badgeBg = (p && p.websiteBadgeBg) ? p.websiteBadgeBg : (localStorage.getItem('skp_brand_badge_bg') || '');
+                    var tagline = (p && p.websiteTagline !== undefined) ? p.websiteTagline : (localStorage.getItem('skp_brand_tagline') || '');
 
-                    if (!logo || !name || !badge || !badgeBg) {
+                    if (!logo || !name || !badge || !badgeBg || !tagline) {
                       var cookies = document.cookie.split(';');
                       for (var i = 0; i < cookies.length; i++) {
                         var c = cookies[i].trim();
@@ -491,6 +502,7 @@ export default function LoginPage() {
                         if (c.indexOf('skp_brand_name=') === 0 && !name) name = decodeURIComponent(c.substring('skp_brand_name='.length));
                         if (c.indexOf('skp_brand_badge=') === 0 && !badge) badge = decodeURIComponent(c.substring('skp_brand_badge='.length));
                         if (c.indexOf('skp_brand_badge_bg=') === 0 && !badgeBg) badgeBg = decodeURIComponent(c.substring('skp_brand_badge_bg='.length));
+                        if (c.indexOf('skp_brand_tagline=') === 0 && !tagline) tagline = decodeURIComponent(c.substring('skp_brand_tagline='.length));
                       }
                     }
 
@@ -516,14 +528,32 @@ export default function LoginPage() {
                         b.style.display = 'none';
                       }
                     }
+                    var tg = document.getElementById('login-brand-tagline-display');
+                    if (tg) {
+                      if (tagline && tagline.trim()) {
+                        tg.textContent = tagline.trim();
+                        tg.style.display = 'block';
+                      } else {
+                        tg.style.display = 'none';
+                      }
+                    }
+                    if (name) {
+                      var fullTitle = name + (badge ? ' ' + badge : '') + (tagline ? ' - ' + tagline : '');
+                      document.title = fullTitle;
+                    }
                   } catch(e) {}
                 })();
               `,
             }}
           />
           
-          <p className="text-[11px] font-semibold text-slate-400 tracking-wider uppercase font-mono mt-0.5">
-            Fintech Operating System
+          <p
+            id="login-brand-tagline-display"
+            className={`text-[11px] font-semibold text-slate-400 tracking-wider uppercase font-mono mt-0.5 ${
+              brandState.tagline?.trim() ? 'block' : 'hidden'
+            }`}
+          >
+            {brandState.tagline?.trim() || ''}
           </p>
         </Link>
 

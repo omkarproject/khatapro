@@ -90,6 +90,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
   let globalWebFavicon = '';
   let globalWebBadge = '';
   let globalWebBadgeBg = 'fintech-gradient-primary';
+  let globalWebTagline = '';
 
   if (typeof window !== 'undefined') {
     try {
@@ -101,6 +102,10 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
         const badgeBgMatch = document.cookie.match(/(?:^|;\s*)skp_brand_badge_bg=([^;]+)/);
         if (badgeBgMatch && badgeBgMatch[1]) {
           globalWebBadgeBg = decodeURIComponent(badgeBgMatch[1]);
+        }
+        const tagMatch = document.cookie.match(/(?:^|;\s*)skp_brand_tagline=([^;]+)/);
+        if (tagMatch && tagMatch[1]) {
+          globalWebTagline = decodeURIComponent(tagMatch[1]);
         }
         const nameMatch = document.cookie.match(/(?:^|;\s*)skp_brand_name=([^;]+)/);
         if (nameMatch && nameMatch[1]) {
@@ -120,6 +125,8 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
         if (storedBadge !== null && storedBadge !== undefined) globalWebBadge = storedBadge;
         const storedBadgeBg = localStorage.getItem('skp_brand_badge_bg');
         if (storedBadgeBg) globalWebBadgeBg = storedBadgeBg;
+        const storedTag = localStorage.getItem('skp_brand_tagline');
+        if (storedTag !== null && storedTag !== undefined) globalWebTagline = storedTag;
         const storedName = localStorage.getItem('skp_brand_name');
         if (storedName) globalWebName = storedName;
         const storedLogo = localStorage.getItem('skp_brand_logo');
@@ -134,6 +141,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
           if (b.websiteFavicon !== undefined) globalWebFavicon = b.websiteFavicon;
           if (b.websiteBadgeText !== undefined) globalWebBadge = b.websiteBadgeText;
           if (b.websiteBadgeBg) globalWebBadgeBg = b.websiteBadgeBg;
+          if (b.websiteTagline !== undefined) globalWebTagline = b.websiteTagline;
         }
         const rawG = localStorage.getItem('skp_global_system_config');
         if (rawG) {
@@ -144,6 +152,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
             if (g.websiteBranding.websiteFavicon && !globalWebFavicon) globalWebFavicon = g.websiteBranding.websiteFavicon;
             if (g.websiteBranding.websiteBadgeText !== undefined && !rawB) globalWebBadge = g.websiteBranding.websiteBadgeText;
             if (g.websiteBranding.websiteBadgeBg && (!rawB || !storedBadgeBg)) globalWebBadgeBg = g.websiteBranding.websiteBadgeBg;
+            if (g.websiteBranding.websiteTagline !== undefined && (!rawB || !storedTag)) globalWebTagline = g.websiteBranding.websiteTagline;
           }
         }
       }
@@ -205,6 +214,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
     websiteFavicon: globalWebFavicon,
     websiteBadgeText: globalWebBadge,
     websiteBadgeBg: globalWebBadgeBg,
+    websiteTagline: globalWebTagline,
   };
 };
 
@@ -297,7 +307,8 @@ export const StorageService = {
         data.settings.websiteLogo ||
         data.settings.websiteFavicon ||
         data.settings.websiteBadgeText !== undefined ||
-        data.settings.websiteBadgeBg !== undefined
+        data.settings.websiteBadgeBg !== undefined ||
+        data.settings.websiteTagline !== undefined
       ) {
         try {
           const brandObj = {
@@ -306,11 +317,13 @@ export const StorageService = {
             websiteFavicon: data.settings.websiteFavicon || existingSettings?.websiteFavicon || '',
             websiteBadgeText: data.settings.websiteBadgeText !== undefined ? data.settings.websiteBadgeText : (existingSettings?.websiteBadgeText || ''),
             websiteBadgeBg: data.settings.websiteBadgeBg || existingSettings?.websiteBadgeBg || 'fintech-gradient-primary',
+            websiteTagline: data.settings.websiteTagline !== undefined ? data.settings.websiteTagline : (existingSettings?.websiteTagline || ''),
           };
           if (typeof localStorage !== 'undefined') {
             localStorage.setItem('skp_global_branding', JSON.stringify(brandObj));
             if (brandObj.websiteBadgeText !== undefined) localStorage.setItem('skp_brand_badge', brandObj.websiteBadgeText);
             if (brandObj.websiteBadgeBg) localStorage.setItem('skp_brand_badge_bg', brandObj.websiteBadgeBg);
+            if (brandObj.websiteTagline !== undefined) localStorage.setItem('skp_brand_tagline', brandObj.websiteTagline);
             if (brandObj.websiteName) localStorage.setItem('skp_brand_name', brandObj.websiteName);
             if (brandObj.websiteLogo) localStorage.setItem('skp_brand_logo', brandObj.websiteLogo);
             if (brandObj.websiteFavicon) localStorage.setItem('skp_brand_favicon', brandObj.websiteFavicon);
@@ -318,6 +331,7 @@ export const StorageService = {
           if (typeof document !== 'undefined') {
             document.cookie = `skp_brand_badge=${encodeURIComponent(brandObj.websiteBadgeText)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
             document.cookie = `skp_brand_badge_bg=${encodeURIComponent(brandObj.websiteBadgeBg)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+            document.cookie = `skp_brand_tagline=${encodeURIComponent(brandObj.websiteTagline)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
             document.cookie = `skp_brand_name=${encodeURIComponent(brandObj.websiteName)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
             if (brandObj.websiteLogo && brandObj.websiteLogo.length < 2000) {
               document.cookie = `skp_brand_logo=${encodeURIComponent(brandObj.websiteLogo)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
@@ -455,6 +469,7 @@ export const StorageService = {
             if (globalConf.websiteBranding.websiteFavicon !== undefined) s.websiteFavicon = globalConf.websiteBranding.websiteFavicon;
             if (globalConf.websiteBranding.websiteBadgeText !== undefined) s.websiteBadgeText = globalConf.websiteBranding.websiteBadgeText;
             if (globalConf.websiteBranding.websiteBadgeBg) s.websiteBadgeBg = globalConf.websiteBranding.websiteBadgeBg;
+            if (globalConf.websiteBranding.websiteTagline !== undefined) s.websiteTagline = globalConf.websiteBranding.websiteTagline;
           }
         }
         const rawBranding = localStorage.getItem('skp_global_branding');
@@ -465,6 +480,7 @@ export const StorageService = {
           if (brandConf.websiteFavicon !== undefined) s.websiteFavicon = brandConf.websiteFavicon;
           if (brandConf.websiteBadgeText !== undefined) s.websiteBadgeText = brandConf.websiteBadgeText;
           if (brandConf.websiteBadgeBg) s.websiteBadgeBg = brandConf.websiteBadgeBg;
+          if (brandConf.websiteTagline !== undefined) s.websiteTagline = brandConf.websiteTagline;
         }
       } catch {}
     }
@@ -509,7 +525,8 @@ export const StorageService = {
       merged.websiteLogo !== undefined ||
       merged.websiteFavicon !== undefined ||
       merged.websiteBadgeText !== undefined ||
-      merged.websiteBadgeBg !== undefined
+      merged.websiteBadgeBg !== undefined ||
+      merged.websiteTagline !== undefined
     ) {
       try {
         const brandObj = {
@@ -518,6 +535,7 @@ export const StorageService = {
           websiteFavicon: merged.websiteFavicon || merged.websiteLogo || '',
           websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : '',
           websiteBadgeBg: merged.websiteBadgeBg || 'fintech-gradient-primary',
+          websiteTagline: merged.websiteTagline !== undefined ? merged.websiteTagline : '',
         };
         if (typeof localStorage !== 'undefined') {
           localStorage.setItem('skp_global_branding', JSON.stringify(brandObj));
@@ -530,6 +548,9 @@ export const StorageService = {
           }
           if (brandObj.websiteBadgeBg) {
             localStorage.setItem('skp_brand_badge_bg', brandObj.websiteBadgeBg);
+          }
+          if (brandObj.websiteTagline !== undefined) {
+            localStorage.setItem('skp_brand_tagline', brandObj.websiteTagline);
           }
           if (brandObj.websiteName) {
             localStorage.setItem('skp_brand_name', brandObj.websiteName);
@@ -544,6 +565,7 @@ export const StorageService = {
         if (typeof document !== 'undefined') {
           document.cookie = `skp_brand_badge=${encodeURIComponent(brandObj.websiteBadgeText)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
           document.cookie = `skp_brand_badge_bg=${encodeURIComponent(brandObj.websiteBadgeBg)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+          document.cookie = `skp_brand_tagline=${encodeURIComponent(brandObj.websiteTagline)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
           document.cookie = `skp_brand_name=${encodeURIComponent(brandObj.websiteName)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
           if (brandObj.websiteLogo && brandObj.websiteLogo.length < 2000) {
             document.cookie = `skp_brand_logo=${encodeURIComponent(brandObj.websiteLogo)}; Path=/; Max-Age=31536000; SameSite=Lax;`;

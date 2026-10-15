@@ -871,6 +871,7 @@ export default function SettingsPage() {
   const [webName, setWebName] = useState(() => settings.websiteName || 'SmartKhata');
   const [webBadgeText, setWebBadgeText] = useState(() => settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO');
   const [webBadgeBg, setWebBadgeBg] = useState(() => settings.websiteBadgeBg || 'fintech-gradient-primary');
+  const [webTagline, setWebTagline] = useState(() => settings.websiteTagline !== undefined ? settings.websiteTagline : '');
   const [webLogo, setWebLogo] = useState(() => settings.websiteLogo || '');
   const [webLogoMode, setWebLogoMode] = useState<'upload' | 'link'>('upload');
   const [webLogoLinkInput, setWebLogoLinkInput] = useState('');
@@ -885,9 +886,10 @@ export default function SettingsPage() {
     if (settings.websiteName) setWebName(settings.websiteName);
     if (settings.websiteBadgeText !== undefined) setWebBadgeText(settings.websiteBadgeText);
     if (settings.websiteBadgeBg) setWebBadgeBg(settings.websiteBadgeBg);
+    if (settings.websiteTagline !== undefined) setWebTagline(settings.websiteTagline);
     if (settings.websiteLogo) setWebLogo(settings.websiteLogo);
     if (settings.websiteFavicon) setWebFavicon(settings.websiteFavicon);
-  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteBadgeBg, settings.websiteLogo, settings.websiteFavicon]);
+  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteBadgeBg, settings.websiteTagline, settings.websiteLogo, settings.websiteFavicon]);
 
   // Handle Website Logo Upload with auto-resize
   const handleUploadWebLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1005,12 +1007,14 @@ export default function SettingsPage() {
     const finalFavicon = webFaviconMode === 'link' ? (webFaviconLinkInput.trim() || webFavicon) : (webFavicon || finalLogo);
     const finalName = webName.trim() || 'SmartKhata';
     const finalBadge = webBadgeText.trim();
+    const finalTagline = webTagline.trim();
 
     const updated: SystemSettings = {
       ...settings,
       websiteName: finalName,
       websiteBadgeText: finalBadge,
       websiteBadgeBg: webBadgeBg,
+      websiteTagline: finalTagline,
       websiteLogo: finalLogo,
       websiteFavicon: finalFavicon,
     };
@@ -1019,6 +1023,7 @@ export default function SettingsPage() {
     setWebName(finalName);
     setWebBadgeText(finalBadge);
     setWebBadgeBg(webBadgeBg);
+    setWebTagline(finalTagline);
     setWebLogo(finalLogo);
     setWebFavicon(finalFavicon);
 
@@ -1026,6 +1031,7 @@ export default function SettingsPage() {
       websiteName: finalName,
       websiteBadgeText: finalBadge,
       websiteBadgeBg: webBadgeBg,
+      websiteTagline: finalTagline,
       websiteLogo: finalLogo,
       websiteFavicon: finalFavicon,
     };
@@ -1038,6 +1044,7 @@ export default function SettingsPage() {
       localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
       localStorage.setItem('skp_brand_badge', finalBadge);
       localStorage.setItem('skp_brand_badge_bg', webBadgeBg);
+      localStorage.setItem('skp_brand_tagline', finalTagline);
       localStorage.setItem('skp_brand_name', finalName);
       if (finalLogo) localStorage.setItem('skp_brand_logo', finalLogo);
       if (finalFavicon) localStorage.setItem('skp_brand_favicon', finalFavicon);
@@ -1046,6 +1053,7 @@ export default function SettingsPage() {
     if (typeof document !== 'undefined') {
       document.cookie = `skp_brand_badge=${encodeURIComponent(finalBadge)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
       document.cookie = `skp_brand_badge_bg=${encodeURIComponent(webBadgeBg)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+      document.cookie = `skp_brand_tagline=${encodeURIComponent(finalTagline)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
       document.cookie = `skp_brand_name=${encodeURIComponent(finalName)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
       if (finalLogo && finalLogo.length < 2000) {
         document.cookie = `skp_brand_logo=${encodeURIComponent(finalLogo)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
@@ -1066,7 +1074,8 @@ export default function SettingsPage() {
     window.dispatchEvent(new CustomEvent('khatapro_branding_changed', { detail: brandPayload }));
 
     const badgeSuffix = finalBadge ? ` ${finalBadge}` : '';
-    document.title = `${finalName}${badgeSuffix} - Enterprise Fintech & Digital Khata Operating System`;
+    const taglineSuffix = finalTagline ? ` - ${finalTagline}` : '';
+    document.title = `${finalName}${badgeSuffix}${taglineSuffix}`;
     const targetFav = finalFavicon || finalLogo || '/icon.svg';
     try {
       const oldLinks = document.querySelectorAll("link[rel*='icon'], link[rel='apple-touch-icon']");
@@ -1079,7 +1088,7 @@ export default function SettingsPage() {
       });
     } catch (e) {}
 
-    addToast('Website Branding Updated! 🎨', 'Website Name, Logo, Favicon & Badge pure portal par live update ho gaye hain!', 'success');
+    addToast('Website Branding Updated! 🎨', 'Website Name, Subtitle, Logo, Favicon & Badge pure portal par live update ho gaye hain!', 'success');
     setIsSavingBranding(false);
   };
 
@@ -2816,6 +2825,22 @@ export default function SettingsPage() {
                 />
                 <p className="text-[10px] text-slate-400 mt-1.5">
                   Default: <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">SmartKhata</span>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Website Subtitle / Tagline (e.g. Fintech Operating System)
+                </label>
+                <input
+                  type="text"
+                  value={webTagline}
+                  onChange={(e) => setWebTagline(e.target.value)}
+                  placeholder="e.g. Fintech Operating System, Cloud ERP System"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-all font-semibold"
+                />
+                <p className="text-[10px] text-slate-400 mt-1.5">
+                  Navbar, Footer, Login &amp; Browser tab me dikhne wala subtitle (Blank to hide)
                 </p>
               </div>
 

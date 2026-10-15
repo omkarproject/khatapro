@@ -410,6 +410,7 @@ export interface SystemSettings {
   websiteFavicon?: string;
   websiteBadgeText?: string;
   websiteBadgeBg?: string;
+  websiteTagline?: string;
   broadcasts?: BroadcastMessage[];
   supportTickets?: SupportTicket[];
 }

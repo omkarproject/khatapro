@@ -11,6 +11,7 @@ import { cookies } from 'next/headers';
 export async function generateMetadata(): Promise<Metadata> {
   let brandName = '';
   let brandBadge = '';
+  let brandTagline = '';
   let brandFavicon = '';
 
   try {
@@ -19,13 +20,16 @@ export async function generateMetadata(): Promise<Metadata> {
     if (nameCookie?.value) brandName = decodeURIComponent(nameCookie.value);
     const badgeCookie = cookieStore.get('skp_brand_badge');
     if (badgeCookie?.value !== undefined) brandBadge = decodeURIComponent(badgeCookie.value);
+    const tagCookie = cookieStore.get('skp_brand_tagline');
+    if (tagCookie?.value !== undefined) brandTagline = decodeURIComponent(tagCookie.value);
     const favCookie = cookieStore.get('skp_brand_favicon');
     if (favCookie?.value) brandFavicon = decodeURIComponent(favCookie.value);
   } catch {}
 
   const displayName = brandName || 'SmartKhata';
   const displayBadge = brandBadge ? ` ${brandBadge}` : '';
-  const title = `${displayName}${displayBadge} - Enterprise Fintech & Digital Khata Operating System`;
+  const displayTagline = brandTagline ? ` - ${brandTagline}` : '';
+  const title = `${displayName}${displayBadge}${displayTagline}`;
 
   return {
     title,
@@ -49,12 +53,14 @@ export default function RootLayout({
                 try {
                   var brandName = '';
                   var brandBadge = '';
+                  var brandTagline = '';
                   var brandFavicon = '';
                   var raw = localStorage.getItem('skp_global_branding');
                   if (raw) {
                     var parsed = JSON.parse(raw);
                     brandName = parsed.websiteName || '';
                     if (parsed.websiteBadgeText !== undefined) brandBadge = parsed.websiteBadgeText;
+                    if (parsed.websiteTagline !== undefined) brandTagline = parsed.websiteTagline;
                     brandFavicon = parsed.websiteFavicon || '';
                   }
                   if (!brandName) brandName = localStorage.getItem('skp_brand_name') || '';
@@ -62,7 +68,11 @@ export default function RootLayout({
                     var b = localStorage.getItem('skp_brand_badge');
                     if (b !== null && b !== undefined) brandBadge = b;
                   }
-                  if (!brandName || !brandBadge) {
+                  if (!brandTagline) {
+                    var tg = localStorage.getItem('skp_brand_tagline');
+                    if (tg !== null && tg !== undefined) brandTagline = tg;
+                  }
+                  if (!brandName || !brandBadge || !brandTagline) {
                     var cookies = document.cookie.split(';');
                     for (var i = 0; i < cookies.length; i++) {
                       var c = cookies[i].trim();
@@ -72,11 +82,14 @@ export default function RootLayout({
                       if (c.indexOf('skp_brand_badge=') === 0 && !brandBadge) {
                         brandBadge = decodeURIComponent(c.substring('skp_brand_badge='.length));
                       }
+                      if (c.indexOf('skp_brand_tagline=') === 0 && !brandTagline) {
+                        brandTagline = decodeURIComponent(c.substring('skp_brand_tagline='.length));
+                      }
                     }
                   }
                   if (brandName) {
-                    var full = brandName + (brandBadge ? ' ' + brandBadge : '');
-                    document.title = full + ' - Enterprise Fintech & Digital Khata Operating System';
+                    var full = brandName + (brandBadge ? ' ' + brandBadge : '') + (brandTagline ? ' - ' + brandTagline : '');
+                    document.title = full;
                   }
                   if (brandFavicon) {
                     var link = document.querySelector("link[rel*='icon']");
