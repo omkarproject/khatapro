@@ -857,8 +857,20 @@ export default function SettingsPage() {
   };
 
   // Website Branding State
+  const BADGE_COLOR_PRESETS = [
+    { id: 'cyan_indigo', label: 'Cyan / Indigo', class: 'fintech-gradient-primary', bg: 'linear-gradient(135deg, #06b6d4, #4f46e5)' },
+    { id: 'indigo_violet', label: 'Indigo / Violet', class: 'bg-gradient-to-r from-indigo-600 to-purple-600', bg: 'linear-gradient(135deg, #4f46e5, #9333ea)' },
+    { id: 'purple_pink', label: 'Purple / Pink', class: 'bg-gradient-to-r from-purple-600 to-pink-500', bg: 'linear-gradient(135deg, #9333ea, #ec4899)' },
+    { id: 'rose_red', label: 'Rose / Red', class: 'bg-gradient-to-r from-rose-500 to-red-600', bg: 'linear-gradient(135deg, #f43f5e, #dc2626)' },
+    { id: 'amber_orange', label: 'Amber / Orange', class: 'bg-gradient-to-r from-amber-500 to-orange-500', bg: 'linear-gradient(135deg, #f59e0b, #f97316)' },
+    { id: 'emerald_teal', label: 'Emerald / Teal', class: 'bg-gradient-to-r from-emerald-500 to-teal-600', bg: 'linear-gradient(135deg, #10b981, #0d9488)' },
+    { id: 'blue_cyan', label: 'Electric Blue', class: 'bg-gradient-to-r from-blue-600 to-cyan-500', bg: 'linear-gradient(135deg, #2563eb, #06b6d4)' },
+    { id: 'slate_dark', label: 'Stealth Dark', class: 'bg-gradient-to-r from-slate-800 to-slate-900 border border-slate-700', bg: 'linear-gradient(135deg, #1e293b, #0f172a)' },
+  ];
+
   const [webName, setWebName] = useState(() => settings.websiteName || 'SmartKhata');
   const [webBadgeText, setWebBadgeText] = useState(() => settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO');
+  const [webBadgeBg, setWebBadgeBg] = useState(() => settings.websiteBadgeBg || 'fintech-gradient-primary');
   const [webLogo, setWebLogo] = useState(() => settings.websiteLogo || '');
   const [webLogoMode, setWebLogoMode] = useState<'upload' | 'link'>('upload');
   const [webLogoLinkInput, setWebLogoLinkInput] = useState('');
@@ -872,9 +884,10 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings.websiteName) setWebName(settings.websiteName);
     if (settings.websiteBadgeText !== undefined) setWebBadgeText(settings.websiteBadgeText);
+    if (settings.websiteBadgeBg) setWebBadgeBg(settings.websiteBadgeBg);
     if (settings.websiteLogo) setWebLogo(settings.websiteLogo);
     if (settings.websiteFavicon) setWebFavicon(settings.websiteFavicon);
-  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteLogo, settings.websiteFavicon]);
+  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteBadgeBg, settings.websiteLogo, settings.websiteFavicon]);
 
   // Handle Website Logo Upload with auto-resize
   const handleUploadWebLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -997,6 +1010,7 @@ export default function SettingsPage() {
       ...settings,
       websiteName: finalName,
       websiteBadgeText: finalBadge,
+      websiteBadgeBg: webBadgeBg,
       websiteLogo: finalLogo,
       websiteFavicon: finalFavicon,
     };
@@ -1004,12 +1018,14 @@ export default function SettingsPage() {
     updateSettings(updated);
     setWebName(finalName);
     setWebBadgeText(finalBadge);
+    setWebBadgeBg(webBadgeBg);
     setWebLogo(finalLogo);
     setWebFavicon(finalFavicon);
 
     const brandPayload = {
       websiteName: finalName,
       websiteBadgeText: finalBadge,
+      websiteBadgeBg: webBadgeBg,
       websiteLogo: finalLogo,
       websiteFavicon: finalFavicon,
     };
@@ -1021,6 +1037,7 @@ export default function SettingsPage() {
       globalObj.websiteBranding = brandPayload;
       localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
       localStorage.setItem('skp_brand_badge', finalBadge);
+      localStorage.setItem('skp_brand_badge_bg', webBadgeBg);
       localStorage.setItem('skp_brand_name', finalName);
       if (finalLogo) localStorage.setItem('skp_brand_logo', finalLogo);
       if (finalFavicon) localStorage.setItem('skp_brand_favicon', finalFavicon);
@@ -1028,6 +1045,7 @@ export default function SettingsPage() {
 
     if (typeof document !== 'undefined') {
       document.cookie = `skp_brand_badge=${encodeURIComponent(finalBadge)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+      document.cookie = `skp_brand_badge_bg=${encodeURIComponent(webBadgeBg)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
       document.cookie = `skp_brand_name=${encodeURIComponent(finalName)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
       if (finalLogo && finalLogo.length < 2000) {
         document.cookie = `skp_brand_logo=${encodeURIComponent(finalLogo)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
@@ -2746,36 +2764,28 @@ export default function SettingsPage() {
       {mainTab === 'branding' && isAdmin && brandingSubTab === 'visuals' && (
         <form onSubmit={handleSaveBranding} className="space-y-6 animate-in fade-in">
           
-          {/* Header Banner */}
-          <div className="p-5 rounded-3xl bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-indigo-500/10 border border-pink-200/80 dark:border-pink-900/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Palette className="w-4 h-4 text-pink-500" />
-                <span className="text-xs font-mono font-black text-pink-600 dark:text-pink-400 uppercase tracking-wider">
-                  White-label &amp; Website Identity
-                </span>
-              </div>
-              <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                Website Branding &amp; Visual Assets
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xl">
-                Yahan se aap puri website ka <strong>Brand Name</strong>, <strong>Header Logo</strong>, aur <strong>Browser Favicon</strong> update kar sakte hain. Changes pure portal aur browser tabs me live reflect honge.
-              </p>
+          {/* Header Banner - Slim Strip */}
+          <div className="py-2.5 px-4 rounded-2xl bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-indigo-500/10 border border-pink-200/80 dark:border-pink-900/40 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Palette className="w-4 h-4 text-pink-500 shrink-0" />
+              <span className="text-xs font-mono font-black text-pink-600 dark:text-pink-400 uppercase tracking-wider">
+                Website Identity &amp; Branding
+              </span>
             </div>
 
             <button
               type="submit"
               disabled={isSavingBranding}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-pink-600 to-indigo-600 hover:from-pink-700 hover:to-indigo-700 text-white font-bold text-xs shadow-lg shadow-pink-500/20 transition-all cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-gradient-to-r from-pink-600 to-indigo-600 hover:from-pink-700 hover:to-indigo-700 text-white font-bold text-xs shadow-md shadow-pink-500/20 transition-all cursor-pointer disabled:opacity-50"
             >
-              <Save className="w-4 h-4" />
-              <span>{isSavingBranding ? 'Saving Branding...' : 'Save Branding Changes'}</span>
+              <Save className="w-3.5 h-3.5" />
+              <span>{isSavingBranding ? 'Saving...' : 'Save Branding Changes'}</span>
             </button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            {/* Card 1: Website Name */}
+            {/* Card 1: Website Name & Badge */}
             <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
@@ -2784,10 +2794,10 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                      Website Name
+                      Website Name &amp; Badge
                     </h3>
                     <p className="text-[11px] text-slate-400">
-                      Navbar, Footer, aur browser title me dikhne wala brand name
+                      Brand display name aur tag badge configuration
                     </p>
                   </div>
                 </div>
@@ -2809,43 +2819,66 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              {/* Pro Badge / Tag Text Input */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Pro Badge / Tag Text (e.g. PRO, ERP, VIP, BIZ)
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={webBadgeText}
-                    onChange={(e) => setWebBadgeText(e.target.value.toUpperCase())}
-                    placeholder="e.g. PRO, ERP, VIP"
-                    maxLength={10}
-                    className="w-44 px-3.5 py-2 text-xs uppercase rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-all font-black tracking-wider"
-                  />
-                  <span className="text-[11px] text-slate-400">
-                    (Max 10 chars; blank to hide badge)
-                  </span>
-                </div>
-                <p className="text-[10px] text-slate-400 mt-1.5">
-                  Default: <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">Custom Tag</span>. Pure website me logo aur name ke sath show hoga.
-                </p>
-              </div>
-
-              {/* Live Preview Box */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                <div className="min-w-0">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Live Navbar Preview</span>
-                  <span className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5 truncate">
-                    {webName || 'SmartKhata'}
+              {/* Pro Badge / Tag Text Input & Color Selection */}
+              <div className="space-y-3 pt-1 border-t border-slate-100 dark:border-slate-800">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Pro Badge / Tag Text (e.g. PRO, ERP, VIP, BIZ)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={webBadgeText}
+                      onChange={(e) => setWebBadgeText(e.target.value.toUpperCase())}
+                      placeholder="e.g. PRO, ERP, VIP"
+                      maxLength={10}
+                      className="w-36 px-3.5 py-2 text-xs uppercase rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-all font-black tracking-wider"
+                    />
                     {webBadgeText?.trim() && (
-                      <span className="text-[8.5px] px-1.5 py-0.5 rounded-md font-extrabold uppercase tracking-wider fintech-gradient-primary text-white shadow-xs">
+                      <span className={`text-[8.5px] px-2 py-1 rounded-md font-extrabold uppercase tracking-wider text-white shadow-xs ${webBadgeBg}`}>
                         {webBadgeText.trim()}
                       </span>
                     )}
-                  </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    (Max 10 chars; blank to hide badge)
+                  </p>
                 </div>
-                <Sparkles className="w-4 h-4 text-pink-500 shrink-0" />
+
+                {/* Badge Background Color Options */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                    Badge Background Color
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {BADGE_COLOR_PRESETS.map((preset) => {
+                      const isSelected = webBadgeBg === preset.class;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => setWebBadgeBg(preset.class)}
+                          className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                            isSelected
+                              ? 'ring-2 ring-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-400 dark:border-indigo-600'
+                              : 'border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/70 hover:border-slate-300'
+                          }`}
+                        >
+                          <span
+                            className="w-3.5 h-3.5 rounded-full shadow-inner shrink-0"
+                            style={{ background: preset.bg }}
+                          />
+                          <span className="text-[10.5px] text-slate-700 dark:text-slate-300 truncate font-semibold">
+                            {preset.label}
+                          </span>
+                          {isSelected && (
+                            <Check className="w-3 h-3 text-indigo-600 dark:text-indigo-400 ml-auto shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -2863,24 +2896,6 @@ export default function SettingsPage() {
                     <p className="text-[11px] text-slate-400">
                       Top navigation bar aur footer me dikhne wala logo
                     </p>
-                  </div>
-                </div>
-
-                {/* Info Tooltip Icon */}
-                <div className="group relative">
-                  <button type="button" className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-                    <Info className="w-4 h-4" />
-                  </button>
-                  <div className="absolute right-0 top-full mt-2 w-64 p-3 rounded-2xl bg-slate-900 text-white text-[11px] shadow-xl border border-slate-700 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                    <div className="font-bold text-indigo-300 mb-1 flex items-center gap-1">
-                      <Info className="w-3.5 h-3.5" /> Recommended Logo Dimensions
-                    </div>
-                    <ul className="space-y-1 text-slate-300">
-                      <li>• <strong>Size / Dimensions:</strong> 256x256 px ya 512x512 px (Square 1:1)</li>
-                      <li>• <strong>Height x Width:</strong> 36px to 64px display</li>
-                      <li>• <strong>Format:</strong> Transparent PNG, WEBP, SVG, ya JPG</li>
-                      <li>• <strong>File Size:</strong> Less than 2 MB</li>
-                    </ul>
                   </div>
                 </div>
               </div>
@@ -3023,24 +3038,6 @@ export default function SettingsPage() {
                     </p>
                   </div>
                 </div>
-
-                {/* Info Tooltip Icon */}
-                <div className="group relative">
-                  <button type="button" className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
-                    <Info className="w-4 h-4" />
-                  </button>
-                  <div className="absolute right-0 top-full mt-2 w-64 p-3 rounded-2xl bg-slate-900 text-white text-[11px] shadow-xl border border-slate-700 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                    <div className="font-bold text-amber-300 mb-1 flex items-center gap-1">
-                      <Info className="w-3.5 h-3.5" /> Recommended Favicon Dimensions
-                    </div>
-                    <ul className="space-y-1 text-slate-300">
-                      <li>• <strong>Size / Dimensions:</strong> 32x32 px ya 64x64 px (Square 1:1)</li>
-                      <li>• <strong>Height x Width:</strong> 16x16 px to 32x32 px tab render</li>
-                      <li>• <strong>Format:</strong> .ICO, PNG, ya SVG</li>
-                      <li>• <strong>Transparent Background:</strong> Highly recommended</li>
-                    </ul>
-                  </div>
-                </div>
               </div>
 
               {/* Mode Switcher: Upload vs Link */}
@@ -3162,55 +3159,6 @@ export default function SettingsPage() {
                     <X className="w-4 h-4" />
                   </button>
                 )}
-              </div>
-            </div>
-
-            {/* Card 4: Dimension & Size Guide Card */}
-            <div className="p-6 rounded-3xl bg-gradient-to-br from-indigo-50/50 via-white to-pink-50/40 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950/30 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
-                  <Info className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Dimensions &amp; Resolution Guide
-                  </h3>
-                  <p className="text-[11px] text-slate-400">
-                    Sahi aspect ratio aur size guidelines taki website visually crisp dikhe
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-3 text-xs">
-                <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700">
-                  <div className="font-bold text-slate-900 dark:text-white flex items-center justify-between">
-                    <span>1. Header Logo (Navbar / Footer)</span>
-                    <span className="font-mono text-[10px] text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md font-bold">256 × 256 px</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Square 1:1 ratio PNG ya SVG sabse best render hota hai. Height aur width website par auto-scale hoti hain. Transparent background prefer karein.
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700">
-                  <div className="font-bold text-slate-900 dark:text-white flex items-center justify-between">
-                    <span>2. Browser Favicon (Tab Icon)</span>
-                    <span className="font-mono text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-md font-bold">32 × 32 px</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    32x32 ya 64x64 pixel square icon .ico, .png ya .svg format me. Browser tabs, bookmarks bar aur mobile home screen shortcuts me clean aur sharp dikhta hai.
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700">
-                  <div className="font-bold text-slate-900 dark:text-white flex items-center justify-between">
-                    <span>3. Instant Realtime Update</span>
-                    <span className="font-mono text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md font-bold">Auto Live</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Save button click karte hi title tag, tab favicon, navbar brand aur footer sabhi jagah realtime me bina website restart kiye apply ho jata hai.
-                  </p>
-                </div>
               </div>
             </div>
 

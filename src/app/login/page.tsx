@@ -47,6 +47,7 @@ export default function LoginPage() {
   const [brandState, setBrandState] = useState(() => {
     let name = 'SmartKhata';
     let badge = '';
+    let badgeBg = 'fintech-gradient-primary';
     let logo = '';
     let favicon = '';
 
@@ -57,6 +58,7 @@ export default function LoginPage() {
           const parsed = JSON.parse(raw);
           if (parsed.websiteName) name = parsed.websiteName;
           if (parsed.websiteBadgeText !== undefined) badge = parsed.websiteBadgeText;
+          if (parsed.websiteBadgeBg) badgeBg = parsed.websiteBadgeBg;
           if (parsed.websiteLogo) logo = parsed.websiteLogo;
           if (parsed.websiteFavicon) favicon = parsed.websiteFavicon;
         }
@@ -67,6 +69,10 @@ export default function LoginPage() {
         const storedBadge = localStorage.getItem('skp_brand_badge');
         if (storedBadge !== null && storedBadge !== undefined) {
           badge = storedBadge;
+        }
+        const storedBadgeBg = localStorage.getItem('skp_brand_badge_bg');
+        if (storedBadgeBg) {
+          badgeBg = storedBadgeBg;
         }
         const storedLogo = localStorage.getItem('skp_brand_logo');
         if (storedLogo && !logo) logo = storedLogo;
@@ -84,6 +90,9 @@ export default function LoginPage() {
             if (c.indexOf('skp_brand_badge=') === 0 && !badge) {
               badge = decodeURIComponent(c.substring('skp_brand_badge='.length));
             }
+            if (c.indexOf('skp_brand_badge_bg=') === 0 && !storedBadgeBg) {
+              badgeBg = decodeURIComponent(c.substring('skp_brand_badge_bg='.length));
+            }
             if (c.indexOf('skp_brand_logo=') === 0 && !logo) {
               logo = decodeURIComponent(c.substring('skp_brand_logo='.length));
             }
@@ -94,7 +103,7 @@ export default function LoginPage() {
         }
       } catch {}
     }
-    return { name, badge, logo, favicon };
+    return { name, badge, badgeBg, logo, favicon };
   });
 
   useEffect(() => {
@@ -102,6 +111,7 @@ export default function LoginPage() {
       setBrandState({
         name: settings.websiteName || 'SmartKhata',
         badge: settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : '',
+        badgeBg: settings.websiteBadgeBg || 'fintech-gradient-primary',
         logo: settings.websiteLogo || '',
         favicon: settings.websiteFavicon || '',
       });
@@ -112,6 +122,7 @@ export default function LoginPage() {
         setBrandState({
           name: e.detail.websiteName || 'SmartKhata',
           badge: e.detail.websiteBadgeText !== undefined ? e.detail.websiteBadgeText : '',
+          badgeBg: e.detail.websiteBadgeBg || 'fintech-gradient-primary',
           logo: e.detail.websiteLogo || '',
           favicon: e.detail.websiteFavicon || '',
         });
@@ -119,7 +130,7 @@ export default function LoginPage() {
     };
     window.addEventListener('khatapro_branding_changed', onBrandChange);
     return () => window.removeEventListener('khatapro_branding_changed', onBrandChange);
-  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteLogo, settings.websiteFavicon]);
+  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteBadgeBg, settings.websiteLogo, settings.websiteFavicon]);
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot_password'>('signin');
   const [step, setStep] = useState<'input' | 'otp' | 'reset_direct'>('input');
@@ -451,7 +462,7 @@ export default function LoginPage() {
             </span>
             <span
               id="login-brand-badge-display"
-              className={`text-[8.5px] px-1.5 py-0.5 rounded-md font-extrabold uppercase tracking-wider fintech-gradient-primary text-white shadow-xs ${
+              className={`text-[8.5px] px-1.5 py-0.5 rounded-md font-extrabold uppercase tracking-wider text-white shadow-xs ${brandState.badgeBg || 'fintech-gradient-primary'} ${
                 brandState.badge?.trim() ? 'inline-block' : 'hidden'
               }`}
             >
@@ -470,14 +481,16 @@ export default function LoginPage() {
                     var logo = (p && p.websiteLogo) ? p.websiteLogo : (localStorage.getItem('skp_brand_logo') || '');
                     var name = (p && p.websiteName) ? p.websiteName : (localStorage.getItem('skp_brand_name') || '');
                     var badge = (p && p.websiteBadgeText !== undefined) ? p.websiteBadgeText : (localStorage.getItem('skp_brand_badge') || '');
+                    var badgeBg = (p && p.websiteBadgeBg) ? p.websiteBadgeBg : (localStorage.getItem('skp_brand_badge_bg') || '');
 
-                    if (!logo || !name || !badge) {
+                    if (!logo || !name || !badge || !badgeBg) {
                       var cookies = document.cookie.split(';');
                       for (var i = 0; i < cookies.length; i++) {
                         var c = cookies[i].trim();
                         if (c.indexOf('skp_brand_logo=') === 0 && !logo) logo = decodeURIComponent(c.substring('skp_brand_logo='.length));
                         if (c.indexOf('skp_brand_name=') === 0 && !name) name = decodeURIComponent(c.substring('skp_brand_name='.length));
                         if (c.indexOf('skp_brand_badge=') === 0 && !badge) badge = decodeURIComponent(c.substring('skp_brand_badge='.length));
+                        if (c.indexOf('skp_brand_badge_bg=') === 0 && !badgeBg) badgeBg = decodeURIComponent(c.substring('skp_brand_badge_bg='.length));
                       }
                     }
 
@@ -496,6 +509,9 @@ export default function LoginPage() {
                       if (badge && badge.trim()) {
                         b.textContent = badge.trim();
                         b.style.display = 'inline-block';
+                        if (badgeBg) {
+                          b.className = 'text-[8.5px] px-1.5 py-0.5 rounded-md font-extrabold uppercase tracking-wider text-white shadow-xs inline-block ' + badgeBg;
+                        }
                       } else {
                         b.style.display = 'none';
                       }

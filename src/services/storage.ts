@@ -89,6 +89,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
   let globalWebLogo = '';
   let globalWebFavicon = '';
   let globalWebBadge = '';
+  let globalWebBadgeBg = 'fintech-gradient-primary';
 
   if (typeof window !== 'undefined') {
     try {
@@ -96,6 +97,10 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
         const badgeMatch = document.cookie.match(/(?:^|;\s*)skp_brand_badge=([^;]+)/);
         if (badgeMatch && badgeMatch[1]) {
           globalWebBadge = decodeURIComponent(badgeMatch[1]);
+        }
+        const badgeBgMatch = document.cookie.match(/(?:^|;\s*)skp_brand_badge_bg=([^;]+)/);
+        if (badgeBgMatch && badgeBgMatch[1]) {
+          globalWebBadgeBg = decodeURIComponent(badgeBgMatch[1]);
         }
         const nameMatch = document.cookie.match(/(?:^|;\s*)skp_brand_name=([^;]+)/);
         if (nameMatch && nameMatch[1]) {
@@ -113,6 +118,8 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
       if (typeof localStorage !== 'undefined') {
         const storedBadge = localStorage.getItem('skp_brand_badge');
         if (storedBadge !== null && storedBadge !== undefined) globalWebBadge = storedBadge;
+        const storedBadgeBg = localStorage.getItem('skp_brand_badge_bg');
+        if (storedBadgeBg) globalWebBadgeBg = storedBadgeBg;
         const storedName = localStorage.getItem('skp_brand_name');
         if (storedName) globalWebName = storedName;
         const storedLogo = localStorage.getItem('skp_brand_logo');
@@ -126,6 +133,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
           if (b.websiteLogo !== undefined) globalWebLogo = b.websiteLogo;
           if (b.websiteFavicon !== undefined) globalWebFavicon = b.websiteFavicon;
           if (b.websiteBadgeText !== undefined) globalWebBadge = b.websiteBadgeText;
+          if (b.websiteBadgeBg) globalWebBadgeBg = b.websiteBadgeBg;
         }
         const rawG = localStorage.getItem('skp_global_system_config');
         if (rawG) {
@@ -135,6 +143,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
             if (g.websiteBranding.websiteLogo && !globalWebLogo) globalWebLogo = g.websiteBranding.websiteLogo;
             if (g.websiteBranding.websiteFavicon && !globalWebFavicon) globalWebFavicon = g.websiteBranding.websiteFavicon;
             if (g.websiteBranding.websiteBadgeText !== undefined && !rawB) globalWebBadge = g.websiteBranding.websiteBadgeText;
+            if (g.websiteBranding.websiteBadgeBg && (!rawB || !storedBadgeBg)) globalWebBadgeBg = g.websiteBranding.websiteBadgeBg;
           }
         }
       }
@@ -195,6 +204,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
     websiteLogo: globalWebLogo,
     websiteFavicon: globalWebFavicon,
     websiteBadgeText: globalWebBadge,
+    websiteBadgeBg: globalWebBadgeBg,
   };
 };
 
@@ -286,7 +296,8 @@ export const StorageService = {
         data.settings.websiteName ||
         data.settings.websiteLogo ||
         data.settings.websiteFavicon ||
-        data.settings.websiteBadgeText !== undefined
+        data.settings.websiteBadgeText !== undefined ||
+        data.settings.websiteBadgeBg !== undefined
       ) {
         try {
           const brandObj = {
@@ -294,16 +305,19 @@ export const StorageService = {
             websiteLogo: data.settings.websiteLogo || existingSettings?.websiteLogo || '',
             websiteFavicon: data.settings.websiteFavicon || existingSettings?.websiteFavicon || '',
             websiteBadgeText: data.settings.websiteBadgeText !== undefined ? data.settings.websiteBadgeText : (existingSettings?.websiteBadgeText || ''),
+            websiteBadgeBg: data.settings.websiteBadgeBg || existingSettings?.websiteBadgeBg || 'fintech-gradient-primary',
           };
           if (typeof localStorage !== 'undefined') {
             localStorage.setItem('skp_global_branding', JSON.stringify(brandObj));
             if (brandObj.websiteBadgeText !== undefined) localStorage.setItem('skp_brand_badge', brandObj.websiteBadgeText);
+            if (brandObj.websiteBadgeBg) localStorage.setItem('skp_brand_badge_bg', brandObj.websiteBadgeBg);
             if (brandObj.websiteName) localStorage.setItem('skp_brand_name', brandObj.websiteName);
             if (brandObj.websiteLogo) localStorage.setItem('skp_brand_logo', brandObj.websiteLogo);
             if (brandObj.websiteFavicon) localStorage.setItem('skp_brand_favicon', brandObj.websiteFavicon);
           }
           if (typeof document !== 'undefined') {
             document.cookie = `skp_brand_badge=${encodeURIComponent(brandObj.websiteBadgeText)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+            document.cookie = `skp_brand_badge_bg=${encodeURIComponent(brandObj.websiteBadgeBg)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
             document.cookie = `skp_brand_name=${encodeURIComponent(brandObj.websiteName)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
             if (brandObj.websiteLogo && brandObj.websiteLogo.length < 2000) {
               document.cookie = `skp_brand_logo=${encodeURIComponent(brandObj.websiteLogo)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
@@ -440,6 +454,7 @@ export const StorageService = {
             if (globalConf.websiteBranding.websiteLogo !== undefined) s.websiteLogo = globalConf.websiteBranding.websiteLogo;
             if (globalConf.websiteBranding.websiteFavicon !== undefined) s.websiteFavicon = globalConf.websiteBranding.websiteFavicon;
             if (globalConf.websiteBranding.websiteBadgeText !== undefined) s.websiteBadgeText = globalConf.websiteBranding.websiteBadgeText;
+            if (globalConf.websiteBranding.websiteBadgeBg) s.websiteBadgeBg = globalConf.websiteBranding.websiteBadgeBg;
           }
         }
         const rawBranding = localStorage.getItem('skp_global_branding');
@@ -449,6 +464,7 @@ export const StorageService = {
           if (brandConf.websiteLogo !== undefined) s.websiteLogo = brandConf.websiteLogo;
           if (brandConf.websiteFavicon !== undefined) s.websiteFavicon = brandConf.websiteFavicon;
           if (brandConf.websiteBadgeText !== undefined) s.websiteBadgeText = brandConf.websiteBadgeText;
+          if (brandConf.websiteBadgeBg) s.websiteBadgeBg = brandConf.websiteBadgeBg;
         }
       } catch {}
     }
@@ -492,7 +508,8 @@ export const StorageService = {
       merged.websiteName !== undefined ||
       merged.websiteLogo !== undefined ||
       merged.websiteFavicon !== undefined ||
-      merged.websiteBadgeText !== undefined
+      merged.websiteBadgeText !== undefined ||
+      merged.websiteBadgeBg !== undefined
     ) {
       try {
         const brandObj = {
@@ -500,6 +517,7 @@ export const StorageService = {
           websiteLogo: merged.websiteLogo || '',
           websiteFavicon: merged.websiteFavicon || merged.websiteLogo || '',
           websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : '',
+          websiteBadgeBg: merged.websiteBadgeBg || 'fintech-gradient-primary',
         };
         if (typeof localStorage !== 'undefined') {
           localStorage.setItem('skp_global_branding', JSON.stringify(brandObj));
@@ -509,6 +527,9 @@ export const StorageService = {
           localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
           if (brandObj.websiteBadgeText !== undefined) {
             localStorage.setItem('skp_brand_badge', brandObj.websiteBadgeText);
+          }
+          if (brandObj.websiteBadgeBg) {
+            localStorage.setItem('skp_brand_badge_bg', brandObj.websiteBadgeBg);
           }
           if (brandObj.websiteName) {
             localStorage.setItem('skp_brand_name', brandObj.websiteName);
@@ -522,6 +543,7 @@ export const StorageService = {
         }
         if (typeof document !== 'undefined') {
           document.cookie = `skp_brand_badge=${encodeURIComponent(brandObj.websiteBadgeText)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+          document.cookie = `skp_brand_badge_bg=${encodeURIComponent(brandObj.websiteBadgeBg)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
           document.cookie = `skp_brand_name=${encodeURIComponent(brandObj.websiteName)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
           if (brandObj.websiteLogo && brandObj.websiteLogo.length < 2000) {
             document.cookie = `skp_brand_logo=${encodeURIComponent(brandObj.websiteLogo)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
