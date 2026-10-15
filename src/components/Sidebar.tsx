@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { t } from '@/lib/i18n';
 import {
@@ -77,16 +77,6 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
     { label: t('settings', 'Settings'), href: '/settings', icon: Settings },
   ];
 
-  const router = useRouter();
-
-  useEffect(() => {
-    navItems.forEach((item) => {
-      try {
-        router.prefetch(item.href);
-      } catch {}
-    });
-  }, [router]);
-
   const renderSidebarContent = (isMobileView: boolean) => {
     const collapsed = !isMobileView && isCollapsed;
 
@@ -124,7 +114,6 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
               <Link
                 key={item.href}
                 href={item.href}
-                prefetch={true}
                 onClick={onCloseMobile}
                 title={collapsed ? item.label : undefined}
                 className={`flex items-center rounded-xl text-xs font-semibold transition-all group ${

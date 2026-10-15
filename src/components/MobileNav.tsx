@@ -48,7 +48,6 @@ export default function MobileNav() {
             <Link
               key={tab.href}
               href={tab.href!}
-              prefetch={true}
               className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl text-[10px] font-semibold transition-colors ${
                 isActive
                   ? 'text-indigo-600 dark:text-indigo-400'
