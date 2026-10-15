@@ -338,7 +338,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                 <div className="flex items-center gap-1 sm:gap-1.5 font-black tracking-tight text-slate-900 dark:text-white text-sm sm:text-base">
                   <span>{settings.websiteName || ''}</span>
                   {settings.websiteBadgeText?.trim() && (
-                    <span className={`text-[8.5px] px-1.5 py-0.5 rounded-md font-extrabold uppercase tracking-wider text-white shadow-xs ${settings.websiteBadgeBg || 'fintech-gradient-primary'}`}>
+                    <span className={`text-[7px] sm:text-[7.5px] px-1 py-[1px] rounded font-bold uppercase tracking-wider leading-none text-white shadow-xs ${settings.websiteBadgeBg || 'fintech-gradient-primary'}`}>
                       {settings.websiteBadgeText.trim()}
                     </span>
                   )}

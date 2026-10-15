@@ -2860,7 +2860,7 @@ export default function SettingsPage() {
                       className="w-36 px-3.5 py-2 text-xs uppercase rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-all font-black tracking-wider"
                     />
                     {webBadgeText?.trim() && (
-                      <span className={`text-[8.5px] px-2 py-1 rounded-md font-extrabold uppercase tracking-wider text-white shadow-xs ${webBadgeBg}`}>
+                      <span className={`text-[7px] sm:text-[7.5px] px-1.5 py-[1.5px] rounded font-bold uppercase tracking-wider leading-none text-white shadow-xs ${webBadgeBg}`}>
                         {webBadgeText.trim()}
                       </span>
                     )}

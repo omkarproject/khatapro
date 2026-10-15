@@ -467,7 +467,7 @@ export default function LoginPage() {
             </span>
             <span
               id="login-brand-badge-display"
-              className={`text-[8.5px] px-1.5 py-0.5 rounded-md font-extrabold uppercase tracking-wider text-white shadow-xs ${brandState.badgeBg || 'fintech-gradient-primary'} ${
+              className={`text-[7px] sm:text-[7.5px] px-1 py-[1px] rounded font-bold uppercase tracking-wider leading-none text-white shadow-xs ${brandState.badgeBg || 'fintech-gradient-primary'} ${
                 brandState.badge?.trim() ? 'inline-block' : 'hidden'
               }`}
             >
@@ -514,7 +514,7 @@ export default function LoginPage() {
                         b.textContent = badge.trim();
                         b.style.display = 'inline-block';
                         if (badgeBg) {
-                          b.className = 'text-[8.5px] px-1.5 py-0.5 rounded-md font-extrabold uppercase tracking-wider text-white shadow-xs inline-block ' + badgeBg;
+                          b.className = 'text-[7px] sm:text-[7.5px] px-1 py-[1px] rounded font-bold uppercase tracking-wider leading-none text-white shadow-xs inline-block ' + badgeBg;
                         }
                       } else {
                         b.style.display = 'none';
