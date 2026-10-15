@@ -763,6 +763,7 @@ export async function GET(req: NextRequest) {
       websiteName: sbSet.data.payment_settings?.websiteName || 'SmartKhata Pro',
       websiteLogo: sbSet.data.payment_settings?.websiteLogo || '',
       websiteFavicon: sbSet.data.payment_settings?.websiteFavicon || '',
+      websiteBadgeText: sbSet.data.payment_settings?.websiteBadgeText !== undefined ? sbSet.data.payment_settings?.websiteBadgeText : 'PRO',
     } : null;
 
     const finalData = {
@@ -933,6 +934,7 @@ export async function POST(req: NextRequest) {
           websiteName: data.settings.websiteName || 'SmartKhata Pro',
           websiteLogo: data.settings.websiteLogo || '',
           websiteFavicon: data.settings.websiteFavicon || '',
+          websiteBadgeText: data.settings.websiteBadgeText !== undefined ? data.settings.websiteBadgeText : 'PRO',
         };
         promises.push(
           Promise.resolve(

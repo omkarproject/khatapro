@@ -702,18 +702,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const globalPayload = {
             maintenanceMode: json.maintenanceMode,
             betaTestingEnabled: Boolean(json.betaTestingEnabled),
+            websiteBranding: json.websiteBranding || null,
           };
           if (typeof window !== 'undefined') {
             localStorage.setItem('skp_global_system_config', JSON.stringify(globalPayload));
+            if (json.websiteBranding) {
+              localStorage.setItem('skp_global_branding', JSON.stringify(json.websiteBranding));
+            }
           }
           setSettingsState(prev => {
             const sameMaint = JSON.stringify(prev.maintenanceMode) === JSON.stringify(json.maintenanceMode);
             const sameBeta = prev.betaTestingEnabled === Boolean(json.betaTestingEnabled);
-            if (sameMaint && sameBeta) return prev;
+            const brand = json.websiteBranding;
+            const sameBrand = !brand || (
+              prev.websiteName === brand.websiteName &&
+              prev.websiteLogo === brand.websiteLogo &&
+              prev.websiteFavicon === brand.websiteFavicon &&
+              prev.websiteBadgeText === brand.websiteBadgeText
+            );
+            if (sameMaint && sameBeta && sameBrand) return prev;
             return {
               ...prev,
               maintenanceMode: json.maintenanceMode,
               betaTestingEnabled: Boolean(json.betaTestingEnabled),
+              ...(brand ? {
+                websiteName: brand.websiteName || prev.websiteName,
+                websiteLogo: brand.websiteLogo !== undefined ? brand.websiteLogo : prev.websiteLogo,
+                websiteFavicon: brand.websiteFavicon !== undefined ? brand.websiteFavicon : prev.websiteFavicon,
+                websiteBadgeText: brand.websiteBadgeText !== undefined ? brand.websiteBadgeText : prev.websiteBadgeText,
+              } : {}),
             };
           });
         }
@@ -724,7 +741,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     fetchGlobalSystemConfig();
     const interval = setInterval(fetchGlobalSystemConfig, 12000);
-    return () => clearInterval(interval);
+
+    const handleBrandingChanged = (e: any) => {
+      const brand = e?.detail;
+      if (brand) {
+        setSettingsState(prev => ({
+          ...prev,
+          websiteName: brand.websiteName !== undefined ? brand.websiteName : prev.websiteName,
+          websiteLogo: brand.websiteLogo !== undefined ? brand.websiteLogo : prev.websiteLogo,
+          websiteFavicon: brand.websiteFavicon !== undefined ? brand.websiteFavicon : prev.websiteFavicon,
+          websiteBadgeText: brand.websiteBadgeText !== undefined ? brand.websiteBadgeText : prev.websiteBadgeText,
+        }));
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('khatapro_branding_changed', handleBrandingChanged);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('khatapro_branding_changed', handleBrandingChanged);
+      }
+    };
   }, [mounted]);
 
   const toggleDarkMode = () => {
@@ -772,6 +811,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(globalPayload),
         }).catch(e => console.warn('Global config broadcast error:', e));
+      }
+    }
+
+    // If Website Branding was modified, persist globally and broadcast immediately across all portal tabs
+    if (
+      newSettings.websiteName !== undefined ||
+      newSettings.websiteLogo !== undefined ||
+      newSettings.websiteFavicon !== undefined ||
+      newSettings.websiteBadgeText !== undefined
+    ) {
+      if (typeof window !== 'undefined') {
+        const brandingPayload = {
+          websiteName: merged.websiteName || 'SmartKhata Pro',
+          websiteLogo: merged.websiteLogo || '',
+          websiteFavicon: merged.websiteFavicon || '',
+          websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : 'PRO',
+        };
+        try {
+          localStorage.setItem('skp_global_branding', JSON.stringify(brandingPayload));
+          const existingGlobal = localStorage.getItem('skp_global_system_config');
+          const globalObj = existingGlobal ? JSON.parse(existingGlobal) : {};
+          globalObj.websiteBranding = brandingPayload;
+          localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
+        } catch {}
+
+        fetch('/api/system/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ websiteBranding: brandingPayload }),
+        }).catch(e => console.warn('Global branding broadcast error:', e));
+
+        window.dispatchEvent(new CustomEvent('khatapro_branding_changed', { detail: brandingPayload }));
       }
     }
 

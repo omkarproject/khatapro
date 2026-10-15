@@ -25,22 +25,39 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
 
   // Dynamically update document title & favicon across entire website
   React.useEffect(() => {
-    if (typeof document !== 'undefined') {
-      const siteName = settings.websiteName?.trim() || 'SmartKhata Pro';
-      if (siteName) {
-        document.title = `${siteName} - Fintech & Digital Khata Operating System`;
-      }
+    if (typeof document === 'undefined') return;
 
-      if (settings.websiteFavicon) {
-        let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']");
+    const applyBranding = (name?: string, favicon?: string) => {
+      const siteName = (name || settings.websiteName)?.trim() || 'SmartKhata Pro';
+      document.title = `${siteName} - Fintech & Digital Khata Operating System`;
+
+      const targetFavicon = favicon !== undefined ? favicon : (settings.websiteFavicon || '/icon.svg');
+      
+      const rels = ['icon', 'shortcut icon', 'apple-touch-icon'];
+      rels.forEach(rel => {
+        let link: HTMLLinkElement | null = document.querySelector(`link[rel='${rel}']`);
         if (!link) {
           link = document.createElement('link');
-          link.rel = 'icon';
+          link.rel = rel;
           document.head.appendChild(link);
         }
-        link.href = settings.websiteFavicon;
+        link.href = targetFavicon || '/icon.svg';
+      });
+    };
+
+    applyBranding();
+
+    const handleBrandingEvent = (e: any) => {
+      const brand = e?.detail;
+      if (brand) {
+        applyBranding(brand.websiteName, brand.websiteFavicon);
       }
-    }
+    };
+
+    window.addEventListener('khatapro_branding_changed', handleBrandingEvent);
+    return () => {
+      window.removeEventListener('khatapro_branding_changed', handleBrandingEvent);
+    };
   }, [settings.websiteName, settings.websiteFavicon]);
 
   const isPayRoute = pathname?.startsWith('/pay');

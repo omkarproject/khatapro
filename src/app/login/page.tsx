@@ -41,7 +41,7 @@ function generateCaptcha() {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { currentUser, login, applyAuthenticatedUser, logout } = useApp();
+  const { currentUser, settings, login, applyAuthenticatedUser, logout } = useApp();
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot_password'>('signin');
   const [step, setStep] = useState<'input' | 'otp' | 'reset_direct'>('input');
@@ -340,26 +340,47 @@ export default function LoginPage() {
       <div className="absolute top-1/4 -left-20 w-96 h-96 bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-indigo-600/10 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* Top Branding Bar */}
-      <div className="w-full max-w-md mb-4 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-md">
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <span className="text-sm font-black tracking-wider uppercase bg-gradient-to-r from-cyan-500 to-indigo-600 bg-clip-text text-transparent">
-            SmartKhata Pro
-          </span>
-        </Link>
-
+      {/* Centered Top Branding Bar: Logo on Top, Name Below */}
+      <div className="w-full max-w-md mb-6 flex flex-col items-center justify-center text-center relative">
         {currentUser && (
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+            className="absolute right-0 top-0 inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
           >
             <span>Dashboard</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         )}
+
+        <Link href="/" className="group flex flex-col items-center justify-center">
+          {/* Logo on top */}
+          {settings.websiteLogo ? (
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden shadow-lg shadow-indigo-500/20 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center p-1.5 group-hover:scale-105 transition-all">
+              <img
+                src={settings.websiteLogo}
+                alt={settings.websiteName || 'Logo'}
+                className="w-full h-full object-contain"
+                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+              />
+            </div>
+          ) : (
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-all">
+              <Sparkles className="w-7 h-7 sm:w-8 sm:h-8" />
+            </div>
+          )}
+
+          {/* Website Name & PRO Badge below logo */}
+          <div className="flex items-center justify-center gap-1.5 mt-2.5">
+            <span className="text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white">
+              {settings.websiteName || 'SmartKhata'}
+            </span>
+            {(settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO') && (
+              <span className="text-[7.5px] sm:text-[8px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wider fintech-gradient-primary text-white shadow-xs leading-none">
+                {settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO'}
+              </span>
+            )}
+          </div>
+        </Link>
       </div>
 
       <div className="w-full max-w-md bg-white dark:bg-[#0C1222] rounded-[32px] shadow-2xl border border-slate-200/90 dark:border-indigo-500/30 overflow-hidden relative">
@@ -377,7 +398,7 @@ export default function LoginPage() {
                 : mode === 'forgot_password'
                 ? 'Reset Password'
                 : mode === 'signin'
-                ? 'Sign In to SmartKhata'
+                ? `Sign In to ${settings.websiteName || 'SmartKhata'}`
                 : 'Create Account'}
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">

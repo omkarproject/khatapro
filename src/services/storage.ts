@@ -132,6 +132,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
   websiteName: 'SmartKhata Pro',
   websiteLogo: '',
   websiteFavicon: '',
+  websiteBadgeText: 'PRO',
 });
 
 export const StorageService = {
@@ -326,7 +327,7 @@ export const StorageService = {
     const defaults = getCleanDefaultSettings(curUser?.businessName, curUser?.phone, curUser?.email);
     const s = getLocalItem(STORAGE_KEYS.SETTINGS, defaults);
 
-    // Merge cached global system config (maintenanceMode & betaTestingEnabled)
+    // Merge cached global system config (maintenanceMode, betaTestingEnabled & websiteBranding)
     if (typeof window !== 'undefined') {
       try {
         const rawGlobal = localStorage.getItem('skp_global_system_config');
@@ -338,6 +339,20 @@ export const StorageService = {
           if (globalConf.betaTestingEnabled !== undefined) {
             s.betaTestingEnabled = Boolean(globalConf.betaTestingEnabled);
           }
+          if (globalConf.websiteBranding) {
+            if (globalConf.websiteBranding.websiteName) s.websiteName = globalConf.websiteBranding.websiteName;
+            if (globalConf.websiteBranding.websiteLogo !== undefined) s.websiteLogo = globalConf.websiteBranding.websiteLogo;
+            if (globalConf.websiteBranding.websiteFavicon !== undefined) s.websiteFavicon = globalConf.websiteBranding.websiteFavicon;
+            if (globalConf.websiteBranding.websiteBadgeText !== undefined) s.websiteBadgeText = globalConf.websiteBranding.websiteBadgeText;
+          }
+        }
+        const rawBranding = localStorage.getItem('skp_global_branding');
+        if (rawBranding) {
+          const brandConf = JSON.parse(rawBranding);
+          if (brandConf.websiteName) s.websiteName = brandConf.websiteName;
+          if (brandConf.websiteLogo !== undefined) s.websiteLogo = brandConf.websiteLogo;
+          if (brandConf.websiteFavicon !== undefined) s.websiteFavicon = brandConf.websiteFavicon;
+          if (brandConf.websiteBadgeText !== undefined) s.websiteBadgeText = brandConf.websiteBadgeText;
         }
       } catch {}
     }

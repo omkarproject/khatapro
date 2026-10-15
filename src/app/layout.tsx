@@ -9,6 +9,15 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 export const metadata: Metadata = {
   title: 'SmartKhata Pro - Enterprise Fintech & Digital Khata Operating System',
   description: 'Track Money, Manage Business, Grow Faster. Enterprise-grade Expense Tracker, Digital KhataBook, Invoicing, Inventory, UPI Collections & CRM.',
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' }
+    ],
+    shortcut: ['/icon.svg'],
+    apple: [
+      { url: '/icon.svg' }
+    ],
+  },
 };
 
 export default function RootLayout({
