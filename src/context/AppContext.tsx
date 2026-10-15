@@ -152,21 +152,24 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
-  const [profile, setProfileState] = useState<UserProfile>(defaultEmptyProfile);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
-  const [reminders, setReminders] = useState<PaymentReminder[]>([]);
-  const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  const [notes, setNotes] = useState<NoteItem[]>([]);
-  const [tasks, setTasks] = useState<TaskItem[]>([]);
-  const [passwords, setPasswords] = useState<PasswordItem[]>([]);
-  const [settings, setSettingsState] = useState<SystemSettings>(() => getCleanDefaultSettings());
-  const [darkMode, setDarkMode] = useState(false);
-  const [activeRole, setActiveRole] = useState<UserRole>('user');
+  const [profile, setProfileState] = useState<UserProfile>(() => StorageService.getProfile());
+  const [customers, setCustomers] = useState<Customer[]>(() => StorageService.getCustomers());
+  const [transactions, setTransactions] = useState<Transaction[]>(() => StorageService.getTransactions());
+  const [products, setProducts] = useState<Product[]>(() => StorageService.getProducts());
+  const [invoices, setInvoices] = useState<Invoice[]>(() => StorageService.getInvoices());
+  const [expenses, setExpenses] = useState<Expense[]>(() => StorageService.getExpenses());
+  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>(() => StorageService.getSavingsGoals());
+  const [reminders, setReminders] = useState<PaymentReminder[]>(() => StorageService.getReminders());
+  const [documents, setDocuments] = useState<DocumentItem[]>(() => StorageService.getDocuments());
+  const [notes, setNotes] = useState<NoteItem[]>(() => StorageService.getNotes());
+  const [tasks, setTasks] = useState<TaskItem[]>(() => StorageService.getTasks());
+  const [passwords, setPasswords] = useState<PasswordItem[]>(() => StorageService.getPasswords());
+  const [settings, setSettingsState] = useState<SystemSettings>(() => StorageService.getSettings());
+  const [darkMode, setDarkMode] = useState(() => StorageService.getSettings().darkMode);
+  const [activeRole, setActiveRole] = useState<UserRole>(() => {
+    const cur = StorageService.getCurrentUser();
+    return cur?.role || (cur?.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user');
+  });
 
   // Collect Modal
   const [isCollectModalOpen, setIsCollectModalOpen] = useState(false);
@@ -179,7 +182,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }>({});
 
   // Current Auth User & Cloud Sync
-  const [currentUser, setCurrentUserState] = useState<UserProfile | null>(null);
+  const [currentUser, setCurrentUserState] = useState<UserProfile | null>(() => StorageService.getCurrentUser());
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
 
@@ -311,7 +314,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           // Customer drive folders & files are loaded strictly on-demand per customer
           if (d.settings) {
             setSettingsState(prev => {
-              const globalLogo = '';
+              const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
               const incomingLogo = d.settings.businessLogo || d.user?.avatarUrl || (d.user as any)?.avatar_url || '';
               const preservedLogo = incomingLogo || prev.businessLogo || globalLogo;
               return {
@@ -333,7 +336,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             if (d.user.language) setActiveLanguage(d.user.language);
             if (d.user.currency) setActiveCurrency(d.user.currency);
             setProfileState(prev => {
-              const globalLogo = '';
+              const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
               const incomingAvatar = d.user.avatarUrl || (d.user as any)?.avatar_url || d.settings?.businessLogo || '';
               const preservedAvatar = incomingAvatar || prev.avatarUrl || globalLogo;
               return {
@@ -344,7 +347,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             });
             setCurrentUserState(prev => {
               if (!prev) return null;
-              const globalLogo = '';
+              const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
               const incomingAvatar = d.user.avatarUrl || (d.user as any)?.avatar_url || d.settings?.businessLogo || '';
               const preservedAvatar = incomingAvatar || prev.avatarUrl || globalLogo;
               return {
@@ -645,9 +648,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       refreshData();
     };
 
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key && (e.key.startsWith('skp_') || e.key.startsWith('khatapro_'))) {
+        refreshData();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
     window.addEventListener('khatapro_data_sync', handleCustomDataChange);
     return () => {
       clearInterval(liveSyncInterval);
+      window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('khatapro_data_sync', handleCustomDataChange);
     };
   }, []);
@@ -677,10 +688,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             websiteBranding: json.websiteBranding || null,
           };
           if (typeof window !== 'undefined') {
-            // in-memory synchronized
-            if (json.websiteBranding) {
-              // in-memory synchronized
-            }
+            try {
+              localStorage.setItem('skp_global_system_config', JSON.stringify(globalPayload));
+              if (json.websiteBranding) {
+                localStorage.setItem('skp_global_branding', JSON.stringify(json.websiteBranding));
+              }
+            } catch {}
           }
           setSettingsState(prev => {
             const sameMaint = JSON.stringify(prev.maintenanceMode) === JSON.stringify(json.maintenanceMode);
@@ -795,7 +808,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           maintenanceMode: merged.maintenanceMode,
           betaTestingEnabled: Boolean(merged.betaTestingEnabled),
         };
-        // in-memory synchronized
+        try {
+          localStorage.setItem('skp_global_system_config', JSON.stringify(globalPayload));
+        } catch {}
         fetch('/api/system/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -813,12 +828,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ) {
       if (typeof window !== 'undefined') {
         const brandingPayload = {
-          websiteName: merged.websiteName || 'SmartKhata Pro',
+          websiteName: merged.websiteName || 'SmartKhata',
           websiteLogo: merged.websiteLogo || '',
           websiteFavicon: merged.websiteFavicon || '',
           websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : '',
         };
-        // in-memory synchronized via /api/system/config and CustomEvent broadcast
+        try {
+          localStorage.setItem('skp_global_branding', JSON.stringify(brandingPayload));
+          const existingGlobal = localStorage.getItem('skp_global_system_config');
+          const globalObj = existingGlobal ? JSON.parse(existingGlobal) : {};
+          globalObj.websiteBranding = brandingPayload;
+          localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
+        } catch {}
 
         fetch('/api/system/config', {
           method: 'POST',

@@ -1031,7 +1031,17 @@ export default function SettingsPage() {
         websiteBadgeText: finalBadge,
       };
 
-      // Broadcast live to database and all browser tabs without localStorage
+      try {
+        localStorage.setItem('skp_global_branding', JSON.stringify(brandPayload));
+        const rawGlobal = localStorage.getItem('skp_global_system_config');
+        const globalObj = rawGlobal ? JSON.parse(rawGlobal) : {};
+        globalObj.websiteBranding = brandPayload;
+        localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
+        localStorage.setItem('skp_brand_badge', finalBadge);
+        localStorage.setItem('skp_brand_name', finalName);
+      } catch {}
+
+      // Broadcast live to database and all browser tabs
       try {
         await fetch('/api/system/config', {
           method: 'POST',

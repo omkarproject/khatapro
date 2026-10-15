@@ -44,40 +44,7 @@ const STORAGE_KEYS = {
 // Data is held strictly in memory and synced live in realtime with Supabase Cloud Database & Google Drive.
 const inMemoryStore: Record<string, any> = {};
 
-// Clean up legacy localStorage keys on startup so client storage stays clean
-if (typeof window !== 'undefined') {
-  try {
-    const legacyKeysToPurge = [
-      'skp_customers',
-      'skp_transactions',
-      'skp_products',
-      'skp_invoices',
-      'skp_expenses',
-      'skp_savings',
-      'skp_reminders',
-      'skp_documents',
-      'skp_settings',
-      'skp_notes',
-      'skp_tasks',
-      'skp_passwords',
-      'skp_user_profile',
-      'skp_db_v1_initialized',
-      'khatapro_currency',
-      'khatapro_currency_symbol',
-      'khatapro_language',
-      'khatapro_business_logo',
-      'khatapro_dismissed_alerts',
-      'khatapro_dismissed_broadcasts',
-    ];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && (legacyKeysToPurge.some(p => k.startsWith(p)) || k.startsWith('skp_cust_drive_') || k.startsWith('skp_cust_bank_') || k.startsWith('skp_gdrive_connected_'))) {
-        localStorage.removeItem(k);
-        i--;
-      }
-    }
-  } catch {}
-}
+
 
 // Current Active User & Scoping Helper for strict multi-user isolation
 export function getActiveUserId(): string | null {
@@ -166,14 +133,26 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
         const storedName = localStorage.getItem('skp_brand_name');
         if (storedName) globalWebName = storedName;
       }
-      const b = inMemoryStore['skp_global_branding'];
+      let b = inMemoryStore['skp_global_branding'];
+      if (!b && typeof localStorage !== 'undefined') {
+        const rawB = localStorage.getItem('skp_global_branding');
+        if (rawB) {
+          try { b = JSON.parse(rawB); } catch {}
+        }
+      }
       if (b) {
         if (b.websiteName) globalWebName = b.websiteName;
         if (b.websiteLogo !== undefined) globalWebLogo = b.websiteLogo;
         if (b.websiteFavicon !== undefined) globalWebFavicon = b.websiteFavicon;
         if (b.websiteBadgeText !== undefined) globalWebBadge = b.websiteBadgeText;
       }
-      const g = inMemoryStore['skp_global_system_config'];
+      let g = inMemoryStore['skp_global_system_config'];
+      if (!g && typeof localStorage !== 'undefined') {
+        const rawG = localStorage.getItem('skp_global_system_config');
+        if (rawG) {
+          try { g = JSON.parse(rawG); } catch {}
+        }
+      }
       if (g && g.websiteBranding) {
         if (g.websiteBranding.websiteName && (!b || !globalWebName)) globalWebName = g.websiteBranding.websiteName;
         if (g.websiteBranding.websiteLogo && !globalWebLogo) globalWebLogo = g.websiteBranding.websiteLogo;
@@ -378,7 +357,9 @@ export const StorageService = {
   initializeDefaults: () => {
     if (typeof window === 'undefined') return;
     const curUser = StorageService.getCurrentUser();
-    const isInit = inMemoryStore[getScopedKey(STORAGE_KEYS.INITIALIZED)];
+    const isInit = typeof window !== 'undefined'
+      ? localStorage.getItem(getScopedKey(STORAGE_KEYS.INITIALIZED))
+      : inMemoryStore[getScopedKey(STORAGE_KEYS.INITIALIZED)];
     if (!isInit) {
       if (curUser) {
         setLocalItem(STORAGE_KEYS.PROFILE, curUser);
@@ -395,6 +376,11 @@ export const StorageService = {
       setLocalItem(STORAGE_KEYS.NOTES, []);
       setLocalItem(STORAGE_KEYS.TASKS, []);
       setLocalItem(STORAGE_KEYS.PASSWORDS, []);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(getScopedKey(STORAGE_KEYS.INITIALIZED), 'true');
+        } catch {}
+      }
       inMemoryStore[getScopedKey(STORAGE_KEYS.INITIALIZED)] = true;
     }
   },
@@ -403,6 +389,11 @@ export const StorageService = {
   resetDefaults: () => {
     if (typeof window === 'undefined') return;
     delete inMemoryStore[getScopedKey(STORAGE_KEYS.INITIALIZED)];
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(getScopedKey(STORAGE_KEYS.INITIALIZED));
+      } catch {}
+    }
     StorageService.initializeDefaults();
   },
 
@@ -462,9 +453,14 @@ export const StorageService = {
     // Merge cached global system config (maintenanceMode, betaTestingEnabled & websiteBranding)
     if (typeof window !== 'undefined') {
       try {
-        const globalConf = inMemoryStore['skp_global_system_config'];
+        let globalConf = inMemoryStore['skp_global_system_config'];
+        if (!globalConf) {
+          const rawGlobal = localStorage.getItem('skp_global_system_config');
+          if (rawGlobal) {
+            try { globalConf = JSON.parse(rawGlobal); } catch {}
+          }
+        }
         if (globalConf) {
-          // In-memory read
           if (globalConf.maintenanceMode) {
             s.maintenanceMode = globalConf.maintenanceMode;
           }
@@ -478,9 +474,14 @@ export const StorageService = {
             if (globalConf.websiteBranding.websiteBadgeText !== undefined) s.websiteBadgeText = globalConf.websiteBranding.websiteBadgeText;
           }
         }
-        const brandConf = inMemoryStore['skp_global_branding'];
+        let brandConf = inMemoryStore['skp_global_branding'];
+        if (!brandConf) {
+          const rawBrand = localStorage.getItem('skp_global_branding');
+          if (rawBrand) {
+            try { brandConf = JSON.parse(rawBrand); } catch {}
+          }
+        }
         if (brandConf) {
-          // In-memory read
           if (brandConf.websiteName) s.websiteName = brandConf.websiteName;
           if (brandConf.websiteLogo !== undefined) s.websiteLogo = brandConf.websiteLogo;
           if (brandConf.websiteFavicon !== undefined) s.websiteFavicon = brandConf.websiteFavicon;
@@ -513,6 +514,9 @@ export const StorageService = {
     }
 
     if (merged.businessLogo !== undefined) {
+      if (merged.businessLogo && typeof window !== 'undefined') {
+        try { localStorage.setItem('khatapro_business_logo', merged.businessLogo); } catch {}
+      }
       if (storedProfile) {
         setLocalItem(STORAGE_KEYS.PROFILE, { ...storedProfile, avatarUrl: merged.businessLogo });
       }
@@ -535,6 +539,13 @@ export const StorageService = {
           websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : '',
         };
         inMemoryStore['skp_global_branding'] = brandObj;
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('skp_global_branding', JSON.stringify(brandObj));
+          const existingGlobal = localStorage.getItem('skp_global_system_config');
+          const globalObj = existingGlobal ? JSON.parse(existingGlobal) : {};
+          globalObj.websiteBranding = brandObj;
+          localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
+        }
       } catch {}
     }
 
@@ -983,11 +994,23 @@ export const StorageService = {
     return list;
   },
 
-  // Customer Drive & Vault (Per-customer folders & documents held in memory, synced live to Drive & Database)
+  // Customer Drive & Vault (Per-customer folders & documents)
   getCustomerDriveData: (customerId: string): { folders: CustomerDriveFolder[]; files: CustomerDriveFile[] } => {
     const key = `skp_cust_drive_${customerId}`;
     if (inMemoryStore[key]) {
       return inMemoryStore[key];
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          inMemoryStore[key] = parsed;
+          return parsed;
+        }
+      } catch (e) {
+        console.warn('Failed to read customer drive', e);
+      }
     }
     // Default initial folders if none exist (matches Windows-style folders: AADHAR CARD, BILLS, DOCUMENTS)
     const defaultFolders: CustomerDriveFolder[] = [
@@ -997,11 +1020,23 @@ export const StorageService = {
     ];
     const initial = { folders: defaultFolders, files: [] };
     inMemoryStore[key] = initial;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(key, JSON.stringify(initial));
+      } catch (e) {}
+    }
     return initial;
   },
   saveCustomerDriveData: (customerId: string, data: { folders: CustomerDriveFolder[]; files: CustomerDriveFile[] }): void => {
     const key = `skp_cust_drive_${customerId}`;
     inMemoryStore[key] = data;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(key, JSON.stringify(data));
+      } catch (e) {
+        console.error('Failed to save customer drive', e);
+      }
+    }
   },
   getCustomerBankingData: (customerId: string): { bankAccounts: CustomerBankAccount[]; upiDetails: CustomerUpiDetail[] } => {
     const customers = StorageService.getCustomers();
@@ -1016,11 +1051,26 @@ export const StorageService = {
     if (inMemoryStore[key]) {
       return inMemoryStore[key];
     }
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          inMemoryStore[key] = parsed;
+          return parsed;
+        }
+      } catch (e) {}
+    }
     return { bankAccounts: [], upiDetails: [] };
   },
   saveCustomerBankingData: (customerId: string, data: { bankAccounts: CustomerBankAccount[]; upiDetails: CustomerUpiDetail[] }): void => {
     const key = `skp_cust_bank_${customerId}`;
     inMemoryStore[key] = data;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(key, JSON.stringify(data));
+      } catch (e) {}
+    }
     const customers = StorageService.getCustomers();
     const cust = customers.find(c => c.id === customerId);
     if (cust) {
@@ -1174,6 +1224,9 @@ export const StorageService = {
       if (data.notes) setLocalItem(STORAGE_KEYS.NOTES, data.notes);
       if (data.tasks) setLocalItem(STORAGE_KEYS.TASKS, data.tasks);
       if (data.passwords) setLocalItem(STORAGE_KEYS.PASSWORDS, data.passwords);
+      if (typeof window !== 'undefined') {
+        try { localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true'); } catch {}
+      }
       inMemoryStore[STORAGE_KEYS.INITIALIZED] = true;
       return true;
     } catch (e) {
