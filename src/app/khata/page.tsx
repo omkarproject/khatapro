@@ -1119,7 +1119,7 @@ interface AttachedBill {
     <div class="footer-section">
       <div>
         <strong style="color: #334155;">Terms & Conditions:</strong>
-        <div>1. This is a computer-generated digital bill from SmartKhata Pro.</div>
+        <div>1. This is a computer-generated digital bill from ${settings?.websiteName || 'SmartKhata'}.</div>
         <div>2. Certified record of account transaction for ${activeCustomer.name}.</div>
       </div>
       <div style="text-align: right;">
@@ -4653,7 +4653,7 @@ interface AttachedBill {
                           <div className="pt-3 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
                             <div>
                               <p className="font-semibold text-slate-700">Terms & Conditions:</p>
-                              <p>This is a certified statement of customer ledger from SmartKhata Pro.</p>
+                              <p>This is a certified statement of customer ledger from {settings?.websiteName || 'SmartKhata'}.</p>
                             </div>
                             <div className="text-right sm:text-right border-t sm:border-t-0 pt-2 sm:pt-0">
                               <p className="font-bold text-slate-800 uppercase tracking-wide">

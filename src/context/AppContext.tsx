@@ -164,7 +164,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [passwords, setPasswords] = useState<PasswordItem[]>([]);
-  const [settings, setSettingsState] = useState<SystemSettings>(() => getCleanDefaultSettings());
+  const [settings, setSettingsState] = useState<SystemSettings>(() => StorageService.getSettings());
   const [darkMode, setDarkMode] = useState(false);
   const [activeRole, setActiveRole] = useState<UserRole>('user');
 

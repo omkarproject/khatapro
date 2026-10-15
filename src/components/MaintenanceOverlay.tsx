@@ -224,7 +224,7 @@ export default function MaintenanceOverlay() {
         <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
           
           <div className="text-[11px] text-slate-500 font-mono">
-            {settings.businessName || 'SmartKhata Pro'} • Protected Operating System
+            {settings.businessName || settings.websiteName || 'SmartKhata'} • Protected Operating System
           </div>
 
           <div className="flex items-center gap-2 ml-auto">

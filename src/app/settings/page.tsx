@@ -1022,11 +1022,19 @@ export default function SettingsPage() {
       localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
       localStorage.setItem('skp_brand_badge', finalBadge);
       localStorage.setItem('skp_brand_name', finalName);
+      if (finalLogo) localStorage.setItem('skp_brand_logo', finalLogo);
+      if (finalFavicon) localStorage.setItem('skp_brand_favicon', finalFavicon);
     } catch {}
 
     if (typeof document !== 'undefined') {
       document.cookie = `skp_brand_badge=${encodeURIComponent(finalBadge)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
       document.cookie = `skp_brand_name=${encodeURIComponent(finalName)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+      if (finalLogo && finalLogo.length < 2000) {
+        document.cookie = `skp_brand_logo=${encodeURIComponent(finalLogo)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+      }
+      if (finalFavicon && finalFavicon.length < 2000) {
+        document.cookie = `skp_brand_favicon=${encodeURIComponent(finalFavicon)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+      }
     }
 
     try {
@@ -2820,7 +2828,7 @@ export default function SettingsPage() {
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1.5">
-                  Default: <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">PRO</span>. Pure website me logo aur name ke sath show hoga.
+                  Default: <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">Custom Tag</span>. Pure website me logo aur name ke sath show hoga.
                 </p>
               </div>
 
@@ -2831,7 +2839,7 @@ export default function SettingsPage() {
                   <span className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5 truncate">
                     {webName || 'SmartKhata'}
                     {webBadgeText?.trim() && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider fintech-gradient-primary text-white shadow-xs">
+                      <span className="text-[8.5px] px-1.5 py-0.5 rounded-md font-extrabold uppercase tracking-wider fintech-gradient-primary text-white shadow-xs">
                         {webBadgeText.trim()}
                       </span>
                     )}

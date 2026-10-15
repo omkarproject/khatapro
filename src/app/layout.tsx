@@ -6,10 +6,33 @@ import LayoutShell from '@/components/LayoutShell';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
-export const metadata: Metadata = {
-  title: 'SmartKhata Pro - Enterprise Fintech & Digital Khata Operating System',
-  description: 'Track Money, Manage Business, Grow Faster. Enterprise-grade Expense Tracker, Digital KhataBook, Invoicing, Inventory, UPI Collections & CRM.',
-};
+import { cookies } from 'next/headers';
+
+export async function generateMetadata(): Promise<Metadata> {
+  let brandName = '';
+  let brandBadge = '';
+  let brandFavicon = '';
+
+  try {
+    const cookieStore = await cookies();
+    const nameCookie = cookieStore.get('skp_brand_name');
+    if (nameCookie?.value) brandName = decodeURIComponent(nameCookie.value);
+    const badgeCookie = cookieStore.get('skp_brand_badge');
+    if (badgeCookie?.value !== undefined) brandBadge = decodeURIComponent(badgeCookie.value);
+    const favCookie = cookieStore.get('skp_brand_favicon');
+    if (favCookie?.value) brandFavicon = decodeURIComponent(favCookie.value);
+  } catch {}
+
+  const displayName = brandName || 'SmartKhata';
+  const displayBadge = brandBadge ? ` ${brandBadge}` : '';
+  const title = `${displayName}${displayBadge} - Enterprise Fintech & Digital Khata Operating System`;
+
+  return {
+    title,
+    description: 'Track Money, Manage Business, Grow Faster. Enterprise-grade Expense Tracker, Digital KhataBook, Invoicing, Inventory, UPI Collections & CRM.',
+    icons: brandFavicon ? [{ rel: 'icon', url: brandFavicon }, { rel: 'shortcut icon', url: brandFavicon }] : undefined,
+  };
+}
 
 export default function RootLayout({
   children,

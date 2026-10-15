@@ -2037,7 +2037,7 @@ export default function SavingsPage() {
           )}
 
           <div className="footer">
-            <span>SmartKhata Pro • Official Digital Reserve Fund Ledger</span>
+            <span>{settings?.websiteName || 'SmartKhata'} • Official Digital Reserve Fund Ledger</span>
             <span>Verified System Record</span>
           </div>
         </div>

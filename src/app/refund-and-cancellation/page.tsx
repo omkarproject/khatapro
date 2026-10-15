@@ -7,9 +7,9 @@ import { ArrowLeft, RefreshCw, ShieldCheck, Clock, AlertCircle, CheckCircle2 } f
 
 export default function RefundAndCancellationPage() {
   const { settings, profile, currentUser } = useApp();
-  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || 'SmartKhata Pro';
+  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || settings.websiteName || 'SmartKhata';
   const businessPhone = settings.businessPhone || profile.phone || currentUser?.phone || '';
-  const businessEmail = settings.businessEmail || profile.email || currentUser?.email || 'support@smartkhatapro.in';
+  const businessEmail = settings.businessEmail || profile.email || currentUser?.email || '';
   const businessAddress = settings.businessAddress || profile.businessAddress || '';
 
   return (

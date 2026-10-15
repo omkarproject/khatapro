@@ -114,7 +114,7 @@ export default function MaintenanceNoticeModal() {
               {/* Stylish Description */}
               <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800/80 text-xs sm:text-sm text-slate-300 leading-relaxed space-y-2">
                 <p>
-                  Welcome to <strong>SmartKhata Pro</strong>. The platform is currently undergoing live feature enhancements, user flow optimizations, and payment gateway verification.
+                  Welcome to <strong>{settings?.websiteName || 'SmartKhata'}{settings?.websiteBadgeText?.trim() ? ` ${settings.websiteBadgeText.trim()}` : ''}</strong>. The platform is currently undergoing live feature enhancements, user flow optimizations, and payment gateway verification.
                 </p>
                 <p className="text-xs text-cyan-300/90 font-mono flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />

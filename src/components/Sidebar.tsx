@@ -179,7 +179,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
                   {t('secure100', '100% Secure')}
                 </span>
                 <span className="text-[9px] font-mono">
-                  v1.0 {settings.websiteBadgeText !== undefined && settings.websiteBadgeText !== '' ? settings.websiteBadgeText : 'Pro'}
+                  v1.0{settings.websiteBadgeText ? ` ${settings.websiteBadgeText.trim()}` : ''}
                 </span>
               </div>
             </>

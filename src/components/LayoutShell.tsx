@@ -27,7 +27,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
   React.useEffect(() => {
     if (typeof document !== 'undefined') {
       const siteName = settings.websiteName?.trim() || 'SmartKhata';
-      const badge = settings.websiteBadgeText !== undefined ? settings.websiteBadgeText.trim() : 'PRO';
+      const badge = settings.websiteBadgeText?.trim() || '';
       const fullName = badge ? `${siteName} ${badge}` : siteName;
       if (fullName) {
         document.title = `${fullName} - Fintech & Digital Khata Operating System`;

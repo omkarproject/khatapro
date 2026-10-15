@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react';
 import DriveConnectVIPScreen from './DriveConnectVIPScreen';
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { currentUser, isMounted, addToast } = useApp();
+  const { currentUser, isMounted, addToast, settings } = useApp();
   const isAdmin = Boolean(
     currentUser?.email === 'anantyadav8924@gmail.com' ||
     (currentUser?.role === 'super_admin' && currentUser?.email?.toLowerCase().includes('anant'))
@@ -111,7 +111,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-xl shadow-indigo-600/30 mb-4 animate-pulse">
           <Loader2 className="w-6 h-6 animate-spin" />
         </div>
-        <p className="text-xs font-mono uppercase tracking-wider text-slate-400">Authenticating SmartKhata...</p>
+        <p className="text-xs font-mono uppercase tracking-wider text-slate-400">Authenticating {settings?.websiteName || 'Session'}...</p>
       </div>
     );
   }

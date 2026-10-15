@@ -46,7 +46,7 @@ export default function LoginPage() {
   // Instant frame-0 branding state from localStorage/cookies to prevent any loading flash
   const [brandState, setBrandState] = useState(() => {
     let name = 'SmartKhata';
-    let badge = 'PRO';
+    let badge = '';
     let logo = '';
     let favicon = '';
 
@@ -68,9 +68,13 @@ export default function LoginPage() {
         if (storedBadge !== null && storedBadge !== undefined) {
           badge = storedBadge;
         }
+        const storedLogo = localStorage.getItem('skp_brand_logo');
+        if (storedLogo && !logo) logo = storedLogo;
+        const storedFav = localStorage.getItem('skp_brand_favicon');
+        if (storedFav && !favicon) favicon = storedFav;
 
         // Cookie fallback
-        if (!name || name === 'SmartKhata' || !badge) {
+        if (!name || name === 'SmartKhata' || !badge || !logo) {
           const cookies = document.cookie.split(';');
           for (let i = 0; i < cookies.length; i++) {
             const c = cookies[i].trim();
@@ -79,6 +83,12 @@ export default function LoginPage() {
             }
             if (c.indexOf('skp_brand_badge=') === 0 && !badge) {
               badge = decodeURIComponent(c.substring('skp_brand_badge='.length));
+            }
+            if (c.indexOf('skp_brand_logo=') === 0 && !logo) {
+              logo = decodeURIComponent(c.substring('skp_brand_logo='.length));
+            }
+            if (c.indexOf('skp_brand_favicon=') === 0 && !favicon) {
+              favicon = decodeURIComponent(c.substring('skp_brand_favicon='.length));
             }
           }
         }
@@ -91,7 +101,7 @@ export default function LoginPage() {
     if (settings.websiteName || settings.websiteBadgeText !== undefined || settings.websiteLogo) {
       setBrandState({
         name: settings.websiteName || 'SmartKhata',
-        badge: settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO',
+        badge: settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : '',
         logo: settings.websiteLogo || '',
         favicon: settings.websiteFavicon || '',
       });
@@ -101,7 +111,7 @@ export default function LoginPage() {
       if (e.detail) {
         setBrandState({
           name: e.detail.websiteName || 'SmartKhata',
-          badge: e.detail.websiteBadgeText !== undefined ? e.detail.websiteBadgeText : 'PRO',
+          badge: e.detail.websiteBadgeText !== undefined ? e.detail.websiteBadgeText : '',
           logo: e.detail.websiteLogo || '',
           favicon: e.detail.websiteFavicon || '',
         });
@@ -416,34 +426,85 @@ export default function LoginPage() {
             {/* Glowing animated halo */}
             <div className="absolute -inset-2.5 rounded-3xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-pink-500 opacity-75 blur-xl group-hover:opacity-100 animate-pulse transition-opacity duration-700" />
             
-            {/* Logo container */}
-            <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white dark:bg-[#0C1222] border-2 border-white/80 dark:border-indigo-500/40 shadow-2xl flex items-center justify-center overflow-hidden p-2.5 group-hover:scale-105 transition-all duration-300">
-              {brandState.logo ? (
-                <img
-                  src={brandState.logo}
-                  alt={brandState.name}
-                  className="w-full h-full object-contain"
-                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                />
-              ) : (
-                <div className="w-full h-full rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-inner">
-                  <Sparkles className="w-8 h-8 text-white animate-[spin_8s_linear_infinite]" />
-                </div>
-              )}
+            {/* Logo container (NO border, smooth floating with glowing backdrop) */}
+            <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center overflow-hidden p-1 group-hover:scale-105 transition-all duration-300">
+              <img
+                id="login-brand-logo-img"
+                src={brandState.logo || ''}
+                alt={brandState.name || 'Logo'}
+                className={`w-full h-full object-contain ${brandState.logo ? 'block' : 'hidden'}`}
+                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+              />
+              <div
+                id="login-brand-logo-fallback"
+                className={`w-full h-full rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-inner ${brandState.logo ? 'hidden' : 'flex'}`}
+              >
+                <Sparkles className="w-8 h-8 text-white animate-[spin_8s_linear_infinite]" />
+              </div>
             </div>
           </div>
 
           {/* Website Name & Badge underneath Logo */}
           <div className="flex items-center gap-2">
-            <span className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white drop-shadow-sm">
-              {brandState.name}
+            <span id="login-brand-name-display" className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white drop-shadow-sm">
+              {brandState.name || 'SmartKhata'}
             </span>
-            {brandState.badge?.trim() && (
-              <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-lg font-black uppercase tracking-wider fintech-gradient-primary text-white shadow-md shadow-indigo-500/25">
-                {brandState.badge.trim()}
-              </span>
-            )}
+            <span
+              id="login-brand-badge-display"
+              className={`text-[8.5px] px-1.5 py-0.5 rounded-md font-extrabold uppercase tracking-wider fintech-gradient-primary text-white shadow-xs ${
+                brandState.badge?.trim() ? 'inline-block' : 'hidden'
+              }`}
+            >
+              {brandState.badge?.trim() || ''}
+            </span>
           </div>
+
+          {/* Synchronous Frame-0 Parser Script (Zero Flash Guarantee) */}
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                (function() {
+                  try {
+                    var raw = localStorage.getItem('skp_global_branding');
+                    var p = raw ? JSON.parse(raw) : null;
+                    var logo = (p && p.websiteLogo) ? p.websiteLogo : (localStorage.getItem('skp_brand_logo') || '');
+                    var name = (p && p.websiteName) ? p.websiteName : (localStorage.getItem('skp_brand_name') || '');
+                    var badge = (p && p.websiteBadgeText !== undefined) ? p.websiteBadgeText : (localStorage.getItem('skp_brand_badge') || '');
+
+                    if (!logo || !name || !badge) {
+                      var cookies = document.cookie.split(';');
+                      for (var i = 0; i < cookies.length; i++) {
+                        var c = cookies[i].trim();
+                        if (c.indexOf('skp_brand_logo=') === 0 && !logo) logo = decodeURIComponent(c.substring('skp_brand_logo='.length));
+                        if (c.indexOf('skp_brand_name=') === 0 && !name) name = decodeURIComponent(c.substring('skp_brand_name='.length));
+                        if (c.indexOf('skp_brand_badge=') === 0 && !badge) badge = decodeURIComponent(c.substring('skp_brand_badge='.length));
+                      }
+                    }
+
+                    if (logo) {
+                      var img = document.getElementById('login-brand-logo-img');
+                      var fb = document.getElementById('login-brand-logo-fallback');
+                      if (img) { img.src = logo; img.style.display = 'block'; }
+                      if (fb) { fb.style.display = 'none'; }
+                    }
+                    if (name) {
+                      var n = document.getElementById('login-brand-name-display');
+                      if (n) n.textContent = name;
+                    }
+                    var b = document.getElementById('login-brand-badge-display');
+                    if (b) {
+                      if (badge && badge.trim()) {
+                        b.textContent = badge.trim();
+                        b.style.display = 'inline-block';
+                      } else {
+                        b.style.display = 'none';
+                      }
+                    }
+                  } catch(e) {}
+                })();
+              `,
+            }}
+          />
           
           <p className="text-[11px] font-semibold text-slate-400 tracking-wider uppercase font-mono mt-0.5">
             Fintech Operating System

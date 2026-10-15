@@ -7,9 +7,9 @@ import { ShieldCheck, Lock, Heart, Phone, Mail, MapPin } from 'lucide-react';
 
 export default function Footer() {
   const { settings, profile, currentUser, activeCurrency, t } = useApp();
-  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || 'SmartKhata Pro';
+  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || settings.websiteName || 'SmartKhata';
   const businessPhone = settings.businessPhone || profile.phone || currentUser?.phone || '';
-  const businessEmail = settings.businessEmail || profile.email || currentUser?.email || 'support@smartkhatapro.in';
+  const businessEmail = settings.businessEmail || profile.email || currentUser?.email || '';
   const businessAddress = settings.businessAddress || profile.businessAddress || '';
   const businessGst = settings.paymentSettings?.businessGst || profile.businessGst || '';
 
@@ -39,7 +39,7 @@ export default function Footer() {
               <span className="font-extrabold text-sm text-slate-900 dark:text-white truncate flex items-center gap-1.5">
                 <span>{settings.websiteName || 'SmartKhata'}</span>
                 {settings.websiteBadgeText?.trim() && (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded-md font-bold uppercase tracking-wider fintech-gradient-primary text-white shadow-xs">
+                  <span className="text-[8.5px] px-1.5 py-0.5 rounded-md font-extrabold uppercase tracking-wider fintech-gradient-primary text-white shadow-xs">
                     {settings.websiteBadgeText.trim()}
                   </span>
                 )}

@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 export default function DocumentsPage() {
-  const { documents, addDocument, deleteDocument, addToast } = useApp();
+  const { documents, addDocument, deleteDocument, addToast, settings } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -203,7 +203,7 @@ export default function DocumentsPage() {
 
     // Fallback text download for pre-existing mock documents
     const blob = new Blob([
-      `SmartKhata Pro Vault Document\n\nTitle: ${doc.title}\nCategory: ${doc.category.toUpperCase()}\nRelated Entity: ${doc.relatedEntityName || 'N/A'}\nFile Size: ${doc.fileSize}\nUploaded At: ${doc.uploadedAt}\n`
+      `${settings?.websiteName || 'SmartKhata'} Vault Document\n\nTitle: ${doc.title}\nCategory: ${doc.category.toUpperCase()}\nRelated Entity: ${doc.relatedEntityName || 'N/A'}\nFile Size: ${doc.fileSize}\nUploaded At: ${doc.uploadedAt}\n`
     ], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
