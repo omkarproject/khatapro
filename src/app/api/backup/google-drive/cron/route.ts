@@ -176,8 +176,8 @@ async function handleCron(req: NextRequest) {
   try {
     const cronSecret = process.env.CRON_SECRET || 'skp_cron_daily_backup_secret_2026_secure';
     const authHeader = req.headers.get('authorization') || '';
-    const customHeader = req.headers.get('x-cron-secret') || '';
-    const vercelCronHeader = req.headers.get('x-vercel-cron') || '';
+    const customHeader = req.headers.get('x-cron-secret') || req.headers.get('x-cronjob') || '';
+    const cronjobHeader = req.headers.get('x-cronjob') || req.headers.get('x-vercel-cron') || '';
     const userAgent = (req.headers.get('user-agent') || '').toLowerCase();
     const urlSecret = req.nextUrl.searchParams.get('secret') || '';
     const isAutoTrigger = req.nextUrl.searchParams.get('auto') === 'true';
@@ -198,9 +198,10 @@ async function handleCron(req: NextRequest) {
       req.cookies.get('skp_auth_session')?.value ||
       '';
 
-    // 1. Universal Authorization check (Vercel Cron, Login Trigger, VPS crontab / curl, external webhooks, or auto guardian)
+    // 1. Universal Authorization check (CronJob, Daily Scheduled Task, Login / Open Trigger, VPS crontab / curl, external webhooks, or auto guardian)
     const isAuthorized =
-      vercelCronHeader === '1' ||
+      cronjobHeader === '1' ||
+      userAgent.includes('cronjob') ||
       userAgent.includes('vercel-cron') ||
       authHeader === `Bearer ${cronSecret}` ||
       authHeader.includes('Bearer ') ||
@@ -210,6 +211,7 @@ async function handleCron(req: NextRequest) {
       isAutoTrigger ||
       isForce ||
       trigger === 'login' ||
+      trigger === 'day_first_open' ||
       Boolean(targetUserId);
 
     if (!isAuthorized) {
@@ -250,7 +252,7 @@ async function handleCron(req: NextRequest) {
     }
 
     // =========================================================================
-    // CASE B: Universal Multi-Tenant Daily Cron (Vercel Cron / VPS / Scheduled)
+    // CASE B: Universal Multi-Tenant Daily CronJob (Automated Scheduled Backup)
     // =========================================================================
     // Gather all active merchant accounts from profiles
     const { data: profiles, error: profErr } = await supabase

@@ -304,6 +304,41 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     return isUnread && !dismissedAlerts.includes(`ticket_${t.id}`);
   });
 
+  // Live Day's 1st Open Auto Backup Progress & Notification State
+  const [autoBackupProgress, setAutoBackupProgress] = useState<any>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('skp_live_backup_progress');
+        return saved ? JSON.parse(saved) : null;
+      } catch {}
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    const handleProgress = (e: any) => {
+      if (e.detail) {
+        setAutoBackupProgress(e.detail);
+      }
+    };
+    window.addEventListener('khatapro_backup_progress', handleProgress);
+    return () => window.removeEventListener('khatapro_backup_progress', handleProgress);
+  }, []);
+
+  const handleCancelAutoBackup = () => {
+    window.dispatchEvent(new CustomEvent('khatapro_backup_cancel'));
+    addToast('Auto Backup Cancelled', "Today's auto backup has been cancelled.", 'info');
+  };
+
+  const handleLaterAutoBackup = () => {
+    window.dispatchEvent(new CustomEvent('khatapro_backup_later'));
+    addToast('Backup Postponed', 'Auto backup will run the next time you open KhataPro.', 'info');
+  };
+
+  const handleDismissBackupAlert = (dateKey: string) => {
+    handleDismissAlert(`backup_${dateKey}`);
+  };
+
   // Compute active non-dismissed alerts
   const lowStockProducts = products.filter(
     (p) => p.currentStock <= p.minStock && !dismissedAlerts.includes(`low_stock_${p.id}`)
@@ -360,7 +395,19 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     return targetDate! <= todayStr;
   });
 
-  const totalAlerts = lowStockProducts.length + overdueReminders.length + dueSavingsGoals.length + activeNoteReminders.length + activeTaskReminders.length + unreadSupportTickets.length;
+  const isBackupRunning = autoBackupProgress?.status === 'running';
+  const isBackupCompletedAlert =
+    autoBackupProgress?.status === 'completed' &&
+    !dismissedAlerts.includes(`backup_${autoBackupProgress.date || todayStr}`);
+
+  const totalAlerts =
+    lowStockProducts.length +
+    overdueReminders.length +
+    dueSavingsGoals.length +
+    activeNoteReminders.length +
+    activeTaskReminders.length +
+    unreadSupportTickets.length +
+    (isBackupRunning || isBackupCompletedAlert ? 1 : 0);
 
   const handleClearAllAlerts = () => {
     const allIds: string[] = [
@@ -370,6 +417,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
       ...activeNoteReminders.map((n) => `note_${n.id}`),
       ...activeTaskReminders.map((t) => `task_${t.id}`),
       ...unreadSupportTickets.map((t) => `ticket_${t.id}`),
+      `backup_${autoBackupProgress?.date || todayStr}`,
     ];
     setDismissedAlerts((prev) => {
       const next = Array.from(new Set([...prev, ...allIds]));
@@ -492,6 +540,155 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                   </div>
 
                   <div className="space-y-2.5 max-h-80 overflow-y-auto pr-0.5">
+                    {/* Live Day 1st Open Auto Backup in Progress */}
+                    {isBackupRunning && (
+                      <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50/70 dark:from-blue-950/40 dark:to-indigo-950/30 border border-blue-200/90 dark:border-blue-800/60 space-y-2.5 relative group shadow-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs font-black text-slate-900 dark:text-white truncate">
+                                  Day&apos;s 1st Auto Backup
+                                </span>
+                                <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-blue-500 text-white font-mono animate-pulse">
+                                  Running
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-blue-700/90 dark:text-blue-300 font-medium truncate">
+                                {autoBackupProgress.stepText || 'Backing up ledger data to Cloud...'}
+                              </div>
+                            </div>
+                          </div>
+                          <span className="text-[9.5px] font-mono text-slate-400 shrink-0">
+                            {autoBackupProgress.durationSeconds ? `${autoBackupProgress.durationSeconds}s` : 'Starting...'}
+                          </span>
+                        </div>
+
+                        {/* Progress Bar & MB indicator */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[10.5px] font-mono">
+                            <span className="font-bold text-slate-700 dark:text-slate-300">
+                              {autoBackupProgress.processedMb?.toFixed(2) || '0.20'} MB / {autoBackupProgress.totalMb?.toFixed(2) || '1.85'} MB
+                            </span>
+                            <span className="font-extrabold text-blue-600 dark:text-blue-400">
+                              {autoBackupProgress.progressPercent || 15}%
+                            </span>
+                          </div>
+                          <div className="w-full h-2 rounded-full bg-blue-100 dark:bg-blue-950/60 overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-blue-500 via-indigo-600 to-purple-600 transition-all duration-300 rounded-full"
+                              style={{ width: `${autoBackupProgress.progressPercent || 15}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* 2 Options: Cancel and Later */}
+                        <div className="flex items-center justify-end gap-2 pt-1 border-t border-blue-100/80 dark:border-blue-900/40">
+                          <button
+                            type="button"
+                            onClick={handleCancelAutoBackup}
+                            className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800 text-[10.5px] font-bold transition-colors cursor-pointer flex items-center gap-1"
+                            title="Cancel auto backup for today"
+                          >
+                            <X className="w-3 h-3" />
+                            <span>Cancel</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleLaterAutoBackup}
+                            className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-[10.5px] font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1"
+                            title="Postpone auto backup to next app open"
+                          >
+                            <Clock className="w-3 h-3 text-slate-500" />
+                            <span>Later (Next Open)</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Auto Backup Completed Alert Card */}
+                    {isBackupCompletedAlert && (
+                      <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50/70 dark:from-emerald-950/40 dark:to-teal-950/30 border border-emerald-200/90 dark:border-emerald-800/60 space-y-2 relative group shadow-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                              <CheckCircle2 className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs font-black text-emerald-950 dark:text-emerald-100 truncate">
+                                  Auto Backup Completed
+                                </span>
+                                <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-emerald-500 text-white font-mono">
+                                  100% Synced
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-emerald-700/90 dark:text-emerald-300 font-medium">
+                                Day&apos;s 1st auto backup saved to Cloud &amp; Google Drive
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDismissBackupAlert(autoBackupProgress.date || todayStr)}
+                            title="Dismiss notification"
+                            className="p-1 rounded-lg text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-200 hover:bg-emerald-200/50 dark:hover:bg-emerald-900/50 transition-colors cursor-pointer shrink-0"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Detailed Metrics: Total MB and Time Taken */}
+                        <div className="p-2 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-emerald-100/90 dark:border-emerald-900/40 grid grid-cols-2 gap-2 text-[10.5px] text-center font-mono">
+                          <div>
+                            <span className="text-slate-400 block text-[9px] font-sans">Total File Size</span>
+                            <span className="font-bold text-emerald-700 dark:text-emerald-300">
+                              {autoBackupProgress.finalSizeMb || autoBackupProgress.totalMb?.toFixed(2) || '1.85'} MB
+                            </span>
+                          </div>
+                          <div className="border-l border-slate-100 dark:border-slate-800">
+                            <span className="text-slate-400 block text-[9px] font-sans">Backup Time Taken</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">
+                              {autoBackupProgress.durationSeconds || '2.1'}s
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[9px] text-slate-400 font-mono pt-0.5">
+                          <span className="truncate max-w-[200px]">{autoBackupProgress.filename || 'SmartKhata-Backup.zip'}</span>
+                          <span>{autoBackupProgress.timestamp ? new Date(autoBackupProgress.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Today'}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Postponed / Cancelled Notice (if not dismissed) */}
+                    {(autoBackupProgress?.status === 'cancelled' || autoBackupProgress?.status === 'postponed') &&
+                      !dismissedAlerts.includes(`backup_${autoBackupProgress.date || todayStr}`) && (
+                        <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2 text-[10.5px]">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="text-slate-600 dark:text-slate-400 truncate">
+                              {autoBackupProgress.status === 'cancelled'
+                                ? "Today's auto backup was cancelled."
+                                : 'Auto backup postponed to next open.'}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDismissBackupAlert(autoBackupProgress.date || todayStr)}
+                            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 shrink-0"
+                            title="Dismiss"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+
                     {/* Unread Support Inquiries / Tickets (Admin & Merchant) */}
                     {unreadSupportTickets.length > 0 && (
                       <div className="space-y-2">
