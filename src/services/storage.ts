@@ -18,6 +18,8 @@ import {
   NoteItem,
   TaskItem,
   PasswordItem,
+  KhataGroup,
+  KhataGroupNotification,
 } from '@/types';
 
 
@@ -36,6 +38,8 @@ const STORAGE_KEYS = {
   NOTES: 'skp_notes',
   TASKS: 'skp_tasks',
   PASSWORDS: 'skp_passwords',
+  GROUPS: 'skp_groups',
+  GROUP_NOTIFICATIONS: 'skp_group_notifications',
   INITIALIZED: 'skp_db_v1_initialized',
 };
 
@@ -1249,37 +1253,87 @@ export const StorageService = {
     return updated;
   },
 
-  // Full Database JSON Export / Import
-  exportFullDatabaseJSON: (includeMedia: boolean = true): string => {
-    let expenses = StorageService.getExpenses();
-    let documents = StorageService.getDocuments();
-    let settings = StorageService.getSettings();
-    let profile = StorageService.getProfile();
+  // Khata Groups
+  getGroups: (): KhataGroup[] => {
+    return getLocalItem<KhataGroup[]>(STORAGE_KEYS.GROUPS, []);
+  },
+  saveGroup: (group: KhataGroup): KhataGroup => {
+    const list = StorageService.getGroups();
+    const idx = list.findIndex(g => g.id === group.id);
+    let updated: KhataGroup[];
+    if (idx >= 0) {
+      updated = [...list];
+      updated[idx] = { ...group, updatedAt: new Date().toISOString() };
+    } else {
+      updated = [{ ...group, createdAt: group.createdAt || new Date().toISOString() }, ...list];
+    }
+    setLocalItem(STORAGE_KEYS.GROUPS, updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('khatapro_groups_updated', { detail: updated }));
+    }
+    return group;
+  },
+  deleteGroup: (groupId: string): void => {
+    const list = StorageService.getGroups().filter(g => g.id !== groupId);
+    setLocalItem(STORAGE_KEYS.GROUPS, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('khatapro_groups_updated', { detail: list }));
+    }
+  },
 
-    if (!includeMedia) {
-      // Strip heavy base64 data URLs if user requested lightweight backup without images/PDF
-      expenses = expenses.map(e => ({ ...e, receiptImages: [] }));
-      documents = documents.map(d => ({ ...d, fileUrl: d.fileUrl?.startsWith('data:') ? '' : d.fileUrl }));
-      if (settings.businessLogo?.startsWith('data:')) {
-        settings = { ...settings, businessLogo: '' };
-      }
-      if (settings.paymentSettings?.customQrUrl?.startsWith('data:')) {
-        settings = {
-          ...settings,
-          paymentSettings: { ...settings.paymentSettings, customQrUrl: '' }
+  // Group Notifications
+  getGroupNotifications: (): KhataGroupNotification[] => {
+    return getLocalItem<KhataGroupNotification[]>(STORAGE_KEYS.GROUP_NOTIFICATIONS, []);
+  },
+  addGroupNotification: (notif: KhataGroupNotification): void => {
+    const list = StorageService.getGroupNotifications();
+    const updated = [notif, ...list.filter(n => n.id !== notif.id)].slice(0, 100);
+    setLocalItem(STORAGE_KEYS.GROUP_NOTIFICATIONS, updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('khatapro_group_notification_added', { detail: notif }));
+      window.dispatchEvent(new CustomEvent('khatapro_group_notifications_updated', { detail: updated }));
+    }
+  },
+  dismissGroupNotification: (notifId: string): void => {
+    const list = StorageService.getGroupNotifications().filter(n => n.id !== notifId);
+    setLocalItem(STORAGE_KEYS.GROUP_NOTIFICATIONS, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('khatapro_group_notifications_updated', { detail: list }));
+    }
+  },
+  clearAllGroupNotifications: (): void => {
+    setLocalItem(STORAGE_KEYS.GROUP_NOTIFICATIONS, []);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('khatapro_group_notifications_updated', { detail: [] }));
+    }
+  },
+
+  exportFullDatabaseJSON: (includeMedia: boolean = true): string => {
+    const documents = StorageService.getDocuments().map((doc) => {
+      if (doc.fileUrl && doc.fileUrl.startsWith('data:')) {
+        return {
+          ...doc,
+          fileUrl: doc.driveFileId ? `https://drive.google.com/file/d/${doc.driveFileId}/view` : '',
         };
       }
-      if (profile.avatarUrl?.startsWith('data:')) {
-        profile = { ...profile, avatarUrl: '' };
+      return doc;
+    });
+
+    const expenses = StorageService.getExpenses().map((exp) => {
+      if (exp.receiptUrl && exp.receiptUrl.startsWith('data:')) {
+        return {
+          ...exp,
+          receiptUrl: exp.driveReceiptId ? `https://drive.google.com/file/d/${exp.driveReceiptId}/view` : '',
+        };
       }
-    }
+      return exp;
+    });
 
     const backup = {
-      version: '1.0.0',
+      version: '1.0',
       exportedAt: new Date().toISOString(),
-      includeMedia,
-      profile,
-      settings,
+      profile: StorageService.getProfile(),
+      settings: StorageService.getSettings(),
       customers: StorageService.getCustomers(),
       transactions: StorageService.getTransactions(),
       invoices: StorageService.getInvoices(),
@@ -1291,6 +1345,7 @@ export const StorageService = {
       notes: StorageService.getNotes(),
       tasks: StorageService.getTasks(),
       passwords: StorageService.getPasswords(),
+      groups: StorageService.getGroups(),
     };
     return JSON.stringify(backup, null, 2);
   },
@@ -1311,6 +1366,7 @@ export const StorageService = {
       if (data.notes) setLocalItem(STORAGE_KEYS.NOTES, data.notes);
       if (data.tasks) setLocalItem(STORAGE_KEYS.TASKS, data.tasks);
       if (data.passwords) setLocalItem(STORAGE_KEYS.PASSWORDS, data.passwords);
+      if (data.groups) setLocalItem(STORAGE_KEYS.GROUPS, data.groups);
       localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
       return true;
     } catch (e) {

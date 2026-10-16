@@ -40,7 +40,9 @@ import {
   Cloud,
   Pause,
   Play,
-  Folder
+  Folder,
+  Users,
+  RotateCcw
 } from 'lucide-react';
 import { formatINR, formatDate } from '@/lib/utils';
 import { SavingsGoal, SavingsDeposit, SupportTicket } from '@/types';
@@ -75,6 +77,8 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     savingsGoals,
     notes,
     tasks,
+    groupNotifications,
+    dismissGroupNotification,
     saveSavingsGoal,
     addToast,
     settings,
@@ -451,6 +455,15 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     customerDriveProgress?.batchId &&
     !dismissedAlerts.includes(`drive_upload_${customerDriveProgress.batchId}`);
 
+  const unreadGroupAlerts = (groupNotifications || []).filter(
+    (n) => !dismissedAlerts.includes(`grp_notif_${n.id}`)
+  );
+
+  const handleDismissGroupAlert = (notifId: string) => {
+    handleDismissAlert(`grp_notif_${notifId}`);
+    dismissGroupNotification(notifId);
+  };
+
   const totalAlerts =
     lowStockProducts.length +
     overdueReminders.length +
@@ -458,6 +471,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     activeNoteReminders.length +
     activeTaskReminders.length +
     unreadSupportTickets.length +
+    unreadGroupAlerts.length +
     (isBackupRunning || isBackupCompletedAlert ? 1 : 0) +
     (isDriveUploadRunning || isDriveUploadCompletedAlert ? 1 : 0);
 
@@ -469,6 +483,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
       ...activeNoteReminders.map((n) => `note_${n.id}`),
       ...activeTaskReminders.map((t) => `task_${t.id}`),
       ...unreadSupportTickets.map((t) => `ticket_${t.id}`),
+      ...unreadGroupAlerts.map((n) => `grp_notif_${n.id}`),
       `backup_${autoBackupProgress?.date || todayStr}`,
     ];
     if (customerDriveProgress?.batchId) {
@@ -934,6 +949,81 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                           </button>
                         </div>
                       )}
+
+                    {/* Unread Khata Group Notifications & Alerts */}
+                    {unreadGroupAlerts.length > 0 && (
+                      <div className="space-y-2">
+                        {unreadGroupAlerts.map((notif) => (
+                          <div
+                            key={notif.id}
+                            className={`p-3 rounded-2xl border space-y-2 relative group shadow-xs ${
+                              notif.type === 'record_edited'
+                                ? 'bg-gradient-to-r from-amber-50 to-orange-50/70 dark:from-amber-950/40 dark:to-orange-950/30 border-amber-200/90 dark:border-amber-800/60'
+                                : notif.type === 'member_joined'
+                                ? 'bg-gradient-to-r from-purple-50 to-indigo-50/70 dark:from-purple-950/40 dark:to-indigo-950/30 border-purple-200/90 dark:border-purple-800/60'
+                                : 'bg-gradient-to-r from-emerald-50 to-teal-50/70 dark:from-emerald-950/40 dark:to-teal-950/30 border-emerald-200/90 dark:border-emerald-800/60'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className={`w-8 h-8 rounded-xl text-white flex items-center justify-center shrink-0 shadow-xs ${
+                                  notif.type === 'record_edited' ? 'bg-amber-600' : notif.type === 'member_joined' ? 'bg-purple-600' : 'bg-emerald-600'
+                                }`}>
+                                  {notif.type === 'record_edited' ? (
+                                    <RotateCcw className="w-4 h-4" />
+                                  ) : notif.type === 'member_joined' ? (
+                                    <Users className="w-4 h-4" />
+                                  ) : (
+                                    <Coins className="w-4 h-4" />
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-xs font-black text-slate-900 dark:text-white truncate">
+                                      {notif.groupName}
+                                    </span>
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider font-mono bg-purple-500 text-white">
+                                      @{notif.groupUsername}
+                                    </span>
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-rose-500 text-white font-mono animate-pulse">
+                                      {notif.type === 'record_edited' ? 'Record Edited' : notif.type === 'member_joined' ? 'New Member Joined' : 'Amount Divided'}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-slate-700 dark:text-slate-300 font-medium truncate mt-0.5">
+                                    {notif.message}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDismissGroupAlert(notif.id)}
+                                title="Dismiss notification"
+                                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer shrink-0"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2 pt-0.5">
+                              <span className="text-[9px] text-slate-400 font-mono">
+                                {new Date(notif.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+
+                              <Link
+                                href={`/khata?groupId=${notif.groupId}`}
+                                prefetch={true}
+                                onClick={() => setIsNotificationsOpen(false)}
+                                className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-600/30 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+                              >
+                                <ArrowRight className="w-3.5 h-3.5" />
+                                <span>Open Group Khata</span>
+                              </Link>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Unread Support Inquiries / Tickets (Admin & Merchant) */}
                     {unreadSupportTickets.length > 0 && (

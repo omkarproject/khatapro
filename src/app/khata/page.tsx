@@ -7,7 +7,7 @@ import Loading from '@/components/Loading';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
 import { getActiveCurrency, t } from '@/lib/i18n';
 import { convertCurrency, getExcelNumFmt, formatMoney } from '@/lib/currencyService';
-import { Customer, Transaction, TransactionType, PaymentReminder } from '@/types';
+import { Customer, Transaction, TransactionType, PaymentReminder, KhataGroup, KhataGroupNotification, TransactionSplitMember, TransactionEditAudit } from '@/types';
 import { uploadToDriveFiles, deleteFromDriveFiles } from '@/lib/driveUploadClient';
 import QRCode from 'qrcode';
 import {
@@ -48,6 +48,16 @@ import {
   Pencil,
   BellRing,
   Loader2,
+  Users,
+  UserPlus,
+  LogIn,
+  Divide,
+  History,
+  UserMinus,
+  ShieldAlert,
+  Sparkles,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 
 function getCustomerRatingColor(rating: number = 5): string {
@@ -77,6 +87,7 @@ function formatTime(dateStr: string): string {
 function KhataPageInner() {
   const searchParams = useSearchParams();
   const customerIdParam = searchParams.get('id');
+  const groupIdParam = searchParams.get('groupId');
 
   const {
     customers,
@@ -97,6 +108,11 @@ function KhataPageInner() {
     deleteReminder,
     activeCurrency,
     activeLanguage,
+    groups,
+    saveGroup,
+    deleteGroup,
+    groupNotifications,
+    addGroupNotification,
   } = useApp();
 
   // Payment Reminder Modal State for Transactions
@@ -116,6 +132,31 @@ function KhataPageInner() {
   const [isUniversalSharing, setIsUniversalSharing] = useState(false);
   const [isUniversalShareModalOpen, setIsUniversalShareModalOpen] = useState(false);
 
+  // Khata Group States
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(() => groupIdParam || null);
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [isJoinGroupOpen, setIsJoinGroupOpen] = useState(false);
+  const [isGroupInfoOpen, setIsGroupInfoOpen] = useState(false);
+  const [selectedMemberFilterId, setSelectedMemberFilterId] = useState<string | null>(null);
+  const [historyModalTxn, setHistoryModalTxn] = useState<Transaction | null>(null);
+
+  // Create Group Form States
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupUsername, setNewGroupUsername] = useState('');
+  const [newGroupPic, setNewGroupPic] = useState<string | null>(null);
+  const [selectedCustomerIdsForGroup, setSelectedCustomerIdsForGroup] = useState<string[]>([]);
+  const [createGroupError, setCreateGroupError] = useState<string | null>(null);
+  const [isUploadingGroupPic, setIsUploadingGroupPic] = useState(false);
+  const groupPicInputRef = useRef<HTMLInputElement>(null);
+
+  // Join Group Form States
+  const [joinGroupUsername, setJoinGroupUsername] = useState('');
+  const [joinGroupError, setJoinGroupError] = useState<string | null>(null);
+
+  // Group Transaction Split Members Selection State (Screen 3)
+  const [splitMemberIds, setSplitMemberIds] = useState<string[]>([]);
+
   // Active customer selection - default to Datta More if available or first customer
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(() => {
     if (customerIdParam) return customerIdParam;
@@ -123,12 +164,14 @@ function KhataPageInner() {
     return datta ? datta.id : (customers[0]?.id || '');
   });
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'credit' | 'debit'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'credit' | 'debit' | 'group'>(() => {
+    return groupIdParam ? 'group' : 'all';
+  });
 
   // Screen View Mode: 'chat' (Screen 2), 'entry' (Screen 3), 'profile' (Screen 1)
   const [screenView, setScreenView] = useState<'chat' | 'entry' | 'profile'>('chat');
   const [mobileActivePanel, setMobileActivePanel] = useState<'directory' | 'ledger'>(() => {
-    return customerIdParam ? 'ledger' : 'directory';
+    return (customerIdParam || groupIdParam) ? 'ledger' : 'directory';
   });
   const [editingTxnId, setEditingTxnId] = useState<string | null>(null);
   const [isChatSearchOpen, setIsChatSearchOpen] = useState(false);
@@ -137,14 +180,14 @@ function KhataPageInner() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const headerAvatarInputRef = useRef<HTMLInputElement>(null);
 
-interface AttachedBill {
-  id: string;
-  url: string;
-  name: string;
-  type: 'image' | 'pdf';
-  size?: string;
-  driveFileId?: string;
-}
+  interface AttachedBill {
+    id: string;
+    url: string;
+    name: string;
+    type: 'image' | 'pdf';
+    size?: string;
+    driveFileId?: string;
+  }
 
   // Entry screen state (Screen 3)
   const [entryType, setEntryType] = useState<'received' | 'given'>('received'); // received = You Got (Debit/Green), given = You Gave (Credit/Red)
@@ -197,6 +240,12 @@ interface AttachedBill {
     return customers.find(c => c.id === selectedCustomerId) || customers[0];
   }, [customers, selectedCustomerId]);
 
+  // Active Group Object
+  const activeGroup = useMemo(() => {
+    if (!selectedGroupId) return null;
+    return groups.find(g => g.id === selectedGroupId) || null;
+  }, [groups, selectedGroupId]);
+
   // Sync profile edit temp fields when customer changes
   useEffect(() => {
     if (activeCustomer) {
@@ -213,14 +262,47 @@ interface AttachedBill {
       const found = customers.find(c => c.id === customerIdParam);
       if (found) {
         setSelectedCustomerId(found.id);
+        setSelectedGroupId(null);
         setScreenView('chat');
         setMobileActivePanel('ledger');
       }
     }
   }, [customerIdParam, customers]);
 
-  // Customer transactions history (Sorted chronologically so newest appears at the bottom / last in chat)
-  const customerTransactions = useMemo(() => {
+  // Sync searchParam groupId if provided
+  useEffect(() => {
+    if (groupIdParam) {
+      const foundGroup = groups.find(g => g.id === groupIdParam);
+      if (foundGroup) {
+        setSelectedGroupId(foundGroup.id);
+        setFilterType('group');
+        setScreenView('chat');
+        setMobileActivePanel('ledger');
+      }
+    }
+  }, [groupIdParam, groups]);
+
+  // Active transactions for ledger chat (Group transactions or Customer transactions)
+  const activeTransactions = useMemo(() => {
+    if (activeGroup) {
+      const groupTxns = transactions.filter(t => t.groupId === activeGroup.id);
+      const filtered = selectedMemberFilterId
+        ? groupTxns.filter(t => 
+            (t.splitMembers && t.splitMembers.some(sm => sm.customerId === selectedMemberFilterId)) ||
+            t.customerId === selectedMemberFilterId
+          )
+        : groupTxns;
+
+      return filtered.sort((a, b) => {
+        const timeA = new Date(a.date).getTime();
+        const timeB = new Date(b.date).getTime();
+        if (timeA !== timeB) return timeA - timeB;
+        const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return createdA - createdB;
+      });
+    }
+
     if (!activeCustomer) return [];
     return transactions
       .filter(t => t.customerId === activeCustomer.id)
@@ -232,16 +314,25 @@ interface AttachedBill {
         const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return createdA - createdB;
       });
-  }, [transactions, activeCustomer]);
+  }, [activeGroup, activeCustomer, transactions, selectedMemberFilterId]);
 
   // Compute running balance for each transaction chronologically
   const enrichedTransactions = useMemo(() => {
     let running = 0;
-    return customerTransactions.map((t) => {
+    return activeTransactions.map((t) => {
+      // In group mode when filtering a specific member, track running balance for that member's share
+      let txnVal = t.amount;
+      if (activeGroup && selectedMemberFilterId && t.splitMembers && t.splitMembers.length > 0) {
+        const memberSplit = t.splitMembers.find(sm => sm.customerId === selectedMemberFilterId);
+        if (memberSplit) {
+          txnVal = memberSplit.share;
+        }
+      }
+
       if (t.type === 'credit') {
-        running += t.amount;
+        running += txnVal;
       } else if (t.type === 'debit' || t.type === 'collection') {
-        running -= t.amount;
+        running -= txnVal;
       }
       const balanceLabel =
         running > 0
@@ -256,7 +347,56 @@ interface AttachedBill {
         balanceLabel,
       };
     });
-  }, [customerTransactions]);
+  }, [activeTransactions, activeGroup, selectedMemberFilterId]);
+
+  // Member balance calculations for the active group
+  const memberBalances = useMemo(() => {
+    if (!activeGroup) return {};
+    const map: { [customerId: string]: { name: string; avatar?: string; phone?: string; received: number; given: number; net: number } } = {};
+    activeGroup.members.forEach(m => {
+      map[m.customerId] = {
+        name: m.name,
+        avatar: m.avatar,
+        phone: m.phone,
+        received: 0,
+        given: 0,
+        net: 0,
+      };
+    });
+
+    const gTxns = transactions.filter(t => t.groupId === activeGroup.id);
+    gTxns.forEach(t => {
+      const isGot = t.type === 'debit' || t.type === 'collection';
+      if (t.splitMembers && t.splitMembers.length > 0) {
+        t.splitMembers.forEach(sm => {
+          if (!map[sm.customerId]) {
+            map[sm.customerId] = { name: sm.customerName, received: 0, given: 0, net: 0 };
+          }
+          if (isGot) {
+            map[sm.customerId].received += sm.share;
+          } else {
+            map[sm.customerId].given += sm.share;
+          }
+        });
+      } else if (t.customerId) {
+        if (!map[t.customerId]) {
+          map[t.customerId] = { name: t.customerName || 'Member', received: 0, given: 0, net: 0 };
+        }
+        if (isGot) {
+          map[t.customerId].received += t.amount;
+        } else {
+          map[t.customerId].given += t.amount;
+        }
+      }
+    });
+
+    Object.keys(map).forEach(id => {
+      // Net: given - received (>0 = Due to Pay, <0 = Advance)
+      map[id].net = map[id].given - map[id].received;
+    });
+
+    return map;
+  }, [activeGroup, transactions]);
 
   // Filter by chat search query if user opened chat search
   const visibleTransactions = useMemo(() => {
@@ -284,11 +424,11 @@ interface AttachedBill {
       const timer = setTimeout(() => scrollToBottom('smooth'), 120);
       return () => clearTimeout(timer);
     }
-  }, [screenView, customerTransactions.length, selectedCustomerId]);
+  }, [screenView, activeTransactions.length, selectedCustomerId, selectedGroupId, selectedMemberFilterId]);
 
   // Group transactions by date for the chat stream (Screen 2)
   const groupedTransactions = useMemo(() => {
-    const groups: { [dateKey: string]: typeof enrichedTransactions } = {};
+    const dateBuckets: { [dateKey: string]: typeof enrichedTransactions } = {};
     visibleTransactions.forEach((t) => {
       const d = new Date(t.date);
       const today = new Date();
@@ -301,12 +441,12 @@ interface AttachedBill {
         ? 'Today'
         : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
-      if (!groups[dateLabel]) {
-        groups[dateLabel] = [];
+      if (!dateBuckets[dateLabel]) {
+        dateBuckets[dateLabel] = [];
       }
-      groups[dateLabel].push(t);
+      dateBuckets[dateLabel].push(t);
     });
-    return groups;
+    return dateBuckets;
   }, [visibleTransactions]);
 
   // Filtered customer list
@@ -325,6 +465,246 @@ interface AttachedBill {
       return matchSearch;
     });
   }, [customers, searchTerm, filterType]);
+
+  // Filtered groups list for Group tab
+  const filteredGroups = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return groups.filter(g => {
+      const matchSearch =
+        !term ||
+        g.name.toLowerCase().includes(term) ||
+        g.username.toLowerCase().includes(term) ||
+        g.members.some(m => m.name.toLowerCase().includes(term));
+      return matchSearch;
+    });
+  }, [groups, searchTerm]);
+
+  // Group Picture Upload Handler
+  const handleGroupPicUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    if (file.size > 5 * 1024 * 1024) {
+      addToast('File too large', 'Please select a photo under 5MB.', 'warning');
+      return;
+    }
+
+    setIsUploadingGroupPic(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result as string;
+      try {
+        const uploadRes = await uploadToDriveFiles(
+          `group_${Date.now()}_${file.name}`,
+          base64,
+          file.type || 'image/jpeg',
+          undefined,
+          {
+            category: 'Group Avatar',
+            folderName: 'Groups',
+            appFileId: `group_pic_${Date.now()}`,
+            uploadedAt: new Date().toISOString(),
+          }
+        );
+        if (uploadRes.success && uploadRes.fileId) {
+          setNewGroupPic(`/api/backup/google-drive/view-file?fileId=${uploadRes.fileId}`);
+        } else {
+          setNewGroupPic(base64);
+        }
+        addToast('Photo Uploaded', 'Group profile picture set.', 'success');
+      } catch {
+        setNewGroupPic(base64);
+      } finally {
+        setIsUploadingGroupPic(false);
+      }
+    };
+    reader.onerror = () => {
+      setIsUploadingGroupPic(false);
+      addToast('Error', 'Failed to read image file.', 'error');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle Create New Group with Handle Uniqueness Check
+  const handleCreateGroup = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateGroupError(null);
+
+    const name = newGroupName.trim();
+    const rawUsername = newGroupUsername.trim().replace(/^@+/, '').toLowerCase();
+
+    if (!name) {
+      setCreateGroupError('Group name is required.');
+      return;
+    }
+
+    if (!rawUsername || rawUsername.length < 3) {
+      setCreateGroupError('Unique username must be at least 3 characters.');
+      return;
+    }
+
+    // Check unique username across existing groups
+    const isDuplicate = groups.some(g => g.username.toLowerCase() === rawUsername);
+    if (isDuplicate) {
+      setCreateGroupError(`Group username @${rawUsername} already taken! Please enter a unique handle.`);
+      return;
+    }
+
+    const currentUserId = currentUser?.id || 'admin_user';
+    const currentUserName = currentUser?.businessName || settings.businessName || 'Admin';
+
+    // Build initial members: Creator (Admin) + selected customers
+    const membersList: KhataGroup['members'] = [
+      {
+        customerId: currentUserId,
+        name: currentUserName,
+        phone: currentUser?.phone || profile.phone || '',
+        avatar: profile.logo || undefined,
+        role: 'admin',
+        joinedAt: new Date().toISOString(),
+      },
+    ];
+
+    selectedCustomerIdsForGroup.forEach(cid => {
+      const c = customers.find(cust => cust.id === cid);
+      if (c && c.id !== currentUserId) {
+        membersList.push({
+          customerId: c.id,
+          name: c.name,
+          phone: c.phone,
+          avatar: c.avatar || c.avatarUrl,
+          role: 'member',
+          joinedAt: new Date().toISOString(),
+        });
+      }
+    });
+
+    const newGroup: KhataGroup = {
+      id: `grp_${Date.now()}`,
+      name,
+      username: rawUsername,
+      avatar: newGroupPic || undefined,
+      creatorId: currentUserId,
+      creatorName: currentUserName,
+      createdAt: new Date().toISOString(),
+      members: membersList,
+    };
+
+    saveGroup(newGroup);
+    setSelectedGroupId(newGroup.id);
+    setFilterType('group');
+    setIsCreateGroupOpen(false);
+
+    // Reset fields
+    setNewGroupName('');
+    setNewGroupUsername('');
+    setNewGroupPic(null);
+    setSelectedCustomerIdsForGroup([]);
+    setCreateGroupError(null);
+
+    addToast('Group Created', `Group "${newGroup.name}" (@${newGroup.username}) created with ${membersList.length} members.`, 'success');
+  };
+
+  // Handle Join Group via Username Handle
+  const handleJoinGroup = (e: React.FormEvent) => {
+    e.preventDefault();
+    setJoinGroupError(null);
+
+    const rawHandle = joinGroupUsername.trim().replace(/^@+/, '').toLowerCase();
+    if (!rawHandle) {
+      setJoinGroupError('Please enter a group username.');
+      return;
+    }
+
+    const targetGroup = groups.find(g => g.username.toLowerCase() === rawHandle);
+    if (!targetGroup) {
+      setJoinGroupError(`No group found with username @${rawHandle}. Please verify handle.`);
+      return;
+    }
+
+    const currentUserId = currentUser?.id || 'admin_user';
+    const currentUserName = currentUser?.businessName || settings.businessName || 'Merchant';
+
+    const alreadyJoined = targetGroup.members.some(m => m.customerId === currentUserId);
+    if (alreadyJoined) {
+      setSelectedGroupId(targetGroup.id);
+      setFilterType('group');
+      setIsJoinGroupOpen(false);
+      setJoinGroupUsername('');
+      addToast('Group Opened', `You are already a member of @${rawHandle}.`, 'info');
+      return;
+    }
+
+    const updatedMembers = [
+      ...targetGroup.members,
+      {
+        customerId: currentUserId,
+        name: currentUserName,
+        phone: currentUser?.phone || profile.phone || '',
+        avatar: profile.logo || undefined,
+        role: 'member' as const,
+        joinedAt: new Date().toISOString(),
+      },
+    ];
+
+    const updatedGroup: KhataGroup = {
+      ...targetGroup,
+      members: updatedMembers,
+      updatedAt: new Date().toISOString(),
+    };
+
+    saveGroup(updatedGroup);
+
+    // Send notification to existing members:
+    const notif: KhataGroupNotification = {
+      id: `notif_${Date.now()}`,
+      groupId: targetGroup.id,
+      groupName: targetGroup.name,
+      type: 'member_joined',
+      title: 'New Member Joined Group',
+      message: `${currentUserName} joined group @${targetGroup.username} (${updatedMembers.length} total members)`,
+      createdAt: new Date().toISOString(),
+      read: false,
+      memberIds: targetGroup.members.map(m => m.customerId),
+    };
+    addGroupNotification(notif);
+
+    setSelectedGroupId(targetGroup.id);
+    setFilterType('group');
+    setIsJoinGroupOpen(false);
+    setJoinGroupUsername('');
+    setJoinGroupError(null);
+
+    addToast('Joined Group', `You successfully joined @${targetGroup.username}!`, 'success');
+  };
+
+  // Handle Remove Member From Group (Creator permission only)
+  const handleRemoveMemberFromGroup = (memberId: string) => {
+    if (!activeGroup) return;
+
+    const currentUserId = currentUser?.id || 'admin_user';
+    const isCreator = activeGroup.creatorId === currentUserId || activeGroup.creatorName === (currentUser?.businessName || settings.businessName);
+
+    if (!isCreator) {
+      addToast('Unauthorized', 'Only the group creator can remove members.', 'error');
+      return;
+    }
+
+    const targetMember = activeGroup.members.find(m => m.customerId === memberId);
+    if (!targetMember) return;
+
+    if (confirm(`Are you sure you want to remove ${targetMember.name} from group "${activeGroup.name}"?`)) {
+      const updatedMembers = activeGroup.members.filter(m => m.customerId !== memberId);
+      const updatedGroup: KhataGroup = {
+        ...activeGroup,
+        members: updatedMembers,
+        updatedAt: new Date().toISOString(),
+      };
+      saveGroup(updatedGroup);
+      addToast('Member Removed', `${targetMember.name} removed from ${activeGroup.name}.`, 'info');
+    }
+  };
 
   // Keypad click handlers (Screen 3)
   const handleKeypadPress = (val: string) => {
@@ -547,18 +927,13 @@ interface AttachedBill {
     });
     setEntryAttachments(parsedAttachments);
 
-    // Sync reminder state for this transaction
-    const existingRem = reminders.find(r => r.transactionId === txn.id);
-    if (existingRem) {
-      setIsEntryReminderEnabled(true);
-      setEntryReminderDate(existingRem.dueDate);
-      setEntryReminderNote(existingRem.note || existingRem.messageTemplate || '');
+    // Sync split members if group transaction
+    if (txn.splitMembers && txn.splitMembers.length > 0) {
+      setSplitMemberIds(txn.splitMembers.map(m => m.customerId));
+    } else if (activeGroup) {
+      setSplitMemberIds(activeGroup.members.map(m => m.customerId));
     } else {
-      setIsEntryReminderEnabled(false);
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      setEntryReminderDate(tomorrow.toISOString().split('T')[0]);
-      setEntryReminderNote('');
+      setSplitMemberIds([]);
     }
 
     setScreenView('entry');
@@ -680,9 +1055,178 @@ interface AttachedBill {
       addToast('Amount Required', 'Please enter a valid amount using the keypad.', 'warning');
       return;
     }
-    if (!activeCustomer) return;
 
     const isGot = entryType === 'received';
+
+    // In Group Mode
+    if (activeGroup) {
+      // Determine members to split among
+      const membersForSplit = splitMemberIds.length > 0
+        ? splitMemberIds
+        : activeGroup.members.map(m => m.customerId);
+
+      const count = Math.max(1, membersForSplit.length);
+      const sharePerMember = Math.round((num / count) * 100) / 100;
+
+      const splitMembers: TransactionSplitMember[] = membersForSplit.map(cid => {
+        const mem = activeGroup.members.find(m => m.customerId === cid);
+        return {
+          customerId: cid,
+          customerName: mem?.name || 'Member',
+          share: sharePerMember,
+        };
+      });
+
+      // Upload attachments if any
+      const dummyCustomerForUpload: Customer = {
+        id: activeGroup.id,
+        name: activeGroup.name,
+        phone: '',
+        email: '',
+        creditLimit: 0,
+        outstandingBalance: 0,
+        category: 'Regular',
+        status: 'active',
+        rating: 5,
+        createdAt: activeGroup.createdAt,
+      };
+      const finalAttachments = await uploadPendingAttachmentsToDrive(dummyCustomerForUpload, entryAttachments);
+      const serializedAttachments = finalAttachments.map(b => JSON.stringify(b));
+      const finalTxnId = editingTxnId || `txn_${Date.now()}`;
+
+      if (editingTxnId) {
+        const originalTxn = transactions.find(t => t.id === editingTxnId);
+        const originalDateOnly = originalTxn?.date ? originalTxn.date.split('T')[0] : '';
+        const updatedDate = entryDate === originalDateOnly
+          ? (originalTxn?.date || new Date().toISOString())
+          : new Date(entryDate).toISOString();
+
+        // Build audit history
+        const audit: TransactionEditAudit = {
+          editedAt: new Date().toISOString(),
+          editedBy: currentUser?.businessName || settings.businessName || 'Admin',
+          previousAmount: originalTxn?.amount || 0,
+          newAmount: num,
+          previousNote: originalTxn?.note,
+          newNote: entryNotes || (isGot ? 'Payment received' : 'Goods on credit'),
+          previousSplit: originalTxn?.splitMembers,
+          newSplit: splitMembers,
+        };
+        const updatedEditHistory = [...(originalTxn?.editHistory || []), audit];
+
+        const updatedTxn: Transaction = {
+          ...originalTxn,
+          id: editingTxnId,
+          type: isGot ? 'debit' : 'credit',
+          amount: num,
+          date: updatedDate,
+          customerId: activeGroup.id,
+          customerName: activeGroup.name,
+          category: isGot ? 'Payment Received' : 'Credit Given',
+          paymentMode: originalTxn?.paymentMode || (isGot ? 'upi' : 'cash'),
+          note: entryNotes || (isGot ? 'Payment received' : 'Goods on credit'),
+          attachments: serializedAttachments,
+          status: 'completed',
+          createdBy: originalTxn?.createdBy || settings.businessName,
+          createdAt: originalTxn?.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          groupId: activeGroup.id,
+          groupName: activeGroup.name,
+          splitMembers,
+          editHistory: updatedEditHistory,
+        };
+
+        updateTransaction(updatedTxn);
+
+        // Send group notification to affected members
+        const notif: KhataGroupNotification = {
+          id: `notif_${Date.now()}`,
+          groupId: activeGroup.id,
+          groupName: activeGroup.name,
+          type: 'record_edited',
+          title: 'Group Record Edited',
+          message: `${audit.editedBy} edited record: ₹${(audit.previousAmount ?? audit.prevAmount ?? 0).toLocaleString('en-IN')} ➔ ₹${num.toLocaleString('en-IN')} (₹${sharePerMember.toLocaleString('en-IN')} each for ${membersForSplit.length} members)`,
+          createdAt: new Date().toISOString(),
+          read: false,
+          memberIds: membersForSplit,
+          details: {
+            transactionId: editingTxnId,
+            oldAmount: audit.previousAmount ?? audit.prevAmount ?? 0,
+            newAmount: num,
+            editedBy: audit.editedBy,
+          },
+        };
+        addGroupNotification(notif);
+
+        addToast(
+          'Group Record Updated',
+          `₹${num.toLocaleString('en-IN')} updated & divided among ${membersForSplit.length} members (₹${sharePerMember.toLocaleString('en-IN')} each).`,
+          'success'
+        );
+      } else {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const txnDateIso = entryDate === todayStr ? new Date().toISOString() : new Date(entryDate).toISOString();
+
+        const newTxn: Transaction = {
+          id: finalTxnId,
+          type: isGot ? 'debit' : 'credit',
+          amount: num,
+          date: txnDateIso,
+          customerId: activeGroup.id,
+          customerName: activeGroup.name,
+          category: isGot ? 'Payment Received' : 'Credit Given',
+          paymentMode: isGot ? 'upi' : 'cash',
+          note: entryNotes || (isGot ? 'Payment received' : 'Goods on credit'),
+          attachments: serializedAttachments,
+          status: 'completed',
+          createdBy: settings.businessName,
+          createdAt: new Date().toISOString(),
+          groupId: activeGroup.id,
+          groupName: activeGroup.name,
+          splitMembers,
+        };
+
+        addTransaction(newTxn);
+
+        // Send group notification to divided members
+        const notif: KhataGroupNotification = {
+          id: `notif_${Date.now()}`,
+          groupId: activeGroup.id,
+          groupName: activeGroup.name,
+          type: 'amount_divided',
+          title: 'New Group Expense Divided',
+          message: `₹${num.toLocaleString('en-IN')} ${isGot ? 'Received' : 'Given'} divided among ${membersForSplit.length} members (₹${sharePerMember.toLocaleString('en-IN')} each)`,
+          createdAt: new Date().toISOString(),
+          read: false,
+          memberIds: membersForSplit,
+          details: {
+            newAmount: num,
+            editedBy: currentUser?.businessName || settings.businessName || 'Admin',
+          },
+        };
+        addGroupNotification(notif);
+
+        addToast(
+          isGot ? 'Payment Received' : 'Credit Given',
+          `₹${num.toLocaleString('en-IN')} divided among ${membersForSplit.length} members (₹${sharePerMember.toLocaleString('en-IN')} each).`,
+          'success'
+        );
+      }
+
+      // Reset and return to chat view
+      setEditingTxnId(null);
+      setEntryAmountStr('');
+      setEntryNotes('');
+      setEntryAttachments([]);
+      setSplitMemberIds([]);
+      setIsEntryReminderEnabled(false);
+      setEntryReminderNote('');
+      setScreenView('chat');
+      return;
+    }
+
+    // Individual Customer Mode
+    if (!activeCustomer) return;
 
     // Upload any newly attached files to Google Drive now that user has confirmed saving
     const finalAttachments = await uploadPendingAttachmentsToDrive(activeCustomer, entryAttachments);
@@ -698,6 +1242,16 @@ interface AttachedBill {
       const updatedDate = entryDate === originalDateOnly
         ? (originalTxn?.date || new Date().toISOString())
         : new Date(entryDate).toISOString();
+
+      const audit: TransactionEditAudit = {
+        editedAt: new Date().toISOString(),
+        editedBy: currentUser?.businessName || settings.businessName || 'Merchant',
+        previousAmount: originalTxn?.amount || 0,
+        newAmount: num,
+        previousNote: originalTxn?.note,
+        newNote: entryNotes || (isGot ? 'Payment received' : 'Goods on credit'),
+      };
+      const updatedEditHistory = [...(originalTxn?.editHistory || []), audit];
 
       const updatedTxn: Transaction = {
         ...originalTxn,
@@ -715,6 +1269,7 @@ interface AttachedBill {
         createdBy: originalTxn?.createdBy || settings.businessName,
         createdAt: originalTxn?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        editHistory: updatedEditHistory,
       };
 
       updateTransaction(updatedTxn);
@@ -784,6 +1339,7 @@ interface AttachedBill {
     setEntryAmountStr('');
     setEntryNotes('');
     setEntryAttachments([]);
+    setSplitMemberIds([]);
     setIsEntryReminderEnabled(false);
     setEntryReminderNote('');
     setScreenView('chat');
@@ -2591,23 +3147,73 @@ interface AttachedBill {
       {/* Main Container Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 h-[calc(100dvh-8rem)] sm:h-[calc(100vh-6.5rem)] min-h-[520px] sm:min-h-[640px]">
         
-        {/* ================= LEFT COLUMN: CUSTOMER DIRECTORY ================= */}
+        {/* ================= LEFT COLUMN: CUSTOMER / GROUP DIRECTORY ================= */}
         <div className={`lg:col-span-4 glass-card p-3 flex flex-col h-full ${
           mobileActivePanel === 'ledger' ? 'hidden lg:flex' : 'flex'
         }`}>
-          {/* Top Search & Add Customer */}
+          {/* Top Search & Add Customer / Group */}
           <div className="space-y-2 p-1">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">
-                Customers ({customers.length})
+                {filterType === 'group' ? `Groups (${groups.length})` : `Customers (${customers.length})`}
               </h2>
-              <button
-                onClick={() => setIsAddCustomerOpen(true)}
-                className="px-2.5 py-1 text-xs font-bold rounded-xl text-white fintech-gradient-primary flex items-center gap-1 shadow-sm"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Add
-              </button>
+              
+              {/* Add Button with Dropdown Menu */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsAddMenuOpen(prev => !prev)}
+                  className="px-2.5 py-1 text-xs font-bold rounded-xl text-white fintech-gradient-primary flex items-center gap-1 shadow-sm cursor-pointer hover:opacity-90 active:scale-95 transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add
+                </button>
+
+                {/* Dropdown Menu */}
+                {isAddMenuOpen && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-20"
+                      onClick={() => setIsAddMenuOpen(false)}
+                    />
+                    <div className="absolute right-0 top-8 z-30 w-56 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 animate-in fade-in zoom-in-95 duration-150">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddCustomerOpen(true);
+                          setIsAddMenuOpen(false);
+                        }}
+                        className="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2.5 transition-colors"
+                      >
+                        <UserPlus className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                        <span>Add New Khata Customer</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCreateGroupOpen(true);
+                          setIsAddMenuOpen(false);
+                        }}
+                        className="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2.5 transition-colors"
+                      >
+                        <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                        <span>Create New Group</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsJoinGroupOpen(true);
+                          setIsAddMenuOpen(false);
+                        }}
+                        className="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2.5 transition-colors"
+                      >
+                        <LogIn className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                        <span>Join Group</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
             <div className="relative">
@@ -2616,111 +3222,205 @@ interface AttachedBill {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search name, phone, or email..."
+                placeholder={filterType === 'group' ? 'Search group name or @handle...' : 'Search name, phone, or email...'}
                 className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none"
               />
             </div>
 
-            {/* Filter Pills */}
+            {/* Filter Pills: All, Due, Advance, Group */}
             <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl text-[11px] font-semibold">
               <button
-                onClick={() => setFilterType('all')}
-                className={`flex-1 py-1 rounded-lg transition-colors ${filterType === 'all' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'text-slate-500'}`}
+                type="button"
+                onClick={() => { setFilterType('all'); setSelectedGroupId(null); }}
+                className={`flex-1 py-1 rounded-lg transition-colors ${filterType === 'all' && !selectedGroupId ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold' : 'text-slate-500'}`}
               >
                 All
               </button>
               <button
-                onClick={() => setFilterType('credit')}
-                className={`flex-1 py-1 rounded-lg transition-colors ${filterType === 'credit' ? 'bg-white dark:bg-slate-700 text-rose-600 shadow-xs' : 'text-slate-500'}`}
+                type="button"
+                onClick={() => { setFilterType('credit'); setSelectedGroupId(null); }}
+                className={`flex-1 py-1 rounded-lg transition-colors ${filterType === 'credit' && !selectedGroupId ? 'bg-white dark:bg-slate-700 text-rose-600 shadow-xs font-bold' : 'text-slate-500'}`}
               >
                 Due
               </button>
               <button
-                onClick={() => setFilterType('debit')}
-                className={`flex-1 py-1 rounded-lg transition-colors ${filterType === 'debit' ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-xs' : 'text-slate-500'}`}
+                type="button"
+                onClick={() => { setFilterType('debit'); setSelectedGroupId(null); }}
+                className={`flex-1 py-1 rounded-lg transition-colors ${filterType === 'debit' && !selectedGroupId ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-xs font-bold' : 'text-slate-500'}`}
               >
                 Advance
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterType('group');
+                  if (!selectedGroupId && groups.length > 0) {
+                    setSelectedGroupId(groups[0].id);
+                  }
+                }}
+                className={`flex-1 py-1 rounded-lg transition-colors flex items-center justify-center gap-1 ${filterType === 'group' || selectedGroupId ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold' : 'text-slate-500'}`}
+              >
+                <Users className="w-3 h-3" />
+                <span>Group</span>
               </button>
             </div>
           </div>
 
-          {/* Customer Scroll List */}
+          {/* Directory Scroll List: Groups OR Customers */}
           <div className="flex-1 overflow-y-auto space-y-1.5 mt-2 pr-1">
-            {filteredCustomers.map((cust) => {
-              const isSelected = cust.id === activeCustomer?.id;
-              return (
-                <div
-                  key={cust.id}
-                  onClick={() => {
-                    setSelectedCustomerId(cust.id);
-                    setScreenView('chat');
-                    setMobileActivePanel('ledger');
-                  }}
-                  className={`p-3 rounded-2xl cursor-pointer transition-all border ${
-                    isSelected
-                      ? 'bg-indigo-50/90 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700 shadow-sm'
-                      : 'bg-white/50 dark:bg-slate-800/30 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/70'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenAvatarReview(cust);
-                        }}
-                        className={`w-11 h-11 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-sm shrink-0 aspect-square overflow-hidden cursor-pointer hover:ring-2 hover:ring-emerald-500/50 transition-all ${getCustomerRatingBorder(cust.rating)}`}
-                        title="Click to view/change profile photo"
-                      >
-                        {(cust.avatar || cust.avatarUrl) ? (
-                          <img
-                            src={cust.avatar || cust.avatarUrl}
-                            alt={cust.name}
-                            className="w-full h-full object-cover object-center rounded-full"
-                            style={{ imageRendering: 'auto' }}
-                            onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                          />
-                        ) : (
-                          <span className="font-black text-sm">{cust.name.charAt(0)}</span>
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <div className={`text-xs font-bold truncate ${getCustomerRatingColor(cust.rating)}`}>
-                          {cust.name}
+            {filterType === 'group' ? (
+              filteredGroups.length > 0 ? (
+                filteredGroups.map((grp) => {
+                  const isSelected = grp.id === selectedGroupId;
+                  return (
+                    <div
+                      key={grp.id}
+                      onClick={() => {
+                        setSelectedGroupId(grp.id);
+                        setSelectedMemberFilterId(null);
+                        setScreenView('chat');
+                        setMobileActivePanel('ledger');
+                      }}
+                      className={`p-3 rounded-2xl cursor-pointer transition-all border ${
+                        isSelected
+                          ? 'bg-indigo-50/90 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700 shadow-sm'
+                          : 'bg-white/50 dark:bg-slate-800/30 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/70'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-extrabold flex items-center justify-center text-sm shrink-0 aspect-square overflow-hidden shadow-xs ring-2 ring-indigo-500/20">
+                            {grp.avatar ? (
+                              <img src={grp.avatar} alt={grp.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <Users className="w-5 h-5 text-white" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold truncate text-slate-900 dark:text-white flex items-center gap-1.5">
+                              <span>{grp.name}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">
+                              <span>@{grp.username}</span>
+                              <span className="text-slate-400">• {grp.members.length} members</span>
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 truncate">
-                          <span>{cust.phone}</span>
-                          <span className="flex items-center gap-0.5 shrink-0">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <Star
-                                key={star}
-                                className={`w-2.5 h-2.5 ${
-                                  star <= (cust.rating || 5)
-                                    ? 'fill-amber-400 text-amber-400'
-                                    : 'text-slate-300 dark:text-slate-600'
-                                }`}
-                              />
-                            ))}
+
+                        <div className="text-right">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                            Group
                           </span>
                         </div>
                       </div>
                     </div>
-
-                    <div className="text-right">
-                      <div className={`text-xs font-bold font-mono ${
-                        cust.outstandingBalance > 0 ? 'text-rose-600' :
-                        cust.outstandingBalance < 0 ? 'text-emerald-600' : 'text-slate-400'
-                      }`}>
-                        {formatINR(Math.abs(cust.outstandingBalance))}
+                  );
+                })
+              ) : (
+                <div className="p-6 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200">No Groups Found</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Create a new group or join with a handle.</p>
+                  </div>
+                  <div className="flex items-center justify-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsCreateGroupOpen(true)}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm cursor-pointer"
+                    >
+                      + Create Group
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsJoinGroupOpen(true)}
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 cursor-pointer"
+                    >
+                      Join Group
+                    </button>
+                  </div>
+                </div>
+              )
+            ) : (
+              filteredCustomers.map((cust) => {
+                const isSelected = !selectedGroupId && cust.id === activeCustomer?.id;
+                return (
+                  <div
+                    key={cust.id}
+                    onClick={() => {
+                      setSelectedCustomerId(cust.id);
+                      setSelectedGroupId(null);
+                      setScreenView('chat');
+                      setMobileActivePanel('ledger');
+                    }}
+                    className={`p-3 rounded-2xl cursor-pointer transition-all border ${
+                      isSelected
+                        ? 'bg-indigo-50/90 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700 shadow-sm'
+                        : 'bg-white/50 dark:bg-slate-800/30 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/70'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenAvatarReview(cust);
+                          }}
+                          className={`w-11 h-11 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-sm shrink-0 aspect-square overflow-hidden cursor-pointer hover:ring-2 hover:ring-emerald-500/50 transition-all ${getCustomerRatingBorder(cust.rating)}`}
+                          title="Click to view/change profile photo"
+                        >
+                          {(cust.avatar || cust.avatarUrl) ? (
+                            <img
+                              src={cust.avatar || cust.avatarUrl}
+                              alt={cust.name}
+                              className="w-full h-full object-cover object-center rounded-full"
+                              style={{ imageRendering: 'auto' }}
+                              onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                            />
+                          ) : (
+                            <span className="font-black text-sm">{cust.name.charAt(0)}</span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className={`text-xs font-bold truncate ${getCustomerRatingColor(cust.rating)}`}>
+                            {cust.name}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[10px] text-slate-400 truncate">
+                            <span>{cust.phone}</span>
+                            <span className="flex items-center gap-0.5 shrink-0">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Star
+                                  key={star}
+                                  className={`w-2.5 h-2.5 ${
+                                    star <= (cust.rating || 5)
+                                      ? 'fill-amber-400 text-amber-400'
+                                      : 'text-slate-300 dark:text-slate-600'
+                                  }`}
+                                />
+                              ))}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">
-                        {cust.outstandingBalance > 0 ? 'Due' : cust.outstandingBalance < 0 ? 'Advance' : 'Settled'}
+
+                      <div className="text-right">
+                        <div className={`text-xs font-bold font-mono ${
+                          cust.outstandingBalance > 0 ? 'text-rose-600' :
+                          cust.outstandingBalance < 0 ? 'text-emerald-600' : 'text-slate-400'
+                        }`}>
+                          {formatINR(Math.abs(cust.outstandingBalance))}
+                        </div>
+                        <div className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">
+                          {cust.outstandingBalance > 0 ? 'Due' : cust.outstandingBalance < 0 ? 'Advance' : 'Settled'}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
 
@@ -2731,12 +3431,12 @@ interface AttachedBill {
             : 'fixed inset-0 z-50 bg-[#F4F6F5] dark:bg-[#0B101D] h-[100dvh] w-full flex flex-col overflow-hidden lg:static lg:inset-auto lg:z-auto lg:col-span-8 lg:h-full lg:bg-white lg:dark:bg-[#0E1526] lg:rounded-[28px] lg:border lg:border-slate-200/80 lg:dark:border-slate-800 lg:shadow-xl lg:relative'
         }`}>
           
-          {activeCustomer ? (
+          {(activeCustomer || activeGroup) ? (
             <>
               {/* -------------------------------------------------------------
                   SCREEN 1: PROFILE EDIT SCREEN (Exact replica of Image 1)
               -------------------------------------------------------------- */}
-              {screenView === 'profile' && (
+              {screenView === 'profile' && activeCustomer && (
                 <div className="flex-1 flex flex-col bg-[#F6FAF8] dark:bg-slate-900 overflow-y-auto animate-in slide-in-from-right duration-200">
                   
                   {/* Top Header */}
@@ -2985,95 +3685,150 @@ interface AttachedBill {
               {screenView === 'chat' && (
                 <div className="flex-1 flex flex-col h-full bg-[#F2F5F4] dark:bg-[#0B101D] overflow-hidden">
                   
-                  {/* Top App Bar (Exact replica of Image 2) */}
+                  {/* Top App Bar (Group vs Customer) */}
                   <div className="flex items-center justify-between px-3.5 sm:px-4 py-2.5 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 shrink-0">
                     <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                      {/* Back button (on mobile returns to Customer Directory) */}
+                      {/* Back button (on mobile returns to Directory) */}
                       <button
                         type="button"
                         onClick={() => setMobileActivePanel('directory')}
                         className="p-1 -ml-1 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors cursor-pointer"
-                        title="Back to Customers Directory"
+                        title="Back to Directory"
                       >
                         <ArrowLeft className="w-6 h-6 stroke-[2.2]" />
                       </button>
 
-                      {/* Circular Avatar (with rating-based colored round border) - Click opens Review Modal */}
-                      <div className="relative group shrink-0">
-                        <div
-                          onClick={() => handleOpenAvatarReview(activeCustomer)}
-                          className={`w-10 h-10 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-base shadow-xs shrink-0 select-none cursor-pointer hover:opacity-90 active:scale-95 transition-all overflow-hidden ${getCustomerRatingBorder(activeCustomer.rating)}`}
-                          title="Click to view full photo, change, or delete"
-                        >
-                          {(activeCustomer.avatar || activeCustomer.avatarUrl) ? (
-                            <img
-                              src={activeCustomer.avatar || activeCustomer.avatarUrl}
-                              alt={activeCustomer.name}
-                              className="w-full h-full object-cover"
-                              onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                            />
-                          ) : (
-                            activeCustomer.name.charAt(0).toUpperCase()
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenAvatarReview(activeCustomer);
-                          }}
-                          className="absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-md border border-white dark:border-slate-900 transition-transform hover:scale-110 cursor-pointer"
-                          title="View, change, or remove profile photo"
-                        >
-                          <Camera className="w-2.5 h-2.5" />
-                        </button>
-                      </div>
+                      {activeGroup ? (
+                        <>
+                          {/* Group Avatar */}
+                          <div
+                            onClick={() => setIsGroupInfoOpen(true)}
+                            className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-extrabold flex items-center justify-center text-sm shadow-xs shrink-0 select-none cursor-pointer hover:opacity-90 active:scale-95 transition-all overflow-hidden ring-2 ring-indigo-500/30"
+                            title="Click to view group details & members"
+                          >
+                            {activeGroup.avatar ? (
+                              <img
+                                src={activeGroup.avatar}
+                                alt={activeGroup.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <Users className="w-5 h-5 text-white" />
+                            )}
+                          </div>
 
-                      {/* Customer Name (Color based on rating) + CRM Star Rating - Click opens View Profile */}
-                      <div className="min-w-0">
-                        <div
-                          onClick={() => setScreenView('profile')}
-                          className={`text-[17px] font-black leading-tight truncate cursor-pointer hover:opacity-85 transition-opacity ${getCustomerRatingColor(activeCustomer.rating)}`}
-                          title="Click to view/edit profile"
-                        >
-                          {activeCustomer.name}
-                        </div>
-                        {/* Customer CRM Rating - Only Stars Visible */}
-                        <div
-                          onClick={() => setScreenView('profile')}
-                          className="flex items-center gap-0.5 cursor-pointer -mt-0.5 py-0.5 hover:opacity-80 transition-opacity"
-                          title="Customer CRM Rating (Click to view profile)"
-                        >
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <Star
-                              key={star}
-                              className={`w-3.5 h-3.5 ${
-                                star <= (activeCustomer.rating || 5)
-                                  ? 'fill-amber-400 text-amber-400'
-                                  : 'text-slate-300 dark:text-slate-600'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </div>
+                          {/* Group Name & Username Handle */}
+                          <div className="min-w-0">
+                            <div
+                              onClick={() => setIsGroupInfoOpen(true)}
+                              className="text-[17px] font-black leading-tight truncate text-slate-900 dark:text-white cursor-pointer hover:opacity-85 transition-opacity"
+                              title="Click to view group details & members"
+                            >
+                              {activeGroup.name}
+                            </div>
+                            <div
+                              onClick={() => setIsGroupInfoOpen(true)}
+                              className="flex items-center gap-1.5 cursor-pointer text-[11px] text-indigo-600 dark:text-indigo-400 font-mono -mt-0.5 hover:opacity-80 transition-opacity"
+                              title="Click to manage members"
+                            >
+                              <span>@{activeGroup.username}</span>
+                              <span className="text-slate-400">• {activeGroup.members.length} members</span>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {/* Circular Avatar (with rating-based colored round border) - Click opens Review Modal */}
+                          <div className="relative group shrink-0">
+                            <div
+                              onClick={() => handleOpenAvatarReview(activeCustomer)}
+                              className={`w-10 h-10 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-base shadow-xs shrink-0 select-none cursor-pointer hover:opacity-90 active:scale-95 transition-all overflow-hidden ${getCustomerRatingBorder(activeCustomer.rating)}`}
+                              title="Click to view full photo, change, or delete"
+                            >
+                              {(activeCustomer.avatar || activeCustomer.avatarUrl) ? (
+                                <img
+                                  src={activeCustomer.avatar || activeCustomer.avatarUrl}
+                                  alt={activeCustomer.name}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                                />
+                              ) : (
+                                activeCustomer.name.charAt(0).toUpperCase()
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenAvatarReview(activeCustomer);
+                              }}
+                              className="absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-md border border-white dark:border-slate-900 transition-transform hover:scale-110 cursor-pointer"
+                              title="View, change, or remove profile photo"
+                            >
+                              <Camera className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+
+                          {/* Customer Name (Color based on rating) + CRM Star Rating - Click opens View Profile */}
+                          <div className="min-w-0">
+                            <div
+                              onClick={() => setScreenView('profile')}
+                              className={`text-[17px] font-black leading-tight truncate cursor-pointer hover:opacity-85 transition-opacity ${getCustomerRatingColor(activeCustomer.rating)}`}
+                              title="Click to view/edit profile"
+                            >
+                              {activeCustomer.name}
+                            </div>
+                            {/* Customer CRM Rating - Only Stars Visible */}
+                            <div
+                              onClick={() => setScreenView('profile')}
+                              className="flex items-center gap-0.5 cursor-pointer -mt-0.5 py-0.5 hover:opacity-80 transition-opacity"
+                              title="Customer CRM Rating (Click to view profile)"
+                            >
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Star
+                                  key={star}
+                                  className={`w-3.5 h-3.5 ${
+                                    star <= (activeCustomer.rating || 5)
+                                      ? 'fill-amber-400 text-amber-400'
+                                      : 'text-slate-300 dark:text-slate-600'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
 
-                    {/* Right action icons: Universal Share, Statement Bill & Search */}
+                    {/* Right action icons */}
                     <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setIsUniversalShareModalOpen(true)}
-                        className="p-2 rounded-xl text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer"
-                        title="Universal Share (WhatsApp, SMS, Email, System Share, Copy, QR)"
-                      >
-                        <Share2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                      </button>
-                      <button
-                        onClick={() => setIsStatementBillModalOpen(true)}
-                        className="p-2 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                        title="Generate Due Bill & Statement (PDF / Excel)"
-                      >
-                        <FileText className="w-5 h-5 text-slate-700 dark:text-slate-300" />
-                      </button>
+                      {activeGroup ? (
+                        <button
+                          type="button"
+                          onClick={() => setIsGroupInfoOpen(true)}
+                          className="p-2 rounded-xl text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer flex items-center gap-1"
+                          title="Manage Group & Members"
+                        >
+                          <Users className="w-5 h-5" />
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setIsUniversalShareModalOpen(true)}
+                            className="p-2 rounded-xl text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer"
+                            title="Universal Share (WhatsApp, SMS, Email, System Share, Copy, QR)"
+                          >
+                            <Share2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                          </button>
+                          <button
+                            onClick={() => setIsStatementBillModalOpen(true)}
+                            className="p-2 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            title="Generate Due Bill & Statement (PDF / Excel)"
+                          >
+                            <FileText className="w-5 h-5 text-slate-700 dark:text-slate-300" />
+                          </button>
+                        </>
+                      )}
                       <button
                         onClick={() => setIsChatSearchOpen(prev => !prev)}
                         className={`p-2 rounded-xl transition-colors cursor-pointer ${
@@ -3087,6 +3842,69 @@ interface AttachedBill {
                       </button>
                     </div>
                   </div>
+
+                  {/* Group Members Balances Horizontal Sub-Bar */}
+                  {activeGroup && (
+                    <div className="px-3.5 py-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-b border-slate-200/80 dark:border-slate-800 flex items-center gap-2 overflow-x-auto scrollbar-thin shrink-0 shadow-xs">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMemberFilterId(null)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                          selectedMemberFilterId === null
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                        }`}
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        <span>All Members ({activeGroup.members.length})</span>
+                      </button>
+
+                      {activeGroup.members.map((member) => {
+                        const bal = memberBalances[member.customerId] || { received: 0, given: 0, net: 0 };
+                        const isDue = bal.net > 0;
+                        const isAdv = bal.net < 0;
+                        const isSelected = selectedMemberFilterId === member.customerId;
+
+                        return (
+                          <button
+                            key={member.customerId}
+                            type="button"
+                            onClick={() => {
+                              if (selectedMemberFilterId === member.customerId) {
+                                setSelectedMemberFilterId(null);
+                              } else {
+                                setSelectedMemberFilterId(member.customerId);
+                              }
+                            }}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-2 border ${
+                              isSelected
+                                ? 'bg-indigo-50 dark:bg-indigo-950/70 border-indigo-400 dark:border-indigo-600 shadow-xs ring-2 ring-indigo-500/20'
+                                : 'bg-white dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 hover:border-indigo-300'
+                            }`}
+                            title="Click to view this member's divided history in group"
+                          >
+                            <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden shrink-0 flex items-center justify-center text-[10px] font-bold">
+                              {member.avatar ? (
+                                <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <span>{member.name.charAt(0)}</span>
+                              )}
+                            </div>
+                            <div className="text-left">
+                              <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate max-w-[90px]">
+                                {member.name}
+                              </div>
+                              <div className={`text-[10px] font-bold font-mono ${
+                                isDue ? 'text-rose-600 dark:text-rose-400' : isAdv ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'
+                              }`}>
+                                {bal.net === 0 ? '₹0 Settled' : `${formatINR(Math.abs(bal.net))} ${isDue ? 'Due' : 'Adv'}`}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {/* Optional Chat Search Bar */}
                   {isChatSearchOpen && (
@@ -3318,6 +4136,32 @@ interface AttachedBill {
                                     </div>
                                   )}
 
+                                  {/* Split Members Chip Bar (Group Ledgers) */}
+                                  {t.splitMembers && t.splitMembers.length > 0 && (
+                                    <div className="pt-2 border-t border-slate-100 dark:border-slate-700/80 space-y-1.5">
+                                      <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-bold">
+                                        <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400">
+                                          <Divide className="w-3.5 h-3.5" />
+                                          Divided among {t.splitMembers.length} members:
+                                        </span>
+                                        <span className="font-mono text-indigo-600 dark:text-indigo-400 font-black">
+                                          ₹{t.splitMembers[0]?.share.toLocaleString('en-IN')} each
+                                        </span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1">
+                                        {t.splitMembers.map(sm => (
+                                          <span
+                                            key={sm.customerId}
+                                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600"
+                                          >
+                                            <span className="truncate max-w-[85px]">{sm.customerName}</span>
+                                            <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">₹{sm.share}</span>
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
                                   {/* Reminder status badge if set */}
                                   {(() => {
                                     const txnRem = reminders.find(r => r.transactionId === t.id);
@@ -3342,9 +4186,22 @@ interface AttachedBill {
                                   })()}
                                 </div>
 
-                                {/* Running Balance Note below bubble: Left for Received, Right for Given */}
-                                <div className={`text-xs text-slate-500 font-medium mt-1 px-1 ${isReceived ? 'text-left' : 'text-right'}`}>
-                                  {t.balanceLabel}
+                                {/* Running Balance Note below bubble: Left for Received, Right for Given with Edit History Icon */}
+                                <div className={`text-xs text-slate-500 font-medium mt-1 px-1 flex items-center gap-1.5 ${isReceived ? 'justify-start' : 'justify-end'}`}>
+                                  <span>{t.balanceLabel}</span>
+                                  
+                                  {/* Interactive Edit History Icon */}
+                                  {t.editHistory && t.editHistory.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setHistoryModalTxn(t)}
+                                      className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/70 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 px-2 py-0.5 rounded-full border border-indigo-200/80 dark:border-indigo-800 transition-all cursor-pointer shadow-xs active:scale-95"
+                                      title="View Edit Audit History (Click to see what was changed)"
+                                    >
+                                      <History className="w-3 h-3 text-indigo-600 dark:text-indigo-400 stroke-[2.5]" />
+                                      <span>History</span>
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             );
@@ -3358,7 +4215,11 @@ interface AttachedBill {
                           <FileText className="w-6 h-6" />
                         </div>
                         <p className="text-xs text-slate-400">
-                          {chatSearchQuery ? 'No transactions match your search.' : `No transactions yet for ${activeCustomer.name}.`}
+                          {chatSearchQuery
+                            ? 'No transactions match your search.'
+                            : activeGroup
+                            ? `No transactions yet for group "${activeGroup.name}".`
+                            : `No transactions yet for ${activeCustomer?.name || 'Customer'}.`}
                         </p>
                         <p className="text-[11px] text-slate-400">
                           Click &ldquo;Received&rdquo; or &ldquo;Given&rdquo; below to make an entry.
@@ -3372,12 +4233,18 @@ interface AttachedBill {
                   <div className="p-3.5 sm:p-4 bg-[#F4F9F6] dark:bg-slate-900 border-t border-slate-200/80 dark:border-slate-800 flex items-center gap-3 shrink-0">
                     {/* Left: ↓ Received (White pill, Green text & arrow) */}
                     <button
+                      type="button"
                       onClick={() => {
                         setEditingTxnId(null);
                         setEntryType('received');
                         setEntryAmountStr('');
                         setEntryNotes('');
                         setEntryAttachments([]);
+                        if (activeGroup) {
+                          setSplitMemberIds(activeGroup.members.map(m => m.customerId));
+                        } else {
+                          setSplitMemberIds([]);
+                        }
                         setIsEntryReminderEnabled(false);
                         const tomorrow = new Date();
                         tomorrow.setDate(tomorrow.getDate() + 1);
@@ -3393,12 +4260,18 @@ interface AttachedBill {
 
                     {/* Right: ↑ Given (White pill, Red text & arrow) */}
                     <button
+                      type="button"
                       onClick={() => {
                         setEditingTxnId(null);
                         setEntryType('given');
                         setEntryAmountStr('');
                         setEntryNotes('');
                         setEntryAttachments([]);
+                        if (activeGroup) {
+                          setSplitMemberIds(activeGroup.members.map(m => m.customerId));
+                        } else {
+                          setSplitMemberIds([]);
+                        }
                         setIsEntryReminderEnabled(false);
                         const tomorrow = new Date();
                         tomorrow.setDate(tomorrow.getDate() + 1);
@@ -3440,7 +4313,20 @@ interface AttachedBill {
                     </button>
 
                     <div className="flex items-center gap-2.5">
-                      {activeCustomer.avatar || activeCustomer.avatarUrl ? (
+                      {activeGroup ? (
+                        activeGroup.avatar ? (
+                          <img
+                            src={activeGroup.avatar}
+                            alt={activeGroup.name}
+                            className="w-9 h-9 rounded-full object-cover object-center border border-slate-200 dark:border-slate-700 shrink-0 aspect-square shadow-xs"
+                            onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-extrabold flex items-center justify-center text-xs shrink-0 aspect-square">
+                            <Users className="w-4 h-4 text-white" />
+                          </div>
+                        )
+                      ) : activeCustomer?.avatar || activeCustomer?.avatarUrl ? (
                         <img
                           src={activeCustomer.avatar || activeCustomer.avatarUrl}
                           alt={activeCustomer.name}
@@ -3449,20 +4335,32 @@ interface AttachedBill {
                         />
                       ) : (
                         <div className="w-9 h-9 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-xs shrink-0 aspect-square">
-                          {activeCustomer.name.charAt(0)}
+                          {activeCustomer?.name ? activeCustomer.name.charAt(0) : 'C'}
                         </div>
                       )}
                       <div>
                         <div className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
-                          <span>{editingTxnId ? 'Edit Entry' : activeCustomer.name}</span>
+                          <span>
+                            {editingTxnId
+                              ? (activeGroup ? 'Edit Group Entry' : 'Edit Entry')
+                              : (activeGroup ? activeGroup.name : activeCustomer?.name || 'Entry')}
+                          </span>
                           {editingTxnId && (
                             <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-500 text-white uppercase tracking-wider">
                               Edit
                             </span>
                           )}
                         </div>
-                        <div className="text-[10px] text-rose-500 font-bold">
-                          ₹{Math.abs(activeCustomer.outstandingBalance).toLocaleString('en-IN')} Due
+                        <div className="text-[10px] font-bold">
+                          {activeGroup ? (
+                            <span className="text-indigo-600 dark:text-indigo-400">
+                              @{activeGroup.username} • {activeGroup.members.length} Members
+                            </span>
+                          ) : (
+                            <span className="text-rose-500">
+                              ₹{Math.abs(activeCustomer?.outstandingBalance || 0).toLocaleString('en-IN')} Due
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -3624,7 +4522,115 @@ interface AttachedBill {
                         )}
                       </div>
 
-                      {/* Card 3: Add Bills / Photos & PDFs (Image 3) */}
+                      {/* Card: Split / Divide Among Members (Only for Groups) */}
+                      {activeGroup && (
+                        <div className="bg-[#EDF6F3] dark:bg-slate-800/80 rounded-2xl p-3.5 border border-[#D5ECE3] dark:border-slate-700 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-xl bg-indigo-100 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-400 flex items-center justify-center">
+                                <Divide className="w-4 h-4 stroke-[2.5]" />
+                              </div>
+                              <div>
+                                <div className="text-xs font-black text-slate-900 dark:text-white">
+                                  Divide Among Members
+                                </div>
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                  Select who shares this {entryType === 'received' ? 'payment' : 'amount'}
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (splitMemberIds.length === activeGroup.members.length) {
+                                  setSplitMemberIds([]);
+                                } else {
+                                  setSplitMemberIds(activeGroup.members.map(m => m.customerId));
+                                }
+                              }}
+                              className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                            >
+                              {splitMemberIds.length === activeGroup.members.length ? 'Clear All' : 'Select All'}
+                            </button>
+                          </div>
+
+                          {/* Live Split Calculation Banner */}
+                          {parseFloat(entryAmountStr || '0') > 0 && splitMemberIds.length > 0 && (
+                            <div className="p-2.5 rounded-xl bg-indigo-50/90 dark:bg-indigo-950/50 border border-indigo-200/80 dark:border-indigo-800/70 flex items-center justify-between text-xs">
+                              <span className="text-[11px] font-semibold text-indigo-900 dark:text-indigo-200">
+                                Split per member:
+                              </span>
+                              <span className="font-mono font-black text-indigo-700 dark:text-indigo-300">
+                                ₹{Math.round(parseFloat(entryAmountStr) / splitMemberIds.length).toLocaleString('en-IN')}{' '}
+                                <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400">
+                                  ({splitMemberIds.length} members)
+                                </span>
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Member Checklist */}
+                          <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 divide-y divide-slate-200/50 dark:divide-slate-700/50">
+                            {activeGroup.members.map(m => {
+                              const isSelected = splitMemberIds.includes(m.customerId);
+                              const perShare =
+                                parseFloat(entryAmountStr || '0') > 0 && splitMemberIds.length > 0 && isSelected
+                                  ? Math.round(parseFloat(entryAmountStr) / splitMemberIds.length)
+                                  : 0;
+                              return (
+                                <div
+                                  key={m.customerId}
+                                  onClick={() => {
+                                    setSplitMemberIds(prev =>
+                                      prev.includes(m.customerId)
+                                        ? prev.filter(id => id !== m.customerId)
+                                        : [...prev, m.customerId]
+                                    );
+                                  }}
+                                  className={`pt-1.5 flex items-center justify-between px-2.5 py-1.5 rounded-xl cursor-pointer transition-all select-none ${
+                                    isSelected
+                                      ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60'
+                                      : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/50'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="text-indigo-600 dark:text-indigo-400">
+                                      {isSelected ? (
+                                        <CheckSquare className="w-4 h-4 fill-indigo-600 text-white dark:fill-indigo-500" />
+                                      ) : (
+                                        <Square className="w-4 h-4 text-slate-400" />
+                                      )}
+                                    </div>
+                                    <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-black text-slate-700 dark:text-slate-200 shrink-0 overflow-hidden">
+                                      {m.avatar ? (
+                                        <img src={m.avatar} alt={m.name} className="w-full h-full object-cover" />
+                                      ) : (
+                                        m.name.charAt(0).toUpperCase()
+                                      )}
+                                    </div>
+                                    <span className="text-xs font-semibold text-slate-900 dark:text-white truncate max-w-[140px]">
+                                      {m.name}
+                                    </span>
+                                  </div>
+
+                                  {isSelected && perShare > 0 ? (
+                                    <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                                      ₹{perShare.toLocaleString('en-IN')}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400">
+                                      {isSelected ? 'Included' : 'Excluded'}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Card 4: Add Bills / Photos & PDFs (Image 3) */}
                       <div className="bg-[#EDF6F3] dark:bg-slate-800/80 rounded-2xl px-4 py-3 border border-[#D5ECE3] dark:border-slate-700 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <Camera className="w-4 h-4 text-slate-600 dark:text-slate-400" />
@@ -5195,6 +6201,583 @@ interface AttachedBill {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL 1: CREATE NEW GROUP ================= */}
+      {isCreateGroupOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-400 flex items-center justify-center">
+                  <UserPlus className="w-4 h-4 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">Create New Group</h3>
+                  <p className="text-[11px] text-slate-400">Collaborative Ledger with Customer Split</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCreateGroupOpen(false);
+                  setCreateGroupError(null);
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form Body */}
+            <form onSubmit={handleCreateGroup} className="flex-1 overflow-y-auto p-5 space-y-4">
+              {/* Group Avatar Upload */}
+              <div className="flex flex-col items-center justify-center gap-2">
+                <input
+                  ref={groupPicInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleGroupPicUpload}
+                  className="hidden"
+                />
+                <div
+                  onClick={() => groupPicInputRef.current?.click()}
+                  className="relative w-20 h-20 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-indigo-400 flex items-center justify-center cursor-pointer hover:opacity-90 overflow-hidden shadow-inner group"
+                >
+                  {newGroupPic ? (
+                    <img src={newGroupPic} alt="Group Pic" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="flex flex-col items-center text-slate-400 group-hover:text-indigo-600 transition-colors">
+                      <Camera className="w-6 h-6 mb-0.5" />
+                      <span className="text-[9px] font-bold">Add Photo</span>
+                    </div>
+                  )}
+                  {isUploadingGroupPic && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white text-[10px] font-bold">
+                      Saving...
+                    </div>
+                  )}
+                </div>
+                <span className="text-[10px] text-slate-400">Click to upload group picture (Optional)</span>
+              </div>
+
+              {/* Group Name */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Group Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  placeholder="e.g. Friends Trip, Flatmates, Family Khata"
+                  className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Unique Group Username / Handle */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Group Unique Handle / Username *
+                  </label>
+                  {newGroupUsername.trim() && (
+                    <span className={`text-[10px] font-bold ${
+                      groups.some(g => g.username.toLowerCase() === newGroupUsername.trim().replace(/^@+/, '').toLowerCase())
+                        ? 'text-rose-600 dark:text-rose-400'
+                        : 'text-emerald-600 dark:text-emerald-400'
+                    }`}>
+                      {groups.some(g => g.username.toLowerCase() === newGroupUsername.trim().replace(/^@+/, '').toLowerCase())
+                        ? '✗ Already Taken'
+                        : '✓ Available'}
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-2.5 text-xs font-bold text-slate-400 font-mono">@</span>
+                  <input
+                    type="text"
+                    required
+                    value={newGroupUsername}
+                    onChange={(e) => {
+                      setNewGroupUsername(e.target.value);
+                      setCreateGroupError(null);
+                    }}
+                    placeholder="trip_friends_2026"
+                    className="w-full pl-8 pr-3.5 py-2.5 text-xs font-mono font-semibold rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Members can join this group using this unique username (@handle).
+                </p>
+              </div>
+
+              {/* Error message */}
+              {createGroupError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 font-semibold">
+                  ⚠️ {createGroupError}
+                </div>
+              )}
+
+              {/* Select Customers Checklist */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Select Customers to Add ({selectedCustomerIdsForGroup.length})
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedCustomerIdsForGroup.length === customers.length) {
+                        setSelectedCustomerIdsForGroup([]);
+                      } else {
+                        setSelectedCustomerIdsForGroup(customers.map(c => c.id));
+                      }
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                  >
+                    {selectedCustomerIdsForGroup.length === customers.length ? 'Clear All' : 'Select All'}
+                  </button>
+                </div>
+
+                <div className="max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-slate-800 p-1">
+                  {customers.map(c => {
+                    const isChecked = selectedCustomerIdsForGroup.includes(c.id);
+                    return (
+                      <div
+                        key={c.id}
+                        onClick={() => {
+                          setSelectedCustomerIdsForGroup(prev =>
+                            prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
+                          );
+                        }}
+                        className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
+                          isChecked ? 'bg-indigo-50 dark:bg-indigo-950/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="text-indigo-600 dark:text-indigo-400">
+                            {isChecked ? (
+                              <CheckSquare className="w-4 h-4 fill-indigo-600 text-white dark:fill-indigo-500" />
+                            ) : (
+                              <Square className="w-4 h-4 text-slate-400" />
+                            )}
+                          </div>
+                          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                            {c.name}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                          {c.phone || ''}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateGroupOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Create Group</span>
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL 2: JOIN GROUP VIA USERNAME ================= */}
+      {isJoinGroupOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-400 flex items-center justify-center">
+                  <LogIn className="w-4 h-4 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">Join Group</h3>
+                  <p className="text-[11px] text-slate-400">Enter unique @handle to join existing ledger</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsJoinGroupOpen(false);
+                  setJoinGroupError(null);
+                  setJoinGroupUsername('');
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleJoinGroup} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Enter Group Handle / Username *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-2.5 text-xs font-bold text-slate-400 font-mono">@</span>
+                  <input
+                    type="text"
+                    required
+                    value={joinGroupUsername}
+                    onChange={(e) => {
+                      setJoinGroupUsername(e.target.value);
+                      setJoinGroupError(null);
+                    }}
+                    placeholder="trip_friends_2026"
+                    className="w-full pl-8 pr-3.5 py-2.5 text-xs font-mono font-semibold rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    autoFocus
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Ask group creator for their unique handle.
+                </p>
+              </div>
+
+              {/* Group match preview if found */}
+              {(() => {
+                const queryHandle = joinGroupUsername.trim().replace(/^@+/, '').toLowerCase();
+                const matched = queryHandle ? groups.find(g => g.username.toLowerCase() === queryHandle) : null;
+                if (!matched) return null;
+                return (
+                  <div className="p-3 rounded-2xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200/80 dark:border-purple-800/60 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-600 text-white font-extrabold flex items-center justify-center text-xs overflow-hidden shrink-0">
+                      {matched.avatar ? (
+                        <img src={matched.avatar} alt={matched.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Users className="w-5 h-5" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-black text-slate-900 dark:text-white truncate">
+                        {matched.name}
+                      </div>
+                      <div className="text-[10px] text-purple-700 dark:text-purple-300 font-mono">
+                        @{matched.username} • {matched.members.length} Members
+                      </div>
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-purple-200/80 text-purple-900 dark:bg-purple-900/60 dark:text-purple-200">
+                      Found ✓
+                    </span>
+                  </div>
+                );
+              })()}
+
+              {joinGroupError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 font-semibold">
+                  ⚠️ {joinGroupError}
+                </div>
+              )}
+
+              <div className="p-3 rounded-2xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <BellRing className="w-3.5 h-3.5 shrink-0" />
+                  <span>Real-time Member Alerts:</span>
+                </div>
+                <div>
+                  Jb aap group join karenge to group ke sabhi active members ko <strong>Notifications & Alerts</strong> me details ke sath alert chala jayega.
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsJoinGroupOpen(false);
+                    setJoinGroupError(null);
+                    setJoinGroupUsername('');
+                  }}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md shadow-purple-600/20 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Join Group Now</span>
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL 3: GROUP INFO & MEMBER MANAGEMENT ================= */}
+      {isGroupInfoOpen && activeGroup && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-400 flex items-center justify-center">
+                  <Users className="w-4 h-4 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">Group Details & Members</h3>
+                  <p className="text-[11px] text-slate-400">@{activeGroup.username}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsGroupInfoOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              
+              {/* Group Hero Card */}
+              <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/40 dark:to-purple-950/40 border border-indigo-100 dark:border-indigo-900/60">
+                <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-black flex items-center justify-center text-lg overflow-hidden shrink-0 ring-2 ring-indigo-500/30">
+                  {activeGroup.avatar ? (
+                    <img src={activeGroup.avatar} alt={activeGroup.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Users className="w-7 h-7" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-base font-black text-slate-900 dark:text-white truncate">
+                    {activeGroup.name}
+                  </h4>
+                  <div className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                    @{activeGroup.username}
+                  </div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    Created by <strong className="text-slate-700 dark:text-slate-200">{activeGroup.creatorName}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Members Section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300 px-1">
+                  <span>Group Members ({activeGroup.members.length})</span>
+                  <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">
+                    Creator can remove members
+                  </span>
+                </div>
+
+                <div className="border border-slate-200 dark:border-slate-800 rounded-2xl divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+                  {activeGroup.members.map(member => {
+                    const isCreator = member.customerId === activeGroup.creatorId || member.role === 'admin';
+                    const currentUserId = currentUser?.id || 'admin_user';
+                    const amICreator = activeGroup.creatorId === currentUserId || activeGroup.creatorName === (currentUser?.businessName || settings.businessName);
+                    const canRemove = amICreator && !isCreator;
+
+                    return (
+                      <div
+                        key={member.customerId}
+                        className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-black text-slate-700 dark:text-slate-200 shrink-0 overflow-hidden">
+                            {member.avatar ? (
+                              <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
+                            ) : (
+                              member.name.charAt(0).toUpperCase()
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                              <span className="truncate">{member.name}</span>
+                              {isCreator && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+                                  Creator
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              {member.phone || 'No phone'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {canRemove && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMemberFromGroup(member.customerId)}
+                            className="p-1.5 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors flex items-center gap-1 text-[11px] font-semibold cursor-pointer"
+                            title="Remove from group (Creator permission)"
+                          >
+                            <UserMinus className="w-4 h-4" />
+                            <span className="hidden sm:inline">Remove</span>
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsGroupInfoOpen(false)}
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL 4: TRANSACTION EDIT AUDIT HISTORY ================= */}
+      {historyModalTxn && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-400 flex items-center justify-center">
+                  <History className="w-4 h-4 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">Record Edit History</h3>
+                  <p className="text-[11px] text-slate-400">Audit trail of all edits made to this entry</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHistoryModalTxn(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Current State Card */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Current Entry</div>
+                <div className="text-base font-black text-slate-900 dark:text-white mt-0.5">
+                  ₹{historyModalTxn.amount.toLocaleString('en-IN')}
+                  <span className="text-xs font-normal text-slate-500 ml-2">
+                    ({historyModalTxn.type === 'credit' ? 'You Gave' : 'You Got'})
+                  </span>
+                </div>
+                {historyModalTxn.note && (
+                  <div className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 italic">
+                    &ldquo;{historyModalTxn.note}&rdquo;
+                  </div>
+                )}
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] text-slate-400">Date</div>
+                <div className="text-xs font-bold text-slate-700 dark:text-slate-300 font-mono">
+                  {formatDate(historyModalTxn.date)}
+                </div>
+              </div>
+            </div>
+
+            {/* Timeline List */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>Modification Timeline ({historyModalTxn.editHistory?.length || 0} edits)</span>
+              </div>
+
+              {historyModalTxn.editHistory && historyModalTxn.editHistory.length > 0 ? (
+                <div className="relative pl-6 space-y-4 before:content-[''] before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-indigo-200 dark:before:bg-indigo-900">
+                  {historyModalTxn.editHistory.map((item, idx) => (
+                    <div key={idx} className="relative">
+                      {/* Timeline Dot */}
+                      <div className="absolute -left-6 top-1 w-3 h-3 rounded-full bg-indigo-600 border-2 border-white dark:border-slate-900 ring-2 ring-indigo-200 dark:ring-indigo-950" />
+                      
+                      <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-2 shadow-xs">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-bold text-slate-900 dark:text-white">
+                            Edited by: <strong className="text-indigo-600 dark:text-indigo-400">{item.editedBy}</strong>
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {new Date(item.editedAt).toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </div>
+
+                        {/* Amount Change */}
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-slate-400 line-through font-mono">
+                            ₹{(item.previousAmount ?? item.prevAmount ?? 0).toLocaleString('en-IN')}
+                          </span>
+                          <span className="text-slate-400">➔</span>
+                          <span className="font-black font-mono text-emerald-600 dark:text-emerald-400">
+                            ₹{item.newAmount.toLocaleString('en-IN')}
+                          </span>
+                        </div>
+
+                        {/* Note Change if any */}
+                        {(item.previousNote || item.newNote) && item.previousNote !== item.newNote && (
+                          <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                            <span className="text-[10px] font-bold text-slate-400 block uppercase">Note Updated:</span>
+                            {item.newNote || '(Note removed)'}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-8 text-center text-xs text-slate-400">
+                  No previous edits recorded for this transaction.
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setHistoryModalTxn(null)}
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
           </div>
         </div>
       )}

@@ -7,6 +7,7 @@ export interface UserProfile {
   phone: string;
   role: UserRole;
   avatarUrl?: string;
+  logo?: string;
   businessName: string;
   businessGst?: string;
   businessAddress?: string;
@@ -115,6 +116,73 @@ export interface Customer {
 export type TransactionType = 'credit' | 'debit' | 'income' | 'expense' | 'collection' | 'payment' | 'transfer' | 'adjustment';
 export type PaymentMode = 'upi' | 'cash' | 'bank_transfer' | 'cheque' | 'card' | 'other';
 
+export interface KhataGroupMember {
+  customerId: string;
+  name: string;
+  phone?: string;
+  avatar?: string;
+  role?: 'admin' | 'member';
+  joinedAt?: string;
+}
+
+export interface TransactionSplitMember {
+  customerId: string;
+  customerName: string;
+  share: number;
+  shareAmount?: number;
+}
+
+export interface TransactionEditAudit {
+  editedAt: string;
+  editedBy: string;
+  prevAmount?: number;
+  newAmount: number;
+  previousAmount?: number;
+  prevNote?: string;
+  newNote?: string;
+  previousNote?: string;
+  prevType?: TransactionType;
+  newType?: TransactionType;
+  prevSplitMembers?: TransactionSplitMember[];
+  newSplitMembers?: TransactionSplitMember[];
+  previousSplit?: any;
+  newSplit?: any;
+}
+
+export interface KhataGroup {
+  id: string;
+  name: string;
+  username: string; // unique handle without leading @, stored lowercase e.g. "goa_trip"
+  avatar?: string;
+  avatarUrl?: string;
+  memberCustomerIds?: string[]; // customer IDs in this group
+  members: KhataGroupMember[]; // list of members in this group
+  creatorId: string; // userId of creator/admin
+  creatorName?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface KhataGroupNotification {
+  id: string;
+  groupId: string;
+  groupName: string;
+  groupUsername?: string;
+  type: 'member_joined' | 'record_edited' | 'amount_divided';
+  title: string;
+  message: string;
+  actorName?: string;
+  targetCustomerIds?: string[];
+  memberIds?: string[];
+  transactionId?: string;
+  amount?: number;
+  shareAmount?: number;
+  details?: Record<string, any>;
+  createdAt: string;
+  isRead?: boolean;
+  read?: boolean;
+}
+
 export interface Transaction {
   id: string;
   type: TransactionType;
@@ -132,6 +200,10 @@ export interface Transaction {
   createdBy: string;
   createdAt: string;
   updatedAt?: string;
+  groupId?: string;
+  groupName?: string;
+  splitMembers?: TransactionSplitMember[];
+  editHistory?: TransactionEditAudit[];
 }
 
 export interface InvoiceItem {
@@ -236,6 +308,7 @@ export interface Expense {
   notes?: string;
   receiptUrl?: string;
   receiptUrls?: string[];
+  driveReceiptId?: string;
   isRecurring: boolean;
   recurringFrequency?: 'weekly' | 'monthly' | 'yearly';
   tags: string[];

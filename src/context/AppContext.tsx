@@ -16,7 +16,9 @@ import {
   UserRole,
   NoteItem,
   TaskItem,
-  PasswordItem
+  PasswordItem,
+  KhataGroup,
+  KhataGroupNotification,
 } from '@/types';
 import { StorageService, getCleanDefaultSettings } from '@/services/storage';
 import { deleteFromDriveFiles } from '@/lib/driveUploadClient';
@@ -94,6 +96,14 @@ interface AppContextType {
   deletePassword: (id: string) => void;
   updateSettings: (settings: Partial<SystemSettings>) => void;
   
+  // Khata Groups & Split Notifications
+  groups: KhataGroup[];
+  saveGroup: (group: KhataGroup) => void;
+  deleteGroup: (id: string) => void;
+  groupNotifications: KhataGroupNotification[];
+  addGroupNotification: (notif: KhataGroupNotification) => void;
+  dismissGroupNotification: (id: string) => void;
+  
   // UPI and QR Default Persistence (Key User Requirement)
   saveDefaultUpiAndQr: (data: { upiId: string; payeeName: string; customQrUrl?: string }) => void;
   
@@ -165,6 +175,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [passwords, setPasswords] = useState<PasswordItem[]>([]);
+  const [groups, setGroups] = useState<KhataGroup[]>([]);
+  const [groupNotifications, setGroupNotifications] = useState<KhataGroupNotification[]>([]);
   const [settings, setSettingsState] = useState<SystemSettings>(() => {
     const s = StorageService.getSettings();
     if (initialBranding && typeof initialBranding === 'object') {
@@ -336,7 +348,15 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           passwords: StorageService.getPasswords(),
           customerDriveFolders: allDriveFolders,
           customerDriveFiles: allDriveFiles,
-          settings: StorageService.getSettings(),
+          groups: StorageService.getGroups(),
+          settings: {
+            ...StorageService.getSettings(),
+            paymentSettings: {
+              ...(StorageService.getSettings().paymentSettings || {}),
+              khataGroups: StorageService.getGroups(),
+              khataGroupNotifications: StorageService.getGroupNotifications(),
+            },
+          },
           profile: StorageService.getProfile(),
         },
       };
@@ -486,9 +506,18 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
                   payeeName: (d.settings.paymentSettings?.payeeName || '').trim() || prev.paymentSettings?.payeeName || prev.businessName || '',
                   customQrUrl: d.settings.paymentSettings?.customQrUrl || prev.paymentSettings?.customQrUrl || '',
                   isDefaultQrSaved: d.settings.paymentSettings?.isDefaultQrSaved ?? prev.paymentSettings?.isDefaultQrSaved ?? false,
-                }
+                },
               };
             });
+
+            if (Array.isArray(d.settings.paymentSettings?.khataGroups)) {
+              d.settings.paymentSettings.khataGroups.forEach((g: any) => StorageService.saveGroup(g));
+              setGroups(StorageService.getGroups());
+            }
+            if (Array.isArray(d.settings.paymentSettings?.khataGroupNotifications)) {
+              d.settings.paymentSettings.khataGroupNotifications.forEach((n: any) => StorageService.addGroupNotification(n));
+              setGroupNotifications(StorageService.getGroupNotifications());
+            }
           }
           if (d.user) {
             if (d.user.language) setActiveLanguage(d.user.language);
@@ -895,6 +924,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       setNotes([]);
       setTasks([]);
       setPasswords([]);
+      setGroups([]);
+      setGroupNotifications([]);
       setSettingsState(getCleanDefaultSettings());
       return;
     }
@@ -912,12 +943,19 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setNotes(StorageService.getNotes());
     setTasks(StorageService.getTasks());
     setPasswords(StorageService.getPasswords());
+    setGroups(StorageService.getGroups());
+    setGroupNotifications(StorageService.getGroupNotifications());
     const s = StorageService.getSettings();
     setSettingsState(s);
     setDarkMode(s.darkMode);
   };
 
   useEffect(() => {
+    const handleGroupsUpdate = () => setGroups(StorageService.getGroups());
+    const handleGroupNotifsUpdate = () => setGroupNotifications(StorageService.getGroupNotifications());
+    window.addEventListener('khatapro_groups_updated', handleGroupsUpdate);
+    window.addEventListener('khatapro_group_notifications_updated', handleGroupNotifsUpdate);
+
     const activeU = StorageService.getCurrentUser();
     if (activeU?.language) setActiveLanguage(activeU.language);
     if (activeU?.currency) setActiveCurrency(activeU.currency);
@@ -967,7 +1005,11 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     };
 
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('khatapro_groups_updated', handleGroupsUpdate);
+      window.removeEventListener('khatapro_group_notifications_updated', handleGroupNotifsUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -1569,6 +1611,31 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setCollectModalData({});
   };
 
+  const saveGroup = (group: KhataGroup) => {
+    StorageService.saveGroup(group);
+    setGroups(StorageService.getGroups());
+    syncWithDatabase();
+    addToast('Group Saved', `Group "${group.name}" (@${group.username}) updated.`, 'success');
+  };
+
+  const deleteGroup = (id: string) => {
+    StorageService.deleteGroup(id);
+    setGroups(StorageService.getGroups());
+    syncWithDatabase();
+    addToast('Group Removed', 'Group has been deleted.', 'info');
+  };
+
+  const addGroupNotification = (notif: KhataGroupNotification) => {
+    StorageService.addGroupNotification(notif);
+    setGroupNotifications(StorageService.getGroupNotifications());
+    syncWithDatabase();
+  };
+
+  const dismissGroupNotification = (id: string) => {
+    StorageService.dismissGroupNotification(id);
+    setGroupNotifications(StorageService.getGroupNotifications());
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1585,6 +1652,12 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         notes,
         tasks,
         passwords,
+        groups,
+        saveGroup,
+        deleteGroup,
+        groupNotifications,
+        addGroupNotification,
+        dismissGroupNotification,
         settings,
         darkMode,
         activeRole,
