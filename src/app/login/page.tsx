@@ -492,10 +492,10 @@ export default function LoginPage() {
             <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center overflow-hidden p-1 group-hover:scale-105 transition-all duration-300">
               <img
                 id="login-brand-logo-img"
-                src={brandState.logo || (currentUser ? userLogo : '') || ''}
-                alt={brandState.name || currentUser?.businessName || currentUser?.name || 'Logo'}
+                src={brandState.logo || ''}
+                alt={brandState.name || 'Logo'}
                 className="w-full h-full object-contain"
-                style={{ display: (brandState.logo || (currentUser && userLogo)) ? 'block' : 'none' }}
+                style={{ display: brandState.logo ? 'block' : 'none' }}
                 onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
               />
             </div>
@@ -504,7 +504,7 @@ export default function LoginPage() {
           {/* Website Name & Badge underneath Logo */}
           <div className="flex items-center gap-2">
             <span id="login-brand-name-display" className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white drop-shadow-sm">
-              {brandState.name || (currentUser ? (currentUser.businessName || currentUser.name || '') : '')}
+              {brandState.name || ''}
             </span>
             <span
               id="login-brand-badge-display"
