@@ -117,6 +117,7 @@ export async function POST(req: NextRequest) {
       phone: cleanPhone,
       businessName: cleanBusinessName,
       role: userRole,
+      avatarUrl: '',
       createdAt: new Date().toISOString(),
     };
 

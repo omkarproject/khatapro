@@ -141,6 +141,7 @@ export async function POST(req: NextRequest) {
         phone,
         businessName,
         role: userRole,
+        avatarUrl: '',
         createdAt: new Date().toISOString(),
       };
 
@@ -185,19 +186,35 @@ export async function POST(req: NextRequest) {
         } catch {}
       }
 
+      // Query user system_settings for business_logo if avatar is empty
+      let avatarUrl = profile.avatar_url || '';
+      if (!avatarUrl) {
+        try {
+          const { data: setRow } = await supabase
+            .from('system_settings')
+            .select('business_logo, payment_settings')
+            .eq('user_id', profile.id)
+            .single();
+          if (setRow) {
+            avatarUrl = setRow.business_logo || setRow.payment_settings?.businessLogo || '';
+          }
+        } catch {}
+      }
+
       const safeUser = {
         id: profile.id,
-        name: profile.name || 'Business Owner',
+        name: profile.name || '',
         email: profile.email || cleanEmail,
         phone: profile.phone || '',
         role: userRole,
-        businessName: profile.business_name || 'SmartKhata Merchant',
+        businessName: profile.business_name || '',
+        avatarUrl: avatarUrl,
         createdAt: profile.created_at,
       };
 
       const res = NextResponse.json({
         success: true,
-        message: `Welcome back, ${safeUser.name}!`,
+        message: safeUser.name ? `Welcome back, ${safeUser.name}!` : 'Welcome back!',
         user: safeUser,
         token: `token_${safeUser.id}_${Date.now()}`,
         provider: 'supabase',

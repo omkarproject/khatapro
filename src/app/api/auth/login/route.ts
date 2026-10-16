@@ -42,11 +42,20 @@ export async function POST(req: NextRequest) {
     const sbUser = data.user;
 
     // Fetch user profile from Supabase profiles table
+    // Fetch user profile and system settings from Supabase
     const { data: profile } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', sbUser.id)
       .single();
+
+    const { data: userSettings } = await supabase
+      .from('system_settings')
+      .select('*')
+      .eq('user_id', sbUser.id)
+      .single();
+
+    const avatar = profile?.avatar_url || userSettings?.business_logo || userSettings?.payment_settings?.businessLogo || sbUser.user_metadata?.avatar_url || '';
 
     // Determine role: non-admin emails cannot be admin/super_admin
     let userRole = profile?.role || sbUser.user_metadata?.role || 'user';
@@ -60,11 +69,12 @@ export async function POST(req: NextRequest) {
 
     const safeUser = {
       id: sbUser.id,
-      name: profile?.name || sbUser.user_metadata?.name || 'Business Owner',
+      name: profile?.name || sbUser.user_metadata?.name || '',
       email: sbUser.email || cleanEmail,
       phone: profile?.phone || sbUser.user_metadata?.phone || '',
       role: userRole,
-      businessName: profile?.business_name || sbUser.user_metadata?.business_name || 'SmartKhata Merchant',
+      avatarUrl: avatar,
+      businessName: profile?.business_name || userSettings?.business_name || sbUser.user_metadata?.business_name || '',
       createdAt: sbUser.created_at,
     };
 

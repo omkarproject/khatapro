@@ -40,7 +40,15 @@ function generateCaptcha() {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { currentUser, login, applyAuthenticatedUser, logout, settings } = useApp();
+  const { currentUser, login, applyAuthenticatedUser, logout, settings, profile } = useApp();
+
+  const userLogo =
+    currentUser?.avatarUrl ||
+    (currentUser as any)?.avatar_url ||
+    (currentUser as any)?.businessLogo ||
+    profile?.avatarUrl ||
+    settings?.businessLogo ||
+    (typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '');
 
   // Instant frame-0 branding state from localStorage/cookies to prevent any loading flash
   const [brandState, setBrandState] = useState(() => {
@@ -484,10 +492,10 @@ export default function LoginPage() {
             <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center overflow-hidden p-1 group-hover:scale-105 transition-all duration-300">
               <img
                 id="login-brand-logo-img"
-                src={brandState.logo || ''}
-                alt={brandState.name || 'Logo'}
+                src={brandState.logo || (currentUser ? userLogo : '') || ''}
+                alt={brandState.name || currentUser?.businessName || currentUser?.name || 'Logo'}
                 className="w-full h-full object-contain"
-                style={{ display: brandState.logo ? 'block' : 'none' }}
+                style={{ display: (brandState.logo || (currentUser && userLogo)) ? 'block' : 'none' }}
                 onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
               />
             </div>
@@ -496,7 +504,7 @@ export default function LoginPage() {
           {/* Website Name & Badge underneath Logo */}
           <div className="flex items-center gap-2">
             <span id="login-brand-name-display" className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white drop-shadow-sm">
-              {brandState.name || ''}
+              {brandState.name || (currentUser ? (currentUser.businessName || currentUser.name || '') : '')}
             </span>
             <span
               id="login-brand-badge-display"
@@ -637,17 +645,33 @@ export default function LoginPage() {
             <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 font-black text-lg flex items-center justify-center border border-indigo-200 dark:border-indigo-800">
-                    {currentUser.name.charAt(0).toUpperCase()}
+                  <div className="w-14 h-14 rounded-2xl bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 font-black text-xl flex items-center justify-center border border-indigo-200 dark:border-indigo-800 overflow-hidden shrink-0 shadow-xs relative">
+                    {userLogo ? (
+                      <img
+                        src={userLogo}
+                        alt={currentUser.businessName || currentUser.name || 'Profile'}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLElement).style.display = 'none';
+                          const fallback = e.currentTarget.parentElement?.querySelector('.avatar-fallback') as HTMLElement;
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <span className={`avatar-fallback ${userLogo ? 'hidden' : 'flex'} items-center justify-center w-full h-full font-black text-xl text-indigo-600 dark:text-indigo-400`}>
+                      {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+                    </span>
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <h4 className="text-base font-bold text-slate-900 dark:text-white truncate">
                       {currentUser.name}
                     </h4>
                     <p className="text-xs text-slate-500 truncate font-mono">{currentUser.email}</p>
-                    <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mt-0.5">
-                      {currentUser.businessName}
-                    </p>
+                    {currentUser.businessName && (
+                      <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mt-0.5 truncate">
+                        {currentUser.businessName}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

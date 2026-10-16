@@ -807,9 +807,11 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                             <p className="text-[11px] text-slate-500 truncate font-mono">{currentUser.email}</p>
                           </div>
                         </div>
-                        <p className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 truncate">
-                          {settings?.businessName || profile?.businessName || currentUser.businessName || 'SmartKhata Merchant'}
-                        </p>
+                        {(settings?.businessName || profile?.businessName || currentUser.businessName) && (
+                          <p className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 truncate">
+                            {settings?.businessName || profile?.businessName || currentUser.businessName}
+                          </p>
+                        )}
                       </div>
 
                       {/* Currency & Language Quick Selection */}

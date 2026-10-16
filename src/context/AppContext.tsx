@@ -396,11 +396,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
               const incomingAvatar = d.user.avatarUrl || (d.user as any)?.avatar_url || d.settings?.businessLogo || '';
               const preservedAvatar = incomingAvatar || prev.avatarUrl || globalLogo;
-              return {
+              const updated = {
                 ...prev,
                 ...d.user,
                 avatarUrl: preservedAvatar,
               };
+              StorageService.setCurrentUser(updated);
+              return updated;
             });
           }
 
