@@ -170,8 +170,9 @@ export default function CustomersPage() {
   // File preview modal
   const [previewFile, setPreviewFile] = useState<CustomerDriveFile | null>(null);
 
-  // Hidden File input ref
+  // Hidden File & Folder input refs
   const driveFileInputRef = useRef<HTMLInputElement>(null);
+  const driveFolderInputRef = useRef<HTMLInputElement>(null);
 
   // Customer Bank Accounts & UPI Modal State
   const [bankCustomer, setBankCustomer] = useState<Customer | null>(null);
@@ -576,84 +577,73 @@ export default function CustomersPage() {
     setRenameValue('');
   };
 
-  const handleUploadFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Live update drive folders and files when background upload adds or removes items
+  useEffect(() => {
+    const handleDriveUpdated = (e: any) => {
+      if (driveCustomer && e.detail?.customerId === driveCustomer.id) {
+        const data = StorageService.getCustomerDriveData(driveCustomer.id);
+        setDriveFolders(data.folders || []);
+        setDriveFiles(data.files || []);
+      }
+    };
+    window.addEventListener('khatapro_customer_drive_updated', handleDriveUpdated);
+    return () => window.removeEventListener('khatapro_customer_drive_updated', handleDriveUpdated);
+  }, [driveCustomer]);
+
+  const handleUploadFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!driveCustomer || !e.target.files || e.target.files.length === 0) return;
     const fileList = Array.from(e.target.files);
     e.target.value = '';
 
-    // Determine current subfolder name if inside a folder
     const currentFolder = driveFolders.find(f => f.id === currentFolderId);
     const subfolderName = currentFolder ? currentFolder.name : undefined;
 
-    const newUploadedFiles: CustomerDriveFile[] = [];
+    window.dispatchEvent(
+      new CustomEvent('khatapro_start_customer_drive_upload', {
+        detail: {
+          customerId: driveCustomer.id,
+          customerName: driveCustomer.name,
+          files: fileList,
+          targetFolderId: currentFolderId,
+          targetFolderName: subfolderName,
+          currentFolders: driveFolders,
+        },
+      })
+    );
 
-    addToast('Uploading...', `Uploading ${fileList.length} file(s) to Customer CRM (${subfolderName || 'Root'})...`, 'info');
+    addToast(
+      'Uploading in Background',
+      `Uploading ${fileList.length} file(s) in background. Track progress or pause/cancel in Notifications & Alerts!`,
+      'info'
+    );
+  };
 
-    for (const file of fileList) {
-      if (file.size > 25 * 1024 * 1024) {
-        addToast('File too large', `${file.name} exceeds 25MB limit.`, 'error');
-        continue;
-      }
+  const handleUploadFolder = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!driveCustomer || !e.target.files || e.target.files.length === 0) return;
+    const fileList = Array.from(e.target.files);
+    e.target.value = '';
 
-      try {
-        const fileDataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
+    const currentFolder = driveFolders.find(f => f.id === currentFolderId);
+    const subfolderName = currentFolder ? currentFolder.name : undefined;
 
-        // Exact timestamp including date, hours, minutes, seconds & milliseconds
-        const uploadTimestamp = new Date().toISOString();
-        const newFileId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    window.dispatchEvent(
+      new CustomEvent('khatapro_start_customer_drive_upload', {
+        detail: {
+          customerId: driveCustomer.id,
+          customerName: driveCustomer.name,
+          files: fileList,
+          targetFolderId: currentFolderId,
+          targetFolderName: subfolderName,
+          currentFolders: driveFolders,
+        },
+      })
+    );
 
-        // Upload directly to Google Drive in the proper Customer CRM folder / subfolder!
-        const driveRes = await uploadToDriveFiles(
-          file.name,
-          fileDataUrl,
-          file.type,
-          undefined,
-          {
-            customerName: driveCustomer.name,
-            customerId: driveCustomer.id,
-            folderName: subfolderName,
-            appFileId: newFileId,
-            uploadedAt: uploadTimestamp,
-          }
-        );
-
-        const customerDriveFile: CustomerDriveFile = {
-          id: newFileId,
-          name: file.name,
-          size: file.size,
-          type: file.type || 'application/octet-stream',
-          dataUrl: fileDataUrl,
-          url: driveRes.webViewLink || driveRes.webContentLink,
-          driveFileId: driveRes.fileId,
-          folderId: currentFolderId,
-          uploadedAt: uploadTimestamp,
-        };
-
-        newUploadedFiles.push(customerDriveFile);
-      } catch (err: any) {
-        console.error('File upload error for', file.name, err);
-      }
-    }
-
-    if (newUploadedFiles.length > 0) {
-      const updatedFiles = [...driveFiles, ...newUploadedFiles];
-      setDriveFiles(updatedFiles);
-      StorageService.saveCustomerDriveData(driveCustomer.id, {
-        folders: driveFolders,
-        files: updatedFiles,
-      });
-      syncWithDatabase();
-      addToast(
-        'Upload Complete',
-        `${newUploadedFiles.length} file(s) saved with unique Drive IDs and timestamp records.`,
-        'success'
-      );
-    }
+    addToast(
+      'Folder Upload Started',
+      `Uploading folder structure with ${fileList.length} file(s) in background. Track progress in Notifications & Alerts!`,
+      'info'
+    );
   };
 
   const handleDeleteFile = (fileId: string, fileName: string) => {
@@ -2051,6 +2041,7 @@ export default function CustomersPage() {
                 <button
                   onClick={() => driveFileInputRef.current?.click()}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold transition-all shadow-md shadow-amber-500/20 cursor-pointer"
+                  title="Upload individual or multiple files"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   <span>Upload Files</span>
@@ -2060,6 +2051,24 @@ export default function CustomersPage() {
                   multiple
                   ref={driveFileInputRef}
                   onChange={handleUploadFiles}
+                  className="hidden"
+                />
+
+                {/* Upload Folder Button */}
+                <button
+                  onClick={() => driveFolderInputRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold transition-all shadow-md shadow-amber-600/20 cursor-pointer"
+                  title="Upload an entire folder (with subfolders & files)"
+                >
+                  <Folder className="w-3.5 h-3.5" />
+                  <span>Upload Folder</span>
+                </button>
+                <input
+                  type="file"
+                  multiple
+                  ref={driveFolderInputRef}
+                  onChange={handleUploadFolder}
+                  {...({ webkitdirectory: '', directory: '' } as any)}
                   className="hidden"
                 />
               </div>
@@ -2371,7 +2380,14 @@ export default function CustomersPage() {
                         className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer"
                       >
                         <Upload className="w-3.5 h-3.5" />
-                        Upload File Now
+                        Upload Files
+                      </button>
+                      <button
+                        onClick={() => driveFolderInputRef.current?.click()}
+                        className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-600/20 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Folder className="w-3.5 h-3.5" />
+                        Upload Folder
                       </button>
                       {driveClipboard && (
                         <button

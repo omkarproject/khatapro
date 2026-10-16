@@ -16,6 +16,7 @@ import AuthGuard from './AuthGuard';
 import BroadcastBanner from './BroadcastBanner';
 import SupportChatWidget from './SupportChatWidget';
 import AutoBackupGuardian from './AutoBackupGuardian';
+import CustomerDriveUploadGuardian from './CustomerDriveUploadGuardian';
 import { useApp } from '@/context/AppContext';
 
 export default function LayoutShell({ children }: { children: React.ReactNode }) {
@@ -68,6 +69,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
         <MaintenanceOverlay />
         <PaymentDetailsModal />
         <AutoBackupGuardian />
+        <CustomerDriveUploadGuardian />
       </div>
     );
   }
@@ -100,6 +102,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
         <AuthModal />
         <SupportChatWidget />
         <AutoBackupGuardian />
+        <CustomerDriveUploadGuardian />
       </AuthGuard>
       <ToastContainer />
     </div>
