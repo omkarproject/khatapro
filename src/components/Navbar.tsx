@@ -83,6 +83,33 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
 
+  const [localBrand, setLocalBrand] = useState<any>(() => {
+    if (typeof window !== 'undefined') {
+      const init = (window as any).__INITIAL_BRANDING__;
+      const raw = localStorage.getItem('skp_global_branding');
+      return raw ? JSON.parse(raw) : (init || null);
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e.detail) setLocalBrand(e.detail);
+    };
+    window.addEventListener('skp_branding_updated', handler);
+    window.addEventListener('khatapro_branding_changed', handler);
+    return () => {
+      window.removeEventListener('skp_branding_updated', handler);
+      window.removeEventListener('khatapro_branding_changed', handler);
+    };
+  }, []);
+
+  const websiteLogo = settings.websiteLogo || localBrand?.websiteLogo || '';
+  const websiteName = settings.websiteName || localBrand?.websiteName || '';
+  const websiteBadgeText = settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : (localBrand?.websiteBadgeText || '');
+  const websiteBadgeBg = settings.websiteBadgeBg || localBrand?.websiteBadgeBg || 'fintech-gradient-primary';
+  const websiteTagline = settings.websiteTagline !== undefined ? settings.websiteTagline : (localBrand?.websiteTagline || '');
+
   // Currency & Language Selector Modal State
   const [isCurrencyLanguageOpen, setIsCurrencyLanguageOpen] = useState(false);
   const [currencyLanguageTab, setCurrencyLanguageTab] = useState<'language' | 'currency'>('language');
@@ -324,11 +351,11 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
             </button>
 
             <Link href="/" className="flex items-center gap-2 sm:gap-2.5 group">
-              {settings.websiteLogo ? (
+              {websiteLogo ? (
                 <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl overflow-hidden shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform shrink-0 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center">
                   <img
-                    src={settings.websiteLogo}
-                    alt={settings.websiteName || 'Logo'}
+                    src={websiteLogo}
+                    alt={websiteName || 'Logo'}
                     className="w-full h-full object-contain"
                     onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                   />
@@ -336,16 +363,16 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
               ) : null}
               <div className="block">
                 <div className="flex items-center gap-1 sm:gap-1.5 font-black tracking-tight text-slate-900 dark:text-white text-sm sm:text-base">
-                  <span>{settings.websiteName || ''}</span>
-                  {settings.websiteBadgeText?.trim() && (
-                    <span className={`text-[7px] sm:text-[7.5px] px-1 py-[1px] rounded font-bold uppercase tracking-wider leading-none text-white shadow-xs ${settings.websiteBadgeBg || 'fintech-gradient-primary'}`}>
-                      {settings.websiteBadgeText.trim()}
+                  <span>{websiteName || ''}</span>
+                  {websiteBadgeText?.trim() && (
+                    <span className={`text-[7px] sm:text-[7.5px] px-1 py-[1px] rounded font-bold uppercase tracking-wider leading-none text-white shadow-xs ${websiteBadgeBg || 'fintech-gradient-primary'}`}>
+                      {websiteBadgeText.trim()}
                     </span>
                   )}
                 </div>
-                {settings.websiteTagline?.trim() && (
+                {websiteTagline?.trim() && (
                   <div className="hidden sm:block text-[10px] text-slate-400 font-medium tracking-tight">
-                    {settings.websiteTagline.trim()}
+                    {websiteTagline.trim()}
                   </div>
                 )}
               </div>

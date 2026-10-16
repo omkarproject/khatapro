@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
+import { getGlobalBrandingFromDb, saveGlobalBrandingToDb } from '@/lib/globalBranding';
 
 const DEFAULT_CONFIG = {
   maintenanceMode: {
@@ -13,6 +14,8 @@ const DEFAULT_CONFIG = {
 // GET: Returns the global system config (maintenanceMode, betaTestingEnabled, websiteBranding, broadcasts, supportTickets)
 export async function GET() {
   try {
+    const branding = await getGlobalBrandingFromDb();
+
     if (isSupabaseConfigured()) {
       const supabase = getSupabaseAdmin();
       if (supabase) {
@@ -33,7 +36,7 @@ export async function GET() {
               endTime: maintObj.endTime,
             },
             betaTestingEnabled: Boolean(data.beta_testing_enabled),
-            websiteBranding: maintObj.websiteBranding || null,
+            websiteBranding: branding,
             broadcasts: Array.isArray(maintObj.broadcasts) ? maintObj.broadcasts : [],
             supportTickets: Array.isArray(maintObj.supportTickets) ? maintObj.supportTickets : [],
           });
@@ -44,16 +47,17 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       ...DEFAULT_CONFIG,
-      websiteBranding: null,
+      websiteBranding: branding,
       broadcasts: [],
       supportTickets: [],
     });
   } catch (error: any) {
     console.error('System config GET error:', error);
+    const branding = await getGlobalBrandingFromDb().catch(() => null);
     return NextResponse.json({
       success: true,
       ...DEFAULT_CONFIG,
-      websiteBranding: null,
+      websiteBranding: branding,
       broadcasts: [],
       supportTickets: [],
     });
@@ -99,6 +103,7 @@ export async function POST(req: NextRequest) {
 
     if (websiteBranding !== undefined) {
       updatedMaint.websiteBranding = websiteBranding;
+      await saveGlobalBrandingToDb(websiteBranding).catch((err) => console.error('saveGlobalBrandingToDb error:', err));
     }
 
     if (broadcasts !== undefined) {

@@ -53,6 +53,16 @@ export default function LoginPage() {
 
     if (typeof window !== 'undefined') {
       try {
+        const init = (window as any).__INITIAL_BRANDING__;
+        if (init && typeof init === 'object') {
+          if (init.websiteName) name = init.websiteName;
+          if (init.websiteBadgeText !== undefined) badge = init.websiteBadgeText;
+          if (init.websiteBadgeBg) badgeBg = init.websiteBadgeBg;
+          if (init.websiteTagline !== undefined) tagline = init.websiteTagline;
+          if (init.websiteLogo) logo = init.websiteLogo;
+          if (init.websiteFavicon) favicon = init.websiteFavicon;
+        }
+
         const raw = localStorage.getItem('skp_global_branding');
         if (raw) {
           const parsed = JSON.parse(raw);
@@ -85,11 +95,11 @@ export default function LoginPage() {
         if (storedFav && !favicon) favicon = storedFav;
 
         // Cookie fallback
-        if (!name || name === 'SmartKhata' || !badge || !logo || !tagline) {
+        if (!name || !badge || !logo || !tagline) {
           const cookies = document.cookie.split(';');
           for (let i = 0; i < cookies.length; i++) {
             const c = cookies[i].trim();
-            if (c.indexOf('skp_brand_name=') === 0 && (!name || name === 'SmartKhata')) {
+            if (c.indexOf('skp_brand_name=') === 0 && !name) {
               name = decodeURIComponent(c.substring('skp_brand_name='.length));
             }
             if (c.indexOf('skp_brand_badge=') === 0 && !badge) {
@@ -117,7 +127,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (settings.websiteName || settings.websiteBadgeText !== undefined || settings.websiteLogo || settings.websiteTagline !== undefined) {
       setBrandState({
-        name: settings.websiteName || 'SmartKhata',
+        name: settings.websiteName || '',
         badge: settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : '',
         badgeBg: settings.websiteBadgeBg || 'fintech-gradient-primary',
         tagline: settings.websiteTagline !== undefined ? settings.websiteTagline : '',
@@ -129,7 +139,7 @@ export default function LoginPage() {
     const onBrandChange = (e: any) => {
       if (e.detail) {
         setBrandState({
-          name: e.detail.websiteName || 'SmartKhata',
+          name: e.detail.websiteName || '',
           badge: e.detail.websiteBadgeText !== undefined ? e.detail.websiteBadgeText : '',
           badgeBg: e.detail.websiteBadgeBg || 'fintech-gradient-primary',
           tagline: e.detail.websiteTagline !== undefined ? e.detail.websiteTagline : '',
@@ -139,7 +149,30 @@ export default function LoginPage() {
       }
     };
     window.addEventListener('khatapro_branding_changed', onBrandChange);
-    return () => window.removeEventListener('khatapro_branding_changed', onBrandChange);
+    window.addEventListener('skp_branding_updated', onBrandChange);
+
+    // If branding not yet available, query cloud system config immediately
+    fetch('/api/system/config')
+      .then((res) => res.json())
+      .then((json) => {
+        if (json?.websiteBranding) {
+          const b = json.websiteBranding;
+          setBrandState({
+            name: b.websiteName || '',
+            badge: b.websiteBadgeText !== undefined ? b.websiteBadgeText : '',
+            badgeBg: b.websiteBadgeBg || 'fintech-gradient-primary',
+            tagline: b.websiteTagline !== undefined ? b.websiteTagline : '',
+            logo: b.websiteLogo || '',
+            favicon: b.websiteFavicon || '',
+          });
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      window.removeEventListener('khatapro_branding_changed', onBrandChange);
+      window.removeEventListener('skp_branding_updated', onBrandChange);
+    };
   }, [settings.websiteName, settings.websiteBadgeText, settings.websiteBadgeBg, settings.websiteTagline, settings.websiteLogo, settings.websiteFavicon]);
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot_password'>('signin');
@@ -481,12 +514,14 @@ export default function LoginPage() {
               __html: `
                 (function() {
                   try {
+                    var init = window.__INITIAL_BRANDING__;
                     var raw = localStorage.getItem('skp_global_branding');
-                    var p = raw ? JSON.parse(raw) : null;
-                    var logo = (p && p.websiteLogo) ? p.websiteLogo : (localStorage.getItem('skp_brand_logo') || '');
-                    var name = (p && p.websiteName) ? p.websiteName : (localStorage.getItem('skp_brand_name') || '');
-                    var badge = (p && p.websiteBadgeText !== undefined) ? p.websiteBadgeText : (localStorage.getItem('skp_brand_badge') || '');
-                    var tagline = (p && p.websiteTagline !== undefined) ? p.websiteTagline : (localStorage.getItem('skp_brand_tagline') || '');
+                    var p = raw ? JSON.parse(raw) : (init || null);
+                    var logo = (p && p.websiteLogo) ? p.websiteLogo : (localStorage.getItem('skp_brand_logo') || (init && init.websiteLogo) || '');
+                    var name = (p && p.websiteName) ? p.websiteName : (localStorage.getItem('skp_brand_name') || (init && init.websiteName) || '');
+                    var badge = (p && p.websiteBadgeText !== undefined) ? p.websiteBadgeText : (localStorage.getItem('skp_brand_badge') || (init && init.websiteBadgeText) || '');
+                    var badgeBg = (p && p.websiteBadgeBg) ? p.websiteBadgeBg : (localStorage.getItem('skp_brand_badge_bg') || (init && init.websiteBadgeBg) || 'fintech-gradient-primary');
+                    var tagline = (p && p.websiteTagline !== undefined) ? p.websiteTagline : (localStorage.getItem('skp_brand_tagline') || (init && init.websiteTagline) || '');
 
                     if (!logo || !name || !badge || !badgeBg || !tagline) {
                       var cookies = document.cookie.split(';');

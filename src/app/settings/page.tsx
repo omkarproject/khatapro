@@ -1082,6 +1082,9 @@ export default function SettingsPage() {
       document.cookie = `skp_brand_badge_bg=${encodeURIComponent(webBadgeBg)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
       document.cookie = `skp_brand_tagline=${encodeURIComponent(finalTagline)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
       document.cookie = `skp_brand_name=${encodeURIComponent(finalName)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+      if (finalSupportLocation) document.cookie = `skp_brand_support_location=${encodeURIComponent(finalSupportLocation)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+      if (finalSupportPhone) document.cookie = `skp_brand_support_phone=${encodeURIComponent(finalSupportPhone)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+      if (finalSupportEmail) document.cookie = `skp_brand_support_email=${encodeURIComponent(finalSupportEmail)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
       if (finalLogo && finalLogo.length < 2000) {
         document.cookie = `skp_brand_logo=${encodeURIComponent(finalLogo)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
       }
@@ -1099,6 +1102,7 @@ export default function SettingsPage() {
     } catch (err) {}
 
     window.dispatchEvent(new CustomEvent('khatapro_branding_changed', { detail: brandPayload }));
+    window.dispatchEvent(new CustomEvent('skp_branding_updated', { detail: brandPayload }));
 
     const badgeSuffix = finalBadge ? ` ${finalBadge}` : '';
     const taglineSuffix = finalTagline ? ` - ${finalTagline}` : '';

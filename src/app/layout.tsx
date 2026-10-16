@@ -3,16 +3,17 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { AppProvider } from '@/context/AppContext';
 import LayoutShell from '@/components/LayoutShell';
+import { cookies } from 'next/headers';
+import { getGlobalBrandingFromDb } from '@/lib/globalBranding';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
-import { cookies } from 'next/headers';
-
 export async function generateMetadata(): Promise<Metadata> {
-  let brandName = '';
-  let brandBadge = '';
-  let brandTagline = '';
-  let brandFavicon = '';
+  const dbBrand = await getGlobalBrandingFromDb().catch(() => null);
+  let brandName = dbBrand?.websiteName || '';
+  let brandBadge = dbBrand?.websiteBadgeText || '';
+  let brandTagline = dbBrand?.websiteTagline || '';
+  let brandFavicon = dbBrand?.websiteFavicon || dbBrand?.websiteLogo || '';
 
   try {
     const cookieStore = await cookies();
@@ -29,7 +30,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const displayName = brandName || '';
   const displayBadge = brandBadge ? ` ${brandBadge}` : '';
   const displayTagline = brandTagline ? ` - ${brandTagline}` : '';
-  const title = displayName ? `${displayName}${displayBadge}${displayTagline}` : 'Fintech Operating System';
+  const title = displayName ? `${displayName}${displayBadge}${displayTagline}` : (brandTagline || 'Fintech Operating System');
 
   return {
     title,
@@ -38,11 +39,13 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const serverBranding = await getGlobalBrandingFromDb().catch(() => null);
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -51,18 +54,46 @@ export default function RootLayout({
             __html: `
               (function() {
                 try {
+                  var serverBrand = ${JSON.stringify(serverBranding || null)};
+                  window.__INITIAL_BRANDING__ = serverBrand;
+
                   var brandName = '';
                   var brandBadge = '';
                   var brandTagline = '';
                   var brandFavicon = '';
+
+                  if (serverBrand && typeof serverBrand === 'object') {
+                    brandName = serverBrand.websiteName || '';
+                    if (serverBrand.websiteBadgeText !== undefined) brandBadge = serverBrand.websiteBadgeText;
+                    if (serverBrand.websiteTagline !== undefined) brandTagline = serverBrand.websiteTagline;
+                    brandFavicon = serverBrand.websiteFavicon || serverBrand.websiteLogo || '';
+
+                    // Sync to localStorage if missing
+                    try {
+                      if (!localStorage.getItem('skp_global_branding')) {
+                        localStorage.setItem('skp_global_branding', JSON.stringify(serverBrand));
+                      }
+                      if (brandName && !localStorage.getItem('skp_brand_name')) localStorage.setItem('skp_brand_name', brandName);
+                      if (serverBrand.websiteLogo && !localStorage.getItem('skp_brand_logo')) localStorage.setItem('skp_brand_logo', serverBrand.websiteLogo);
+                      if (brandFavicon && !localStorage.getItem('skp_brand_favicon')) localStorage.setItem('skp_brand_favicon', brandFavicon);
+                      if (brandBadge && !localStorage.getItem('skp_brand_badge')) localStorage.setItem('skp_brand_badge', brandBadge);
+                      if (serverBrand.websiteBadgeBg && !localStorage.getItem('skp_brand_badge_bg')) localStorage.setItem('skp_brand_badge_bg', serverBrand.websiteBadgeBg);
+                      if (brandTagline && !localStorage.getItem('skp_brand_tagline')) localStorage.setItem('skp_brand_tagline', brandTagline);
+                      if (serverBrand.websiteSupportLocation && !localStorage.getItem('skp_brand_support_location')) localStorage.setItem('skp_brand_support_location', serverBrand.websiteSupportLocation);
+                      if (serverBrand.websiteSupportPhone && !localStorage.getItem('skp_brand_support_phone')) localStorage.setItem('skp_brand_support_phone', serverBrand.websiteSupportPhone);
+                      if (serverBrand.websiteSupportEmail && !localStorage.getItem('skp_brand_support_email')) localStorage.setItem('skp_brand_support_email', serverBrand.websiteSupportEmail);
+                    } catch(e) {}
+                  }
+
                   var raw = localStorage.getItem('skp_global_branding');
-                  var parsed = null;
                   if (raw) {
-                    parsed = JSON.parse(raw);
-                    brandName = parsed.websiteName || '';
-                    if (parsed.websiteBadgeText !== undefined) brandBadge = parsed.websiteBadgeText;
-                    if (parsed.websiteTagline !== undefined) brandTagline = parsed.websiteTagline;
-                    brandFavicon = parsed.websiteFavicon || parsed.websiteLogo || '';
+                    try {
+                      var parsed = JSON.parse(raw);
+                      if (parsed.websiteName) brandName = parsed.websiteName;
+                      if (parsed.websiteBadgeText !== undefined) brandBadge = parsed.websiteBadgeText;
+                      if (parsed.websiteTagline !== undefined) brandTagline = parsed.websiteTagline;
+                      if (parsed.websiteFavicon || parsed.websiteLogo) brandFavicon = parsed.websiteFavicon || parsed.websiteLogo;
+                    } catch(e) {}
                   }
                   if (!brandName) brandName = localStorage.getItem('skp_brand_name') || '';
                   if (!brandBadge) {
@@ -76,27 +107,7 @@ export default function RootLayout({
                   if (!brandFavicon) {
                     brandFavicon = localStorage.getItem('skp_brand_favicon') || localStorage.getItem('skp_brand_logo') || '';
                   }
-                  if (!brandName || !brandBadge || !brandTagline || !brandFavicon) {
-                    var cookies = document.cookie.split(';');
-                    for (var i = 0; i < cookies.length; i++) {
-                      var c = cookies[i].trim();
-                      if (c.indexOf('skp_brand_name=') === 0 && !brandName) {
-                        brandName = decodeURIComponent(c.substring('skp_brand_name='.length));
-                      }
-                      if (c.indexOf('skp_brand_badge=') === 0 && !brandBadge) {
-                        brandBadge = decodeURIComponent(c.substring('skp_brand_badge='.length));
-                      }
-                      if (c.indexOf('skp_brand_tagline=') === 0 && !brandTagline) {
-                        brandTagline = decodeURIComponent(c.substring('skp_brand_tagline='.length));
-                      }
-                      if (c.indexOf('skp_brand_favicon=') === 0 && !brandFavicon) {
-                        brandFavicon = decodeURIComponent(c.substring('skp_brand_favicon='.length));
-                      }
-                      if (c.indexOf('skp_brand_logo=') === 0 && !brandFavicon) {
-                        brandFavicon = decodeURIComponent(c.substring('skp_brand_logo='.length));
-                      }
-                    }
-                  }
+
                   if (brandName) {
                     var full = brandName + (brandBadge ? ' ' + brandBadge : '') + (brandTagline ? ' - ' + brandTagline : '');
                     document.title = full;

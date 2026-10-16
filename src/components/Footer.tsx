@@ -7,10 +7,36 @@ import { ShieldCheck, Lock, Heart, Phone, Mail, MapPin } from 'lucide-react';
 
 export default function Footer() {
   const { settings, profile, currentUser, activeCurrency, t } = useApp();
-  const businessName = settings.websiteName || settings.businessName || '';
-  const supportPhone = settings.websiteSupportPhone?.trim() || '';
-  const supportEmail = settings.websiteSupportEmail?.trim() || '';
-  const supportAddress = settings.websiteSupportLocation?.trim() || '';
+
+  const [localBrand, setLocalBrand] = React.useState<any>(() => {
+    if (typeof window !== 'undefined') {
+      const init = (window as any).__INITIAL_BRANDING__;
+      const raw = localStorage.getItem('skp_global_branding');
+      return raw ? JSON.parse(raw) : (init || null);
+    }
+    return null;
+  });
+
+  React.useEffect(() => {
+    const handler = (e: any) => {
+      if (e.detail) setLocalBrand(e.detail);
+    };
+    window.addEventListener('skp_branding_updated', handler);
+    window.addEventListener('khatapro_branding_changed', handler);
+    return () => {
+      window.removeEventListener('skp_branding_updated', handler);
+      window.removeEventListener('khatapro_branding_changed', handler);
+    };
+  }, []);
+
+  const websiteLogo = settings.websiteLogo || localBrand?.websiteLogo || '';
+  const websiteName = settings.websiteName || localBrand?.websiteName || '';
+  const websiteBadgeText = settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : (localBrand?.websiteBadgeText || '');
+  const websiteBadgeBg = settings.websiteBadgeBg || localBrand?.websiteBadgeBg || 'fintech-gradient-primary';
+  const websiteTagline = settings.websiteTagline !== undefined ? settings.websiteTagline : (localBrand?.websiteTagline || '');
+  const supportPhone = settings.websiteSupportPhone?.trim() || localBrand?.websiteSupportPhone?.trim() || '';
+  const supportEmail = settings.websiteSupportEmail?.trim() || localBrand?.websiteSupportEmail?.trim() || '';
+  const supportAddress = settings.websiteSupportLocation?.trim() || localBrand?.websiteSupportLocation?.trim() || '';
   const businessGst = settings.paymentSettings?.businessGst || profile.businessGst || '';
 
   return (
@@ -23,29 +49,29 @@ export default function Footer() {
           {/* Col 1: Business Branding & Description */}
           <div className="space-y-1.5 md:col-span-1">
             <div className="flex items-center gap-2">
-              {settings.websiteLogo ? (
+              {websiteLogo ? (
                 <div className="w-7 h-7 rounded-lg overflow-hidden border border-slate-200/90 dark:border-slate-700/80 bg-white dark:bg-slate-900 flex items-center justify-center shadow-sm shrink-0">
                   <img
-                    src={settings.websiteLogo}
-                    alt={settings.websiteName || 'Website Logo'}
+                    src={websiteLogo}
+                    alt={websiteName || 'Website Logo'}
                     className="w-full h-full object-contain p-0.5"
                   />
                 </div>
               ) : null}
-              {settings.websiteName?.trim() ? (
+              {websiteName?.trim() ? (
                 <span className="font-extrabold text-sm text-slate-900 dark:text-white truncate flex items-center gap-1.5">
-                  <span>{settings.websiteName.trim()}</span>
-                  {settings.websiteBadgeText?.trim() && (
-                    <span className={`text-[7px] px-1 py-[1px] rounded font-bold uppercase tracking-wider leading-none text-white shadow-xs ${settings.websiteBadgeBg || 'fintech-gradient-primary'}`}>
-                      {settings.websiteBadgeText.trim()}
+                  <span>{websiteName.trim()}</span>
+                  {websiteBadgeText?.trim() && (
+                    <span className={`text-[7px] px-1 py-[1px] rounded font-bold uppercase tracking-wider leading-none text-white shadow-xs ${websiteBadgeBg || 'fintech-gradient-primary'}`}>
+                      {websiteBadgeText.trim()}
                     </span>
                   )}
                 </span>
               ) : null}
             </div>
-            {settings.websiteTagline?.trim() ? (
+            {websiteTagline?.trim() ? (
               <p className="text-[11px] leading-snug text-slate-500 dark:text-slate-400 line-clamp-2">
-                {settings.websiteTagline.trim()}
+                {websiteTagline.trim()}
               </p>
             ) : null}
             {businessGst ? (
@@ -153,7 +179,7 @@ export default function Footer() {
         {/* Bottom Section: Security Badges & Copyright */}
         <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10.5px]">
           <div className="flex items-center gap-2">
-            <span>&copy; {new Date().getFullYear()} {settings.websiteName ? `${settings.websiteName}${settings.websiteBadgeText?.trim() ? ` ${settings.websiteBadgeText.trim()}` : ''}. ` : ''}{t('allRightsReserved', 'All rights reserved.')}</span>
+            <span>&copy; {new Date().getFullYear()} {websiteName ? `${websiteName}${websiteBadgeText?.trim() ? ` ${websiteBadgeText.trim()}` : ''}. ` : ''}{t('allRightsReserved', 'All rights reserved.')}</span>
             <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">&bull;</span>
             <span className="hidden sm:inline">{t('madeInIndia', 'Made in India')}</span>
           </div>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
+import { getGlobalBrandingFromDb, saveGlobalBrandingToDb } from '@/lib/globalBranding';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -747,6 +748,8 @@ export async function GET(req: NextRequest) {
       createdAt: sbProfile.data.created_at || new Date().toISOString(),
     } : null;
 
+    const globalBranding = await getGlobalBrandingFromDb().catch(() => null);
+
     const finalSettings = sbSet.data ? {
       businessName: sbSet.data.business_name || '',
       businessLogo: logo,
@@ -760,10 +763,15 @@ export async function GET(req: NextRequest) {
       },
       darkMode: Boolean(sbSet.data.dark_mode),
       backendProvider: sbSet.data.backend_provider || 'supabase',
-      websiteName: sbSet.data.payment_settings?.websiteName || 'SmartKhata',
-      websiteLogo: sbSet.data.payment_settings?.websiteLogo || '',
-      websiteFavicon: sbSet.data.payment_settings?.websiteFavicon || '',
-      websiteBadgeText: sbSet.data.payment_settings?.websiteBadgeText !== undefined ? sbSet.data.payment_settings.websiteBadgeText : '',
+      websiteName: sbSet.data.payment_settings?.websiteName || globalBranding?.websiteName || '',
+      websiteLogo: sbSet.data.payment_settings?.websiteLogo || globalBranding?.websiteLogo || '',
+      websiteFavicon: sbSet.data.payment_settings?.websiteFavicon || globalBranding?.websiteFavicon || '',
+      websiteBadgeText: sbSet.data.payment_settings?.websiteBadgeText !== undefined ? sbSet.data.payment_settings.websiteBadgeText : (globalBranding?.websiteBadgeText || ''),
+      websiteBadgeBg: sbSet.data.payment_settings?.websiteBadgeBg || globalBranding?.websiteBadgeBg || 'fintech-gradient-primary',
+      websiteTagline: sbSet.data.payment_settings?.websiteTagline || globalBranding?.websiteTagline || '',
+      websiteSupportLocation: sbSet.data.payment_settings?.websiteSupportLocation || globalBranding?.websiteSupportLocation || '',
+      websiteSupportPhone: sbSet.data.payment_settings?.websiteSupportPhone || globalBranding?.websiteSupportPhone || '',
+      websiteSupportEmail: sbSet.data.payment_settings?.websiteSupportEmail || globalBranding?.websiteSupportEmail || '',
     } : null;
 
     const finalData = {
@@ -931,11 +939,39 @@ export async function POST(req: NextRequest) {
         const paymentSettingsWithLogo = {
           ...(data.settings.paymentSettings || {}),
           businessLogo: logoToSave || data.settings.paymentSettings?.businessLogo || '',
-          websiteName: data.settings.websiteName || 'SmartKhata',
+          websiteName: data.settings.websiteName || '',
           websiteLogo: data.settings.websiteLogo || '',
           websiteFavicon: data.settings.websiteFavicon || '',
           websiteBadgeText: data.settings.websiteBadgeText !== undefined ? data.settings.websiteBadgeText : '',
+          websiteBadgeBg: data.settings.websiteBadgeBg || 'fintech-gradient-primary',
+          websiteTagline: data.settings.websiteTagline || '',
+          websiteSupportLocation: data.settings.websiteSupportLocation || '',
+          websiteSupportPhone: data.settings.websiteSupportPhone || '',
+          websiteSupportEmail: data.settings.websiteSupportEmail || '',
         };
+
+        if (
+          data.settings.websiteName ||
+          data.settings.websiteLogo ||
+          data.settings.websiteFavicon ||
+          data.settings.websiteBadgeText !== undefined ||
+          data.settings.websiteTagline
+        ) {
+          promises.push(
+            saveGlobalBrandingToDb({
+              websiteName: data.settings.websiteName,
+              websiteLogo: data.settings.websiteLogo,
+              websiteFavicon: data.settings.websiteFavicon,
+              websiteBadgeText: data.settings.websiteBadgeText,
+              websiteBadgeBg: data.settings.websiteBadgeBg,
+              websiteTagline: data.settings.websiteTagline,
+              websiteSupportLocation: data.settings.websiteSupportLocation,
+              websiteSupportPhone: data.settings.websiteSupportPhone,
+              websiteSupportEmail: data.settings.websiteSupportEmail,
+            }).catch((e) => console.error('Error saving global branding during sync:', e))
+          );
+        }
+
         promises.push(
           Promise.resolve(
             supabase.from('system_settings').upsert({

@@ -707,7 +707,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [darkMode, mounted]);
 
-  // Synchronize Global System Config (Maintenance Mode & Beta Testing) across all users / browsers
+  // Synchronize Global System Config (Maintenance Mode, Beta Testing, & Global Branding) across all devices / browsers
   useEffect(() => {
     if (!mounted) return;
 
@@ -720,18 +720,83 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const globalPayload = {
             maintenanceMode: json.maintenanceMode,
             betaTestingEnabled: Boolean(json.betaTestingEnabled),
+            websiteBranding: json.websiteBranding || null,
           };
           if (typeof window !== 'undefined') {
             localStorage.setItem('skp_global_system_config', JSON.stringify(globalPayload));
+            if (json.websiteBranding && typeof json.websiteBranding === 'object') {
+              const b = json.websiteBranding;
+              localStorage.setItem('skp_global_branding', JSON.stringify(b));
+              if (b.websiteName) localStorage.setItem('skp_brand_name', b.websiteName);
+              if (b.websiteLogo) localStorage.setItem('skp_brand_logo', b.websiteLogo);
+              if (b.websiteFavicon) localStorage.setItem('skp_brand_favicon', b.websiteFavicon);
+              if (b.websiteBadgeText !== undefined) localStorage.setItem('skp_brand_badge', b.websiteBadgeText);
+              if (b.websiteBadgeBg) localStorage.setItem('skp_brand_badge_bg', b.websiteBadgeBg);
+              if (b.websiteTagline !== undefined) localStorage.setItem('skp_brand_tagline', b.websiteTagline);
+              if (b.websiteSupportLocation !== undefined) localStorage.setItem('skp_brand_support_location', b.websiteSupportLocation);
+              if (b.websiteSupportPhone !== undefined) localStorage.setItem('skp_brand_support_phone', b.websiteSupportPhone);
+              if (b.websiteSupportEmail !== undefined) localStorage.setItem('skp_brand_support_email', b.websiteSupportEmail);
+
+              try {
+                const maxAge = '; path=/; max-age=31536000';
+                if (b.websiteName) document.cookie = 'skp_brand_name=' + encodeURIComponent(b.websiteName) + maxAge;
+                if (b.websiteLogo) document.cookie = 'skp_brand_logo=' + encodeURIComponent(b.websiteLogo) + maxAge;
+                if (b.websiteFavicon) document.cookie = 'skp_brand_favicon=' + encodeURIComponent(b.websiteFavicon) + maxAge;
+                if (b.websiteBadgeText !== undefined) document.cookie = 'skp_brand_badge=' + encodeURIComponent(b.websiteBadgeText) + maxAge;
+                if (b.websiteBadgeBg) document.cookie = 'skp_brand_badge_bg=' + encodeURIComponent(b.websiteBadgeBg) + maxAge;
+                if (b.websiteTagline !== undefined) document.cookie = 'skp_brand_tagline=' + encodeURIComponent(b.websiteTagline) + maxAge;
+                if (b.websiteSupportLocation !== undefined) document.cookie = 'skp_brand_support_location=' + encodeURIComponent(b.websiteSupportLocation) + maxAge;
+                if (b.websiteSupportPhone !== undefined) document.cookie = 'skp_brand_support_phone=' + encodeURIComponent(b.websiteSupportPhone) + maxAge;
+                if (b.websiteSupportEmail !== undefined) document.cookie = 'skp_brand_support_email=' + encodeURIComponent(b.websiteSupportEmail) + maxAge;
+              } catch {}
+
+              if (b.websiteName) {
+                document.title = b.websiteName + (b.websiteTagline ? ` — ${b.websiteTagline}` : '');
+              }
+              if (b.websiteFavicon) {
+                let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
+                if (!link) {
+                  link = document.createElement('link');
+                  link.rel = 'icon';
+                  document.head.appendChild(link);
+                }
+                link.href = b.websiteFavicon;
+              }
+              window.dispatchEvent(new CustomEvent('skp_branding_updated', { detail: b }));
+            }
           }
           setSettingsState(prev => {
             const sameMaint = JSON.stringify(prev.maintenanceMode) === JSON.stringify(json.maintenanceMode);
             const sameBeta = prev.betaTestingEnabled === Boolean(json.betaTestingEnabled);
-            if (sameMaint && sameBeta) return prev;
+            const b = json.websiteBranding;
+            const sameBrand = !b || (
+              prev.websiteName === b.websiteName &&
+              prev.websiteLogo === b.websiteLogo &&
+              prev.websiteFavicon === b.websiteFavicon &&
+              prev.websiteBadgeText === b.websiteBadgeText &&
+              prev.websiteBadgeBg === b.websiteBadgeBg &&
+              prev.websiteTagline === b.websiteTagline &&
+              prev.websiteSupportLocation === b.websiteSupportLocation &&
+              prev.websiteSupportPhone === b.websiteSupportPhone &&
+              prev.websiteSupportEmail === b.websiteSupportEmail
+            );
+
+            if (sameMaint && sameBeta && sameBrand) return prev;
             return {
               ...prev,
               maintenanceMode: json.maintenanceMode,
               betaTestingEnabled: Boolean(json.betaTestingEnabled),
+              ...(b ? {
+                websiteName: b.websiteName !== undefined ? b.websiteName : prev.websiteName,
+                websiteLogo: b.websiteLogo !== undefined ? b.websiteLogo : prev.websiteLogo,
+                websiteFavicon: b.websiteFavicon !== undefined ? b.websiteFavicon : prev.websiteFavicon,
+                websiteBadgeText: b.websiteBadgeText !== undefined ? b.websiteBadgeText : prev.websiteBadgeText,
+                websiteBadgeBg: b.websiteBadgeBg !== undefined ? b.websiteBadgeBg : prev.websiteBadgeBg,
+                websiteTagline: b.websiteTagline !== undefined ? b.websiteTagline : prev.websiteTagline,
+                websiteSupportLocation: b.websiteSupportLocation !== undefined ? b.websiteSupportLocation : prev.websiteSupportLocation,
+                websiteSupportPhone: b.websiteSupportPhone !== undefined ? b.websiteSupportPhone : prev.websiteSupportPhone,
+                websiteSupportEmail: b.websiteSupportEmail !== undefined ? b.websiteSupportEmail : prev.websiteSupportEmail,
+              } : {}),
             };
           });
         }
@@ -777,14 +842,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const merged = StorageService.updateSettings(newSettings);
     setSettingsState(merged);
 
-    // If Maintenance Mode or Beta Testing was modified, broadcast immediately to Global System Config
-    if (newSettings.maintenanceMode !== undefined || newSettings.betaTestingEnabled !== undefined) {
+    // If Maintenance Mode, Beta Testing, or Website Branding was modified, broadcast immediately to Global System Config
+    const hasBrandingUpdates = 
+      newSettings.websiteName !== undefined ||
+      newSettings.websiteLogo !== undefined ||
+      newSettings.websiteFavicon !== undefined ||
+      newSettings.websiteBadgeText !== undefined ||
+      newSettings.websiteBadgeBg !== undefined ||
+      newSettings.websiteTagline !== undefined ||
+      newSettings.websiteSupportLocation !== undefined ||
+      newSettings.websiteSupportPhone !== undefined ||
+      newSettings.websiteSupportEmail !== undefined;
+
+    if (hasBrandingUpdates || newSettings.maintenanceMode !== undefined || newSettings.betaTestingEnabled !== undefined) {
       if (typeof window !== 'undefined') {
-        const globalPayload = {
+        const brandPayload = {
+          websiteName: merged.websiteName || '',
+          websiteLogo: merged.websiteLogo || '',
+          websiteFavicon: merged.websiteFavicon || '',
+          websiteBadgeText: merged.websiteBadgeText !== undefined ? merged.websiteBadgeText : '',
+          websiteBadgeBg: merged.websiteBadgeBg || 'fintech-gradient-primary',
+          websiteTagline: merged.websiteTagline || '',
+          websiteSupportLocation: merged.websiteSupportLocation || '',
+          websiteSupportPhone: merged.websiteSupportPhone || '',
+          websiteSupportEmail: merged.websiteSupportEmail || '',
+        };
+        const globalPayload: any = {
           maintenanceMode: merged.maintenanceMode,
           betaTestingEnabled: Boolean(merged.betaTestingEnabled),
         };
-        localStorage.setItem('skp_global_system_config', JSON.stringify(globalPayload));
+        if (hasBrandingUpdates) {
+          globalPayload.websiteBranding = brandPayload;
+        }
+        localStorage.setItem('skp_global_system_config', JSON.stringify({
+          ...globalPayload,
+          websiteBranding: brandPayload,
+        }));
         fetch('/api/system/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
