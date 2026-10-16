@@ -196,7 +196,12 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   }>({});
 
   // Current Auth User & Cloud Sync
-  const [currentUser, setCurrentUserState] = useState<UserProfile | null>(null);
+  const [currentUser, setCurrentUserState] = useState<UserProfile | null>(() => {
+    if (typeof window !== 'undefined') {
+      return StorageService.getCurrentUser();
+    }
+    return null;
+  });
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
 
