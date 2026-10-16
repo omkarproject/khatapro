@@ -30,7 +30,7 @@ interface SidebarProps {
   onCloseMobile?: () => void;
 }
 
-export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
+function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
   const { settings, profile, currentUser, activeLanguage, activeCurrency } = useApp();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -61,7 +61,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
     });
   };
 
-  const navItems = [
+  const navItems = React.useMemo(() => [
     { label: t('dashboard', 'Dashboard'), href: '/', icon: LayoutDashboard },
     { label: t('khata', 'Digital KhataBook'), href: '/khata', icon: BookOpen, badge: t('badgeCore', 'Core') },
     { label: t('customers', 'Customers CRM'), href: '/customers', icon: Users },
@@ -75,7 +75,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
     { label: t('documents', 'Document Vault'), href: '/documents', icon: FolderLock },
     { label: t('analytics', 'Financial Analytics'), href: '/analytics', icon: LineChart },
     { label: t('settings', 'Settings'), href: '/settings', icon: Settings },
-  ];
+  ], [activeLanguage]);
 
   const renderSidebarContent = (isMobileView: boolean) => {
     const collapsed = !isMobileView && isCollapsed;
@@ -114,6 +114,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={true}
                 onClick={onCloseMobile}
                 title={collapsed ? item.label : undefined}
                 className={`flex items-center rounded-xl text-xs font-semibold transition-all group ${
@@ -222,3 +223,6 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
     </>
   );
 }
+
+const Sidebar = React.memo(SidebarContent);
+export default Sidebar;

@@ -12,7 +12,7 @@ import {
   Users
 } from 'lucide-react';
 
-export default function MobileNav() {
+function MobileNavComponent() {
   const pathname = usePathname();
   const { openCollectModal } = useApp();
 
@@ -48,6 +48,7 @@ export default function MobileNav() {
             <Link
               key={tab.href}
               href={tab.href!}
+              prefetch={true}
               className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl text-[10px] font-semibold transition-colors ${
                 isActive
                   ? 'text-indigo-600 dark:text-indigo-400'
@@ -63,3 +64,5 @@ export default function MobileNav() {
     </div>
   );
 }
+
+export default React.memo(MobileNavComponent);

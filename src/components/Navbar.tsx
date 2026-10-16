@@ -350,7 +350,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
               <Menu className="w-5 h-5" />
             </button>
 
-            <Link href="/" className="flex items-center gap-2 sm:gap-2.5 group">
+            <Link href="/" prefetch={true} className="flex items-center gap-2 sm:gap-2.5 group">
               {websiteLogo ? (
                 <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl overflow-hidden shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform shrink-0 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center">
                   <img
@@ -510,6 +510,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                               <div className="flex items-center justify-between gap-2 pt-0.5">
                                 <Link
                                   href="/savings"
+                                  prefetch={true}
                                   onClick={() => setIsNotificationsOpen(false)}
                                   className="text-[11px] font-semibold text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 transition-colors"
                                 >
@@ -633,6 +634,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                                 <div className="mt-1 flex items-center gap-2">
                                   <Link
                                     href="/notes-tasks"
+                                    prefetch={true}
                                     onClick={() => setIsNotificationsOpen(false)}
                                     className="text-[10px] font-bold text-amber-700 dark:text-amber-300 hover:underline flex items-center gap-1"
                                   >
@@ -689,6 +691,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                                 <div className="mt-1 flex items-center gap-2">
                                   <Link
                                     href="/notes-tasks"
+                                    prefetch={true}
                                     onClick={() => setIsNotificationsOpen(false)}
                                     className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 hover:underline flex items-center gap-1"
                                   >
@@ -860,6 +863,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                       <div className="space-y-1 pt-2 border-t border-slate-100 dark:border-slate-800 mt-2">
                         <Link
                           href="/settings"
+                          prefetch={true}
                           onClick={() => setIsUserMenuOpen(false)}
                           className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                         >
