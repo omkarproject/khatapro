@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedDriveForUser } from '@/lib/driveTokenHelper';
 import { createBackupArchive } from '@/lib/backupArchive';
-import { uploadBackupZip, uploadBackupManifest, ensureHisabKitabFolders } from '@/lib/googleDrive';
+import { uploadBackupZip, uploadBackupManifest, ensureHisabKitabFolders, getOrCreateMerchantBackupFolder } from '@/lib/googleDrive';
 import { getSupabaseAdmin } from '@/lib/supabase';
 
 export async function POST(req: NextRequest) {
@@ -81,11 +81,20 @@ export async function POST(req: NextRequest) {
     // 1. Generate versioned ZIP archive
     const { zipBuffer, manifest, filename } = await createBackupArchive(fullData);
 
-    // 2. Upload / replace latest ZIP in SmartKhata Pro/Backups/
-    const uploadResult = await uploadBackupZip(drive, backupsFolderId, filename, zipBuffer);
+    // 2. Locate or create isolated per-merchant folder in Google Drive: Backups/<Merchant Name> (<Merchant ID>)
+    const merchantDisplayName = fullData?.profile?.name || fullData?.profile?.business_name || fullData?.profile?.email || 'Merchant';
+    const merchantFolderId = await getOrCreateMerchantBackupFolder(
+      drive,
+      backupsFolderId,
+      merchantDisplayName,
+      userId
+    );
 
-    // 3. Upload / replace manifest.json in SmartKhata Pro/Backups/
-    await uploadBackupManifest(drive, backupsFolderId, 'manifest.json', manifest);
+    // 3. Upload / replace latest ZIP in SmartKhata Pro/Backups/<Merchant Name> (<Merchant ID>)/
+    const uploadResult = await uploadBackupZip(drive, merchantFolderId, filename, zipBuffer);
+
+    // 4. Upload / replace manifest.json in SmartKhata Pro/Backups/<Merchant Name> (<Merchant ID>)/
+    await uploadBackupManifest(drive, merchantFolderId, 'manifest.json', manifest);
 
     // 4. Record history entry in Supabase
     const historyItem = {

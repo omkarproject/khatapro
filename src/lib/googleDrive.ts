@@ -146,6 +146,57 @@ export async function findOrCreateDriveSubfolder(
 }
 
 /**
+ * Creates or retrieves an isolated per-merchant folder inside SmartKhata Pro/Backups/
+ * Folder name: "<Merchant Name> (<Merchant ID>)"
+ * e.g., "Anant Yadav (b1442bb5-9504-45e0-94d0-40e9d6d45e4e)"
+ */
+export async function getOrCreateMerchantBackupFolder(
+  drive: any,
+  backupsFolderId: string,
+  merchantName: string,
+  userId: string
+): Promise<string> {
+  const cleanName = (merchantName || 'Merchant')
+    .replace(/[\\/:*?"<>|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim() || 'Merchant';
+
+  const folderName = `${cleanName} (${userId})`;
+  const safeName = folderName.replace(/'/g, "\\'");
+
+  try {
+    // Search inside backupsFolderId if this merchant folder already exists (exact name or contains user ID)
+    const query = `'${backupsFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false and (name = '${safeName}' or name contains '(${userId})')`;
+    const res = await drive.files.list({
+      q: query,
+      fields: 'files(id, name)',
+      spaces: 'drive',
+    });
+
+    if (res.data.files && res.data.files.length > 0) {
+      return res.data.files[0].id;
+    }
+  } catch (err) {
+    console.warn(`Error querying merchant backup folder for ${folderName}:`, err);
+  }
+
+  // Create new folder inside Backups
+  const folderMetadata = {
+    name: folderName,
+    mimeType: 'application/vnd.google-apps.folder',
+    parents: [backupsFolderId],
+    description: `Automated & Manual Backups for Merchant ${cleanName} (ID: ${userId})`,
+  };
+
+  const createRes = await drive.files.create({
+    requestBody: folderMetadata,
+    fields: 'id',
+  });
+
+  return createRes.data.id;
+}
+
+/**
  * Uploads a daily ZIP backup to SmartKhata Pro/Backups/
  * Replaces / overwrites previous backup ZIP so that multiple daily ZIP archives do not accumulate!
  */

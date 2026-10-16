@@ -221,16 +221,17 @@ export default function GoogleDriveBackupPanel() {
       setLastBackupAt(json.timestamp);
       setLastSystemBackupAt(json.timestamp);
 
-      if (!json.merchantsCount || json.merchantsCount === 0) {
+      const totalProtected = json.successfulBackups || json.totalMerchants || json.merchantsCount || 0;
+      if (totalProtected === 0) {
         addToast(
           'Backup Engine Ready',
-          'Admin trigger succeeded. No merchants have connected their Google Drive yet. As soon as merchants connect Drive, backups will upload automatically.',
+          'Admin trigger succeeded. No active merchant accounts found in database.',
           'info'
         );
       } else {
         addToast(
           'All Merchants Backed Up! ☁️',
-          `Successfully backed up ${json.successfulBackups || json.merchantsCount} connected merchant(s) directly into their personal Google Drives.`,
+          `Successfully backed up ${totalProtected} merchant(s) into isolated folders with their name and ID in Google Drive (SmartKhata Pro/Backups).`,
           'success'
         );
       }

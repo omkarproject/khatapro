@@ -6,6 +6,7 @@ import {
   ensureSmartKhataFolders,
   uploadBackupZip,
   uploadBackupManifest,
+  getOrCreateMerchantBackupFolder,
 } from '@/lib/googleDrive';
 import { getUserDriveTokens, getMasterDriveClient } from '@/lib/driveTokenHelper';
 import { createBackupArchive, FullBusinessData } from '@/lib/backupArchive';
@@ -22,11 +23,16 @@ export async function POST(req: NextRequest) {
  * Universal Backup Engine for a single user:
  * 1. Collects all module data from Supabase Cloud PostgreSQL.
  * 2. Packages a verified, versioned ZIP archive with SHA256 checksum manifest.
- * 3. Uploads to User's Personal Google Drive if connected.
- * 4. Fallback: Uploads to System Master Google Drive if available.
- * 5. Fallback: Stores verified Cloud Snapshot record in Supabase google_drive_backups.
+ * 3. Uploads into merchant-specific folder inside Google Drive "SmartKhata Pro/Backups/<Merchant Name> (<Merchant ID>)/".
+ * 4. Fallback: Stores verified Cloud Snapshot record in Supabase google_drive_backups.
  */
-async function backupSingleUser(supabase: any, userId: string, dateStr: string) {
+async function backupSingleUser(
+  supabase: any,
+  userId: string,
+  dateStr: string,
+  sharedDrive?: any,
+  sharedBackupsFolderId?: string
+) {
   // Fetch merchant profile for naming
   let displayName = 'Merchant';
   let userEmail = '';
@@ -37,13 +43,13 @@ async function backupSingleUser(supabase: any, userId: string, dateStr: string) 
       .eq('id', userId)
       .single();
     if (prof) {
-      displayName = prof.business_name || prof.name || prof.email?.split('@')[0] || 'Merchant';
+      displayName = prof.name || prof.business_name || prof.email?.split('@')[0] || 'Merchant';
       userEmail = prof.email || '';
     }
   } catch {}
 
-  const sanitizedName = displayName.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().substring(0, 30) || 'Merchant';
-  const safeFilenamePrefix = sanitizedName.replace(/\s+/g, '_');
+  const cleanMerchantName = displayName.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'Merchant';
+  const safeFilenamePrefix = cleanMerchantName.toLowerCase().replace(/[^a-z0-9]/g, '_');
 
   // Query user's full business data from Supabase
   const [
@@ -109,31 +115,66 @@ async function backupSingleUser(supabase: any, userId: string, dateStr: string) 
   let destination = 'cloud_snapshot';
   let googleEmail: string | undefined = undefined;
 
-  // 1. Try personal Google Drive first
+  // 1. If a shared Admin/Master Drive is active (e.g. from "Backup All Merchants Now" or multi-tenant cron)
+  if (sharedDrive && sharedBackupsFolderId) {
+    try {
+      const merchantFolderId = await getOrCreateMerchantBackupFolder(
+        sharedDrive,
+        sharedBackupsFolderId,
+        cleanMerchantName,
+        userId
+      );
+      const uploadRes = await uploadBackupZip(sharedDrive, merchantFolderId, filename, zipBuffer);
+      await uploadBackupManifest(sharedDrive, merchantFolderId, 'manifest.json', manifest);
+      driveFileId = uploadRes.fileId;
+      uploadSize = uploadRes.size;
+      destination = 'admin_google_drive';
+    } catch (sharedErr) {
+      console.warn(`Admin/Master Drive upload error for merchant ${userId} (${cleanMerchantName}):`, sharedErr);
+    }
+  }
+
+  // 2. Also check if this user has their own personal Google Drive connected
   const personalTokenRecord = await getUserDriveTokens(userId);
   if (personalTokenRecord && personalTokenRecord.is_connected && personalTokenRecord.encrypted_tokens) {
     try {
       const decTokens = JSON.parse(decryptToken(personalTokenRecord.encrypted_tokens));
       const personalDrive = await getDriveClient(decTokens);
       const personalFolders = await ensureSmartKhataFolders(personalDrive);
-      const uploadRes = await uploadBackupZip(personalDrive, personalFolders.backupsId, filename, zipBuffer);
-      await uploadBackupManifest(personalDrive, personalFolders.backupsId, 'manifest.json', manifest);
-      driveFileId = uploadRes.fileId;
-      uploadSize = uploadRes.size;
-      destination = 'personal_google_drive';
+      const personalMerchantFolderId = await getOrCreateMerchantBackupFolder(
+        personalDrive,
+        personalFolders.backupsId,
+        cleanMerchantName,
+        userId
+      );
+      const personalUploadRes = await uploadBackupZip(personalDrive, personalMerchantFolderId, filename, zipBuffer);
+      await uploadBackupManifest(personalDrive, personalMerchantFolderId, 'manifest.json', manifest);
+      if (destination === 'cloud_snapshot') {
+        driveFileId = personalUploadRes.fileId;
+        uploadSize = personalUploadRes.size;
+        destination = 'personal_google_drive';
+      } else {
+        destination = 'admin_and_personal_google_drive';
+      }
       googleEmail = personalTokenRecord.google_email;
     } catch (personalErr) {
       console.warn(`User personal Drive upload error for ${userId}, trying fallback:`, personalErr);
     }
   }
 
-  // 2. If personal drive was not used, try Master Drive fallback
+  // 3. Fallback: If neither shared drive nor personal drive was used, try Master Drive fallback
   if (destination === 'cloud_snapshot') {
     try {
       const { drive: masterDrive, tokenRecord: masterToken } = await getMasterDriveClient();
       const masterFolders = await ensureSmartKhataFolders(masterDrive);
-      const uploadRes = await uploadBackupZip(masterDrive, masterFolders.backupsId, filename, zipBuffer);
-      await uploadBackupManifest(masterDrive, masterFolders.backupsId, 'manifest.json', manifest);
+      const merchantFolderId = await getOrCreateMerchantBackupFolder(
+        masterDrive,
+        masterFolders.backupsId,
+        cleanMerchantName,
+        userId
+      );
+      const uploadRes = await uploadBackupZip(masterDrive, merchantFolderId, filename, zipBuffer);
+      await uploadBackupManifest(masterDrive, merchantFolderId, 'manifest.json', manifest);
       driveFileId = uploadRes.fileId;
       uploadSize = uploadRes.size;
       destination = 'master_google_drive';
@@ -144,7 +185,7 @@ async function backupSingleUser(supabase: any, userId: string, dateStr: string) 
     }
   }
 
-  // 3. Record history entry in Supabase google_drive_backups table
+  // 4. Record history entry in Supabase google_drive_backups table
   const historyItem = {
     id: `bk_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     user_id: userId,
@@ -192,11 +233,18 @@ async function handleCron(req: NextRequest) {
       } catch {}
     }
 
-    const targetUserId =
+    const adminId =
+      req.nextUrl.searchParams.get('adminId') ||
+      body?.adminId ||
+      '';
+
+    const rawUserId =
       req.nextUrl.searchParams.get('userId') ||
       body?.userId ||
-      req.cookies.get('skp_auth_session')?.value ||
       '';
+
+    // If adminId is provided (Backup All Merchants Now), this is explicitly multi-tenant, so targetUserId must be empty!
+    const targetUserId = adminId ? '' : rawUserId.trim();
 
     // 1. Universal Authorization check (CronJob, Daily Scheduled Task, Login / Open Trigger, VPS crontab / curl, external webhooks, or auto guardian)
     const isAuthorized =
@@ -210,6 +258,7 @@ async function handleCron(req: NextRequest) {
       urlSecret === 'skp_cron_daily_backup_secret_2026_secure' ||
       isAutoTrigger ||
       isForce ||
+      Boolean(adminId) ||
       trigger === 'login' ||
       trigger === 'day_first_open' ||
       Boolean(targetUserId);
@@ -254,6 +303,23 @@ async function handleCron(req: NextRequest) {
     // =========================================================================
     // CASE B: Universal Multi-Tenant Daily CronJob (Automated Scheduled Backup)
     // =========================================================================
+    // Locate the Admin / Master Google Drive to store all merchants in isolated subfolders
+    let sharedDrive: any = null;
+    let sharedBackupsFolderId: string | null = null;
+    let sharedGoogleEmail: string | undefined = undefined;
+
+    try {
+      const masterResult = await getMasterDriveClient(adminId || undefined);
+      if (masterResult?.drive) {
+        sharedDrive = masterResult.drive;
+        const folders = await ensureSmartKhataFolders(sharedDrive);
+        sharedBackupsFolderId = folders.backupsId;
+        sharedGoogleEmail = masterResult.tokenRecord?.google_email;
+      }
+    } catch (driveErr) {
+      console.warn('Could not initialize shared master drive client for all-merchants backup:', driveErr);
+    }
+
     // Gather all active merchant accounts from profiles
     const { data: profiles, error: profErr } = await supabase
       .from('profiles')
@@ -311,7 +377,13 @@ async function handleCron(req: NextRequest) {
           }
         }
 
-        const res = await backupSingleUser(supabase, userId, dateStr);
+        const res = await backupSingleUser(
+          supabase,
+          userId,
+          dateStr,
+          sharedDrive || undefined,
+          sharedBackupsFolderId || undefined
+        );
         merchantResults.push(res);
       } catch (userErr: any) {
         console.error(`Daily cron failed for user ${userId}:`, userErr);
@@ -329,11 +401,13 @@ async function handleCron(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Universal automated daily backup executed for ${candidateUserIds.length} merchants (${successfulCount} succeeded, ${skippedCount} skipped, ${failedCount} failed).`,
+      message: `Universal automated daily backup executed for ${candidateUserIds.length} merchants into isolated folders in Google Drive (${successfulCount} succeeded, ${skippedCount} skipped, ${failedCount} failed).`,
       totalMerchants: candidateUserIds.length,
+      merchantsCount: candidateUserIds.length,
       successfulBackups: successfulCount,
       skippedBackups: skippedCount,
       failedBackups: failedCount,
+      googleEmail: sharedGoogleEmail,
       merchants: merchantResults,
       timestamp: new Date().toISOString(),
     });

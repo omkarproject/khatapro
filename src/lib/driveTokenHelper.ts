@@ -52,10 +52,31 @@ export async function getAuthenticatedDriveForUser(userId: string) {
  * Returns the Master Google Drive client.
  * Prioritizes admin / super_admin tokens, then falls back to any connected token.
  */
-export async function getMasterDriveClient() {
+export async function getMasterDriveClient(preferredAdminId?: string) {
   const supabase = getSupabaseAdmin();
   if (!supabase) {
     throw new Error('Supabase admin client unavailable');
+  }
+
+  // 0. If preferredAdminId was explicitly passed (e.g. from the admin clicking the backup button)
+  if (preferredAdminId) {
+    try {
+      const { data: prefToken } = await supabase
+        .from('google_drive_tokens')
+        .select('*')
+        .eq('user_id', preferredAdminId)
+        .eq('is_connected', true)
+        .single();
+
+      if (prefToken && prefToken.encrypted_tokens) {
+        const decryptedJson = decryptToken(prefToken.encrypted_tokens);
+        const tokens = JSON.parse(decryptedJson);
+        const drive = await getDriveClient(tokens);
+        return { drive, tokenRecord: prefToken };
+      }
+    } catch (err) {
+      console.warn('Error checking preferred admin drive token:', err);
+    }
   }
 
   // 1. Try to find admin's connected token first
