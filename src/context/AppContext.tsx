@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
   UserProfile,
   Customer,
@@ -22,6 +22,7 @@ import { StorageService, getCleanDefaultSettings } from '@/services/storage';
 import { deleteFromDriveFiles } from '@/lib/driveUploadClient';
 import { setActiveLanguage, setActiveCurrency, getActiveLanguage, getActiveCurrency, LanguageOption, CurrencyOption, t } from '@/lib/i18n';
 import { syncLiveExchangeRates } from '@/lib/currencyService';
+import { getSupabaseClient } from '@/lib/supabase';
 
 export const defaultEmptyProfile: UserProfile = {
   id: '',
@@ -235,6 +236,65 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const openAuthModal = () => setIsAuthModalOpen(true);
   const closeAuthModal = () => setIsAuthModalOpen(false);
 
+  // --- REALTIME MULTI-DEVICE LIVE SYNC ENGINE ---
+  const myDeviceIdRef = useRef<string>('');
+  const realtimeChannelRef = useRef<any>(null);
+  const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+  const lastCloudSyncTimestampRef = useRef<number>(Date.now());
+  const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isSyncingFromCloudRef = useRef<boolean>(false);
+  const currentUserRef = useRef<UserProfile | null>(currentUser);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
+  // Broadcast data changes to other tabs and other devices in real time
+  const broadcastRealtimeChange = (userId: string, action: string) => {
+    if (!userId) return;
+    const deviceId = myDeviceIdRef.current;
+    const timestamp = Date.now();
+
+    // 1. Supabase Realtime WebSocket broadcast to other devices
+    try {
+      if (realtimeChannelRef.current) {
+        realtimeChannelRef.current.send({
+          type: 'broadcast',
+          event: 'khatapro_device_sync',
+          payload: {
+            userId,
+            originDeviceId: deviceId,
+            action,
+            timestamp,
+          },
+        });
+      }
+    } catch (wsErr) {
+      console.warn('Realtime broadcast error:', wsErr);
+    }
+
+    // 2. Browser BroadcastChannel to all other tabs on the same machine
+    try {
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.postMessage({
+          userId,
+          originDeviceId: deviceId,
+          action,
+          timestamp,
+        });
+      }
+    } catch (bcErr) {
+      console.warn('BroadcastChannel error:', bcErr);
+    }
+
+    // 3. Fallback localStorage ping for cross-tab storage listener
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('khatapro_realtime_ping', `${deviceId}_${timestamp}`);
+      }
+    } catch {}
+  };
+
   // Sync all in-memory and local data to Supabase Cloud PostgreSQL
   const syncWithDatabase = async (targetUser?: UserProfile | null) => {
     const activeU = targetUser !== undefined ? targetUser : currentUser;
@@ -285,6 +345,9 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
       if (res.ok) {
         setCloudSyncStatus('synced');
+        lastCloudSyncTimestampRef.current = Date.now();
+        // ⚡ Instantly broadcast live update to all other devices & tabs!
+        broadcastRealtimeChange(userId, 'database_update');
       } else {
         setCloudSyncStatus('error');
       }
@@ -295,14 +358,37 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   };
 
   // Load user data from Supabase Cloud PostgreSQL
-  const loadUserDataFromCloud = async (userId: string) => {
+  const loadUserDataFromCloud = async (userId: string, silent: boolean = false) => {
     try {
-      setCloudSyncStatus('syncing');
+      if (!silent) setCloudSyncStatus('syncing');
       const res = await fetch(`/api/db/sync?userId=${userId}`);
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
           const d = json.data;
+
+          // If silently received live update from another device, check for new payment to chime
+          if (silent && Array.isArray(d.transactions)) {
+            try {
+              const prevTxns = StorageService.getTransactions();
+              const prevIds = new Set(prevTxns.map((t: any) => t.id));
+              const incomingPayment = d.transactions.find(
+                (t: any) =>
+                  !prevIds.has(t.id) &&
+                  (t.type === 'collection' || t.type === 'credit' || t.type === 'income')
+              );
+              if (incomingPayment) {
+                playPaymentNotificationSound();
+                addToast(
+                  '💰 Payment Received (Live Sync)',
+                  `₹${Number(incomingPayment.amount).toLocaleString('en-IN')} received from ${incomingPayment.customerName || 'Customer'}.`,
+                  'success',
+                  incomingPayment
+                );
+              }
+            } catch {}
+          }
+
           // Accurately reflect cloud state (even if empty after deletions)
           if (Array.isArray(d.customers)) setCustomers(d.customers);
           if (Array.isArray(d.transactions)) setTransactions(d.transactions);
@@ -431,15 +517,180 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           // Update local cache
           StorageService.setAllUserData(d);
           setCloudSyncStatus('synced');
+          lastCloudSyncTimestampRef.current = Date.now();
           return;
         }
       }
       setCloudSyncStatus('synced');
+      lastCloudSyncTimestampRef.current = Date.now();
     } catch (err) {
       console.warn('Could not load user data from cloud:', err);
       setCloudSyncStatus('offline');
     }
   };
+
+  // Debounced cloud reload when changes arrive from other devices/tabs
+  const debouncedLoadFromCloud = (userId: string, actionName?: string) => {
+    if (!userId || isSyncingFromCloudRef.current) return;
+
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+    }
+
+    loadTimeoutRef.current = setTimeout(async () => {
+      try {
+        isSyncingFromCloudRef.current = true;
+        console.log(`⚡ [Realtime Live Sync] Refreshing ledger from Supabase Cloud (${actionName || 'remote update'})...`);
+        await loadUserDataFromCloud(userId, true /* silent mode */);
+      } finally {
+        isSyncingFromCloudRef.current = false;
+      }
+    }, 250);
+  };
+
+  // --- REALTIME WEBSOCKET & MULTI-DEVICE LIVE SYNC LISTENER ---
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const userId = currentUser.id;
+
+    if (!myDeviceIdRef.current) {
+      myDeviceIdRef.current = 'dev_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now();
+    }
+
+    // 1. Browser BroadcastChannel for instant same-device multi-tab sync (<5ms)
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        const bc = new BroadcastChannel(`khatapro_sync_${userId}`);
+        bc.onmessage = (event) => {
+          const data = event.data;
+          if (data && data.originDeviceId !== myDeviceIdRef.current && data.userId === userId) {
+            debouncedLoadFromCloud(userId, data.action || 'tab_sync');
+          }
+        };
+        broadcastChannelRef.current = bc;
+      } catch (e) {
+        console.warn('BroadcastChannel initialization error:', e);
+      }
+    }
+
+    // 2. Storage event listener fallback for cross-tab sync
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'khatapro_realtime_ping' && e.newValue) {
+        const [originId] = e.newValue.split('_');
+        if (originId !== myDeviceIdRef.current) {
+          debouncedLoadFromCloud(userId, 'storage_event');
+        }
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', handleStorageEvent);
+    }
+
+    // 3. Connect Supabase Realtime WebSocket for cross-device live sync
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        const channelName = `khatapro_realtime_${userId}`;
+        const channel = supabase.channel(channelName, {
+          config: {
+            broadcast: { self: false },
+          },
+        });
+
+        // A. Listen for Realtime Broadcasts from other devices
+        channel.on('broadcast', { event: 'khatapro_device_sync' }, (message) => {
+          const payload = message.payload;
+          if (payload && payload.originDeviceId !== myDeviceIdRef.current && payload.userId === userId) {
+            debouncedLoadFromCloud(userId, payload.action || 'device_broadcast');
+          }
+        });
+
+        // B. Listen for PostgreSQL Changes on user tables (CDC)
+        channel.on(
+          'postgres_changes',
+          { event: '*', schema: 'public', filter: `user_id=eq.${userId}` },
+          (payload) => {
+            debouncedLoadFromCloud(userId, `postgres_${payload.table}`);
+          }
+        );
+
+        // C. Listen for global config / branding changes
+        channel.on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'global_config' },
+          () => {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('khatapro_branding_updated'));
+              window.dispatchEvent(new CustomEvent('skp_branding_updated'));
+            }
+          }
+        );
+
+        channel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log(`🟢 [Realtime Live Sync] Connected to Supabase channel: ${channelName}`);
+          }
+        });
+
+        realtimeChannelRef.current = channel;
+      } catch (subErr) {
+        console.warn('Supabase Realtime subscription error:', subErr);
+      }
+    }
+
+    // 4. Tab Focus & Visibility Change Listeners (wakes up mobile device / inactive tab)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        const elapsed = Date.now() - lastCloudSyncTimestampRef.current;
+        if (elapsed > 6000) {
+          debouncedLoadFromCloud(userId, 'visibility_change');
+        }
+      }
+    };
+    const handleFocus = () => {
+      const elapsed = Date.now() - lastCloudSyncTimestampRef.current;
+      if (elapsed > 6000) {
+        debouncedLoadFromCloud(userId, 'window_focus');
+      }
+    };
+    const handleOnline = () => {
+      debouncedLoadFromCloud(userId, 'network_online');
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleFocus);
+      window.addEventListener('online', handleOnline);
+      document.addEventListener('visibilitychange', handleVisibility);
+    }
+
+    // 5. Lightweight safety polling interval (every 20s when tab is active)
+    const pollingInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        const elapsed = Date.now() - lastCloudSyncTimestampRef.current;
+        if (elapsed > 18000) {
+          debouncedLoadFromCloud(userId, 'heartbeat_poll');
+        }
+      }
+    }, 20000);
+
+    return () => {
+      if (broadcastChannelRef.current) {
+        try { broadcastChannelRef.current.close(); } catch {}
+        broadcastChannelRef.current = null;
+      }
+      if (realtimeChannelRef.current && supabase) {
+        try { supabase.removeChannel(realtimeChannelRef.current); } catch {}
+        realtimeChannelRef.current = null;
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleFocus);
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('storage', handleStorageEvent);
+        document.removeEventListener('visibilitychange', handleVisibility);
+      }
+      clearInterval(pollingInterval);
+    };
+  }, [currentUser?.id]);
 
   // Login handler
   const login = async (loginEmail: string, loginPass: string) => {
