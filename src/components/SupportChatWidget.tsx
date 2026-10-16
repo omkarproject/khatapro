@@ -24,6 +24,9 @@ import {
   Trash2,
   Maximize2,
   Minimize2,
+  Phone,
+  Mail,
+  MessageCircle
 } from 'lucide-react';
 
 export default function SupportChatWidget() {
@@ -37,18 +40,42 @@ export default function SupportChatWidget() {
   const [ticketFilter, setTicketFilter] = useState<'all' | 'open' | 'in_progress' | 'closed'>('all');
   const [ticketSearch, setTicketSearch] = useState('');
 
-  // Listen for programmatic open requests (e.g. from Dashboard Support Card)
+  const isAdmin = Boolean(
+    currentUser?.role === 'admin' ||
+    currentUser?.role === 'super_admin' ||
+    currentUser?.email === 'anantyadav8924@gmail.com'
+  );
+
+  // Listen for programmatic open requests (e.g. from Dashboard Support Card or Navbar Alerts)
   useEffect(() => {
     const handleOpenSupport = (e: any) => {
       setIsOpen(true);
       setIsMinimized(false);
+      fetchTickets();
       if (e?.detail?.ticketId) {
         setActiveTicketId(e.detail.ticketId);
+        fetch('/api/support/tickets', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ticketId: e.detail.ticketId,
+            markReadBy: isAdmin ? 'admin' : 'merchant',
+          }),
+        }).catch(() => {});
       }
     };
+
+    const handleTicketCreated = () => {
+      fetchTickets();
+    };
+
     window.addEventListener('open_support_chat', handleOpenSupport);
-    return () => window.removeEventListener('open_support_chat', handleOpenSupport);
-  }, []);
+    window.addEventListener('khatapro_ticket_created', handleTicketCreated);
+    return () => {
+      window.removeEventListener('open_support_chat', handleOpenSupport);
+      window.removeEventListener('khatapro_ticket_created', handleTicketCreated);
+    };
+  }, [isAdmin]);
 
   // New ticket state (Merchant)
   const [isCreatingTicket, setIsCreatingTicket] = useState(false);
@@ -69,12 +96,6 @@ export default function SupportChatWidget() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const newTicketFileInputRef = useRef<HTMLInputElement>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
-
-  const isAdmin = Boolean(
-    currentUser?.role === 'admin' ||
-    currentUser?.role === 'super_admin' ||
-    currentUser?.email === 'anantyadav8924@gmail.com'
-  );
 
   // Fetch tickets
   const fetchTickets = async (silent = false) => {
@@ -433,6 +454,70 @@ export default function SupportChatWidget() {
                       >
                         {activeTicket.status.replace('_', ' ')}
                       </span>
+                    )}
+                  </div>
+
+                  {/* Customer / Inquiry Information Details Card */}
+                  <div className="px-3.5 py-2.5 bg-indigo-50/50 dark:bg-slate-900/90 border-b border-indigo-100/70 dark:border-slate-800 space-y-1.5 shrink-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-xs font-black text-slate-900 dark:text-white leading-tight">
+                          {activeTicket.subject}
+                        </div>
+                        <div className="text-[11px] text-slate-600 dark:text-slate-400 font-medium mt-0.5">
+                          Sender: <span className="font-bold text-slate-800 dark:text-slate-200">{activeTicket.userName || 'Customer'}</span>
+                        </div>
+                      </div>
+                      <span className="text-[9.5px] text-slate-400 font-mono shrink-0">
+                        {new Date(activeTicket.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    {/* Direct Contact Actions: Phone / WhatsApp / Email */}
+                    {(activeTicket.userPhone || activeTicket.userEmail) && (
+                      <div className="flex items-center gap-1.5 pt-1 border-t border-indigo-100/80 dark:border-slate-800/80 flex-wrap">
+                        {activeTicket.userPhone && (
+                          <>
+                            <a
+                              href={`tel:${activeTicket.userPhone}`}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-[10.5px] font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-slate-700 shadow-xs transition-colors"
+                              title="Call Customer"
+                            >
+                              <Phone className="w-3 h-3 text-indigo-500" />
+                              <span>{activeTicket.userPhone}</span>
+                            </a>
+
+                            {(() => {
+                              let digits = activeTicket.userPhone.replace(/\D/g, '');
+                              if (digits.startsWith('0') && digits.length === 11) digits = digits.slice(1);
+                              if (digits.length === 10) digits = '91' + digits;
+                              return digits ? (
+                                <a
+                                  href={`https://wa.me/${digits}?text=${encodeURIComponent(`Hello ${activeTicket.userName || ''}, regarding your inquiry ticket ${activeTicket.ticketNo} on ${settings?.websiteName || 'KhataPro'}:`)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-[10.5px] font-bold text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60 shadow-xs transition-colors"
+                                  title="Chat on WhatsApp"
+                                >
+                                  <MessageCircle className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                  <span>WhatsApp</span>
+                                </a>
+                              ) : null;
+                            })()}
+                          </>
+                        )}
+
+                        {activeTicket.userEmail && (
+                          <a
+                            href={`mailto:${activeTicket.userEmail}?subject=${encodeURIComponent(`Re: [${activeTicket.ticketNo}] ${activeTicket.subject}`)}`}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-[10.5px] font-bold text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700 shadow-xs transition-colors"
+                            title="Send Email"
+                          >
+                            <Mail className="w-3 h-3 text-blue-500" />
+                            <span>{activeTicket.userEmail}</span>
+                          </a>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -819,10 +904,10 @@ export default function SupportChatWidget() {
                             )}
 
                             <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
-                              <span>
-                                {isAdmin ? `Merchant: ${t.userName}` : `Category: ${t.category}`}
+                              <span className="truncate max-w-[200px]">
+                                {isAdmin ? `From: ${t.userName}${t.userPhone ? ` (${t.userPhone})` : ''}` : `Category: ${t.category}`}
                               </span>
-                              <span>{new Date(t.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              <span className="shrink-0">{new Date(t.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             </div>
                           </div>
                         );

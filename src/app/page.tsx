@@ -124,7 +124,7 @@ export default function DashboardPage() {
 
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
 
-  React.useEffect(() => {
+  const fetchSupportTickets = React.useCallback(() => {
     if (currentUser) {
       fetch(`/api/support/tickets?userId=${encodeURIComponent(currentUser.id)}&isAdmin=${isAdmin}`)
         .then(r => r.json())
@@ -136,6 +136,17 @@ export default function DashboardPage() {
         .catch(() => {});
     }
   }, [currentUser, isAdmin]);
+
+  React.useEffect(() => {
+    fetchSupportTickets();
+    const interval = setInterval(fetchSupportTickets, 15000);
+    const handleTicketCreated = () => fetchSupportTickets();
+    window.addEventListener('khatapro_ticket_created', handleTicketCreated);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('khatapro_ticket_created', handleTicketCreated);
+    };
+  }, [fetchSupportTickets]);
 
   const supportStats = useMemo(() => {
     const open = supportTickets.filter(t => t.status === 'open').length;
@@ -495,9 +506,16 @@ export default function DashboardPage() {
 
           {/* Right: Compact Stats + Action Button */}
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
-            <div className="flex items-center gap-1 bg-slate-100/70 dark:bg-slate-800/60 p-0.5 rounded-lg border border-slate-200/60 dark:border-slate-800 text-[10px]">
-              <span className="px-1.5 py-0.5 rounded font-bold flex items-center gap-1 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('open_support_chat'));
+              }}
+              title="Click to view all Support Tickets & Inquiries"
+              className="flex items-center gap-1 bg-slate-100/70 dark:bg-slate-800/60 p-0.5 rounded-lg border border-slate-200/60 dark:border-slate-800 text-[10px] hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors cursor-pointer"
+            >
+              <span className={`px-1.5 py-0.5 rounded font-bold flex items-center gap-1 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 ${supportStats.unread > 0 ? 'ring-1 ring-rose-500/30' : ''}`}>
+                <span className={`w-1.5 h-1.5 rounded-full bg-rose-500 ${supportStats.unread > 0 ? 'animate-pulse' : ''}`} />
                 {supportStats.unread} {t('alerts', 'Alerts')}
               </span>
               <span className="px-1.5 py-0.5 rounded font-bold flex items-center gap-1 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50">
@@ -512,16 +530,29 @@ export default function DashboardPage() {
                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
                 {supportStats.closed} {t('solved', 'Solved')}
               </span>
-            </div>
+            </button>
 
             {isAdmin ? (
-              <Link
-                href="/settings?tab=users"
-                className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm flex items-center gap-1 shrink-0 transition-all"
-              >
-                <Users className="w-3 h-3" />
-                <span>Merchant CRM</span>
-              </Link>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent('open_support_chat'));
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm flex items-center gap-1 shrink-0 transition-all cursor-pointer"
+                  title="Open Live Support Tickets & Customer Inquiries"
+                >
+                  <MessageSquare className="w-3 h-3" />
+                  <span>Help Desk &amp; Inquiries</span>
+                </button>
+                <Link
+                  href="/settings?tab=users"
+                  className="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 shadow-xs flex items-center gap-1 shrink-0 transition-all"
+                >
+                  <Users className="w-3 h-3" />
+                  <span>CRM</span>
+                </Link>
+              </div>
             ) : (
               <button
                 type="button"

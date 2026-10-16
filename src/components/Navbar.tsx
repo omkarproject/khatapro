@@ -34,10 +34,12 @@ import {
   ClipboardList,
   CheckSquare,
   Coins,
-  Globe
+  Globe,
+  Headphones,
+  MessageSquare
 } from 'lucide-react';
 import { formatINR, formatDate } from '@/lib/utils';
-import { SavingsGoal, SavingsDeposit } from '@/types';
+import { SavingsGoal, SavingsDeposit, SupportTicket } from '@/types';
 import GlobalSearchModal from './GlobalSearchModal';
 import CurrencyLanguageModal from './CurrencyLanguageModal';
 import { getActiveCurrency, getActiveLanguage, t } from '@/lib/i18n';
@@ -260,6 +262,48 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     addToast('Funds Added', `Added ${formatINR(dep)} to ${activeDepositGoal.title}.`, 'success');
   };
 
+  // Support Tickets for Admin / Merchant alerts
+  const isAdmin = Boolean(
+    currentUser?.role === 'admin' ||
+    currentUser?.role === 'super_admin' ||
+    currentUser?.email === 'anantyadav8924@gmail.com'
+  );
+
+  const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
+
+  const fetchSupportTickets = React.useCallback(async () => {
+    if (!currentUser) return;
+    try {
+      const res = await fetch(`/api/support/tickets?userId=${encodeURIComponent(currentUser.id)}&isAdmin=${isAdmin}`);
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.tickets)) {
+        setSupportTickets(data.tickets);
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }, [currentUser, isAdmin]);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchSupportTickets();
+      const interval = setInterval(fetchSupportTickets, 15000);
+      const ticketCreatedHandler = () => {
+        fetchSupportTickets();
+      };
+      window.addEventListener('khatapro_ticket_created', ticketCreatedHandler);
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener('khatapro_ticket_created', ticketCreatedHandler);
+      };
+    }
+  }, [currentUser, fetchSupportTickets]);
+
+  const unreadSupportTickets = supportTickets.filter((t) => {
+    const isUnread = isAdmin ? t.unreadByAdmin : t.unreadByMerchant;
+    return isUnread && !dismissedAlerts.includes(`ticket_${t.id}`);
+  });
+
   // Compute active non-dismissed alerts
   const lowStockProducts = products.filter(
     (p) => p.currentStock <= p.minStock && !dismissedAlerts.includes(`low_stock_${p.id}`)
@@ -316,7 +360,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     return targetDate! <= todayStr;
   });
 
-  const totalAlerts = lowStockProducts.length + overdueReminders.length + dueSavingsGoals.length + activeNoteReminders.length + activeTaskReminders.length;
+  const totalAlerts = lowStockProducts.length + overdueReminders.length + dueSavingsGoals.length + activeNoteReminders.length + activeTaskReminders.length + unreadSupportTickets.length;
 
   const handleClearAllAlerts = () => {
     const allIds: string[] = [
@@ -325,6 +369,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
       ...overdueReminders.map((r) => `overdue_${r.id}`),
       ...activeNoteReminders.map((n) => `note_${n.id}`),
       ...activeTaskReminders.map((t) => `task_${t.id}`),
+      ...unreadSupportTickets.map((t) => `ticket_${t.id}`),
     ];
     setDismissedAlerts((prev) => {
       const next = Array.from(new Set([...prev, ...allIds]));
@@ -447,6 +492,74 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                   </div>
 
                   <div className="space-y-2.5 max-h-80 overflow-y-auto pr-0.5">
+                    {/* Unread Support Inquiries / Tickets (Admin & Merchant) */}
+                    {unreadSupportTickets.length > 0 && (
+                      <div className="space-y-2">
+                        {unreadSupportTickets.map((ticket) => (
+                          <div
+                            key={ticket.id}
+                            className="p-3 rounded-2xl bg-gradient-to-r from-indigo-50 to-purple-50/70 dark:from-indigo-950/40 dark:to-purple-950/30 border border-indigo-200/90 dark:border-indigo-800/60 space-y-2 relative group shadow-xs"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                  <Headphones className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-xs font-black text-indigo-950 dark:text-indigo-200 truncate">
+                                      {ticket.ticketNo}: {ticket.subject}
+                                    </span>
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-rose-500 text-white font-mono animate-pulse">
+                                      {isAdmin ? 'New Customer Inquiry' : 'Support Update'}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-indigo-700/90 dark:text-indigo-300 font-medium truncate">
+                                    Customer: <span className="font-bold">{ticket.userName || 'Customer'}</span>
+                                    {ticket.userPhone ? ` • 📞 ${ticket.userPhone}` : ''}
+                                    {ticket.userEmail ? ` • ✉️ ${ticket.userEmail}` : ''}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDismissAlert(`ticket_${ticket.id}`)}
+                                title="Dismiss this notification"
+                                className="p-1 rounded-lg text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-200 hover:bg-indigo-200/50 dark:hover:bg-indigo-900/50 transition-colors cursor-pointer shrink-0"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {ticket.messages && ticket.messages.length > 0 && (
+                              <p className="text-[11px] text-slate-600 dark:text-slate-300 bg-white/80 dark:bg-slate-900/80 p-2 rounded-xl border border-indigo-100/70 dark:border-indigo-900/40 line-clamp-2 leading-relaxed italic">
+                                "{ticket.messages[0].text}"
+                              </p>
+                            )}
+
+                            <div className="flex items-center justify-between gap-2 pt-0.5">
+                              <span className="text-[9px] text-slate-400 font-mono">
+                                {new Date(ticket.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsNotificationsOpen(false);
+                                  window.dispatchEvent(new CustomEvent('open_support_chat', { detail: { ticketId: ticket.id } }));
+                                }}
+                                className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-600/30 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5" />
+                                <span>Open Full Inquiry &amp; Chat</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     {/* Due Savings Goals Notifications */}
                     {dueSavingsGoals.length > 0 && (
                       <div className="space-y-2">

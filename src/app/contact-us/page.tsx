@@ -13,7 +13,10 @@ import {
   MessageCircle,
   Building2,
   CheckCircle2,
-  ArrowLeft
+  ArrowLeft,
+  Loader2,
+  Ticket,
+  Headphones
 } from 'lucide-react';
 
 export default function ContactUsPage() {
@@ -24,6 +27,8 @@ export default function ContactUsPage() {
   const [subject, setSubject] = useState('Payment / Billing Inquiry');
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createdTicketNo, setCreatedTicketNo] = useState<string | null>(null);
 
   const [localBrand, setLocalBrand] = useState<any>(() => {
     if (typeof window !== 'undefined') {
@@ -78,14 +83,47 @@ export default function ContactUsPage() {
     return digits;
   })();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !message) {
+    if (!name.trim() || !email.trim() || !message.trim()) {
       addToast('Missing Fields', 'Please fill in your name, email and message.', 'error');
       return;
     }
-    setSubmitted(true);
-    addToast('Message Sent', 'Thank you! Our support team will get back to you within 2-4 hours.', 'success');
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/support/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create_ticket',
+          userId: currentUser?.id || `guest_${Date.now()}`,
+          userName: name.trim(),
+          userEmail: email.trim(),
+          userPhone: phone.trim() || undefined,
+          subject: `[Inquiry: ${subject}] ${name.trim()}`,
+          category: subject.includes('Payment') || subject.includes('Pricing') ? 'Billing' : 'General',
+          priority: 'high',
+          initialMessage: `[Inquiry Category: ${subject}]\nCustomer: ${name.trim()}\nEmail: ${email.trim()}\nPhone: ${phone.trim() || 'N/A'}\n\nInquiry Message / Details:\n${message.trim()}`,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && data.ticket) {
+        setCreatedTicketNo(data.ticket.ticketNo);
+        setSubmitted(true);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('khatapro_ticket_created', { detail: data.ticket }));
+        }
+        addToast('Inquiry Submitted! 🎫', `Ticket #${data.ticket.ticketNo} has been forwarded to the admin live support desk.`, 'success');
+      } else {
+        throw new Error(data.message || 'Failed to submit inquiry');
+      }
+    } catch (err: any) {
+      addToast('Submission Error', err.message || 'Could not send inquiry. Please check your connection.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -224,23 +262,44 @@ export default function ContactUsPage() {
             </p>
 
             {submitted ? (
-              <div className="p-8 text-center space-y-4 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-800 animate-in zoom-in-95">
+              <div className="p-8 text-center space-y-4 bg-emerald-50 dark:bg-emerald-950/40 rounded-3xl border border-emerald-200 dark:border-emerald-800 animate-in zoom-in-95">
                 <div className="w-14 h-14 bg-emerald-500 text-white rounded-full flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/30">
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-emerald-900 dark:text-emerald-100">Inquiry Received Successfully</h3>
-                  <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1 max-w-md mx-auto">
-                    Your reference ticket has been generated. Our executive will reach out to you at <strong>{email}</strong> or <strong>{phone}</strong> shortly.
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 font-mono font-black text-xs mb-2">
+                    <Ticket className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Ticket #{createdTicketNo || 'GENERATED'}</span>
+                  </div>
+                  <h3 className="text-base font-bold text-emerald-900 dark:text-emerald-100">Inquiry &amp; Ticket Submitted Successfully</h3>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1.5 max-w-md mx-auto leading-relaxed">
+                    Your inquiry has been registered in our central database. Our admin live support desk has received the alert and will reach out to you at <strong>{email}</strong>{phone ? <> or <strong>{phone}</strong></> : ''} promptly.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSubmitted(false)}
-                  className="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 text-xs font-bold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700 shadow-xs cursor-pointer hover:bg-emerald-50"
-                >
-                  Submit Another Inquiry
-                </button>
+
+                <div className="flex items-center justify-center gap-3 pt-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubmitted(false);
+                      setMessage('');
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800 text-xs font-bold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700 shadow-xs cursor-pointer hover:bg-emerald-50"
+                  >
+                    Submit Another Inquiry
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('open_support_chat'));
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Headphones className="w-3.5 h-3.5" />
+                    <span>Open Live Support Desk</span>
+                  </button>
+                </div>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4 text-xs">
@@ -323,10 +382,20 @@ export default function ContactUsPage() {
 
                 <button
                   type="submit"
-                  className="w-full sm:w-auto px-8 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all cursor-pointer"
+                  disabled={isSubmitting}
+                  className="w-full sm:w-auto px-8 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all cursor-pointer"
                 >
-                  <Send className="w-4 h-4" />
-                  <span>Submit Inquiry</span>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Sending Inquiry...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      <span>Submit Inquiry</span>
+                    </>
+                  )}
                 </button>
               </form>
             )}
