@@ -10,6 +10,9 @@ export interface GlobalWebsiteBranding {
   websiteSupportLocation: string;
   websiteSupportPhone: string;
   websiteSupportEmail: string;
+  termsAndConditions?: string;
+  refundAndCancellation?: string;
+  privacyPolicy?: string;
 }
 
 export const DEFAULT_BRANDING: GlobalWebsiteBranding = {
@@ -22,6 +25,9 @@ export const DEFAULT_BRANDING: GlobalWebsiteBranding = {
   websiteSupportLocation: '',
   websiteSupportPhone: '',
   websiteSupportEmail: '',
+  termsAndConditions: '',
+  refundAndCancellation: '',
+  privacyPolicy: '',
 };
 
 /**
@@ -52,6 +58,9 @@ export async function getGlobalBrandingFromDb(): Promise<GlobalWebsiteBranding> 
               websiteSupportLocation: brand.websiteSupportLocation !== undefined && brand.websiteSupportLocation !== null ? brand.websiteSupportLocation : '',
               websiteSupportPhone: brand.websiteSupportPhone !== undefined && brand.websiteSupportPhone !== null ? brand.websiteSupportPhone : '',
               websiteSupportEmail: brand.websiteSupportEmail !== undefined && brand.websiteSupportEmail !== null ? brand.websiteSupportEmail : '',
+              termsAndConditions: brand.termsAndConditions !== undefined && brand.termsAndConditions !== null ? brand.termsAndConditions : '',
+              refundAndCancellation: brand.refundAndCancellation !== undefined && brand.refundAndCancellation !== null ? brand.refundAndCancellation : '',
+              privacyPolicy: brand.privacyPolicy !== undefined && brand.privacyPolicy !== null ? brand.privacyPolicy : '',
             };
           }
         }
@@ -80,6 +89,9 @@ export async function saveGlobalBrandingToDb(brand: Partial<GlobalWebsiteBrandin
     websiteSupportLocation: brand.websiteSupportLocation !== undefined ? brand.websiteSupportLocation : current.websiteSupportLocation,
     websiteSupportPhone: brand.websiteSupportPhone !== undefined ? brand.websiteSupportPhone : current.websiteSupportPhone,
     websiteSupportEmail: brand.websiteSupportEmail !== undefined ? brand.websiteSupportEmail : current.websiteSupportEmail,
+    termsAndConditions: brand.termsAndConditions !== undefined ? brand.termsAndConditions : (current.termsAndConditions || ''),
+    refundAndCancellation: brand.refundAndCancellation !== undefined ? brand.refundAndCancellation : (current.refundAndCancellation || ''),
+    privacyPolicy: brand.privacyPolicy !== undefined ? brand.privacyPolicy : (current.privacyPolicy || ''),
   };
 
   try {

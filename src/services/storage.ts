@@ -500,6 +500,9 @@ export const StorageService = {
             if (globalConf.websiteBranding.websiteSupportLocation !== undefined) s.websiteSupportLocation = globalConf.websiteBranding.websiteSupportLocation;
             if (globalConf.websiteBranding.websiteSupportPhone !== undefined) s.websiteSupportPhone = globalConf.websiteBranding.websiteSupportPhone;
             if (globalConf.websiteBranding.websiteSupportEmail !== undefined) s.websiteSupportEmail = globalConf.websiteBranding.websiteSupportEmail;
+            if (globalConf.websiteBranding.termsAndConditions !== undefined) s.termsAndConditions = globalConf.websiteBranding.termsAndConditions;
+            if (globalConf.websiteBranding.refundAndCancellation !== undefined) s.refundAndCancellation = globalConf.websiteBranding.refundAndCancellation;
+            if (globalConf.websiteBranding.privacyPolicy !== undefined) s.privacyPolicy = globalConf.websiteBranding.privacyPolicy;
           }
         }
         const rawBranding = localStorage.getItem('skp_global_branding');
@@ -514,7 +517,17 @@ export const StorageService = {
           if (brandConf.websiteSupportLocation !== undefined) s.websiteSupportLocation = brandConf.websiteSupportLocation;
           if (brandConf.websiteSupportPhone !== undefined) s.websiteSupportPhone = brandConf.websiteSupportPhone;
           if (brandConf.websiteSupportEmail !== undefined) s.websiteSupportEmail = brandConf.websiteSupportEmail;
+          if (brandConf.termsAndConditions !== undefined) s.termsAndConditions = brandConf.termsAndConditions;
+          if (brandConf.refundAndCancellation !== undefined) s.refundAndCancellation = brandConf.refundAndCancellation;
+          if (brandConf.privacyPolicy !== undefined) s.privacyPolicy = brandConf.privacyPolicy;
         }
+
+        const localTerms = localStorage.getItem('skp_policy_terms');
+        if (localTerms !== null) s.termsAndConditions = localTerms;
+        const localRefunds = localStorage.getItem('skp_policy_refunds');
+        if (localRefunds !== null) s.refundAndCancellation = localRefunds;
+        const localPrivacy = localStorage.getItem('skp_policy_privacy');
+        if (localPrivacy !== null) s.privacyPolicy = localPrivacy;
       } catch {}
     }
 
@@ -562,7 +575,10 @@ export const StorageService = {
       merged.websiteTagline !== undefined ||
       merged.websiteSupportLocation !== undefined ||
       merged.websiteSupportPhone !== undefined ||
-      merged.websiteSupportEmail !== undefined
+      merged.websiteSupportEmail !== undefined ||
+      merged.termsAndConditions !== undefined ||
+      merged.refundAndCancellation !== undefined ||
+      merged.privacyPolicy !== undefined
     ) {
       try {
         const brandObj = {
@@ -575,6 +591,9 @@ export const StorageService = {
           websiteSupportLocation: merged.websiteSupportLocation !== undefined ? merged.websiteSupportLocation : '',
           websiteSupportPhone: merged.websiteSupportPhone !== undefined ? merged.websiteSupportPhone : '',
           websiteSupportEmail: merged.websiteSupportEmail !== undefined ? merged.websiteSupportEmail : '',
+          termsAndConditions: merged.termsAndConditions !== undefined ? merged.termsAndConditions : (cur.termsAndConditions || ''),
+          refundAndCancellation: merged.refundAndCancellation !== undefined ? merged.refundAndCancellation : (cur.refundAndCancellation || ''),
+          privacyPolicy: merged.privacyPolicy !== undefined ? merged.privacyPolicy : (cur.privacyPolicy || ''),
         };
         if (typeof localStorage !== 'undefined') {
           localStorage.setItem('skp_global_branding', JSON.stringify(brandObj));
@@ -608,6 +627,15 @@ export const StorageService = {
           }
           if (brandObj.websiteSupportEmail !== undefined) {
             localStorage.setItem('skp_brand_support_email', brandObj.websiteSupportEmail);
+          }
+          if (brandObj.termsAndConditions !== undefined) {
+            localStorage.setItem('skp_policy_terms', brandObj.termsAndConditions);
+          }
+          if (brandObj.refundAndCancellation !== undefined) {
+            localStorage.setItem('skp_policy_refunds', brandObj.refundAndCancellation);
+          }
+          if (brandObj.privacyPolicy !== undefined) {
+            localStorage.setItem('skp_policy_privacy', brandObj.privacyPolicy);
           }
         }
         if (typeof document !== 'undefined') {

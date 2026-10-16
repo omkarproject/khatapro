@@ -1,16 +1,49 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { ArrowLeft, RefreshCw, ShieldCheck, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { isHtmlPolicy } from '@/lib/policyTemplates';
 
 export default function RefundAndCancellationPage() {
   const { settings, profile, currentUser } = useApp();
+  const [customContent, setCustomContent] = useState<string>(() => {
+    if (settings.refundAndCancellation) return settings.refundAndCancellation;
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('skp_policy_refunds') || '';
+    }
+    return '';
+  });
+
+  useEffect(() => {
+    if (settings.refundAndCancellation !== undefined) {
+      setCustomContent(settings.refundAndCancellation);
+    }
+  }, [settings.refundAndCancellation]);
+
+  useEffect(() => {
+    const handlePolicyUpdate = () => {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('skp_policy_refunds');
+        if (stored !== null) setCustomContent(stored);
+      }
+    };
+    window.addEventListener('khatapro_policy_updated', handlePolicyUpdate);
+    window.addEventListener('skp_branding_updated', handlePolicyUpdate);
+    return () => {
+      window.removeEventListener('khatapro_policy_updated', handlePolicyUpdate);
+      window.removeEventListener('skp_branding_updated', handlePolicyUpdate);
+    };
+  }, []);
+
   const businessName = settings.businessName || profile.businessName || currentUser?.businessName || settings.websiteName || 'Business';
   const businessPhone = settings.businessPhone || profile.phone || currentUser?.phone || '';
   const businessEmail = settings.businessEmail || profile.email || currentUser?.email || '';
   const businessAddress = settings.businessAddress || profile.businessAddress || '';
+
+  const hasCustom = Boolean(customContent && customContent.trim().length > 0);
+  const isHtml = hasCustom && isHtmlPolicy(customContent);
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-200">
@@ -59,9 +92,21 @@ export default function RefundAndCancellationPage() {
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-10 border border-slate-200 dark:border-slate-800 shadow-sm text-slate-700 dark:text-slate-300 text-xs sm:text-sm leading-relaxed space-y-6">
-        
-        <section className="space-y-2">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">1. Cancellation Policy</h2>
+        {hasCustom ? (
+          isHtml ? (
+            <div
+              className="prose prose-slate dark:prose-invert max-w-none text-xs sm:text-sm leading-relaxed space-y-4 [&>h2]:text-base [&>h2]:font-bold [&>h2]:text-slate-900 [&>h2]:dark:text-white [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:space-y-1"
+              dangerouslySetInnerHTML={{ __html: customContent }}
+            />
+          ) : (
+            <div className="whitespace-pre-wrap font-sans text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+              {customContent}
+            </div>
+          )
+        ) : (
+          <>
+            <section className="space-y-2">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">1. Cancellation Policy</h2>
           <p>
             At <strong>{businessName}</strong>, customer satisfaction is our prime priority. You may cancel your order or service subscription under the following guidelines:
           </p>
@@ -122,8 +167,9 @@ export default function RefundAndCancellationPage() {
             <div><strong>Working Hours:</strong> Monday to Saturday, 9:00 AM – 7:00 PM IST</div>
           </div>
         </section>
-
-      </div>
+      </>
+    )}
+  </div>
 
     </div>
   );

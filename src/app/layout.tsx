@@ -87,6 +87,9 @@ export default async function RootLayout({
                       if (serverBrand.websiteSupportLocation && !localStorage.getItem('skp_brand_support_location')) localStorage.setItem('skp_brand_support_location', serverBrand.websiteSupportLocation);
                       if (serverBrand.websiteSupportPhone && !localStorage.getItem('skp_brand_support_phone')) localStorage.setItem('skp_brand_support_phone', serverBrand.websiteSupportPhone);
                       if (serverBrand.websiteSupportEmail && !localStorage.getItem('skp_brand_support_email')) localStorage.setItem('skp_brand_support_email', serverBrand.websiteSupportEmail);
+                      if (serverBrand.termsAndConditions) localStorage.setItem('skp_policy_terms', serverBrand.termsAndConditions);
+                      if (serverBrand.refundAndCancellation) localStorage.setItem('skp_policy_refunds', serverBrand.refundAndCancellation);
+                      if (serverBrand.privacyPolicy) localStorage.setItem('skp_policy_privacy', serverBrand.privacyPolicy);
                     } catch(e) {}
                   }
 

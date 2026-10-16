@@ -410,6 +410,9 @@ export interface SystemSettings {
   websiteSupportLocation?: string;
   websiteSupportPhone?: string;
   websiteSupportEmail?: string;
+  termsAndConditions?: string;
+  refundAndCancellation?: string;
+  privacyPolicy?: string;
   broadcasts?: BroadcastMessage[];
   supportTickets?: SupportTicket[];
 }

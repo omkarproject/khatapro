@@ -1,16 +1,49 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { ArrowLeft, Shield, Lock, EyeOff, Server } from 'lucide-react';
+import { isHtmlPolicy } from '@/lib/policyTemplates';
 
 export default function PrivacyPolicyPage() {
   const { settings, profile, currentUser } = useApp();
+  const [customContent, setCustomContent] = useState<string>(() => {
+    if (settings.privacyPolicy) return settings.privacyPolicy;
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('skp_policy_privacy') || '';
+    }
+    return '';
+  });
+
+  useEffect(() => {
+    if (settings.privacyPolicy !== undefined) {
+      setCustomContent(settings.privacyPolicy);
+    }
+  }, [settings.privacyPolicy]);
+
+  useEffect(() => {
+    const handlePolicyUpdate = () => {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('skp_policy_privacy');
+        if (stored !== null) setCustomContent(stored);
+      }
+    };
+    window.addEventListener('khatapro_policy_updated', handlePolicyUpdate);
+    window.addEventListener('skp_branding_updated', handlePolicyUpdate);
+    return () => {
+      window.removeEventListener('khatapro_policy_updated', handlePolicyUpdate);
+      window.removeEventListener('skp_branding_updated', handlePolicyUpdate);
+    };
+  }, []);
+
   const businessName = settings.businessName || profile.businessName || currentUser?.businessName || settings.websiteName || 'Business';
   const businessPhone = settings.businessPhone || profile.phone || currentUser?.phone || '';
   const businessEmail = settings.businessEmail || profile.email || currentUser?.email || '';
   const businessAddress = settings.businessAddress || profile.businessAddress || '';
+
+  const hasCustom = Boolean(customContent && customContent.trim().length > 0);
+  const isHtml = hasCustom && isHtmlPolicy(customContent);
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-200">
@@ -38,76 +71,89 @@ export default function PrivacyPolicyPage() {
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-10 border border-slate-200 dark:border-slate-800 shadow-sm text-slate-700 dark:text-slate-300 text-xs sm:text-sm leading-relaxed space-y-6">
-        
-        <section className="space-y-2">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">1. Overview</h2>
-          <p>
-            At <strong>{businessName}</strong>, we are committed to safeguarding the privacy and security of your personal and business financial data. This Privacy Policy describes how we collect, process, and protect your information when you access {settings.websiteName || businessName || 'our services'} and execute online payments through our portals.
-          </p>
-        </section>
-
-        <section className="space-y-2">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">2. Information We Collect</h2>
-          <p>We only collect information necessary to facilitate business ledger accounting and commercial invoice settlements:</p>
-          <ul className="list-disc pl-5 space-y-1 text-xs">
-            <li><strong>Personal &amp; Business Details:</strong> Name, phone number, email address, business name, and GSTIN.</li>
-            <li><strong>Billing &amp; Delivery Information:</strong> Shipping/billing address for physical product fulfillment or invoices.</li>
-            <li><strong>Transaction Metadata:</strong> Order ID, payment amount in INR (₹), timestamp, and gateway reference (UTR/CF Payment ID).</li>
-          </ul>
-        </section>
-
-        <section className="space-y-2">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">3. Payment Security &amp; No Card Storage</h2>
-          <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 text-xs space-y-2">
-            <div className="flex items-center gap-2 font-bold text-indigo-900 dark:text-indigo-200">
-              <Lock className="w-4 h-4 text-indigo-600" />
-              <span>PCI-DSS Level 1 Encrypted Payment Processing</span>
+        {hasCustom ? (
+          isHtml ? (
+            <div
+              className="prose prose-slate dark:prose-invert max-w-none text-xs sm:text-sm leading-relaxed space-y-4 [&>h2]:text-base [&>h2]:font-bold [&>h2]:text-slate-900 [&>h2]:dark:text-white [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:space-y-1"
+              dangerouslySetInnerHTML={{ __html: customContent }}
+            />
+          ) : (
+            <div className="whitespace-pre-wrap font-sans text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+              {customContent}
             </div>
-            <p className="text-indigo-800 dark:text-indigo-300 leading-relaxed">
-              We <strong>NEVER store, process, or view your full credit/debit card numbers, CVVs, expiry dates, or banking passwords</strong> on our servers. All sensitive financial transactions are securely tokenized and processed through RBI-approved payment aggregators (including <strong>Cashfree Payments India Pvt. Ltd.</strong>) utilizing 256-Bit SSL military-grade encryption.
-            </p>
-          </div>
-        </section>
+          )
+        ) : (
+          <>
+            <section className="space-y-2">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">1. Overview</h2>
+              <p>
+                At <strong>{businessName}</strong>, we are committed to safeguarding the privacy and security of your personal and business financial data. This Privacy Policy describes how we collect, process, and protect your information when you access {settings.websiteName || businessName || 'our services'} and execute online payments through our portals.
+              </p>
+            </section>
 
-        <section className="space-y-2">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">4. How We Use Your Data</h2>
-          <p>Your information is used strictly to:</p>
-          <ul className="list-disc pl-5 space-y-1 text-xs">
-            <li>Generate authentic tax invoices and manage your customer ledger balance.</li>
-            <li>Deliver automated transaction notifications and receipts via WhatsApp or Email.</li>
-            <li>Verify successful payments and facilitate legitimate refund requests.</li>
-            <li>Prevent fraudulent transactions and comply with legal or taxation reporting mandates.</li>
-          </ul>
-        </section>
+            <section className="space-y-2">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">2. Information We Collect</h2>
+              <p>We only collect information necessary to facilitate business ledger accounting and commercial invoice settlements:</p>
+              <ul className="list-disc pl-5 space-y-1 text-xs">
+                <li><strong>Personal &amp; Business Details:</strong> Name, phone number, email address, business name, and GSTIN.</li>
+                <li><strong>Billing &amp; Delivery Information:</strong> Shipping/billing address for physical product fulfillment or invoices.</li>
+                <li><strong>Transaction Metadata:</strong> Order ID, payment amount in INR (₹), timestamp, and gateway reference (UTR/CF Payment ID).</li>
+              </ul>
+            </section>
 
-        <section className="space-y-2">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">5. Non-Disclosure &amp; Third-Party Sharing</h2>
-          <p>
-            We do not sell, rent, or trade your personal or business data to marketing agencies or unauthorized third parties. Information is only shared with authorized entities (such as Cashfree Payment Gateway and banking networks) solely for executing the authorized payment transaction.
-          </p>
-        </section>
+            <section className="space-y-2">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">3. Payment Security &amp; No Card Storage</h2>
+              <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 text-xs space-y-2">
+                <div className="flex items-center gap-2 font-bold text-indigo-900 dark:text-indigo-200">
+                  <Lock className="w-4 h-4 text-indigo-600" />
+                  <span>PCI-DSS Level 1 Encrypted Payment Processing</span>
+                </div>
+                <p className="text-indigo-800 dark:text-indigo-300 leading-relaxed">
+                  We <strong>NEVER store, process, or view your full credit/debit card numbers, CVVs, expiry dates, or banking passwords</strong> on our servers. All sensitive financial transactions are securely tokenized and processed through RBI-approved payment aggregators (including <strong>Cashfree Payments India Pvt. Ltd.</strong>) utilizing 256-Bit SSL military-grade encryption.
+                </p>
+              </div>
+            </section>
 
-        <section className="space-y-2">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">6. Data Retention &amp; Security Measures</h2>
-          <p>
-            We deploy strict physical, electronic, and organizational safeguards to protect customer data from unauthorized disclosure, loss, or alteration. Data is stored on secure cloud clusters with periodic encrypted backups.
-          </p>
-        </section>
+            <section className="space-y-2">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">4. How We Use Your Data</h2>
+              <p>Your information is used strictly to:</p>
+              <ul className="list-disc pl-5 space-y-1 text-xs">
+                <li>Generate authentic tax invoices and manage your customer ledger balance.</li>
+                <li>Deliver automated transaction notifications and receipts via WhatsApp or Email.</li>
+                <li>Verify successful payments and facilitate legitimate refund requests.</li>
+                <li>Prevent fraudulent transactions and comply with legal or taxation reporting mandates.</li>
+              </ul>
+            </section>
 
-        <section className="space-y-2 pt-4 border-t border-slate-100 dark:border-slate-800">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">7. Grievance Officer &amp; Contact Details</h2>
-          <p className="text-xs">
-            In accordance with the Information Technology Act 2000 and rules made thereunder, the name and contact details of our Grievance Officer are provided below:
-          </p>
-          <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs space-y-1">
-            <div><strong>Grievance Officer:</strong> Omkar Pandey / Compliance Desk</div>
-            <div><strong>Business Entity:</strong> {businessName}</div>
-            <div><strong>Registered Address:</strong> {businessAddress}</div>
-            <div><strong>Email:</strong> <a href={`mailto:${businessEmail}`} className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline">{businessEmail}</a></div>
-            <div><strong>Phone Helpline:</strong> {businessPhone}</div>
-          </div>
-        </section>
+            <section className="space-y-2">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">5. Non-Disclosure &amp; Third-Party Sharing</h2>
+              <p>
+                We do not sell, rent, or trade your personal or business data to marketing agencies or unauthorized third parties. Information is only shared with authorized entities (such as Cashfree Payment Gateway and banking networks) solely for executing the authorized payment transaction.
+              </p>
+            </section>
 
+            <section className="space-y-2">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">6. Data Retention &amp; Security Measures</h2>
+              <p>
+                We deploy strict physical, electronic, and organizational safeguards to protect customer data from unauthorized disclosure, loss, or alteration. Data is stored on secure cloud clusters with periodic encrypted backups.
+              </p>
+            </section>
+
+            <section className="space-y-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">7. Grievance Officer &amp; Contact Details</h2>
+              <p className="text-xs">
+                In accordance with the Information Technology Act 2000 and rules made thereunder, the name and contact details of our Grievance Officer are provided below:
+              </p>
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs space-y-1">
+                <div><strong>Grievance Officer:</strong> Omkar Pandey / Compliance Desk</div>
+                <div><strong>Business Entity:</strong> {businessName}</div>
+                <div><strong>Registered Address:</strong> {businessAddress}</div>
+                <div><strong>Email:</strong> <a href={`mailto:${businessEmail}`} className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline">{businessEmail}</a></div>
+                <div><strong>Phone Helpline:</strong> {businessPhone}</div>
+              </div>
+            </section>
+          </>
+        )}
       </div>
 
     </div>

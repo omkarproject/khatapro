@@ -76,9 +76,16 @@ import {
   LifeBuoy,
   Headphones,
   Trash,
+  Code,
 } from 'lucide-react';
 import GoogleDriveBackupPanel from '@/components/GoogleDriveBackupPanel';
 import CurrencyLanguageModal from '@/components/CurrencyLanguageModal';
+import {
+  getDefaultTermsTemplate,
+  getDefaultRefundsTemplate,
+  getDefaultPrivacyTemplate,
+  isHtmlPolicy,
+} from '@/lib/policyTemplates';
 import {
   SUPPORTED_LANGUAGES,
   SUPPORTED_CURRENCIES,
@@ -892,6 +899,138 @@ export default function SettingsPage() {
   const isInitializedRef = useRef(false);
   const lastSavedBaselineRef = useRef<any>(null);
 
+  // Website Policies Modal State & Handlers
+  const [activePolicyModal, setActivePolicyModal] = useState<'terms' | 'refunds' | 'privacy' | null>(null);
+  const [policyDraft, setPolicyDraft] = useState('');
+  const [isSavingPolicy, setIsSavingPolicy] = useState(false);
+  const [policyViewMode, setPolicyViewMode] = useState<'split' | 'edit' | 'preview'>('split');
+
+  const handleOpenPolicyModal = (type: 'terms' | 'refunds' | 'privacy') => {
+    setActivePolicyModal(type);
+    let currentVal = '';
+    if (type === 'terms') {
+      currentVal = settings.termsAndConditions || (typeof window !== 'undefined' ? localStorage.getItem('skp_policy_terms') || '' : '');
+    } else if (type === 'refunds') {
+      currentVal = settings.refundAndCancellation || (typeof window !== 'undefined' ? localStorage.getItem('skp_policy_refunds') || '' : '');
+    } else if (type === 'privacy') {
+      currentVal = settings.privacyPolicy || (typeof window !== 'undefined' ? localStorage.getItem('skp_policy_privacy') || '' : '');
+    }
+    setPolicyDraft(currentVal);
+  };
+
+  const handleLoadDefaultPolicyTemplate = () => {
+    const ctx = {
+      businessName: bName || settings.businessName || profile.businessName || currentUser?.businessName || webName || 'Business',
+      businessPhone: webSupportPhone || bPhone || settings.businessPhone || profile.phone || '',
+      businessEmail: webSupportEmail || bEmail || settings.businessEmail || profile.email || '',
+      businessAddress: bAddress || settings.businessAddress || profile.businessAddress || '',
+      websiteName: webName || settings.websiteName || 'Billing & Ledger System',
+    };
+    if (activePolicyModal === 'terms') {
+      setPolicyDraft(getDefaultTermsTemplate(ctx));
+    } else if (activePolicyModal === 'refunds') {
+      setPolicyDraft(getDefaultRefundsTemplate(ctx));
+    } else if (activePolicyModal === 'privacy') {
+      setPolicyDraft(getDefaultPrivacyTemplate(ctx));
+    }
+    addToast('Default Template Loaded', 'You can now customize it and click Save Policy Changes.', 'info');
+  };
+
+  const handleInsertHtmlTag = (tag: string) => {
+    const textarea = document.getElementById('policy-editor-textarea') as HTMLTextAreaElement | null;
+    if (!textarea) {
+      setPolicyDraft((prev) => prev + tag);
+      return;
+    }
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = policyDraft.substring(start, end);
+    let insertion = tag;
+    if (tag === 'p') insertion = `<p>${selected || 'Paragraph text here...'}</p>`;
+    else if (tag === 'h2') insertion = `<h2>${selected || 'Section Heading'}</h2>`;
+    else if (tag === 'h3') insertion = `<h3>${selected || 'Sub-heading'}</h3>`;
+    else if (tag === 'strong') insertion = `<strong>${selected || 'Bold text'}</strong>`;
+    else if (tag === 'ul') insertion = `<ul>\n  <li>${selected || 'Item 1'}</li>\n  <li>Item 2</li>\n</ul>`;
+    else if (tag === 'a') insertion = `<a href="https://example.com" class="text-indigo-600 underline">${selected || 'Link text'}</a>`;
+    else if (tag === 'box') insertion = `<div style="background: rgba(99, 102, 241, 0.08); padding: 14px; border-radius: 12px; margin: 12px 0;">\n  <strong>Note:</strong> ${selected || 'Important announcement or policy highlight'}\n</div>`;
+
+    const nextVal = policyDraft.substring(0, start) + insertion + policyDraft.substring(end);
+    setPolicyDraft(nextVal);
+  };
+
+  const handleSavePolicy = async () => {
+    if (!activePolicyModal) return;
+    setIsSavingPolicy(true);
+    try {
+      const updatedTerms = activePolicyModal === 'terms' ? policyDraft : (settings.termsAndConditions || '');
+      const updatedRefunds = activePolicyModal === 'refunds' ? policyDraft : (settings.refundAndCancellation || '');
+      const updatedPrivacy = activePolicyModal === 'privacy' ? policyDraft : (settings.privacyPolicy || '');
+
+      const brandPayload: any = {
+        websiteName: webName || settings.websiteName || '',
+        websiteLogo: webLogo || settings.websiteLogo || '',
+        websiteFavicon: webFavicon || settings.websiteFavicon || '',
+        websiteBadgeText: webBadgeText !== undefined ? webBadgeText : (settings.websiteBadgeText || ''),
+        websiteBadgeBg: webBadgeBg || settings.websiteBadgeBg || 'fintech-gradient-primary',
+        websiteTagline: webTagline !== undefined ? webTagline : (settings.websiteTagline || ''),
+        websiteSupportLocation: webSupportLocation || settings.websiteSupportLocation || '',
+        websiteSupportPhone: webSupportPhone || settings.websiteSupportPhone || '',
+        websiteSupportEmail: webSupportEmail || settings.websiteSupportEmail || '',
+        termsAndConditions: updatedTerms,
+        refundAndCancellation: updatedRefunds,
+        privacyPolicy: updatedPrivacy,
+      };
+
+      // 1. Save to Supabase Cloud Database via /api/system/config
+      try {
+        await fetch('/api/system/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ websiteBranding: brandPayload }),
+        });
+      } catch (err) {
+        console.warn('Could not save policy to Supabase API:', err);
+      }
+
+      // 2. Update local storage and context
+      const updatedSettings = StorageService.updateSettings({
+        ...settings,
+        termsAndConditions: updatedTerms,
+        refundAndCancellation: updatedRefunds,
+        privacyPolicy: updatedPrivacy,
+      });
+      updateSettings(updatedSettings);
+
+      if (activePolicyModal === 'terms') {
+        try { localStorage.setItem('skp_policy_terms', policyDraft); } catch {}
+      } else if (activePolicyModal === 'refunds') {
+        try { localStorage.setItem('skp_policy_refunds', policyDraft); } catch {}
+      } else if (activePolicyModal === 'privacy') {
+        try { localStorage.setItem('skp_policy_privacy', policyDraft); } catch {}
+      }
+
+      window.dispatchEvent(new CustomEvent('khatapro_policy_updated', {
+        detail: { type: activePolicyModal, content: policyDraft }
+      }));
+      window.dispatchEvent(new CustomEvent('skp_branding_updated', {
+        detail: brandPayload
+      }));
+
+      const policyTitle = activePolicyModal === 'terms'
+        ? 'Terms & Conditions'
+        : activePolicyModal === 'refunds'
+        ? 'Refunds & Cancellations'
+        : 'Privacy Policy';
+
+      addToast(`${policyTitle} Saved! 📜`, 'Policy database me live update ho gayi hai aur poore website pe active hai!', 'success');
+      setActivePolicyModal(null);
+    } catch (err: any) {
+      addToast('Error Saving Policy', err.message || 'Failed to save', 'error');
+    } finally {
+      setIsSavingPolicy(false);
+    }
+  };
+
   useEffect(() => {
     // If user has modified the form, never overwrite with background settings updates
     if (isBrandingDirtyRef.current) return;
@@ -1073,6 +1212,9 @@ export default function SettingsPage() {
       websiteSupportLocation: finalSupportLocation,
       websiteSupportPhone: finalSupportPhone,
       websiteSupportEmail: finalSupportEmail,
+      termsAndConditions: settings.termsAndConditions || (typeof window !== 'undefined' ? localStorage.getItem('skp_policy_terms') || '' : ''),
+      refundAndCancellation: settings.refundAndCancellation || (typeof window !== 'undefined' ? localStorage.getItem('skp_policy_refunds') || '' : ''),
+      privacyPolicy: settings.privacyPolicy || (typeof window !== 'undefined' ? localStorage.getItem('skp_policy_privacy') || '' : ''),
     };
     lastSavedBaselineRef.current = brandPayload;
 
@@ -3350,6 +3492,53 @@ export default function SettingsPage() {
                   </button>
                 )}
               </div>
+
+              {/* Website Legal Policies & Compliance Buttons (Requested by User) */}
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-indigo-500" />
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Legal Compliance &amp; Policies
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                    Live HTML / Text
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-snug">
+                  Edit policies with live split-screen editor &amp; real-time preview across entire website:
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenPolicyModal('terms')}
+                    className="flex items-center justify-center gap-1 px-2 py-2 rounded-xl text-[11px] font-bold bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-indigo-950/50 text-slate-700 hover:text-indigo-600 dark:text-slate-300 dark:hover:text-indigo-400 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-xs hover:border-indigo-300"
+                    title="Edit Terms & Conditions"
+                  >
+                    <FileText className="w-3.5 h-3.5 shrink-0 text-indigo-500" />
+                    <span className="truncate">Terms &amp; Cond.</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenPolicyModal('refunds')}
+                    className="flex items-center justify-center gap-1 px-2 py-2 rounded-xl text-[11px] font-bold bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-950/50 text-slate-700 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-emerald-400 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-xs hover:border-emerald-300"
+                    title="Edit Refunds & Cancellations"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+                    <span className="truncate">Refund Policy</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenPolicyModal('privacy')}
+                    className="flex items-center justify-center gap-1 px-2 py-2 rounded-xl text-[11px] font-bold bg-slate-100 hover:bg-purple-50 dark:bg-slate-800 dark:hover:bg-purple-950/50 text-slate-700 hover:text-purple-600 dark:text-slate-300 dark:hover:text-purple-400 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-xs hover:border-purple-300"
+                    title="Edit Privacy Policy"
+                  >
+                    <Shield className="w-3.5 h-3.5 shrink-0 text-purple-500" />
+                    <span className="truncate">Privacy Policy</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
           </div>
@@ -5193,6 +5382,290 @@ export default function SettingsPage() {
                 Got It, Close Guide
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Website Legal Policy Editor & Real-Time Split-Screen Preview Modal */}
+      {activePolicyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-6xl h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            
+            {/* Modal Header */}
+            <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-850 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className={`w-9 h-9 rounded-2xl flex items-center justify-center text-white shadow-xs ${
+                  activePolicyModal === 'terms'
+                    ? 'bg-gradient-to-br from-indigo-500 to-indigo-600'
+                    : activePolicyModal === 'refunds'
+                    ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
+                    : 'bg-gradient-to-br from-purple-500 to-pink-600'
+                }`}>
+                  {activePolicyModal === 'terms' ? (
+                    <FileText className="w-5 h-5" />
+                  ) : activePolicyModal === 'refunds' ? (
+                    <RefreshCw className="w-5 h-5" />
+                  ) : (
+                    <Shield className="w-5 h-5" />
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+                      {activePolicyModal === 'terms'
+                        ? 'Edit Terms & Conditions'
+                        : activePolicyModal === 'refunds'
+                        ? 'Edit Refunds & Cancellations Policy'
+                        : 'Edit Privacy Policy'}
+                    </h3>
+                    <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                      Public Customer Policy
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Supports Plain Text or HTML markup &bull; Updates live on{' '}
+                    <span className="font-mono text-slate-500">
+                      {activePolicyModal === 'terms' ? '/terms-and-conditions' : activePolicyModal === 'refunds' ? '/refund-and-cancellation' : '/privacy-policy'}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              {/* View Switcher & Close */}
+              <div className="flex items-center gap-2">
+                <div className="flex bg-slate-200/80 dark:bg-slate-800 p-0.5 rounded-xl text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setPolicyViewMode('split')}
+                    className={`px-2.5 py-1 rounded-lg transition-all ${
+                      policyViewMode === 'split'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-bold'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    }`}
+                  >
+                    Split View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPolicyViewMode('edit')}
+                    className={`px-2.5 py-1 rounded-lg transition-all ${
+                      policyViewMode === 'edit'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-bold'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    }`}
+                  >
+                    Editor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPolicyViewMode('preview')}
+                    className={`px-2.5 py-1 rounded-lg transition-all ${
+                      policyViewMode === 'preview'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-bold'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    }`}
+                  >
+                    Live Preview
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActivePolicyModal(null)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Quick HTML Helpers & Action Toolbar */}
+            <div className="px-5 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-800/40 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-[11px] font-bold text-slate-400 mr-1 flex items-center gap-1">
+                  <Code className="w-3.5 h-3.5" /> Quick HTML:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleInsertHtmlTag('h2')}
+                  className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-mono text-[11px] font-bold hover:border-indigo-400 cursor-pointer"
+                  title="Insert <h2> Heading"
+                >
+                  &lt;h2&gt;
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleInsertHtmlTag('h3')}
+                  className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-mono text-[11px] font-bold hover:border-indigo-400 cursor-pointer"
+                  title="Insert <h3> Subheading"
+                >
+                  &lt;h3&gt;
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleInsertHtmlTag('p')}
+                  className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-mono text-[11px] font-bold hover:border-indigo-400 cursor-pointer"
+                  title="Insert <p> Paragraph"
+                >
+                  &lt;p&gt;
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleInsertHtmlTag('strong')}
+                  className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-mono text-[11px] font-bold hover:border-indigo-400 cursor-pointer"
+                  title="Insert <strong> Bold"
+                >
+                  &lt;strong&gt;
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleInsertHtmlTag('ul')}
+                  className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-mono text-[11px] font-bold hover:border-indigo-400 cursor-pointer"
+                  title="Insert <ul> Bullet List"
+                >
+                  &lt;ul&gt;
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleInsertHtmlTag('a')}
+                  className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-mono text-[11px] font-bold hover:border-indigo-400 cursor-pointer"
+                  title="Insert <a> Link"
+                >
+                  &lt;a&gt;
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleInsertHtmlTag('box')}
+                  className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-semibold hover:border-indigo-400 cursor-pointer"
+                  title="Insert Highlight Box"
+                >
+                  Box Callout
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleLoadDefaultPolicyTemplate}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-900/60 transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Load Default Template</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPolicyDraft('')}
+                  className="px-2 py-1 rounded-xl text-xs font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+                  title="Clear text"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            {/* Split Screen Body */}
+            <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden bg-slate-100 dark:bg-slate-950 divide-y md:divide-y-0 md:divide-x divide-slate-200 dark:divide-slate-800">
+              
+              {/* Left Pane: Code / Plain Text Editor */}
+              {(policyViewMode === 'split' || policyViewMode === 'edit') && (
+                <div className={`flex flex-col h-full bg-slate-900 text-slate-200 font-mono text-xs overflow-hidden ${
+                  policyViewMode === 'split' ? 'w-full md:w-1/2' : 'w-full'
+                }`}>
+                  <div className="px-4 py-2 border-b border-slate-800 bg-slate-950/80 flex items-center justify-between text-[11px] text-slate-400 shrink-0">
+                    <span className="font-bold flex items-center gap-1.5 text-slate-300">
+                      <Code className="w-3.5 h-3.5 text-amber-400" />
+                      Editor (HTML &amp; Plain Text)
+                    </span>
+                    <span>{policyDraft.length} chars</span>
+                  </div>
+                  <textarea
+                    id="policy-editor-textarea"
+                    value={policyDraft}
+                    onChange={(e) => setPolicyDraft(e.target.value)}
+                    placeholder="Enter plain text or custom HTML code here... e.g. <h2>1. Introduction</h2> <p>Welcome to our company...</p>"
+                    className="flex-1 w-full p-4 bg-transparent resize-none text-slate-100 font-mono text-xs leading-relaxed outline-hidden focus:outline-hidden overflow-y-auto selection:bg-indigo-600/40"
+                    spellCheck={false}
+                  />
+                </div>
+              )}
+
+              {/* Right Pane: Live Customer Preview */}
+              {(policyViewMode === 'split' || policyViewMode === 'preview') && (
+                <div className={`flex flex-col h-full bg-slate-50 dark:bg-slate-900/60 overflow-hidden ${
+                  policyViewMode === 'split' ? 'w-full md:w-1/2' : 'w-full'
+                }`}>
+                  <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 shrink-0">
+                    <span className="font-bold flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
+                      <Eye className="w-3.5 h-3.5 text-emerald-500" />
+                      Live Customer Preview
+                    </span>
+                    <span className="font-mono text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                      {isHtmlPolicy(policyDraft) ? 'HTML Mode Active' : 'Plain Text Mode'}
+                    </span>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
+                      {policyDraft.trim().length === 0 ? (
+                        <div className="text-center py-12 text-slate-400">
+                          <FileText className="w-8 h-8 mx-auto mb-2 opacity-40 text-indigo-400" />
+                          <p className="text-xs font-semibold">No content yet</p>
+                          <p className="text-[11px] mt-1">
+                            Type text on the left or click &quot;Load Default Template&quot; to begin.
+                          </p>
+                        </div>
+                      ) : isHtmlPolicy(policyDraft) ? (
+                        <div
+                          className="prose prose-slate dark:prose-invert max-w-none text-xs sm:text-sm leading-relaxed space-y-4 [&>h2]:text-base [&>h2]:font-bold [&>h2]:text-slate-900 [&>h2]:dark:text-white [&>h3]:text-sm [&>h3]:font-bold [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:space-y-1"
+                          dangerouslySetInnerHTML={{ __html: policyDraft }}
+                        />
+                      ) : (
+                        <div className="whitespace-pre-wrap font-sans text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+                          {policyDraft}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-850 flex items-center justify-between shrink-0">
+              <div className="text-[11px] text-slate-400 hidden sm:flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Syncs directly to Supabase Cloud Database &amp; updates instantly across all pages</span>
+              </div>
+              <div className="flex items-center gap-2.5 ml-auto">
+                <button
+                  type="button"
+                  onClick={() => setActivePolicyModal(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSavePolicy}
+                  disabled={isSavingPolicy}
+                  className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+                >
+                  {isSavingPolicy ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving to Database...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Save Policy Changes</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
