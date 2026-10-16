@@ -469,6 +469,23 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
     // Load isolated data from Supabase Cloud for this user
     await loadUserDataFromCloud(user.id);
+
+    // Trigger instant cloud backup snapshot upon user login
+    try {
+      fetch(`/api/backup/google-drive/cron?force=true&auto=true&trigger=login&userId=${encodeURIComponent(user.id)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d?.success) {
+            console.log(`🛡️ Instant Login Backup Completed for ${user.name}:`, d.backup?.filename || d.message);
+          }
+        })
+        .catch(() => {});
+    } catch {}
+
     addToast('Signed In Successfully', `Welcome back, ${user.name}! Your Supabase Cloud ledger is loaded.`, 'success');
   };
 
