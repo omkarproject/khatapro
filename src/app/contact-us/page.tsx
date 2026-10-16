@@ -66,6 +66,18 @@ export default function ContactUsPage() {
   const displayEmail = supportEmail || settings.businessEmail || profile.email || currentUser?.email || 'support@khatapro.in';
   const businessGst = settings.paymentSettings?.businessGst || profile.businessGst || '';
 
+  const targetWhatsAppPhone = supportPhone || displayPhone;
+  const cleanWhatsAppNumber = (() => {
+    let digits = targetWhatsAppPhone.replace(/\D/g, '');
+    if (digits.startsWith('0') && digits.length === 11) {
+      digits = digits.slice(1);
+    }
+    if (digits.length === 10) {
+      digits = '91' + digits;
+    }
+    return digits;
+  })();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !message) {
@@ -102,9 +114,9 @@ export default function ContactUsPage() {
           </p>
         </div>
 
-        {displayPhone && (
+        {cleanWhatsAppNumber && (
           <a
-            href={`https://wa.me/${displayPhone.replace(/\D/g, '')}?text=Hello%20${encodeURIComponent(displayName)},%20I%20have%20an%20inquiry%20regarding%20billing%20and%20payment.`}
+            href={`https://wa.me/${cleanWhatsAppNumber}?text=Hello%20${encodeURIComponent(displayName)},%20I%20have%20an%20inquiry%20regarding%20billing%20and%20payment.`}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold shadow-lg shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
@@ -201,16 +213,6 @@ export default function ContactUsPage() {
 
             </div>
           </div>
-
-          <div className="p-5 rounded-3xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 text-xs text-indigo-950 dark:text-indigo-200 space-y-2">
-            <h3 className="font-extrabold flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-indigo-600" />
-              Cashfree &amp; RBI Payment Compliance
-            </h3>
-            <p className="text-[11px] leading-relaxed text-indigo-800 dark:text-indigo-300">
-              All payment collection transactions and refunds are routed through Cashfree Payment Gateway and NPCI UPI networks with 256-Bit SSL encryption.
-            </p>
-          </div>
         </div>
 
         {/* Right Column: Contact Inquiry Form */}
@@ -298,7 +300,7 @@ export default function ContactUsPage() {
                     >
                       <option value="Payment / Billing Inquiry">Payment / Billing Inquiry</option>
                       <option value="Refund & Cancellation Request">Refund &amp; Cancellation Request</option>
-                      <option value="Cashfree Payment Failure Assistance">Cashfree Payment Failure Assistance</option>
+                      <option value="Payment Failure Assistance">Payment Failure Assistance</option>
                       <option value="Product / Service Pricing (INR)">Product / Service Pricing (INR)</option>
                       <option value="Merchant Partnership">Merchant Partnership</option>
                     </select>
