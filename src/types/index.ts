@@ -352,7 +352,7 @@ export interface PaymentSettings {
   upiGatewayWebhookUrl?: string;
 }
 
-export type BackendProvider = 'local' | 'supabase' | 'firebase' | 'mongodb';
+export type BackendProvider = 'local' | 'supabase';
 
 export type BackupFrequency = 'daily' | 'every_2_days' | 'every_3_days' | 'weekly';
 export type BackupDayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
@@ -389,10 +389,6 @@ export interface SystemSettings {
   supabaseAnonKey?: string;
   supabaseServiceRoleKey?: string;
   googleDriveSettings?: GoogleDriveConfig;
-  firebaseApiKey?: string;
-  firebaseProjectId?: string;
-  mongodbUri?: string;
-  mongodbDbName?: string;
   businessName: string;
   businessLogo?: string;
   businessTagline: string;

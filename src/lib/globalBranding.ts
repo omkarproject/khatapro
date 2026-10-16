@@ -1,5 +1,4 @@
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
-import { connectToDatabase } from '@/lib/mongodb';
 
 export interface GlobalWebsiteBranding {
   websiteName: string;
@@ -26,11 +25,10 @@ export const DEFAULT_BRANDING: GlobalWebsiteBranding = {
 };
 
 /**
- * Server-side reader: Reads live global website branding from Supabase or MongoDB.
+ * Server-side reader: Reads live global website branding from Supabase PostgreSQL.
  * Ensures any device or browser that opens the website gets the live saved branding.
  */
 export async function getGlobalBrandingFromDb(): Promise<GlobalWebsiteBranding> {
-  // 1. Try Supabase
   try {
     if (isSupabaseConfigured()) {
       const supabase = getSupabaseAdmin();
@@ -63,36 +61,12 @@ export async function getGlobalBrandingFromDb(): Promise<GlobalWebsiteBranding> 
     console.warn('Supabase getGlobalBranding error:', err);
   }
 
-  // 2. Fallback to MongoDB
-  try {
-    const { db } = await connectToDatabase();
-    if (db) {
-      const doc = await db.collection('system_config').findOne({ id: 'global_config' });
-      if (doc && doc.websiteBranding) {
-        const brand = doc.websiteBranding;
-        return {
-          websiteName: brand.websiteName || '',
-          websiteLogo: brand.websiteLogo || '',
-          websiteFavicon: brand.websiteFavicon || '',
-          websiteBadgeText: brand.websiteBadgeText !== undefined ? brand.websiteBadgeText : '',
-          websiteBadgeBg: brand.websiteBadgeBg || 'fintech-gradient-primary',
-          websiteTagline: brand.websiteTagline || '',
-          websiteSupportLocation: brand.websiteSupportLocation || '',
-          websiteSupportPhone: brand.websiteSupportPhone || '',
-          websiteSupportEmail: brand.websiteSupportEmail || '',
-        };
-      }
-    }
-  } catch (err) {
-    console.warn('MongoDB getGlobalBranding error:', err);
-  }
-
   return DEFAULT_BRANDING;
 }
 
 /**
- * Server-side writer: Saves live global website branding to BOTH Supabase and MongoDB.
- * Dual-database persistence guarantees all devices and external users see updated branding.
+ * Server-side writer: Saves live global website branding to Supabase PostgreSQL.
+ * Guarantees all devices and external users see updated branding.
  */
 export async function saveGlobalBrandingToDb(brand: Partial<GlobalWebsiteBranding>): Promise<GlobalWebsiteBranding> {
   const current = await getGlobalBrandingFromDb();
@@ -108,7 +82,6 @@ export async function saveGlobalBrandingToDb(brand: Partial<GlobalWebsiteBrandin
     websiteSupportEmail: brand.websiteSupportEmail !== undefined ? brand.websiteSupportEmail : current.websiteSupportEmail,
   };
 
-  // 1. Save to Supabase
   try {
     if (isSupabaseConfigured()) {
       const supabase = getSupabaseAdmin();
@@ -134,25 +107,6 @@ export async function saveGlobalBrandingToDb(brand: Partial<GlobalWebsiteBrandin
     }
   } catch (err) {
     console.error('Failed to save branding in Supabase:', err);
-  }
-
-  // 2. Save to MongoDB
-  try {
-    const { db } = await connectToDatabase();
-    if (db) {
-      await db.collection('system_config').updateOne(
-        { id: 'global_config' },
-        {
-          $set: {
-            websiteBranding: merged,
-            updatedAt: new Date().toISOString(),
-          },
-        },
-        { upsert: true }
-      );
-    }
-  } catch (err) {
-    console.error('Failed to save branding in MongoDB:', err);
   }
 
   return merged;

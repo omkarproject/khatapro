@@ -21,7 +21,7 @@ export interface IBackendAdapter {
   deleteExpense(id: string): Promise<Expense[]>;
 }
 
-// Local Storage & Offline-First Implementation (Default)
+// Local Storage & Offline-First Implementation (Fallback)
 export class LocalAdapter implements IBackendAdapter {
   providerName: BackendProvider = 'local';
 
@@ -90,7 +90,7 @@ export class LocalAdapter implements IBackendAdapter {
   }
 }
 
-// Supabase Adapter with PostgreSQL & Row Level Security fallback
+// Supabase Adapter with PostgreSQL & Row Level Security
 export class SupabaseAdapter implements IBackendAdapter {
   providerName: BackendProvider = 'supabase';
   private url: string;
@@ -183,208 +183,6 @@ export class SupabaseAdapter implements IBackendAdapter {
   }
 }
 
-// Firebase Firestore Adapter
-export class FirebaseAdapter implements IBackendAdapter {
-  providerName: BackendProvider = 'firebase';
-  private apiKey: string;
-  private projectId: string;
-
-  constructor(apiKey: string = '', projectId: string = '') {
-    this.apiKey = apiKey;
-    this.projectId = projectId;
-  }
-
-  async testConnection(): Promise<{ success: boolean; message: string }> {
-    if (!this.projectId) {
-      return {
-        success: false,
-        message: 'Firebase Project ID is missing. Please enter it in Settings.',
-      };
-    }
-    try {
-      const res = await fetch(
-        `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents`,
-        { headers: this.apiKey ? { 'X-Goog-Api-Key': this.apiKey } : {} }
-      );
-      if (res.ok || res.status === 403 || res.status === 401) {
-        return { success: true, message: `Connected to Firebase project '${this.projectId}'.` };
-      }
-      return { success: false, message: `Firebase returned status: ${res.status}` };
-    } catch (e: any) {
-      return { success: false, message: `Could not reach Firebase Firestore: ${e.message}` };
-    }
-  }
-
-  async fetchCustomers(): Promise<Customer[]> {
-    return StorageService.getCustomers();
-  }
-
-  async saveCustomer(customer: Customer): Promise<Customer[]> {
-    return StorageService.saveCustomer(customer);
-  }
-
-  async deleteCustomer(id: string): Promise<Customer[]> {
-    return StorageService.deleteCustomer(id);
-  }
-
-  async fetchTransactions(): Promise<Transaction[]> {
-    return StorageService.getTransactions();
-  }
-
-  async addTransaction(txn: Transaction): Promise<Transaction[]> {
-    return StorageService.addTransaction(txn);
-  }
-
-  async deleteTransaction(id: string): Promise<Transaction[]> {
-    return StorageService.deleteTransaction(id);
-  }
-
-  async fetchInvoices(): Promise<Invoice[]> {
-    return StorageService.getInvoices();
-  }
-
-  async saveInvoice(invoice: Invoice): Promise<Invoice[]> {
-    return StorageService.saveInvoice(invoice);
-  }
-
-  async deleteInvoice(id: string): Promise<Invoice[]> {
-    return StorageService.deleteInvoice(id);
-  }
-
-  async fetchProducts(): Promise<Product[]> {
-    return StorageService.getProducts();
-  }
-
-  async saveProduct(product: Product): Promise<Product[]> {
-    return StorageService.saveProduct(product);
-  }
-
-  async deleteProduct(id: string): Promise<Product[]> {
-    return StorageService.deleteProduct(id);
-  }
-
-  async fetchExpenses(): Promise<Expense[]> {
-    return StorageService.getExpenses();
-  }
-
-  async addExpense(expense: Expense): Promise<Expense[]> {
-    return StorageService.addExpense(expense);
-  }
-
-  async deleteExpense(id: string): Promise<Expense[]> {
-    return StorageService.deleteExpense(id);
-  }
-}
-
-// MongoDB Atlas / Cloud Document DB Adapter (Live API connected)
-export class MongoAdapter implements IBackendAdapter {
-  providerName: BackendProvider = 'mongodb';
-  private uri: string;
-  private dbName: string;
-
-  constructor(uri: string = '', dbName: string = 'smartkhata_db') {
-    this.uri = uri;
-    this.dbName = dbName || 'smartkhata_db';
-  }
-
-  async testConnection(): Promise<{ success: boolean; message: string }> {
-    if (!this.uri) {
-      return {
-        success: false,
-        message: 'MongoDB Connection URI is missing. Please enter your MongoDB Atlas connection string in Settings.',
-      };
-    }
-    const cleanUri = this.uri.trim();
-    if (!cleanUri.startsWith('mongodb://') && !cleanUri.startsWith('mongodb+srv://')) {
-      return {
-        success: false,
-        message: 'Invalid MongoDB connection string. Must start with "mongodb://" or "mongodb+srv://".',
-      };
-    }
-
-    try {
-      const res = await fetch('/api/db/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uri: cleanUri, dbName: this.dbName }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        return {
-          success: true,
-          message: `Connected to MongoDB Atlas live! (${data.latency}ms latency) Database: '${data.database}'. Ready to store all records.`,
-        };
-      }
-      return {
-        success: false,
-        message: data.message || 'Could not connect to MongoDB Atlas cluster.',
-      };
-    } catch (e: any) {
-      return { success: false, message: `Network error reaching MongoDB API: ${e.message}` };
-    }
-  }
-
-  async fetchCustomers(): Promise<Customer[]> {
-    return StorageService.getCustomers();
-  }
-
-  async saveCustomer(customer: Customer): Promise<Customer[]> {
-    return StorageService.saveCustomer(customer);
-  }
-
-  async deleteCustomer(id: string): Promise<Customer[]> {
-    return StorageService.deleteCustomer(id);
-  }
-
-  async fetchTransactions(): Promise<Transaction[]> {
-    return StorageService.getTransactions();
-  }
-
-  async addTransaction(txn: Transaction): Promise<Transaction[]> {
-    return StorageService.addTransaction(txn);
-  }
-
-  async deleteTransaction(id: string): Promise<Transaction[]> {
-    return StorageService.deleteTransaction(id);
-  }
-
-  async fetchInvoices(): Promise<Invoice[]> {
-    return StorageService.getInvoices();
-  }
-
-  async saveInvoice(invoice: Invoice): Promise<Invoice[]> {
-    return StorageService.saveInvoice(invoice);
-  }
-
-  async deleteInvoice(id: string): Promise<Invoice[]> {
-    return StorageService.deleteInvoice(id);
-  }
-
-  async fetchProducts(): Promise<Product[]> {
-    return StorageService.getProducts();
-  }
-
-  async saveProduct(product: Product): Promise<Product[]> {
-    return StorageService.saveProduct(product);
-  }
-
-  async deleteProduct(id: string): Promise<Product[]> {
-    return StorageService.deleteProduct(id);
-  }
-
-  async fetchExpenses(): Promise<Expense[]> {
-    return StorageService.getExpenses();
-  }
-
-  async addExpense(expense: Expense): Promise<Expense[]> {
-    return StorageService.addExpense(expense);
-  }
-
-  async deleteExpense(id: string): Promise<Expense[]> {
-    return StorageService.deleteExpense(id);
-  }
-}
-
 export const BackendManager = {
   getAdapter(): IBackendAdapter {
     const settings: SystemSettings = StorageService.getSettings();
@@ -394,4 +192,3 @@ export const BackendManager = {
     return new SupabaseAdapter(settings.supabaseUrl, settings.supabaseAnonKey);
   }
 };
-

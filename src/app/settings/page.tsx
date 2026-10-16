@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { StorageService } from '@/services/storage';
 import { BackendProvider, SystemSettings, PaymentSettings, PaymentCollectionMode, TelegramBackupSettings, BackupFrequency, BackupDayOfWeek, BroadcastMessage, BroadcastType, BroadcastSeverity } from '@/types';
-import { LocalAdapter, SupabaseAdapter, FirebaseAdapter, MongoAdapter } from '@/services/backendManager';
+import { LocalAdapter, SupabaseAdapter } from '@/services/backendManager';
 import {
   Settings,
   Building,
@@ -793,11 +793,16 @@ export default function SettingsPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Backend Provider Settings State (Supabase Primary)
-  const [provider, setProvider] = useState<BackendProvider>('supabase');
+  // Backend Provider Settings State (Supabase Only)
   const [supabaseUrl, setSupabaseUrl] = useState(settings.supabaseUrl || 'https://axpbydzszykqwojamblh.supabase.co');
   const [supabaseAnonKey, setSupabaseAnonKey] = useState(settings.supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTIzNTcsImV4cCI6MjEwNzI4ODM1N30.MOkM9DqTFr5nB4mYj-Z3n9FEta1Pi0tSSJ0tTWxsxF0');
   const [supabaseServiceRoleKey, setSupabaseServiceRoleKey] = useState(settings.supabaseServiceRoleKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTcxMjM1NywiZXhwIjoyMTA3Mjg4MzU3fQ.oUgYxGo6-WWyioLkhmPuldiCWf4pANvEl7vnPyNyyNs');
+
+  useEffect(() => {
+    if (settings.supabaseUrl) setSupabaseUrl(settings.supabaseUrl);
+    if (settings.supabaseAnonKey) setSupabaseAnonKey(settings.supabaseAnonKey);
+    if (settings.supabaseServiceRoleKey) setSupabaseServiceRoleKey(settings.supabaseServiceRoleKey);
+  }, [settings.supabaseUrl, settings.supabaseAnonKey, settings.supabaseServiceRoleKey]);
 
   // Google Drive API Credentials State
   const [driveClientId, setDriveClientId] = useState(settings.googleDriveSettings?.clientId || '997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com');

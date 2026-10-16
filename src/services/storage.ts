@@ -261,7 +261,7 @@ export const StorageService = {
     }
   },
 
-  // Bulk set all user data from cloud MongoDB Atlas
+  // Bulk set all user data from cloud Supabase
   setAllUserData: (data: {
     customers?: Customer[];
     transactions?: Transaction[];
