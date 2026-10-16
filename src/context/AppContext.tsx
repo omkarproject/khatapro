@@ -215,13 +215,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Sync all in-memory and local data to Supabase Cloud PostgreSQL
   const syncWithDatabase = async (targetUser?: UserProfile | null) => {
-    const curSettings = StorageService.getSettings();
-    // In Local/Offline mode, keep data purely local (no cloud sync overhead)
-    if (curSettings.backendProvider === 'local') {
-      setCloudSyncStatus('synced');
-      return;
-    }
-
     const activeU = targetUser !== undefined ? targetUser : currentUser;
     const userId = activeU?.id || 'usr_001';
 
@@ -282,12 +275,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Load user data from Supabase Cloud PostgreSQL
   const loadUserDataFromCloud = async (userId: string) => {
     try {
-      const curSettings = StorageService.getSettings();
-      if (curSettings.backendProvider === 'local') {
-        setCloudSyncStatus('synced');
-        return;
-      }
-
       setCloudSyncStatus('syncing');
       const res = await fetch(`/api/db/sync?userId=${userId}`);
       if (res.ok) {

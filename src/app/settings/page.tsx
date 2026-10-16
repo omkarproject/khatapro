@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { StorageService } from '@/services/storage';
 import { BackendProvider, SystemSettings, PaymentSettings, PaymentCollectionMode, TelegramBackupSettings, BackupFrequency, BackupDayOfWeek, BroadcastMessage, BroadcastType, BroadcastSeverity } from '@/types';
-import { LocalAdapter, SupabaseAdapter } from '@/services/backendManager';
+import { SupabaseAdapter } from '@/services/backendManager';
 import {
   Settings,
   Building,
@@ -452,7 +452,7 @@ export default function SettingsPage() {
       const link = document.createElement('a');
       link.href = url;
       const mediaTag = includeMedia ? 'Full_WithMedia' : 'Compact_NoMedia';
-      const activeDb = settings.backendProvider.toUpperCase();
+      const activeDb = 'SUPABASE';
       link.download = `SmartKhataPro_${activeDb}_${mediaTag}_${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(link);
       link.click();
@@ -482,9 +482,7 @@ export default function SettingsPage() {
         const success = StorageService.restoreFullDatabaseJSON(text);
         if (success) {
           refreshData();
-          if (settings.backendProvider === 'supabase') {
-            await syncWithDatabase();
-          }
+          await syncWithDatabase();
           addToast('Database Restored', 'All ledgers, invoices, customers, and settings restored and synced!', 'success');
         } else {
           addToast('Restore Failed', 'Invalid JSON backup format.', 'error');
@@ -500,9 +498,7 @@ export default function SettingsPage() {
     if (confirm('Are you sure you want to reset all records back to default sample data?')) {
       StorageService.resetDefaults();
       refreshData();
-      if (settings.backendProvider === 'supabase') {
-        await syncWithDatabase();
-      }
+      await syncWithDatabase();
       addToast('Reset Complete', 'Loaded clean initial seed data.', 'info');
     }
   };
@@ -3703,7 +3699,7 @@ export default function SettingsPage() {
                   <div>✓ Customers &amp; Ledger Transactions</div>
                   <div>✓ GST Billing, Invoices &amp; Products</div>
                   <div>✓ Business Profile &amp; UPI QR Settings</div>
-                  <div>✓ Active DB Provider: <span className="font-bold text-indigo-600 dark:text-indigo-400 uppercase">{settings.backendProvider}</span></div>
+                  <div>✓ Active DB Provider: <span className="font-bold text-emerald-600 dark:text-emerald-400 uppercase">Supabase PostgreSQL</span></div>
                 </div>
               </div>
 
@@ -3766,7 +3762,7 @@ export default function SettingsPage() {
                       Click to select &amp; import <span className="text-emerald-600 font-extrabold">.json backup file</span>
                     </div>
                     <div className="text-[11px] text-slate-400 mt-0.5">
-                      Instantly restores to active <span className="uppercase font-semibold">{settings.backendProvider}</span> database
+                      Instantly restores to active <span className="uppercase font-semibold text-emerald-600">Supabase Cloud</span> database
                     </div>
                   </div>
                 </div>

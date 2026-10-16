@@ -352,7 +352,7 @@ export interface PaymentSettings {
   upiGatewayWebhookUrl?: string;
 }
 
-export type BackendProvider = 'local' | 'supabase';
+export type BackendProvider = 'supabase';
 
 export type BackupFrequency = 'daily' | 'every_2_days' | 'every_3_days' | 'weekly';
 export type BackupDayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
