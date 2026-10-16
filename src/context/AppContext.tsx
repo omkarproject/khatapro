@@ -312,7 +312,11 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           cd.folders.forEach(f => allDriveFolders.push({ ...f, customerId: c.id }));
         }
         if (Array.isArray(cd.files)) {
-          cd.files.forEach(f => allDriveFiles.push({ ...f, customerId: c.id }));
+          cd.files.forEach(f => {
+            // Raw binary is stored ONLY in Google Drive; database only stores metadata and Google Drive fileId/url
+            const { dataUrl, ...fileMeta } = f;
+            allDriveFiles.push({ ...fileMeta, dataUrl: '', customerId: c.id });
+          });
         }
       });
 

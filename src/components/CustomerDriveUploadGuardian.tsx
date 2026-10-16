@@ -274,7 +274,7 @@ export default function CustomerDriveUploadGuardian() {
             name: taskItem.name,
             size: taskItem.size,
             type: taskItem.type || 'application/octet-stream',
-            dataUrl: fileDataUrl,
+            dataUrl: '', // Raw binary files are stored ONLY on Google Drive, not in database
             url: driveRes.webViewLink || driveRes.webContentLink,
             driveFileId: driveRes.fileId,
             folderId: effectiveFolderId,

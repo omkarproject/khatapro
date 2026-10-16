@@ -777,8 +777,10 @@ export default function CustomersPage() {
     addToast('Downloading', `Starting download for ${toDownload.length} file(s)...`, 'info');
     for (let i = 0; i < toDownload.length; i++) {
       const file = toDownload[i];
+      const fileSource = file.dataUrl || file.url || (file.driveFileId ? `/api/backup/google-drive/view-file?fileId=${file.driveFileId}&download=true` : '');
+      if (!fileSource) continue;
       const link = document.createElement('a');
-      link.href = file.dataUrl;
+      link.href = fileSource;
       link.download = file.name;
       document.body.appendChild(link);
       link.click();
