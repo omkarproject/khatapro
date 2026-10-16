@@ -37,10 +37,10 @@ export default function TermsAndConditionsPage() {
     };
   }, []);
 
-  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || settings.websiteName || 'Business';
-  const businessPhone = settings.businessPhone || profile.phone || currentUser?.phone || '';
-  const businessEmail = settings.businessEmail || profile.email || currentUser?.email || '';
-  const businessAddress = settings.businessAddress || profile.businessAddress || '';
+  const businessName = settings.websiteName || settings.businessName || profile.businessName || currentUser?.businessName || 'Business';
+  const businessPhone = settings.websiteSupportPhone || settings.businessPhone || profile.phone || currentUser?.phone || '';
+  const businessEmail = settings.websiteSupportEmail || settings.businessEmail || profile.email || currentUser?.email || '';
+  const businessAddress = settings.websiteSupportLocation || settings.businessAddress || profile.businessAddress || '';
 
   const hasCustom = Boolean(customContent && customContent.trim().length > 0);
   const isHtml = hasCustom && isHtmlPolicy(customContent);

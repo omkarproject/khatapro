@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import {
@@ -25,10 +25,45 @@ export default function ContactUsPage() {
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || settings.websiteName || 'Business';
-  const businessPhone = settings.businessPhone || profile.phone || currentUser?.phone || '';
-  const businessEmail = settings.businessEmail || profile.email || currentUser?.email || settings.websiteSupportEmail || '';
-  const businessAddress = settings.businessAddress || profile.businessAddress || '';
+  const [localBrand, setLocalBrand] = useState<any>(() => {
+    if (typeof window !== 'undefined') {
+      const init = (window as any).__INITIAL_BRANDING__;
+      const raw = localStorage.getItem('skp_global_branding');
+      return raw ? JSON.parse(raw) : (init || null);
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e.detail) setLocalBrand(e.detail);
+      else if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem('skp_global_branding');
+        if (raw) {
+          try { setLocalBrand(JSON.parse(raw)); } catch {}
+        }
+      }
+    };
+    window.addEventListener('skp_branding_updated', handler);
+    window.addEventListener('khatapro_branding_changed', handler);
+    return () => {
+      window.removeEventListener('skp_branding_updated', handler);
+      window.removeEventListener('khatapro_branding_changed', handler);
+    };
+  }, []);
+
+  const websiteName = settings.websiteName?.trim() || localBrand?.websiteName?.trim() || '';
+  const websiteLogo = settings.websiteLogo || localBrand?.websiteLogo || '';
+  const websiteBadgeText = settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : (localBrand?.websiteBadgeText || '');
+  const websiteBadgeBg = settings.websiteBadgeBg || localBrand?.websiteBadgeBg || 'fintech-gradient-primary';
+  const supportLocation = settings.websiteSupportLocation?.trim() || localBrand?.websiteSupportLocation?.trim() || '';
+  const supportPhone = settings.websiteSupportPhone?.trim() || localBrand?.websiteSupportPhone?.trim() || '';
+  const supportEmail = settings.websiteSupportEmail?.trim() || localBrand?.websiteSupportEmail?.trim() || '';
+
+  const displayName = websiteName || settings.businessName || profile.businessName || currentUser?.businessName || 'Business';
+  const displayAddress = supportLocation || settings.businessAddress || profile.businessAddress || 'India';
+  const displayPhone = supportPhone || settings.businessPhone || profile.phone || currentUser?.phone || '';
+  const displayEmail = supportEmail || settings.businessEmail || profile.email || currentUser?.email || 'support@khatapro.in';
   const businessGst = settings.paymentSettings?.businessGst || profile.businessGst || '';
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -67,15 +102,17 @@ export default function ContactUsPage() {
           </p>
         </div>
 
-        <a
-          href={`https://wa.me/${businessPhone.replace(/\D/g, '')}?text=Hello%20${encodeURIComponent(businessName)},%20I%20have%20an%20inquiry%20regarding%20billing%20and%20payment.`}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold shadow-lg shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
-        >
-          <MessageCircle className="w-4 h-4 fill-white" />
-          <span>Chat on WhatsApp</span>
-        </a>
+        {displayPhone && (
+          <a
+            href={`https://wa.me/${displayPhone.replace(/\D/g, '')}?text=Hello%20${encodeURIComponent(displayName)},%20I%20have%20an%20inquiry%20regarding%20billing%20and%20payment.`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold shadow-lg shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
+          >
+            <MessageCircle className="w-4 h-4 fill-white" />
+            <span>Chat on WhatsApp</span>
+          </a>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -84,13 +121,24 @@ export default function ContactUsPage() {
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black">
-                <Building2 className="w-6 h-6" />
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black overflow-hidden border border-slate-200/80 dark:border-slate-700/80 shrink-0">
+                {websiteLogo ? (
+                  <img src={websiteLogo} alt={displayName} className="w-full h-full object-contain p-1.5" />
+                ) : (
+                  <Building2 className="w-6 h-6" />
+                )}
               </div>
-              <div>
-                <h2 className="text-sm font-bold text-slate-900 dark:text-white">{businessName}</h2>
-                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5" /> Verified Business Merchant
+              <div className="min-w-0">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
+                  <span className="truncate">{displayName}</span>
+                  {websiteBadgeText && (
+                    <span className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider text-white shadow-xs ${websiteBadgeBg}`}>
+                      {websiteBadgeText}
+                    </span>
+                  )}
+                </h2>
+                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">
+                  <ShieldCheck className="w-3.5 h-3.5 shrink-0" /> Verified Business Merchant
                 </span>
               </div>
             </div>
@@ -100,8 +148,8 @@ export default function ContactUsPage() {
               <div className="flex items-start gap-3">
                 <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-1" />
                 <div>
-                  <div className="font-bold text-slate-700 dark:text-slate-300">Registered Office Address</div>
-                  <div className="text-slate-500 dark:text-slate-400 leading-relaxed mt-0.5">{businessAddress}</div>
+                  <div className="font-bold text-slate-700 dark:text-slate-300">Registered Office Address / Location</div>
+                  <div className="text-slate-500 dark:text-slate-400 leading-relaxed mt-0.5">{displayAddress}</div>
                 </div>
               </div>
 
@@ -109,9 +157,13 @@ export default function ContactUsPage() {
                 <Phone className="w-4 h-4 text-slate-400 shrink-0 mt-1" />
                 <div>
                   <div className="font-bold text-slate-700 dark:text-slate-300">Telephone / Mobile Helpline</div>
-                  <a href={`tel:${businessPhone}`} className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline block mt-0.5">
-                    {businessPhone}
-                  </a>
+                  {displayPhone ? (
+                    <a href={`tel:${displayPhone}`} className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline block mt-0.5">
+                      {displayPhone}
+                    </a>
+                  ) : (
+                    <div className="text-slate-400 italic mt-0.5">Not specified</div>
+                  )}
                   <div className="text-[10px] text-slate-400">Toll-free customer assistance</div>
                 </div>
               </div>
@@ -120,9 +172,13 @@ export default function ContactUsPage() {
                 <Mail className="w-4 h-4 text-slate-400 shrink-0 mt-1" />
                 <div>
                   <div className="font-bold text-slate-700 dark:text-slate-300">Email Helpdesk</div>
-                  <a href={`mailto:${businessEmail}`} className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline block mt-0.5">
-                    {businessEmail}
-                  </a>
+                  {displayEmail ? (
+                    <a href={`mailto:${displayEmail}`} className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline block mt-0.5">
+                      {displayEmail}
+                    </a>
+                  ) : (
+                    <div className="text-slate-400 italic mt-0.5">Not specified</div>
+                  )}
                   <div className="text-[10px] text-slate-400">Average response time &lt; 2 hours</div>
                 </div>
               </div>
