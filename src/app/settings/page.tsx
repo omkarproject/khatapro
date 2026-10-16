@@ -888,18 +888,20 @@ export default function SettingsPage() {
   const [isSavingBranding, setIsSavingBranding] = useState(false);
   const webLogoInputRef = useRef<HTMLInputElement>(null);
   const webFaviconInputRef = useRef<HTMLInputElement>(null);
+  const isBrandingDirtyRef = useRef(false);
 
   useEffect(() => {
-    if (settings.websiteName) setWebName(settings.websiteName);
+    if (isBrandingDirtyRef.current || isSavingBranding) return;
+    if (settings.websiteName !== undefined) setWebName(settings.websiteName);
     if (settings.websiteBadgeText !== undefined) setWebBadgeText(settings.websiteBadgeText);
     if (settings.websiteBadgeBg) setWebBadgeBg(settings.websiteBadgeBg);
     if (settings.websiteTagline !== undefined) setWebTagline(settings.websiteTagline);
     if (settings.websiteSupportLocation !== undefined) setWebSupportLocation(settings.websiteSupportLocation);
     if (settings.websiteSupportPhone !== undefined) setWebSupportPhone(settings.websiteSupportPhone);
     if (settings.websiteSupportEmail !== undefined) setWebSupportEmail(settings.websiteSupportEmail);
-    if (settings.websiteLogo) setWebLogo(settings.websiteLogo);
-    if (settings.websiteFavicon) setWebFavicon(settings.websiteFavicon);
-  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteBadgeBg, settings.websiteTagline, settings.websiteSupportLocation, settings.websiteSupportPhone, settings.websiteSupportEmail, settings.websiteLogo, settings.websiteFavicon]);
+    if (settings.websiteLogo !== undefined) setWebLogo(settings.websiteLogo);
+    if (settings.websiteFavicon !== undefined) setWebFavicon(settings.websiteFavicon);
+  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteBadgeBg, settings.websiteTagline, settings.websiteSupportLocation, settings.websiteSupportPhone, settings.websiteSupportEmail, settings.websiteLogo, settings.websiteFavicon, isSavingBranding]);
 
   // Handle Website Logo Upload with auto-resize
   const handleUploadWebLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -916,6 +918,7 @@ export default function SettingsPage() {
         if (!result) return;
 
         if (file.type.includes('svg')) {
+          isBrandingDirtyRef.current = true;
           setWebLogo(result);
           addToast('Website Logo Uploaded', 'Remember to click Save Branding Changes.', 'info');
           return;
@@ -939,6 +942,7 @@ export default function SettingsPage() {
           canvas.width = w;
           canvas.height = h;
           const ctx = canvas.getContext('2d');
+          isBrandingDirtyRef.current = true;
           if (ctx) {
             ctx.drawImage(img, 0, 0, w, h);
             const compressed = canvas.toDataURL('image/png', 0.9);
@@ -969,6 +973,7 @@ export default function SettingsPage() {
         if (!result) return;
 
         if (file.type.includes('svg') || file.name.endsWith('.ico')) {
+          isBrandingDirtyRef.current = true;
           setWebFavicon(result);
           addToast('Favicon Uploaded', 'Remember to click Save Branding Changes.', 'info');
           return;
@@ -992,6 +997,7 @@ export default function SettingsPage() {
           canvas.width = w;
           canvas.height = h;
           const ctx = canvas.getContext('2d');
+          isBrandingDirtyRef.current = true;
           if (ctx) {
             ctx.drawImage(img, 0, 0, w, h);
             const compressed = canvas.toDataURL('image/png', 0.9);
@@ -1009,18 +1015,81 @@ export default function SettingsPage() {
   };
 
   // Handle Save Website Branding
-  const handleSaveBranding = (e: React.FormEvent) => {
+  const handleSaveBranding = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingBranding(true);
 
     const finalLogo = webLogoMode === 'link' ? (webLogoLinkInput.trim() || webLogo) : webLogo;
     const finalFavicon = webFaviconMode === 'link' ? (webFaviconLinkInput.trim() || webFavicon) : (webFavicon || finalLogo);
-    const finalName = webName.trim();
+    const finalName = webName.trim() || 'SmartKhata';
     const finalBadge = webBadgeText.trim();
     const finalTagline = webTagline.trim();
     const finalSupportLocation = webSupportLocation.trim();
     const finalSupportPhone = webSupportPhone.trim();
     const finalSupportEmail = webSupportEmail.trim();
+
+    const brandPayload = {
+      websiteName: finalName,
+      websiteBadgeText: finalBadge,
+      websiteBadgeBg: webBadgeBg,
+      websiteTagline: finalTagline,
+      websiteLogo: finalLogo,
+      websiteFavicon: finalFavicon,
+      websiteSupportLocation: finalSupportLocation,
+      websiteSupportPhone: finalSupportPhone,
+      websiteSupportEmail: finalSupportEmail,
+    };
+
+    try {
+      // 1. Direct await save to Supabase cloud database
+      const res = await fetch('/api/system/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ websiteBranding: brandPayload }),
+      });
+      if (!res.ok) {
+        console.warn('System config save warning: HTTP', res.status);
+      }
+    } catch (err) {
+      console.error('System config cloud broadcast error:', err);
+    }
+
+    try {
+      localStorage.setItem('skp_global_branding', JSON.stringify(brandPayload));
+      const rawGlobal = localStorage.getItem('skp_global_system_config');
+      const globalObj = rawGlobal ? JSON.parse(rawGlobal) : {};
+      globalObj.websiteBranding = brandPayload;
+      localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
+      localStorage.setItem('skp_brand_badge', finalBadge);
+      localStorage.setItem('skp_brand_badge_bg', webBadgeBg);
+      localStorage.setItem('skp_brand_tagline', finalTagline);
+      localStorage.setItem('skp_brand_name', finalName);
+      if (finalSupportLocation) localStorage.setItem('skp_brand_support_location', finalSupportLocation);
+      else localStorage.removeItem('skp_brand_support_location');
+      if (finalSupportPhone) localStorage.setItem('skp_brand_support_phone', finalSupportPhone);
+      else localStorage.removeItem('skp_brand_support_phone');
+      if (finalSupportEmail) localStorage.setItem('skp_brand_support_email', finalSupportEmail);
+      else localStorage.removeItem('skp_brand_support_email');
+      if (finalLogo) localStorage.setItem('skp_brand_logo', finalLogo);
+      if (finalFavicon) localStorage.setItem('skp_brand_favicon', finalFavicon);
+    } catch {}
+
+    if (typeof document !== 'undefined') {
+      const maxAge = '; Path=/; Max-Age=31536000; SameSite=Lax;';
+      document.cookie = `skp_brand_badge=${encodeURIComponent(finalBadge)}${maxAge}`;
+      document.cookie = `skp_brand_badge_bg=${encodeURIComponent(webBadgeBg)}${maxAge}`;
+      document.cookie = `skp_brand_tagline=${encodeURIComponent(finalTagline)}${maxAge}`;
+      document.cookie = `skp_brand_name=${encodeURIComponent(finalName)}${maxAge}`;
+      if (finalSupportLocation) document.cookie = `skp_brand_support_location=${encodeURIComponent(finalSupportLocation)}${maxAge}`;
+      if (finalSupportPhone) document.cookie = `skp_brand_support_phone=${encodeURIComponent(finalSupportPhone)}${maxAge}`;
+      if (finalSupportEmail) document.cookie = `skp_brand_support_email=${encodeURIComponent(finalSupportEmail)}${maxAge}`;
+      if (finalLogo && finalLogo.length < 2000) {
+        document.cookie = `skp_brand_logo=${encodeURIComponent(finalLogo)}${maxAge}`;
+      }
+      if (finalFavicon && finalFavicon.length < 2000) {
+        document.cookie = `skp_brand_favicon=${encodeURIComponent(finalFavicon)}${maxAge}`;
+      }
+    }
 
     const updated: SystemSettings = {
       ...settings,
@@ -1045,62 +1114,7 @@ export default function SettingsPage() {
     setWebSupportEmail(finalSupportEmail);
     setWebLogo(finalLogo);
     setWebFavicon(finalFavicon);
-
-    const brandPayload = {
-      websiteName: finalName,
-      websiteBadgeText: finalBadge,
-      websiteBadgeBg: webBadgeBg,
-      websiteTagline: finalTagline,
-      websiteLogo: finalLogo,
-      websiteFavicon: finalFavicon,
-      websiteSupportLocation: finalSupportLocation,
-      websiteSupportPhone: finalSupportPhone,
-      websiteSupportEmail: finalSupportEmail,
-    };
-
-    try {
-      localStorage.setItem('skp_global_branding', JSON.stringify(brandPayload));
-      const rawGlobal = localStorage.getItem('skp_global_system_config');
-      const globalObj = rawGlobal ? JSON.parse(rawGlobal) : {};
-      globalObj.websiteBranding = brandPayload;
-      localStorage.setItem('skp_global_system_config', JSON.stringify(globalObj));
-      localStorage.setItem('skp_brand_badge', finalBadge);
-      localStorage.setItem('skp_brand_badge_bg', webBadgeBg);
-      localStorage.setItem('skp_brand_tagline', finalTagline);
-      localStorage.setItem('skp_brand_name', finalName);
-      if (finalSupportLocation) localStorage.setItem('skp_brand_support_location', finalSupportLocation);
-      else localStorage.removeItem('skp_brand_support_location');
-      if (finalSupportPhone) localStorage.setItem('skp_brand_support_phone', finalSupportPhone);
-      else localStorage.removeItem('skp_brand_support_phone');
-      if (finalSupportEmail) localStorage.setItem('skp_brand_support_email', finalSupportEmail);
-      else localStorage.removeItem('skp_brand_support_email');
-      if (finalLogo) localStorage.setItem('skp_brand_logo', finalLogo);
-      if (finalFavicon) localStorage.setItem('skp_brand_favicon', finalFavicon);
-    } catch {}
-
-    if (typeof document !== 'undefined') {
-      document.cookie = `skp_brand_badge=${encodeURIComponent(finalBadge)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
-      document.cookie = `skp_brand_badge_bg=${encodeURIComponent(webBadgeBg)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
-      document.cookie = `skp_brand_tagline=${encodeURIComponent(finalTagline)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
-      document.cookie = `skp_brand_name=${encodeURIComponent(finalName)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
-      if (finalSupportLocation) document.cookie = `skp_brand_support_location=${encodeURIComponent(finalSupportLocation)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
-      if (finalSupportPhone) document.cookie = `skp_brand_support_phone=${encodeURIComponent(finalSupportPhone)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
-      if (finalSupportEmail) document.cookie = `skp_brand_support_email=${encodeURIComponent(finalSupportEmail)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
-      if (finalLogo && finalLogo.length < 2000) {
-        document.cookie = `skp_brand_logo=${encodeURIComponent(finalLogo)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
-      }
-      if (finalFavicon && finalFavicon.length < 2000) {
-        document.cookie = `skp_brand_favicon=${encodeURIComponent(finalFavicon)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
-      }
-    }
-
-    try {
-      fetch('/api/system/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ websiteBranding: brandPayload }),
-      }).catch(err => console.warn('System config broadcast warning:', err));
-    } catch (err) {}
+    isBrandingDirtyRef.current = false;
 
     window.dispatchEvent(new CustomEvent('khatapro_branding_changed', { detail: brandPayload }));
     window.dispatchEvent(new CustomEvent('skp_branding_updated', { detail: brandPayload }));
@@ -1120,7 +1134,7 @@ export default function SettingsPage() {
       });
     } catch (e) {}
 
-    addToast('Website Branding Updated! 🎨', 'Website Name, Subtitle, Logo, Favicon & Badge pure portal par live update ho gaye hain!', 'success');
+    addToast('Website Branding Updated! 🎨', 'Website Name, Subtitle, Logo, Favicon & Badge database me live update ho gaye hain!', 'success');
     setIsSavingBranding(false);
   };
 
@@ -2851,7 +2865,10 @@ export default function SettingsPage() {
                 <input
                   type="text"
                   value={webName}
-                  onChange={(e) => setWebName(e.target.value)}
+                  onChange={(e) => {
+                    isBrandingDirtyRef.current = true;
+                    setWebName(e.target.value);
+                  }}
                   placeholder="e.g. MyBrand, ApnaKhata, VyaparPro"
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-all font-semibold"
                 />
@@ -2864,7 +2881,10 @@ export default function SettingsPage() {
                 <input
                   type="text"
                   value={webTagline}
-                  onChange={(e) => setWebTagline(e.target.value)}
+                  onChange={(e) => {
+                    isBrandingDirtyRef.current = true;
+                    setWebTagline(e.target.value);
+                  }}
                   placeholder="e.g. Fintech Operating System, Cloud ERP System"
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-all font-semibold"
                 />
@@ -2883,7 +2903,10 @@ export default function SettingsPage() {
                     <input
                       type="text"
                       value={webBadgeText}
-                      onChange={(e) => setWebBadgeText(e.target.value.toUpperCase())}
+                      onChange={(e) => {
+                        isBrandingDirtyRef.current = true;
+                        setWebBadgeText(e.target.value.toUpperCase());
+                      }}
                       placeholder="e.g. PRO, ERP, VIP"
                       maxLength={10}
                       className="w-36 px-3.5 py-2 text-xs uppercase rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-all font-black tracking-wider"
@@ -2911,7 +2934,10 @@ export default function SettingsPage() {
                         <button
                           key={preset.id}
                           type="button"
-                          onClick={() => setWebBadgeBg(preset.class)}
+                          onClick={() => {
+                            isBrandingDirtyRef.current = true;
+                            setWebBadgeBg(preset.class);
+                          }}
                           className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                             isSelected
                               ? 'ring-2 ring-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-400 dark:border-indigo-600'
@@ -3022,6 +3048,7 @@ export default function SettingsPage() {
                       type="button"
                       onClick={() => {
                         if (webLogoLinkInput.trim()) {
+                          isBrandingDirtyRef.current = true;
                           setWebLogo(webLogoLinkInput.trim());
                           addToast('Logo Link Set', 'Preview updated.', 'info');
                         }
@@ -3063,6 +3090,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={() => {
+                      isBrandingDirtyRef.current = true;
                       setWebLogo('');
                       setWebLogoLinkInput('');
                       addToast('Logo Reset', 'Switched back to default icon.', 'info');
@@ -3100,7 +3128,10 @@ export default function SettingsPage() {
                     <input
                       type="text"
                       value={webSupportLocation}
-                      onChange={(e) => setWebSupportLocation(e.target.value)}
+                      onChange={(e) => {
+                        isBrandingDirtyRef.current = true;
+                        setWebSupportLocation(e.target.value);
+                      }}
                       placeholder="e.g. Bhiwandi, Maharashtra"
                       className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all font-medium"
                     />
@@ -3114,7 +3145,10 @@ export default function SettingsPage() {
                     <input
                       type="text"
                       value={webSupportPhone}
-                      onChange={(e) => setWebSupportPhone(e.target.value)}
+                      onChange={(e) => {
+                        isBrandingDirtyRef.current = true;
+                        setWebSupportPhone(e.target.value);
+                      }}
                       placeholder="e.g. +91 8371838314"
                       className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all font-medium"
                     />
@@ -3128,7 +3162,10 @@ export default function SettingsPage() {
                     <input
                       type="email"
                       value={webSupportEmail}
-                      onChange={(e) => setWebSupportEmail(e.target.value)}
+                      onChange={(e) => {
+                        isBrandingDirtyRef.current = true;
+                        setWebSupportEmail(e.target.value);
+                      }}
                       placeholder="e.g. anantyadav8924@gmail.com"
                       className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all font-medium"
                     />
@@ -3223,6 +3260,7 @@ export default function SettingsPage() {
                       type="button"
                       onClick={() => {
                         if (webFaviconLinkInput.trim()) {
+                          isBrandingDirtyRef.current = true;
                           setWebFavicon(webFaviconLinkInput.trim());
                           addToast('Favicon Link Set', 'Preview updated.', 'info');
                         }
@@ -3264,6 +3302,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={() => {
+                      isBrandingDirtyRef.current = true;
                       setWebFavicon('');
                       setWebFaviconLinkInput('');
                       addToast('Favicon Reset', 'Switched back to default favicon.', 'info');

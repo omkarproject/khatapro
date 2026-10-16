@@ -715,15 +715,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             localStorage.setItem('skp_global_system_config', JSON.stringify(globalPayload));
             if (json.websiteBranding && typeof json.websiteBranding === 'object') {
               const b = json.websiteBranding;
-              const effName = b.websiteName?.trim() ? b.websiteName.trim() : 'SmartKhata';
-              const effLogo = b.websiteLogo?.trim() ? b.websiteLogo.trim() : '/brand-logo.png';
-              const effFavicon = b.websiteFavicon?.trim() ? b.websiteFavicon.trim() : (b.websiteLogo?.trim() || '/brand-favicon.png');
-              const effBadge = b.websiteBadgeText !== undefined && b.websiteBadgeText !== null && b.websiteBadgeText !== '' ? b.websiteBadgeText : 'ERP';
+              const effName = b.websiteName !== undefined ? (b.websiteName.trim() || 'SmartKhata') : 'SmartKhata';
+              const effLogo = b.websiteLogo !== undefined ? (b.websiteLogo.trim() || '/brand-logo.png') : '/brand-logo.png';
+              const effFavicon = b.websiteFavicon !== undefined ? (b.websiteFavicon.trim() || effLogo) : (effLogo || '/brand-favicon.png');
+              const effBadge = b.websiteBadgeText !== undefined && b.websiteBadgeText !== null ? b.websiteBadgeText : 'ERP';
               const effBadgeBg = b.websiteBadgeBg || 'fintech-gradient-primary';
-              const effTagline = b.websiteTagline !== undefined && b.websiteTagline !== null && b.websiteTagline !== '' ? b.websiteTagline : 'Enterprise Fintech & Digital Khata Operating System';
-              const effSuppLoc = b.websiteSupportLocation?.trim() ? b.websiteSupportLocation.trim() : 'Bhiwandi';
-              const effSuppPhone = b.websiteSupportPhone?.trim() ? b.websiteSupportPhone.trim() : '8371838314';
-              const effSuppEmail = b.websiteSupportEmail?.trim() ? b.websiteSupportEmail.trim() : 'anantyadav8924@gmail.com';
+              const effTagline = b.websiteTagline !== undefined && b.websiteTagline !== null ? b.websiteTagline : '';
+              const effSuppLoc = b.websiteSupportLocation !== undefined && b.websiteSupportLocation !== null ? b.websiteSupportLocation : '';
+              const effSuppPhone = b.websiteSupportPhone !== undefined && b.websiteSupportPhone !== null ? b.websiteSupportPhone : '';
+              const effSuppEmail = b.websiteSupportEmail !== undefined && b.websiteSupportEmail !== null ? b.websiteSupportEmail : '';
 
               const normalizedBrand = {
                 websiteName: effName,
@@ -778,15 +778,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const sameMaint = JSON.stringify(prev.maintenanceMode) === JSON.stringify(json.maintenanceMode);
             const sameBeta = prev.betaTestingEnabled === Boolean(json.betaTestingEnabled);
             const b = json.websiteBranding;
-            const effName = b?.websiteName?.trim() ? b.websiteName.trim() : (prev.websiteName || 'SmartKhata');
-            const effLogo = b?.websiteLogo?.trim() ? b.websiteLogo.trim() : (prev.websiteLogo || '/brand-logo.png');
-            const effFavicon = b?.websiteFavicon?.trim() ? b.websiteFavicon.trim() : (b?.websiteLogo?.trim() || prev.websiteFavicon || '/brand-favicon.png');
-            const effBadge = b?.websiteBadgeText !== undefined && b?.websiteBadgeText !== null && b?.websiteBadgeText !== '' ? b.websiteBadgeText : (prev.websiteBadgeText || 'ERP');
+            const effName = b?.websiteName !== undefined ? (b.websiteName.trim() || 'SmartKhata') : (prev.websiteName || 'SmartKhata');
+            const effLogo = b?.websiteLogo !== undefined ? (b.websiteLogo.trim() || '/brand-logo.png') : (prev.websiteLogo || '/brand-logo.png');
+            const effFavicon = b?.websiteFavicon !== undefined ? (b.websiteFavicon.trim() || effLogo) : (prev.websiteFavicon || '/brand-favicon.png');
+            const effBadge = b?.websiteBadgeText !== undefined && b?.websiteBadgeText !== null ? b.websiteBadgeText : (prev.websiteBadgeText ?? 'ERP');
             const effBadgeBg = b?.websiteBadgeBg || prev.websiteBadgeBg || 'fintech-gradient-primary';
-            const effTagline = b?.websiteTagline !== undefined && b?.websiteTagline !== null && b?.websiteTagline !== '' ? b.websiteTagline : (prev.websiteTagline || 'Enterprise Fintech & Digital Khata Operating System');
-            const effSuppLoc = b?.websiteSupportLocation?.trim() ? b.websiteSupportLocation.trim() : (prev.websiteSupportLocation || 'Bhiwandi');
-            const effSuppPhone = b?.websiteSupportPhone?.trim() ? b.websiteSupportPhone.trim() : (prev.websiteSupportPhone || '8371838314');
-            const effSuppEmail = b?.websiteSupportEmail?.trim() ? b.websiteSupportEmail.trim() : (prev.websiteSupportEmail || 'anantyadav8924@gmail.com');
+            const effTagline = b?.websiteTagline !== undefined && b?.websiteTagline !== null ? b.websiteTagline : (prev.websiteTagline ?? '');
+            const effSuppLoc = b?.websiteSupportLocation !== undefined && b?.websiteSupportLocation !== null ? b.websiteSupportLocation : (prev.websiteSupportLocation ?? '');
+            const effSuppPhone = b?.websiteSupportPhone !== undefined && b?.websiteSupportPhone !== null ? b.websiteSupportPhone : (prev.websiteSupportPhone ?? '');
+            const effSuppEmail = b?.websiteSupportEmail !== undefined && b?.websiteSupportEmail !== null ? b.websiteSupportEmail : (prev.websiteSupportEmail ?? '');
 
             return {
               ...prev,

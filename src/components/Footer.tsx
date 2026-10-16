@@ -31,12 +31,12 @@ export default function Footer() {
 
   const websiteLogo = settings.websiteLogo || localBrand?.websiteLogo || '/brand-logo.png';
   const websiteName = settings.websiteName || localBrand?.websiteName || 'SmartKhata';
-  const websiteBadgeText = settings.websiteBadgeText !== undefined && settings.websiteBadgeText !== null && settings.websiteBadgeText !== '' ? settings.websiteBadgeText : (localBrand?.websiteBadgeText || 'ERP');
+  const websiteBadgeText = settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : (localBrand?.websiteBadgeText || '');
   const websiteBadgeBg = settings.websiteBadgeBg || localBrand?.websiteBadgeBg || 'fintech-gradient-primary';
-  const websiteTagline = settings.websiteTagline !== undefined && settings.websiteTagline !== null && settings.websiteTagline !== '' ? settings.websiteTagline : (localBrand?.websiteTagline || 'Enterprise Fintech & Digital Khata Operating System');
-  const supportPhone = settings.websiteSupportPhone?.trim() || localBrand?.websiteSupportPhone?.trim() || '8371838314';
-  const supportEmail = settings.websiteSupportEmail?.trim() || localBrand?.websiteSupportEmail?.trim() || 'anantyadav8924@gmail.com';
-  const supportAddress = settings.websiteSupportLocation?.trim() || localBrand?.websiteSupportLocation?.trim() || 'Bhiwandi';
+  const websiteTagline = settings.websiteTagline !== undefined ? settings.websiteTagline : (localBrand?.websiteTagline || '');
+  const supportPhone = settings.websiteSupportPhone?.trim() || localBrand?.websiteSupportPhone?.trim() || '';
+  const supportEmail = settings.websiteSupportEmail?.trim() || localBrand?.websiteSupportEmail?.trim() || '';
+  const supportAddress = settings.websiteSupportLocation?.trim() || localBrand?.websiteSupportLocation?.trim() || '';
   const businessGst = settings.paymentSettings?.businessGst || profile.businessGst || '';
 
   return (

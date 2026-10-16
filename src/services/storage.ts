@@ -91,9 +91,9 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
   let globalWebBadge = 'ERP';
   let globalWebBadgeBg = 'fintech-gradient-primary';
   let globalWebTagline = 'Enterprise Fintech & Digital Khata Operating System';
-  let globalWebSupportLocation = 'Bhiwandi';
-  let globalWebSupportPhone = '8371838314';
-  let globalWebSupportEmail = 'anantyadav8924@gmail.com';
+  let globalWebSupportLocation = '';
+  let globalWebSupportPhone = '';
+  let globalWebSupportEmail = '';
 
   if (typeof window !== 'undefined') {
     try {
@@ -165,6 +165,9 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
             if (g.websiteBranding.websiteBadgeText !== undefined && !rawB) globalWebBadge = g.websiteBranding.websiteBadgeText;
             if (g.websiteBranding.websiteBadgeBg && (!rawB || !storedBadgeBg)) globalWebBadgeBg = g.websiteBranding.websiteBadgeBg;
             if (g.websiteBranding.websiteTagline !== undefined && (!rawB || !storedTag)) globalWebTagline = g.websiteBranding.websiteTagline;
+            if (g.websiteBranding.websiteSupportLocation !== undefined && !rawB) globalWebSupportLocation = g.websiteBranding.websiteSupportLocation;
+            if (g.websiteBranding.websiteSupportPhone !== undefined && !rawB) globalWebSupportPhone = g.websiteBranding.websiteSupportPhone;
+            if (g.websiteBranding.websiteSupportEmail !== undefined && !rawB) globalWebSupportEmail = g.websiteBranding.websiteSupportEmail;
           }
         }
       }
@@ -494,6 +497,9 @@ export const StorageService = {
             if (globalConf.websiteBranding.websiteBadgeText !== undefined) s.websiteBadgeText = globalConf.websiteBranding.websiteBadgeText;
             if (globalConf.websiteBranding.websiteBadgeBg) s.websiteBadgeBg = globalConf.websiteBranding.websiteBadgeBg;
             if (globalConf.websiteBranding.websiteTagline !== undefined) s.websiteTagline = globalConf.websiteBranding.websiteTagline;
+            if (globalConf.websiteBranding.websiteSupportLocation !== undefined) s.websiteSupportLocation = globalConf.websiteBranding.websiteSupportLocation;
+            if (globalConf.websiteBranding.websiteSupportPhone !== undefined) s.websiteSupportPhone = globalConf.websiteBranding.websiteSupportPhone;
+            if (globalConf.websiteBranding.websiteSupportEmail !== undefined) s.websiteSupportEmail = globalConf.websiteBranding.websiteSupportEmail;
           }
         }
         const rawBranding = localStorage.getItem('skp_global_branding');
@@ -505,6 +511,9 @@ export const StorageService = {
           if (brandConf.websiteBadgeText !== undefined) s.websiteBadgeText = brandConf.websiteBadgeText;
           if (brandConf.websiteBadgeBg) s.websiteBadgeBg = brandConf.websiteBadgeBg;
           if (brandConf.websiteTagline !== undefined) s.websiteTagline = brandConf.websiteTagline;
+          if (brandConf.websiteSupportLocation !== undefined) s.websiteSupportLocation = brandConf.websiteSupportLocation;
+          if (brandConf.websiteSupportPhone !== undefined) s.websiteSupportPhone = brandConf.websiteSupportPhone;
+          if (brandConf.websiteSupportEmail !== undefined) s.websiteSupportEmail = brandConf.websiteSupportEmail;
         }
       } catch {}
     }
@@ -602,15 +611,19 @@ export const StorageService = {
           }
         }
         if (typeof document !== 'undefined') {
-          document.cookie = `skp_brand_badge=${encodeURIComponent(brandObj.websiteBadgeText)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
-          document.cookie = `skp_brand_badge_bg=${encodeURIComponent(brandObj.websiteBadgeBg)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
-          document.cookie = `skp_brand_tagline=${encodeURIComponent(brandObj.websiteTagline)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
-          document.cookie = `skp_brand_name=${encodeURIComponent(brandObj.websiteName)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+          const maxAge = '; Path=/; Max-Age=31536000; SameSite=Lax;';
+          document.cookie = `skp_brand_badge=${encodeURIComponent(brandObj.websiteBadgeText)}${maxAge}`;
+          document.cookie = `skp_brand_badge_bg=${encodeURIComponent(brandObj.websiteBadgeBg)}${maxAge}`;
+          document.cookie = `skp_brand_tagline=${encodeURIComponent(brandObj.websiteTagline)}${maxAge}`;
+          document.cookie = `skp_brand_name=${encodeURIComponent(brandObj.websiteName)}${maxAge}`;
+          if (brandObj.websiteSupportLocation) document.cookie = `skp_brand_support_location=${encodeURIComponent(brandObj.websiteSupportLocation)}${maxAge}`;
+          if (brandObj.websiteSupportPhone) document.cookie = `skp_brand_support_phone=${encodeURIComponent(brandObj.websiteSupportPhone)}${maxAge}`;
+          if (brandObj.websiteSupportEmail) document.cookie = `skp_brand_support_email=${encodeURIComponent(brandObj.websiteSupportEmail)}${maxAge}`;
           if (brandObj.websiteLogo && brandObj.websiteLogo.length < 2000) {
-            document.cookie = `skp_brand_logo=${encodeURIComponent(brandObj.websiteLogo)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+            document.cookie = `skp_brand_logo=${encodeURIComponent(brandObj.websiteLogo)}${maxAge}`;
           }
           if (brandObj.websiteFavicon && brandObj.websiteFavicon.length < 2000) {
-            document.cookie = `skp_brand_favicon=${encodeURIComponent(brandObj.websiteFavicon)}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+            document.cookie = `skp_brand_favicon=${encodeURIComponent(brandObj.websiteFavicon)}${maxAge}`;
           }
         }
       } catch {}

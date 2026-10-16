@@ -19,9 +19,9 @@ export const DEFAULT_BRANDING: GlobalWebsiteBranding = {
   websiteBadgeText: 'ERP',
   websiteBadgeBg: 'fintech-gradient-primary',
   websiteTagline: 'Enterprise Fintech & Digital Khata Operating System',
-  websiteSupportLocation: 'Bhiwandi',
-  websiteSupportPhone: '8371838314',
-  websiteSupportEmail: 'anantyadav8924@gmail.com',
+  websiteSupportLocation: '',
+  websiteSupportPhone: '',
+  websiteSupportEmail: '',
 };
 
 /**
@@ -48,10 +48,10 @@ export async function getGlobalBrandingFromDb(): Promise<GlobalWebsiteBranding> 
               websiteFavicon: brand.websiteFavicon?.trim() ? brand.websiteFavicon.trim() : (brand.websiteLogo?.trim() ? brand.websiteLogo.trim() : DEFAULT_BRANDING.websiteFavicon),
               websiteBadgeText: brand.websiteBadgeText !== undefined && brand.websiteBadgeText !== null ? brand.websiteBadgeText : DEFAULT_BRANDING.websiteBadgeText,
               websiteBadgeBg: brand.websiteBadgeBg || DEFAULT_BRANDING.websiteBadgeBg,
-              websiteTagline: brand.websiteTagline !== undefined && brand.websiteTagline !== null && brand.websiteTagline !== '' ? brand.websiteTagline : DEFAULT_BRANDING.websiteTagline,
-              websiteSupportLocation: brand.websiteSupportLocation?.trim() ? brand.websiteSupportLocation.trim() : DEFAULT_BRANDING.websiteSupportLocation,
-              websiteSupportPhone: brand.websiteSupportPhone?.trim() ? brand.websiteSupportPhone.trim() : DEFAULT_BRANDING.websiteSupportPhone,
-              websiteSupportEmail: brand.websiteSupportEmail?.trim() ? brand.websiteSupportEmail.trim() : DEFAULT_BRANDING.websiteSupportEmail,
+              websiteTagline: brand.websiteTagline !== undefined && brand.websiteTagline !== null ? brand.websiteTagline : DEFAULT_BRANDING.websiteTagline,
+              websiteSupportLocation: brand.websiteSupportLocation !== undefined && brand.websiteSupportLocation !== null ? brand.websiteSupportLocation : '',
+              websiteSupportPhone: brand.websiteSupportPhone !== undefined && brand.websiteSupportPhone !== null ? brand.websiteSupportPhone : '',
+              websiteSupportEmail: brand.websiteSupportEmail !== undefined && brand.websiteSupportEmail !== null ? brand.websiteSupportEmail : '',
             };
           }
         }

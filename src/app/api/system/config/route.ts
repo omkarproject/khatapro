@@ -102,8 +102,11 @@ export async function POST(req: NextRequest) {
     };
 
     if (websiteBranding !== undefined) {
-      updatedMaint.websiteBranding = websiteBranding;
-      await saveGlobalBrandingToDb(websiteBranding).catch((err) => console.error('saveGlobalBrandingToDb error:', err));
+      const savedBrand = await saveGlobalBrandingToDb(websiteBranding).catch((err) => {
+        console.error('saveGlobalBrandingToDb error:', err);
+        return websiteBranding;
+      });
+      updatedMaint.websiteBranding = savedBrand;
     }
 
     if (broadcasts !== undefined) {

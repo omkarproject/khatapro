@@ -12,7 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const dbBrand = await getGlobalBrandingFromDb().catch(() => null);
   let brandName = dbBrand?.websiteName || 'SmartKhata';
   let brandBadge = dbBrand?.websiteBadgeText !== undefined ? dbBrand.websiteBadgeText : 'ERP';
-  let brandTagline = dbBrand?.websiteTagline !== undefined ? dbBrand.websiteTagline : 'Enterprise Fintech & Digital Khata Operating System';
+  let brandTagline = dbBrand?.websiteTagline !== undefined ? dbBrand.websiteTagline : '';
   let brandFavicon = dbBrand?.websiteFavicon || dbBrand?.websiteLogo || '/brand-favicon.png';
 
   try {
@@ -30,7 +30,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const displayName = brandName || 'SmartKhata';
   const displayBadge = brandBadge ? ` ${brandBadge}` : '';
   const displayTagline = brandTagline ? ` - ${brandTagline}` : '';
-  const title = displayName ? `${displayName}${displayBadge}${displayTagline}` : 'SmartKhata ERP - Enterprise Fintech & Digital Khata Operating System';
+  const title = displayName ? `${displayName}${displayBadge}${displayTagline}` : 'SmartKhata ERP';
 
   return {
     title,
@@ -99,13 +99,13 @@ export default async function RootLayout({
                     } catch(e) {}
                   }
                   if (!brandName) brandName = localStorage.getItem('skp_brand_name') || 'SmartKhata';
-                  if (!brandBadge) {
+                  if (brandBadge === undefined || brandBadge === null) {
                     var b = localStorage.getItem('skp_brand_badge');
-                    brandBadge = (b !== null && b !== undefined && b !== '') ? b : 'ERP';
+                    brandBadge = (b !== null && b !== undefined) ? b : 'ERP';
                   }
-                  if (!brandTagline) {
+                  if (brandTagline === undefined || brandTagline === null) {
                     var tg = localStorage.getItem('skp_brand_tagline');
-                    brandTagline = (tg !== null && tg !== undefined && tg !== '') ? tg : 'Enterprise Fintech & Digital Khata Operating System';
+                    brandTagline = (tg !== null && tg !== undefined) ? tg : '';
                   }
                   if (!brandFavicon) {
                     brandFavicon = localStorage.getItem('skp_brand_favicon') || localStorage.getItem('skp_brand_logo') || '/brand-favicon.png';

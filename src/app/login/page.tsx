@@ -133,9 +133,9 @@ export default function LoginPage() {
     if (settings.websiteName || settings.websiteBadgeText !== undefined || settings.websiteLogo || settings.websiteTagline !== undefined) {
       setBrandState({
         name: settings.websiteName || 'SmartKhata',
-        badge: settings.websiteBadgeText !== undefined && settings.websiteBadgeText !== null && settings.websiteBadgeText !== '' ? settings.websiteBadgeText : 'ERP',
+        badge: settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'ERP',
         badgeBg: settings.websiteBadgeBg || 'fintech-gradient-primary',
-        tagline: settings.websiteTagline !== undefined && settings.websiteTagline !== null && settings.websiteTagline !== '' ? settings.websiteTagline : 'Enterprise Fintech & Digital Khata Operating System',
+        tagline: settings.websiteTagline !== undefined ? settings.websiteTagline : '',
         logo: settings.websiteLogo || '/brand-logo.png',
         favicon: settings.websiteFavicon || '/brand-favicon.png',
       });
@@ -145,9 +145,9 @@ export default function LoginPage() {
       if (e.detail) {
         setBrandState({
           name: e.detail.websiteName || 'SmartKhata',
-          badge: e.detail.websiteBadgeText !== undefined && e.detail.websiteBadgeText !== null && e.detail.websiteBadgeText !== '' ? e.detail.websiteBadgeText : 'ERP',
+          badge: e.detail.websiteBadgeText !== undefined ? e.detail.websiteBadgeText : 'ERP',
           badgeBg: e.detail.websiteBadgeBg || 'fintech-gradient-primary',
-          tagline: e.detail.websiteTagline !== undefined && e.detail.websiteTagline !== null && e.detail.websiteTagline !== '' ? e.detail.websiteTagline : 'Enterprise Fintech & Digital Khata Operating System',
+          tagline: e.detail.websiteTagline !== undefined ? e.detail.websiteTagline : '',
           logo: e.detail.websiteLogo || '/brand-logo.png',
           favicon: e.detail.websiteFavicon || '/brand-favicon.png',
         });
@@ -164,9 +164,9 @@ export default function LoginPage() {
           const b = json.websiteBranding;
           setBrandState({
             name: b.websiteName || 'SmartKhata',
-            badge: b.websiteBadgeText !== undefined && b.websiteBadgeText !== null && b.websiteBadgeText !== '' ? b.websiteBadgeText : 'ERP',
+            badge: b.websiteBadgeText !== undefined ? b.websiteBadgeText : 'ERP',
             badgeBg: b.websiteBadgeBg || 'fintech-gradient-primary',
-            tagline: b.websiteTagline !== undefined && b.websiteTagline !== null && b.websiteTagline !== '' ? b.websiteTagline : 'Enterprise Fintech & Digital Khata Operating System',
+            tagline: b.websiteTagline !== undefined ? b.websiteTagline : '',
             logo: b.websiteLogo || '/brand-logo.png',
             favicon: b.websiteFavicon || '/brand-favicon.png',
           });
