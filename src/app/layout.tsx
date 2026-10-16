@@ -10,10 +10,10 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export async function generateMetadata(): Promise<Metadata> {
   const dbBrand = await getGlobalBrandingFromDb().catch(() => null);
-  let brandName = dbBrand?.websiteName || '';
-  let brandBadge = dbBrand?.websiteBadgeText || '';
-  let brandTagline = dbBrand?.websiteTagline || '';
-  let brandFavicon = dbBrand?.websiteFavicon || dbBrand?.websiteLogo || '';
+  let brandName = dbBrand?.websiteName || 'SmartKhata';
+  let brandBadge = dbBrand?.websiteBadgeText !== undefined ? dbBrand.websiteBadgeText : 'ERP';
+  let brandTagline = dbBrand?.websiteTagline !== undefined ? dbBrand.websiteTagline : 'Enterprise Fintech & Digital Khata Operating System';
+  let brandFavicon = dbBrand?.websiteFavicon || dbBrand?.websiteLogo || '/brand-favicon.png';
 
   try {
     const cookieStore = await cookies();
@@ -27,15 +27,18 @@ export async function generateMetadata(): Promise<Metadata> {
     if (favCookie?.value) brandFavicon = decodeURIComponent(favCookie.value);
   } catch {}
 
-  const displayName = brandName || '';
+  const displayName = brandName || 'SmartKhata';
   const displayBadge = brandBadge ? ` ${brandBadge}` : '';
   const displayTagline = brandTagline ? ` - ${brandTagline}` : '';
-  const title = displayName ? `${displayName}${displayBadge}${displayTagline}` : (brandTagline || 'Fintech Operating System');
+  const title = displayName ? `${displayName}${displayBadge}${displayTagline}` : 'SmartKhata ERP - Enterprise Fintech & Digital Khata Operating System';
 
   return {
     title,
     description: 'Track Money, Manage Business, Grow Faster. Enterprise-grade Expense Tracker, Digital KhataBook, Invoicing, Inventory, UPI Collections & CRM.',
-    icons: brandFavicon ? [{ rel: 'icon', url: brandFavicon }, { rel: 'shortcut icon', url: brandFavicon }] : undefined,
+    icons: [
+      { rel: 'icon', url: brandFavicon || '/brand-favicon.png' },
+      { rel: 'shortcut icon', url: brandFavicon || '/brand-favicon.png' }
+    ],
   };
 }
 
@@ -95,17 +98,17 @@ export default async function RootLayout({
                       if (parsed.websiteFavicon || parsed.websiteLogo) brandFavicon = parsed.websiteFavicon || parsed.websiteLogo;
                     } catch(e) {}
                   }
-                  if (!brandName) brandName = localStorage.getItem('skp_brand_name') || '';
+                  if (!brandName) brandName = localStorage.getItem('skp_brand_name') || 'SmartKhata';
                   if (!brandBadge) {
                     var b = localStorage.getItem('skp_brand_badge');
-                    if (b !== null && b !== undefined) brandBadge = b;
+                    brandBadge = (b !== null && b !== undefined && b !== '') ? b : 'ERP';
                   }
                   if (!brandTagline) {
                     var tg = localStorage.getItem('skp_brand_tagline');
-                    if (tg !== null && tg !== undefined) brandTagline = tg;
+                    brandTagline = (tg !== null && tg !== undefined && tg !== '') ? tg : 'Enterprise Fintech & Digital Khata Operating System';
                   }
                   if (!brandFavicon) {
-                    brandFavicon = localStorage.getItem('skp_brand_favicon') || localStorage.getItem('skp_brand_logo') || '';
+                    brandFavicon = localStorage.getItem('skp_brand_favicon') || localStorage.getItem('skp_brand_logo') || '/brand-favicon.png';
                   }
 
                   if (brandName) {

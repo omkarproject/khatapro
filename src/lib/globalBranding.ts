@@ -13,15 +13,15 @@ export interface GlobalWebsiteBranding {
 }
 
 export const DEFAULT_BRANDING: GlobalWebsiteBranding = {
-  websiteName: '',
-  websiteLogo: '',
-  websiteFavicon: '',
-  websiteBadgeText: '',
+  websiteName: 'SmartKhata',
+  websiteLogo: '/brand-logo.png',
+  websiteFavicon: '/brand-favicon.png',
+  websiteBadgeText: 'ERP',
   websiteBadgeBg: 'fintech-gradient-primary',
-  websiteTagline: '',
-  websiteSupportLocation: '',
-  websiteSupportPhone: '',
-  websiteSupportEmail: '',
+  websiteTagline: 'Enterprise Fintech & Digital Khata Operating System',
+  websiteSupportLocation: 'Bhiwandi',
+  websiteSupportPhone: '8371838314',
+  websiteSupportEmail: 'anantyadav8924@gmail.com',
 };
 
 /**
@@ -43,15 +43,15 @@ export async function getGlobalBrandingFromDb(): Promise<GlobalWebsiteBranding> 
           const brand = data.maintenance_mode?.websiteBranding;
           if (brand && typeof brand === 'object') {
             return {
-              websiteName: brand.websiteName || '',
-              websiteLogo: brand.websiteLogo || '',
-              websiteFavicon: brand.websiteFavicon || '',
-              websiteBadgeText: brand.websiteBadgeText !== undefined ? brand.websiteBadgeText : '',
-              websiteBadgeBg: brand.websiteBadgeBg || 'fintech-gradient-primary',
-              websiteTagline: brand.websiteTagline || '',
-              websiteSupportLocation: brand.websiteSupportLocation || '',
-              websiteSupportPhone: brand.websiteSupportPhone || '',
-              websiteSupportEmail: brand.websiteSupportEmail || '',
+              websiteName: brand.websiteName?.trim() ? brand.websiteName.trim() : DEFAULT_BRANDING.websiteName,
+              websiteLogo: brand.websiteLogo?.trim() ? brand.websiteLogo.trim() : DEFAULT_BRANDING.websiteLogo,
+              websiteFavicon: brand.websiteFavicon?.trim() ? brand.websiteFavicon.trim() : (brand.websiteLogo?.trim() ? brand.websiteLogo.trim() : DEFAULT_BRANDING.websiteFavicon),
+              websiteBadgeText: brand.websiteBadgeText !== undefined && brand.websiteBadgeText !== null ? brand.websiteBadgeText : DEFAULT_BRANDING.websiteBadgeText,
+              websiteBadgeBg: brand.websiteBadgeBg || DEFAULT_BRANDING.websiteBadgeBg,
+              websiteTagline: brand.websiteTagline !== undefined && brand.websiteTagline !== null && brand.websiteTagline !== '' ? brand.websiteTagline : DEFAULT_BRANDING.websiteTagline,
+              websiteSupportLocation: brand.websiteSupportLocation?.trim() ? brand.websiteSupportLocation.trim() : DEFAULT_BRANDING.websiteSupportLocation,
+              websiteSupportPhone: brand.websiteSupportPhone?.trim() ? brand.websiteSupportPhone.trim() : DEFAULT_BRANDING.websiteSupportPhone,
+              websiteSupportEmail: brand.websiteSupportEmail?.trim() ? brand.websiteSupportEmail.trim() : DEFAULT_BRANDING.websiteSupportEmail,
             };
           }
         }

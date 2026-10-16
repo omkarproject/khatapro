@@ -715,77 +715,92 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             localStorage.setItem('skp_global_system_config', JSON.stringify(globalPayload));
             if (json.websiteBranding && typeof json.websiteBranding === 'object') {
               const b = json.websiteBranding;
-              localStorage.setItem('skp_global_branding', JSON.stringify(b));
-              if (b.websiteName) localStorage.setItem('skp_brand_name', b.websiteName);
-              if (b.websiteLogo) localStorage.setItem('skp_brand_logo', b.websiteLogo);
-              if (b.websiteFavicon) localStorage.setItem('skp_brand_favicon', b.websiteFavicon);
-              if (b.websiteBadgeText !== undefined) localStorage.setItem('skp_brand_badge', b.websiteBadgeText);
-              if (b.websiteBadgeBg) localStorage.setItem('skp_brand_badge_bg', b.websiteBadgeBg);
-              if (b.websiteTagline !== undefined) localStorage.setItem('skp_brand_tagline', b.websiteTagline);
-              if (b.websiteSupportLocation !== undefined) localStorage.setItem('skp_brand_support_location', b.websiteSupportLocation);
-              if (b.websiteSupportPhone !== undefined) localStorage.setItem('skp_brand_support_phone', b.websiteSupportPhone);
-              if (b.websiteSupportEmail !== undefined) localStorage.setItem('skp_brand_support_email', b.websiteSupportEmail);
+              const effName = b.websiteName?.trim() ? b.websiteName.trim() : 'SmartKhata';
+              const effLogo = b.websiteLogo?.trim() ? b.websiteLogo.trim() : '/brand-logo.png';
+              const effFavicon = b.websiteFavicon?.trim() ? b.websiteFavicon.trim() : (b.websiteLogo?.trim() || '/brand-favicon.png');
+              const effBadge = b.websiteBadgeText !== undefined && b.websiteBadgeText !== null && b.websiteBadgeText !== '' ? b.websiteBadgeText : 'ERP';
+              const effBadgeBg = b.websiteBadgeBg || 'fintech-gradient-primary';
+              const effTagline = b.websiteTagline !== undefined && b.websiteTagline !== null && b.websiteTagline !== '' ? b.websiteTagline : 'Enterprise Fintech & Digital Khata Operating System';
+              const effSuppLoc = b.websiteSupportLocation?.trim() ? b.websiteSupportLocation.trim() : 'Bhiwandi';
+              const effSuppPhone = b.websiteSupportPhone?.trim() ? b.websiteSupportPhone.trim() : '8371838314';
+              const effSuppEmail = b.websiteSupportEmail?.trim() ? b.websiteSupportEmail.trim() : 'anantyadav8924@gmail.com';
+
+              const normalizedBrand = {
+                websiteName: effName,
+                websiteLogo: effLogo,
+                websiteFavicon: effFavicon,
+                websiteBadgeText: effBadge,
+                websiteBadgeBg: effBadgeBg,
+                websiteTagline: effTagline,
+                websiteSupportLocation: effSuppLoc,
+                websiteSupportPhone: effSuppPhone,
+                websiteSupportEmail: effSuppEmail,
+              };
+
+              localStorage.setItem('skp_global_branding', JSON.stringify(normalizedBrand));
+              localStorage.setItem('skp_brand_name', effName);
+              localStorage.setItem('skp_brand_logo', effLogo);
+              localStorage.setItem('skp_brand_favicon', effFavicon);
+              localStorage.setItem('skp_brand_badge', effBadge);
+              localStorage.setItem('skp_brand_badge_bg', effBadgeBg);
+              localStorage.setItem('skp_brand_tagline', effTagline);
+              localStorage.setItem('skp_brand_support_location', effSuppLoc);
+              localStorage.setItem('skp_brand_support_phone', effSuppPhone);
+              localStorage.setItem('skp_brand_support_email', effSuppEmail);
 
               try {
                 const maxAge = '; path=/; max-age=31536000';
-                if (b.websiteName) document.cookie = 'skp_brand_name=' + encodeURIComponent(b.websiteName) + maxAge;
-                if (b.websiteLogo) document.cookie = 'skp_brand_logo=' + encodeURIComponent(b.websiteLogo) + maxAge;
-                if (b.websiteFavicon) document.cookie = 'skp_brand_favicon=' + encodeURIComponent(b.websiteFavicon) + maxAge;
-                if (b.websiteBadgeText !== undefined) document.cookie = 'skp_brand_badge=' + encodeURIComponent(b.websiteBadgeText) + maxAge;
-                if (b.websiteBadgeBg) document.cookie = 'skp_brand_badge_bg=' + encodeURIComponent(b.websiteBadgeBg) + maxAge;
-                if (b.websiteTagline !== undefined) document.cookie = 'skp_brand_tagline=' + encodeURIComponent(b.websiteTagline) + maxAge;
-                if (b.websiteSupportLocation !== undefined) document.cookie = 'skp_brand_support_location=' + encodeURIComponent(b.websiteSupportLocation) + maxAge;
-                if (b.websiteSupportPhone !== undefined) document.cookie = 'skp_brand_support_phone=' + encodeURIComponent(b.websiteSupportPhone) + maxAge;
-                if (b.websiteSupportEmail !== undefined) document.cookie = 'skp_brand_support_email=' + encodeURIComponent(b.websiteSupportEmail) + maxAge;
+                document.cookie = 'skp_brand_name=' + encodeURIComponent(effName) + maxAge;
+                document.cookie = 'skp_brand_logo=' + encodeURIComponent(effLogo) + maxAge;
+                document.cookie = 'skp_brand_favicon=' + encodeURIComponent(effFavicon) + maxAge;
+                document.cookie = 'skp_brand_badge=' + encodeURIComponent(effBadge) + maxAge;
+                document.cookie = 'skp_brand_badge_bg=' + encodeURIComponent(effBadgeBg) + maxAge;
+                document.cookie = 'skp_brand_tagline=' + encodeURIComponent(effTagline) + maxAge;
+                document.cookie = 'skp_brand_support_location=' + encodeURIComponent(effSuppLoc) + maxAge;
+                document.cookie = 'skp_brand_support_phone=' + encodeURIComponent(effSuppPhone) + maxAge;
+                document.cookie = 'skp_brand_support_email=' + encodeURIComponent(effSuppEmail) + maxAge;
               } catch {}
 
-              if (b.websiteName) {
-                document.title = b.websiteName + (b.websiteTagline ? ` — ${b.websiteTagline}` : '');
-              }
-              if (b.websiteFavicon) {
+              document.title = effName + (effTagline ? ` — ${effTagline}` : '');
+              if (effFavicon) {
                 let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
                 if (!link) {
                   link = document.createElement('link');
                   link.rel = 'icon';
                   document.head.appendChild(link);
                 }
-                link.href = b.websiteFavicon;
+                link.href = effFavicon;
               }
-              window.dispatchEvent(new CustomEvent('skp_branding_updated', { detail: b }));
+              window.dispatchEvent(new CustomEvent('skp_branding_updated', { detail: normalizedBrand }));
             }
           }
           setSettingsState(prev => {
             const sameMaint = JSON.stringify(prev.maintenanceMode) === JSON.stringify(json.maintenanceMode);
             const sameBeta = prev.betaTestingEnabled === Boolean(json.betaTestingEnabled);
             const b = json.websiteBranding;
-            const sameBrand = !b || (
-              prev.websiteName === b.websiteName &&
-              prev.websiteLogo === b.websiteLogo &&
-              prev.websiteFavicon === b.websiteFavicon &&
-              prev.websiteBadgeText === b.websiteBadgeText &&
-              prev.websiteBadgeBg === b.websiteBadgeBg &&
-              prev.websiteTagline === b.websiteTagline &&
-              prev.websiteSupportLocation === b.websiteSupportLocation &&
-              prev.websiteSupportPhone === b.websiteSupportPhone &&
-              prev.websiteSupportEmail === b.websiteSupportEmail
-            );
+            const effName = b?.websiteName?.trim() ? b.websiteName.trim() : (prev.websiteName || 'SmartKhata');
+            const effLogo = b?.websiteLogo?.trim() ? b.websiteLogo.trim() : (prev.websiteLogo || '/brand-logo.png');
+            const effFavicon = b?.websiteFavicon?.trim() ? b.websiteFavicon.trim() : (b?.websiteLogo?.trim() || prev.websiteFavicon || '/brand-favicon.png');
+            const effBadge = b?.websiteBadgeText !== undefined && b?.websiteBadgeText !== null && b?.websiteBadgeText !== '' ? b.websiteBadgeText : (prev.websiteBadgeText || 'ERP');
+            const effBadgeBg = b?.websiteBadgeBg || prev.websiteBadgeBg || 'fintech-gradient-primary';
+            const effTagline = b?.websiteTagline !== undefined && b?.websiteTagline !== null && b?.websiteTagline !== '' ? b.websiteTagline : (prev.websiteTagline || 'Enterprise Fintech & Digital Khata Operating System');
+            const effSuppLoc = b?.websiteSupportLocation?.trim() ? b.websiteSupportLocation.trim() : (prev.websiteSupportLocation || 'Bhiwandi');
+            const effSuppPhone = b?.websiteSupportPhone?.trim() ? b.websiteSupportPhone.trim() : (prev.websiteSupportPhone || '8371838314');
+            const effSuppEmail = b?.websiteSupportEmail?.trim() ? b.websiteSupportEmail.trim() : (prev.websiteSupportEmail || 'anantyadav8924@gmail.com');
 
-            if (sameMaint && sameBeta && sameBrand) return prev;
             return {
               ...prev,
               maintenanceMode: json.maintenanceMode,
               betaTestingEnabled: Boolean(json.betaTestingEnabled),
-              ...(b ? {
-                websiteName: b.websiteName !== undefined ? b.websiteName : prev.websiteName,
-                websiteLogo: b.websiteLogo !== undefined ? b.websiteLogo : prev.websiteLogo,
-                websiteFavicon: b.websiteFavicon !== undefined ? b.websiteFavicon : prev.websiteFavicon,
-                websiteBadgeText: b.websiteBadgeText !== undefined ? b.websiteBadgeText : prev.websiteBadgeText,
-                websiteBadgeBg: b.websiteBadgeBg !== undefined ? b.websiteBadgeBg : prev.websiteBadgeBg,
-                websiteTagline: b.websiteTagline !== undefined ? b.websiteTagline : prev.websiteTagline,
-                websiteSupportLocation: b.websiteSupportLocation !== undefined ? b.websiteSupportLocation : prev.websiteSupportLocation,
-                websiteSupportPhone: b.websiteSupportPhone !== undefined ? b.websiteSupportPhone : prev.websiteSupportPhone,
-                websiteSupportEmail: b.websiteSupportEmail !== undefined ? b.websiteSupportEmail : prev.websiteSupportEmail,
-              } : {}),
+              websiteName: effName,
+              websiteLogo: effLogo,
+              websiteFavicon: effFavicon,
+              websiteBadgeText: effBadge,
+              websiteBadgeBg: effBadgeBg,
+              websiteTagline: effTagline,
+              websiteSupportLocation: effSuppLoc,
+              websiteSupportPhone: effSuppPhone,
+              websiteSupportEmail: effSuppEmail,
             };
           });
         }

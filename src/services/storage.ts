@@ -85,15 +85,15 @@ function setLocalItem<T>(rawKey: string, value: T): void {
 }
 
 export const getCleanDefaultSettings = (businessName: string = '', phone: string = '', email: string = ''): SystemSettings => {
-  let globalWebName = '';
-  let globalWebLogo = '';
-  let globalWebFavicon = '';
-  let globalWebBadge = '';
+  let globalWebName = 'SmartKhata';
+  let globalWebLogo = '/brand-logo.png';
+  let globalWebFavicon = '/brand-favicon.png';
+  let globalWebBadge = 'ERP';
   let globalWebBadgeBg = 'fintech-gradient-primary';
-  let globalWebTagline = '';
-  let globalWebSupportLocation = '';
-  let globalWebSupportPhone = '';
-  let globalWebSupportEmail = '';
+  let globalWebTagline = 'Enterprise Fintech & Digital Khata Operating System';
+  let globalWebSupportLocation = 'Bhiwandi';
+  let globalWebSupportPhone = '8371838314';
+  let globalWebSupportEmail = 'anantyadav8924@gmail.com';
 
   if (typeof window !== 'undefined') {
     try {

@@ -763,15 +763,15 @@ export async function GET(req: NextRequest) {
       },
       darkMode: Boolean(sbSet.data.dark_mode),
       backendProvider: sbSet.data.backend_provider || 'supabase',
-      websiteName: sbSet.data.payment_settings?.websiteName || globalBranding?.websiteName || '',
-      websiteLogo: sbSet.data.payment_settings?.websiteLogo || globalBranding?.websiteLogo || '',
-      websiteFavicon: sbSet.data.payment_settings?.websiteFavicon || globalBranding?.websiteFavicon || '',
-      websiteBadgeText: sbSet.data.payment_settings?.websiteBadgeText !== undefined ? sbSet.data.payment_settings.websiteBadgeText : (globalBranding?.websiteBadgeText || ''),
+      websiteName: sbSet.data.payment_settings?.websiteName || globalBranding?.websiteName || 'SmartKhata',
+      websiteLogo: sbSet.data.payment_settings?.websiteLogo || globalBranding?.websiteLogo || '/brand-logo.png',
+      websiteFavicon: sbSet.data.payment_settings?.websiteFavicon || globalBranding?.websiteFavicon || '/brand-favicon.png',
+      websiteBadgeText: sbSet.data.payment_settings?.websiteBadgeText !== undefined && sbSet.data.payment_settings?.websiteBadgeText !== '' ? sbSet.data.payment_settings.websiteBadgeText : (globalBranding?.websiteBadgeText || 'ERP'),
       websiteBadgeBg: sbSet.data.payment_settings?.websiteBadgeBg || globalBranding?.websiteBadgeBg || 'fintech-gradient-primary',
-      websiteTagline: sbSet.data.payment_settings?.websiteTagline || globalBranding?.websiteTagline || '',
-      websiteSupportLocation: sbSet.data.payment_settings?.websiteSupportLocation || globalBranding?.websiteSupportLocation || '',
-      websiteSupportPhone: sbSet.data.payment_settings?.websiteSupportPhone || globalBranding?.websiteSupportPhone || '',
-      websiteSupportEmail: sbSet.data.payment_settings?.websiteSupportEmail || globalBranding?.websiteSupportEmail || '',
+      websiteTagline: sbSet.data.payment_settings?.websiteTagline || globalBranding?.websiteTagline || 'Enterprise Fintech & Digital Khata Operating System',
+      websiteSupportLocation: sbSet.data.payment_settings?.websiteSupportLocation || globalBranding?.websiteSupportLocation || 'Bhiwandi',
+      websiteSupportPhone: sbSet.data.payment_settings?.websiteSupportPhone || globalBranding?.websiteSupportPhone || '8371838314',
+      websiteSupportEmail: sbSet.data.payment_settings?.websiteSupportEmail || globalBranding?.websiteSupportEmail || 'anantyadav8924@gmail.com',
     } : null;
 
     const finalData = {
