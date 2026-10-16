@@ -8,12 +8,14 @@ import { getGlobalBrandingFromDb } from '@/lib/globalBranding';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata(): Promise<Metadata> {
   const dbBrand = await getGlobalBrandingFromDb().catch(() => null);
-  let brandName = dbBrand?.websiteName || 'SmartKhata';
-  let brandBadge = dbBrand?.websiteBadgeText !== undefined ? dbBrand.websiteBadgeText : 'ERP';
+  let brandName = dbBrand?.websiteName || '';
+  let brandBadge = dbBrand?.websiteBadgeText !== undefined ? dbBrand.websiteBadgeText : '';
   let brandTagline = dbBrand?.websiteTagline !== undefined ? dbBrand.websiteTagline : '';
-  let brandFavicon = dbBrand?.websiteFavicon || dbBrand?.websiteLogo || '/brand-favicon.png';
+  let brandFavicon = dbBrand?.websiteFavicon || dbBrand?.websiteLogo || '';
 
   try {
     const cookieStore = await cookies();
@@ -27,18 +29,18 @@ export async function generateMetadata(): Promise<Metadata> {
     if (favCookie?.value) brandFavicon = decodeURIComponent(favCookie.value);
   } catch {}
 
-  const displayName = brandName || 'SmartKhata';
+  const displayName = brandName;
   const displayBadge = brandBadge ? ` ${brandBadge}` : '';
   const displayTagline = brandTagline ? ` - ${brandTagline}` : '';
-  const title = displayName ? `${displayName}${displayBadge}${displayTagline}` : 'SmartKhata ERP';
+  const title = displayName ? `${displayName}${displayBadge}${displayTagline}` : 'Fintech ERP';
 
   return {
     title,
     description: 'Track Money, Manage Business, Grow Faster. Enterprise-grade Expense Tracker, Digital KhataBook, Invoicing, Inventory, UPI Collections & CRM.',
-    icons: [
-      { rel: 'icon', url: brandFavicon || '/brand-favicon.png' },
-      { rel: 'shortcut icon', url: brandFavicon || '/brand-favicon.png' }
-    ],
+    icons: brandFavicon ? [
+      { rel: 'icon', url: brandFavicon },
+      { rel: 'shortcut icon', url: brandFavicon }
+    ] : [],
   };
 }
 
@@ -67,8 +69,8 @@ export default async function RootLayout({
 
                   if (serverBrand && typeof serverBrand === 'object') {
                     brandName = serverBrand.websiteName || '';
-                    if (serverBrand.websiteBadgeText !== undefined) brandBadge = serverBrand.websiteBadgeText;
-                    if (serverBrand.websiteTagline !== undefined) brandTagline = serverBrand.websiteTagline;
+                    if (serverBrand.websiteBadgeText !== undefined && serverBrand.websiteBadgeText !== null) brandBadge = serverBrand.websiteBadgeText;
+                    if (serverBrand.websiteTagline !== undefined && serverBrand.websiteTagline !== null) brandTagline = serverBrand.websiteTagline;
                     brandFavicon = serverBrand.websiteFavicon || serverBrand.websiteLogo || '';
 
                     // Sync to localStorage if missing
@@ -79,7 +81,7 @@ export default async function RootLayout({
                       if (brandName && !localStorage.getItem('skp_brand_name')) localStorage.setItem('skp_brand_name', brandName);
                       if (serverBrand.websiteLogo && !localStorage.getItem('skp_brand_logo')) localStorage.setItem('skp_brand_logo', serverBrand.websiteLogo);
                       if (brandFavicon && !localStorage.getItem('skp_brand_favicon')) localStorage.setItem('skp_brand_favicon', brandFavicon);
-                      if (brandBadge && !localStorage.getItem('skp_brand_badge')) localStorage.setItem('skp_brand_badge', brandBadge);
+                      if (brandBadge !== undefined && !localStorage.getItem('skp_brand_badge')) localStorage.setItem('skp_brand_badge', brandBadge);
                       if (serverBrand.websiteBadgeBg && !localStorage.getItem('skp_brand_badge_bg')) localStorage.setItem('skp_brand_badge_bg', serverBrand.websiteBadgeBg);
                       if (brandTagline && !localStorage.getItem('skp_brand_tagline')) localStorage.setItem('skp_brand_tagline', brandTagline);
                       if (serverBrand.websiteSupportLocation && !localStorage.getItem('skp_brand_support_location')) localStorage.setItem('skp_brand_support_location', serverBrand.websiteSupportLocation);
@@ -93,22 +95,22 @@ export default async function RootLayout({
                     try {
                       var parsed = JSON.parse(raw);
                       if (parsed.websiteName) brandName = parsed.websiteName;
-                      if (parsed.websiteBadgeText !== undefined) brandBadge = parsed.websiteBadgeText;
-                      if (parsed.websiteTagline !== undefined) brandTagline = parsed.websiteTagline;
+                      if (parsed.websiteBadgeText !== undefined && parsed.websiteBadgeText !== null) brandBadge = parsed.websiteBadgeText;
+                      if (parsed.websiteTagline !== undefined && parsed.websiteTagline !== null) brandTagline = parsed.websiteTagline;
                       if (parsed.websiteFavicon || parsed.websiteLogo) brandFavicon = parsed.websiteFavicon || parsed.websiteLogo;
                     } catch(e) {}
                   }
-                  if (!brandName) brandName = localStorage.getItem('skp_brand_name') || 'SmartKhata';
+                  if (!brandName) brandName = localStorage.getItem('skp_brand_name') || '';
                   if (brandBadge === undefined || brandBadge === null) {
                     var b = localStorage.getItem('skp_brand_badge');
-                    brandBadge = (b !== null && b !== undefined) ? b : 'ERP';
+                    brandBadge = (b !== null && b !== undefined) ? b : '';
                   }
                   if (brandTagline === undefined || brandTagline === null) {
                     var tg = localStorage.getItem('skp_brand_tagline');
                     brandTagline = (tg !== null && tg !== undefined) ? tg : '';
                   }
                   if (!brandFavicon) {
-                    brandFavicon = localStorage.getItem('skp_brand_favicon') || localStorage.getItem('skp_brand_logo') || '/brand-favicon.png';
+                    brandFavicon = localStorage.getItem('skp_brand_favicon') || localStorage.getItem('skp_brand_logo') || '';
                   }
 
                   if (brandName) {
@@ -138,7 +140,7 @@ export default async function RootLayout({
         />
       </head>
       <body className={`${inter.className} min-h-screen bg-slate-50 dark:bg-[#0B0F19] text-slate-900 dark:text-slate-100 antialiased selection:bg-indigo-500 selection:text-white`}>
-        <AppProvider>
+        <AppProvider initialBranding={serverBranding}>
           <LayoutShell>
             {children}
           </LayoutShell>

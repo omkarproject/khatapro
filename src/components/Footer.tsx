@@ -29,8 +29,8 @@ export default function Footer() {
     };
   }, []);
 
-  const websiteLogo = settings.websiteLogo || localBrand?.websiteLogo || '/brand-logo.png';
-  const websiteName = settings.websiteName || localBrand?.websiteName || 'SmartKhata';
+  const websiteLogo = settings.websiteLogo || localBrand?.websiteLogo || '';
+  const websiteName = settings.websiteName || localBrand?.websiteName || '';
   const websiteBadgeText = settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : (localBrand?.websiteBadgeText || '');
   const websiteBadgeBg = settings.websiteBadgeBg || localBrand?.websiteBadgeBg || 'fintech-gradient-primary';
   const websiteTagline = settings.websiteTagline !== undefined ? settings.websiteTagline : (localBrand?.websiteTagline || '');

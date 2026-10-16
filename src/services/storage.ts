@@ -85,12 +85,12 @@ function setLocalItem<T>(rawKey: string, value: T): void {
 }
 
 export const getCleanDefaultSettings = (businessName: string = '', phone: string = '', email: string = ''): SystemSettings => {
-  let globalWebName = 'SmartKhata';
-  let globalWebLogo = '/brand-logo.png';
-  let globalWebFavicon = '/brand-favicon.png';
-  let globalWebBadge = 'ERP';
+  let globalWebName = '';
+  let globalWebLogo = '';
+  let globalWebFavicon = '';
+  let globalWebBadge = '';
   let globalWebBadgeBg = 'fintech-gradient-primary';
-  let globalWebTagline = 'Enterprise Fintech & Digital Khata Operating System';
+  let globalWebTagline = '';
   let globalWebSupportLocation = '';
   let globalWebSupportPhone = '';
   let globalWebSupportEmail = '';

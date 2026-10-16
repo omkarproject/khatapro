@@ -13,12 +13,12 @@ export interface GlobalWebsiteBranding {
 }
 
 export const DEFAULT_BRANDING: GlobalWebsiteBranding = {
-  websiteName: 'SmartKhata',
-  websiteLogo: '/brand-logo.png',
-  websiteFavicon: '/brand-favicon.png',
-  websiteBadgeText: 'ERP',
+  websiteName: '',
+  websiteLogo: '',
+  websiteFavicon: '',
+  websiteBadgeText: '',
   websiteBadgeBg: 'fintech-gradient-primary',
-  websiteTagline: 'Enterprise Fintech & Digital Khata Operating System',
+  websiteTagline: '',
   websiteSupportLocation: '',
   websiteSupportPhone: '',
   websiteSupportEmail: '',
@@ -43,12 +43,12 @@ export async function getGlobalBrandingFromDb(): Promise<GlobalWebsiteBranding> 
           const brand = data.maintenance_mode?.websiteBranding;
           if (brand && typeof brand === 'object') {
             return {
-              websiteName: brand.websiteName?.trim() ? brand.websiteName.trim() : DEFAULT_BRANDING.websiteName,
-              websiteLogo: brand.websiteLogo?.trim() ? brand.websiteLogo.trim() : DEFAULT_BRANDING.websiteLogo,
-              websiteFavicon: brand.websiteFavicon?.trim() ? brand.websiteFavicon.trim() : (brand.websiteLogo?.trim() ? brand.websiteLogo.trim() : DEFAULT_BRANDING.websiteFavicon),
-              websiteBadgeText: brand.websiteBadgeText !== undefined && brand.websiteBadgeText !== null ? brand.websiteBadgeText : DEFAULT_BRANDING.websiteBadgeText,
-              websiteBadgeBg: brand.websiteBadgeBg || DEFAULT_BRANDING.websiteBadgeBg,
-              websiteTagline: brand.websiteTagline !== undefined && brand.websiteTagline !== null ? brand.websiteTagline : DEFAULT_BRANDING.websiteTagline,
+              websiteName: brand.websiteName?.trim() || '',
+              websiteLogo: brand.websiteLogo?.trim() || '',
+              websiteFavicon: brand.websiteFavicon?.trim() || (brand.websiteLogo?.trim() ? brand.websiteLogo.trim() : ''),
+              websiteBadgeText: brand.websiteBadgeText !== undefined && brand.websiteBadgeText !== null ? brand.websiteBadgeText : '',
+              websiteBadgeBg: brand.websiteBadgeBg || 'fintech-gradient-primary',
+              websiteTagline: brand.websiteTagline !== undefined && brand.websiteTagline !== null ? brand.websiteTagline : '',
               websiteSupportLocation: brand.websiteSupportLocation !== undefined && brand.websiteSupportLocation !== null ? brand.websiteSupportLocation : '',
               websiteSupportPhone: brand.websiteSupportPhone !== undefined && brand.websiteSupportPhone !== null ? brand.websiteSupportPhone : '',
               websiteSupportEmail: brand.websiteSupportEmail !== undefined && brand.websiteSupportEmail !== null ? brand.websiteSupportEmail : '',

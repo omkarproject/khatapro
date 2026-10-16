@@ -7,7 +7,7 @@ import { ArrowLeft, ShieldCheck, FileText, Scale } from 'lucide-react';
 
 export default function TermsAndConditionsPage() {
   const { settings, profile, currentUser } = useApp();
-  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || settings.websiteName || 'SmartKhata';
+  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || settings.websiteName || 'Business';
   const businessPhone = settings.businessPhone || profile.phone || currentUser?.phone || '';
   const businessEmail = settings.businessEmail || profile.email || currentUser?.email || '';
   const businessAddress = settings.businessAddress || profile.businessAddress || '';
@@ -49,7 +49,7 @@ export default function TermsAndConditionsPage() {
         <section className="space-y-2">
           <h2 className="text-base font-bold text-slate-900 dark:text-white">2. Description of Products &amp; Services</h2>
           <p>
-            {businessName} provides enterprise billing software, business ledger systems ({settings.websiteName || 'SmartKhata'}), customer khata management, hardware inventory items, and electronic invoice settlement facilities. All commercial invoices issued represent lawful transactions for supplies or software services rendered.
+            {businessName} provides enterprise billing software, business ledger systems ({settings.websiteName || businessName || 'Billing & Ledger System'}), customer khata management, hardware inventory items, and electronic invoice settlement facilities. All commercial invoices issued represent lawful transactions for supplies or software services rendered.
           </p>
         </section>
 

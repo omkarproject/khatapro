@@ -150,7 +150,7 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export function AppProvider({ children }: { children: React.ReactNode }) {
+export function AppProvider({ children, initialBranding }: { children: React.ReactNode; initialBranding?: any }) {
   const [mounted, setMounted] = useState(false);
   const [profile, setProfileState] = useState<UserProfile>(defaultEmptyProfile);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -164,7 +164,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [passwords, setPasswords] = useState<PasswordItem[]>([]);
-  const [settings, setSettingsState] = useState<SystemSettings>(() => StorageService.getSettings());
+  const [settings, setSettingsState] = useState<SystemSettings>(() => {
+    const s = StorageService.getSettings();
+    if (initialBranding && typeof initialBranding === 'object') {
+      return {
+        ...s,
+        websiteName: initialBranding.websiteName ?? s.websiteName,
+        websiteLogo: initialBranding.websiteLogo ?? s.websiteLogo,
+        websiteFavicon: initialBranding.websiteFavicon ?? s.websiteFavicon,
+        websiteBadgeText: initialBranding.websiteBadgeText !== undefined ? initialBranding.websiteBadgeText : s.websiteBadgeText,
+        websiteBadgeBg: initialBranding.websiteBadgeBg || s.websiteBadgeBg,
+        websiteTagline: initialBranding.websiteTagline !== undefined ? initialBranding.websiteTagline : s.websiteTagline,
+        websiteSupportLocation: initialBranding.websiteSupportLocation !== undefined ? initialBranding.websiteSupportLocation : s.websiteSupportLocation,
+        websiteSupportPhone: initialBranding.websiteSupportPhone !== undefined ? initialBranding.websiteSupportPhone : s.websiteSupportPhone,
+        websiteSupportEmail: initialBranding.websiteSupportEmail !== undefined ? initialBranding.websiteSupportEmail : s.websiteSupportEmail,
+      };
+    }
+    return s;
+  });
   const [darkMode, setDarkMode] = useState(false);
   const [activeRole, setActiveRole] = useState<UserRole>('user');
 
@@ -715,10 +732,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             localStorage.setItem('skp_global_system_config', JSON.stringify(globalPayload));
             if (json.websiteBranding && typeof json.websiteBranding === 'object') {
               const b = json.websiteBranding;
-              const effName = b.websiteName !== undefined ? (b.websiteName.trim() || 'SmartKhata') : 'SmartKhata';
-              const effLogo = b.websiteLogo !== undefined ? (b.websiteLogo.trim() || '/brand-logo.png') : '/brand-logo.png';
-              const effFavicon = b.websiteFavicon !== undefined ? (b.websiteFavicon.trim() || effLogo) : (effLogo || '/brand-favicon.png');
-              const effBadge = b.websiteBadgeText !== undefined && b.websiteBadgeText !== null ? b.websiteBadgeText : 'ERP';
+              const effName = b.websiteName !== undefined ? b.websiteName.trim() : '';
+              const effLogo = b.websiteLogo !== undefined ? b.websiteLogo.trim() : '';
+              const effFavicon = b.websiteFavicon !== undefined ? (b.websiteFavicon.trim() || effLogo) : effLogo;
+              const effBadge = b.websiteBadgeText !== undefined && b.websiteBadgeText !== null ? b.websiteBadgeText : '';
               const effBadgeBg = b.websiteBadgeBg || 'fintech-gradient-primary';
               const effTagline = b.websiteTagline !== undefined && b.websiteTagline !== null ? b.websiteTagline : '';
               const effSuppLoc = b.websiteSupportLocation !== undefined && b.websiteSupportLocation !== null ? b.websiteSupportLocation : '';
@@ -761,7 +778,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 document.cookie = 'skp_brand_support_email=' + encodeURIComponent(effSuppEmail) + maxAge;
               } catch {}
 
-              document.title = effName + (effTagline ? ` — ${effTagline}` : '');
+              if (effName) {
+                document.title = effName + (effTagline ? ` — ${effTagline}` : '');
+              }
               if (effFavicon) {
                 let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
                 if (!link) {
@@ -778,10 +797,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const sameMaint = JSON.stringify(prev.maintenanceMode) === JSON.stringify(json.maintenanceMode);
             const sameBeta = prev.betaTestingEnabled === Boolean(json.betaTestingEnabled);
             const b = json.websiteBranding;
-            const effName = b?.websiteName !== undefined ? (b.websiteName.trim() || 'SmartKhata') : (prev.websiteName || 'SmartKhata');
-            const effLogo = b?.websiteLogo !== undefined ? (b.websiteLogo.trim() || '/brand-logo.png') : (prev.websiteLogo || '/brand-logo.png');
-            const effFavicon = b?.websiteFavicon !== undefined ? (b.websiteFavicon.trim() || effLogo) : (prev.websiteFavicon || '/brand-favicon.png');
-            const effBadge = b?.websiteBadgeText !== undefined && b?.websiteBadgeText !== null ? b.websiteBadgeText : (prev.websiteBadgeText ?? 'ERP');
+            const effName = b?.websiteName !== undefined ? b.websiteName.trim() : (prev.websiteName || '');
+            const effLogo = b?.websiteLogo !== undefined ? b.websiteLogo.trim() : (prev.websiteLogo || '');
+            const effFavicon = b?.websiteFavicon !== undefined ? (b.websiteFavicon.trim() || effLogo) : (prev.websiteFavicon || effLogo);
+            const effBadge = b?.websiteBadgeText !== undefined && b?.websiteBadgeText !== null ? b.websiteBadgeText : (prev.websiteBadgeText ?? '');
             const effBadgeBg = b?.websiteBadgeBg || prev.websiteBadgeBg || 'fintech-gradient-primary';
             const effTagline = b?.websiteTagline !== undefined && b?.websiteTagline !== null ? b.websiteTagline : (prev.websiteTagline ?? '');
             const effSuppLoc = b?.websiteSupportLocation !== undefined && b?.websiteSupportLocation !== null ? b.websiteSupportLocation : (prev.websiteSupportLocation ?? '');

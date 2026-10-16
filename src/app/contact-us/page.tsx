@@ -25,9 +25,9 @@ export default function ContactUsPage() {
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || settings.websiteName || 'SmartKhata';
+  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || settings.websiteName || 'Business';
   const businessPhone = settings.businessPhone || profile.phone || currentUser?.phone || '';
-  const businessEmail = settings.businessEmail || profile.email || currentUser?.email || 'support@smartkhatapro.in';
+  const businessEmail = settings.businessEmail || profile.email || currentUser?.email || settings.websiteSupportEmail || '';
   const businessAddress = settings.businessAddress || profile.businessAddress || '';
   const businessGst = settings.paymentSettings?.businessGst || profile.businessGst || '';
 

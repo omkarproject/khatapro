@@ -873,7 +873,7 @@ export default function SettingsPage() {
   ];
 
   const [webName, setWebName] = useState(() => settings.websiteName || '');
-  const [webBadgeText, setWebBadgeText] = useState(() => settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : 'PRO');
+  const [webBadgeText, setWebBadgeText] = useState(() => settings.websiteBadgeText !== undefined ? settings.websiteBadgeText : '');
   const [webBadgeBg, setWebBadgeBg] = useState(() => settings.websiteBadgeBg || 'fintech-gradient-primary');
   const [webTagline, setWebTagline] = useState(() => settings.websiteTagline !== undefined ? settings.websiteTagline : '');
   const [webSupportLocation, setWebSupportLocation] = useState(() => settings.websiteSupportLocation || '');
@@ -1021,7 +1021,7 @@ export default function SettingsPage() {
 
     const finalLogo = webLogoMode === 'link' ? (webLogoLinkInput.trim() || webLogo) : webLogo;
     const finalFavicon = webFaviconMode === 'link' ? (webFaviconLinkInput.trim() || webFavicon) : (webFavicon || finalLogo);
-    const finalName = webName.trim() || 'SmartKhata';
+    const finalName = webName.trim();
     const finalBadge = webBadgeText.trim();
     const finalTagline = webTagline.trim();
     const finalSupportLocation = webSupportLocation.trim();

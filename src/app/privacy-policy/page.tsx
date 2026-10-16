@@ -7,7 +7,7 @@ import { ArrowLeft, Shield, Lock, EyeOff, Server } from 'lucide-react';
 
 export default function PrivacyPolicyPage() {
   const { settings, profile, currentUser } = useApp();
-  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || settings.websiteName || 'SmartKhata';
+  const businessName = settings.businessName || profile.businessName || currentUser?.businessName || settings.websiteName || 'Business';
   const businessPhone = settings.businessPhone || profile.phone || currentUser?.phone || '';
   const businessEmail = settings.businessEmail || profile.email || currentUser?.email || '';
   const businessAddress = settings.businessAddress || profile.businessAddress || '';
@@ -42,7 +42,7 @@ export default function PrivacyPolicyPage() {
         <section className="space-y-2">
           <h2 className="text-base font-bold text-slate-900 dark:text-white">1. Overview</h2>
           <p>
-            At <strong>{businessName}</strong>, we are committed to safeguarding the privacy and security of your personal and business financial data. This Privacy Policy describes how we collect, process, and protect your information when you access {settings.websiteName || 'SmartKhata'} and execute online payments through our portals.
+            At <strong>{businessName}</strong>, we are committed to safeguarding the privacy and security of your personal and business financial data. This Privacy Policy describes how we collect, process, and protect your information when you access {settings.websiteName || businessName || 'our services'} and execute online payments through our portals.
           </p>
         </section>
 

@@ -166,7 +166,7 @@ export default function Sidebar({ isOpenMobile, onCloseMobile }: SidebarProps) {
                   </span>
                 </div>
                 <div className="text-xs font-bold text-slate-900 dark:text-white truncate leading-tight" suppressHydrationWarning>
-                  {settings.businessName || profile?.businessName || currentUser?.businessName || 'SmartKhata Merchant'}
+                  {settings.businessName || profile?.businessName || currentUser?.businessName || settings.websiteName || 'Merchant'}
                 </div>
                 <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate font-mono mt-0.5" suppressHydrationWarning>
                   {settings.paymentSettings?.upiId || settings.businessPhone || profile?.phone || currentUser?.phone || 'Configure in Settings'}
