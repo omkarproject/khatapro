@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
+import Loading from './Loading';
 import {
   X,
   Mail,
@@ -354,7 +355,18 @@ export default function AuthModal() {
         </div>
 
         {/* Form Body */}
-        <div className="p-6 space-y-4 overflow-y-auto">
+        <div className="p-6 space-y-4 overflow-y-auto relative">
+          {isLoading && (
+            <div className="absolute inset-0 bg-white/95 dark:bg-[#0C1222]/95 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-6 animate-in fade-in duration-200">
+              <Loading
+                variant="verifying"
+                title="Verifying"
+                subtitle="Account"
+                size="md"
+                minHeight="min-h-0"
+              />
+            </div>
+          )}
           {currentUser ? (
             <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-2">

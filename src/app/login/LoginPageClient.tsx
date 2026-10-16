@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
+import Loading from '@/components/Loading';
 import {
   Mail,
   Lock,
@@ -551,6 +552,19 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
         
         {/* Accent Line */}
         <div className="h-1.5 w-full bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 animate-[pulse_2.5s_ease-in-out_infinite]" />
+
+        {/* Loading Overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 bg-white/95 dark:bg-[#0C1222]/95 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-6 animate-in fade-in duration-200">
+            <Loading
+              variant="verifying"
+              title="Verifying"
+              subtitle="Account"
+              size="md"
+              minHeight="min-h-0"
+            />
+          </div>
+        )}
 
         <div className="p-6 sm:p-8 space-y-6">
           

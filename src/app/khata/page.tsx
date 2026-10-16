@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
+import Loading from '@/components/Loading';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
 import { getActiveCurrency, t } from '@/lib/i18n';
 import { convertCurrency, getExcelNumFmt, formatMoney } from '@/lib/currencyService';
@@ -5149,9 +5150,14 @@ interface AttachedBill {
               )}
 
               {isUpdatingAvatarInReview && (
-                <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center text-white gap-2">
-                  <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
-                  <span className="text-xs font-semibold">Updating Google Drive...</span>
+                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center text-white z-20 p-2">
+                  <Loading
+                    variant="almost"
+                    title="Almost"
+                    subtitle="Updating Drive..."
+                    size="sm"
+                    minHeight="min-h-0"
+                  />
                 </div>
               )}
             </div>

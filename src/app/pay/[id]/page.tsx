@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
+import Loading from '@/components/Loading';
 import { StorageService } from '@/services/storage';
 import { Invoice, PaymentCollectionMode } from '@/types';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl } from '@/lib/utils';
@@ -487,60 +488,15 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
     setTimeout(() => setCopiedUpi(false), 2000);
   };
 
-  // Futuristic Modern Loading Screen
+  // Unified Loading Screen
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#070B14] flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans select-none">
-        {/* Futuristic glowing ambient background lights */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-gradient-to-tr from-indigo-600/20 via-purple-600/20 to-cyan-500/20 rounded-full blur-[110px] pointer-events-none" />
-        <div className="absolute -top-28 -right-28 w-80 h-80 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none animate-pulse" />
-        <div className="absolute -bottom-28 -left-28 w-80 h-80 bg-purple-600/15 rounded-full blur-3xl pointer-events-none animate-pulse" />
-
-        <div className="relative z-10 flex flex-col items-center max-w-sm w-full text-center space-y-6 animate-in fade-in zoom-in-95 duration-300">
-          
-          {/* Animated Futuristic Gateway Core */}
-          <div className="relative flex items-center justify-center w-24 h-24">
-            {/* Outer spinning dash ring */}
-            <div className="absolute inset-0 rounded-full border-2 border-dashed border-indigo-500/40 animate-[spin_10s_linear_infinite]" />
-            {/* Middle glowing high-speed ring */}
-            <div className="absolute inset-1.5 rounded-full border-2 border-t-cyan-400 border-r-transparent border-b-purple-500 border-l-transparent animate-[spin_2s_linear_infinite]" />
-            {/* Inner Core */}
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-cyan-400 p-[1.5px] shadow-xl shadow-indigo-500/40 flex items-center justify-center">
-              <div className="w-full h-full bg-[#0b1020] rounded-[14px] flex items-center justify-center">
-                <ShieldCheck className="w-7 h-7 text-cyan-400 animate-pulse" />
-              </div>
-            </div>
-          </div>
-
-          {/* Futuristic text and status */}
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-950/80 border border-indigo-500/30 text-[10px] font-mono font-bold uppercase tracking-widest text-indigo-300 shadow-sm">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
-              <span>SECURE PAYMENT SESSION</span>
-            </div>
-            <h2 className="text-xl font-black text-white tracking-tight">
-              Loading Invoice Details...
-            </h2>
-            <p className="text-xs text-slate-400 max-w-xs mx-auto">
-              Establishing 256-Bit encrypted connection with payment gateway
-            </p>
-          </div>
-
-          {/* Futuristic Glowing Shimmer Progress Bar */}
-          <div className="w-56 h-1.5 bg-slate-800/80 rounded-full overflow-hidden relative border border-slate-700/50">
-            <div className="h-full bg-gradient-to-r from-cyan-400 via-indigo-500 to-purple-500 rounded-full w-2/3 animate-[pulse_1.2s_ease-in-out_infinite]" />
-          </div>
-
-          <div className="flex items-center gap-3 text-[10px] font-mono text-slate-500">
-            <span className="flex items-center gap-1 text-emerald-400">
-              <Lock className="w-3 h-3" /> SSL SECURED
-            </span>
-            <span>•</span>
-            <span>GATEWAY READY</span>
-          </div>
-
-        </div>
-      </div>
+      <Loading
+        variant="initializing"
+        title="Initializing..."
+        subtitle="Connecting to Payment Gateway"
+        fullScreen
+      />
     );
   }
 

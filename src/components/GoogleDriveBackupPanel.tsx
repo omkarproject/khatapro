@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
+import Loading from '@/components/Loading';
 import {
   Cloud,
   HardDrive,
@@ -627,9 +628,14 @@ export default function GoogleDriveBackupPanel() {
 
             <div className="p-6 overflow-y-auto space-y-4 flex-1">
               {isDiscovering ? (
-                <div className="py-16 flex flex-col items-center justify-center text-slate-500 space-y-3">
-                  <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-                  <p className="text-xs font-mono">Searching Google Drive for SmartKhata backups...</p>
+                <div className="py-8">
+                  <Loading
+                    variant="almost"
+                    title="Almost"
+                    subtitle="Searching Google Drive backups..."
+                    size="sm"
+                    minHeight="min-h-0"
+                  />
                 </div>
               ) : discoveredBackups.length === 0 ? (
                 <div className="py-12 text-center text-slate-500 space-y-2">

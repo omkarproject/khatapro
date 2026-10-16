@@ -2,6 +2,7 @@
 
 import React, { useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import Loading from '@/components/Loading';
 
 function PayRedirectContent() {
   const searchParams = useSearchParams();
@@ -17,22 +18,24 @@ function PayRedirectContent() {
   }, [id, gw, router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[#070B14]">
-      <div className="text-center text-xs text-slate-400 font-medium animate-pulse">
-        Loading payment portal...
-      </div>
-    </div>
+    <Loading
+      variant="initializing"
+      title="Initializing..."
+      subtitle="Connecting to Payment Portal"
+      fullScreen
+    />
   );
 }
 
 export default function PayRedirectPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center p-4 bg-[#070B14]">
-        <div className="text-center text-xs text-slate-400 font-medium animate-pulse">
-          Loading payment portal...
-        </div>
-      </div>
+      <Loading
+        variant="initializing"
+        title="Initializing..."
+        subtitle="Connecting to Payment Portal"
+        fullScreen
+      />
     }>
       <PayRedirectContent />
     </Suspense>

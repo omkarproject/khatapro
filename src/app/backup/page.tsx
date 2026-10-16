@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Loading from '@/components/Loading';
 
 export default function BackupPage() {
   const router = useRouter();
@@ -11,11 +12,11 @@ export default function BackupPage() {
   }, [router]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-3">
-      <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-      <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
-        Redirecting to Settings &rarr; Cloud Backup...
-      </p>
-    </div>
+    <Loading
+      variant="initializing"
+      title="Initializing..."
+      subtitle="Connecting to Cloud Backup"
+      minHeight="min-h-[50vh]"
+    />
   );
 }

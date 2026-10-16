@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { Loader2 } from 'lucide-react';
+import Loading from './Loading';
 import DriveConnectVIPScreen from './DriveConnectVIPScreen';
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -107,12 +108,12 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!currentUser) {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center text-slate-900 dark:text-white">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-xl shadow-indigo-600/30 mb-4 animate-pulse">
-          <Loader2 className="w-6 h-6 animate-spin" />
-        </div>
-        <p className="text-xs font-mono uppercase tracking-wider text-slate-400">Authenticating {settings?.websiteName || 'Session'}...</p>
-      </div>
+      <Loading
+        variant="verifying"
+        title="Verifying"
+        subtitle="Account"
+        minHeight="min-h-[70vh]"
+      />
     );
   }
 
@@ -153,12 +154,12 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   // Loading Drive status check
   if (isDriveConnected === null) {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center text-slate-900 dark:text-white">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-xl shadow-indigo-600/30 mb-4 animate-pulse">
-          <Loader2 className="w-6 h-6 animate-spin" />
-        </div>
-        <p className="text-xs font-mono uppercase tracking-wider text-slate-400">Verifying Encrypted Cloud Vault...</p>
-      </div>
+      <Loading
+        variant="verifying"
+        title="Verifying"
+        subtitle="Encrypted Cloud Vault"
+        minHeight="min-h-[70vh]"
+      />
     );
   }
 
