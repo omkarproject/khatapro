@@ -491,7 +491,7 @@ export const StorageService = {
             s.betaTestingEnabled = Boolean(globalConf.betaTestingEnabled);
           }
           if (globalConf.websiteBranding) {
-            if (globalConf.websiteBranding.websiteName) s.websiteName = globalConf.websiteBranding.websiteName;
+            if (globalConf.websiteBranding.websiteName !== undefined) s.websiteName = globalConf.websiteBranding.websiteName;
             if (globalConf.websiteBranding.websiteLogo !== undefined) s.websiteLogo = globalConf.websiteBranding.websiteLogo;
             if (globalConf.websiteBranding.websiteFavicon !== undefined) s.websiteFavicon = globalConf.websiteBranding.websiteFavicon;
             if (globalConf.websiteBranding.websiteBadgeText !== undefined) s.websiteBadgeText = globalConf.websiteBranding.websiteBadgeText;
@@ -505,7 +505,7 @@ export const StorageService = {
         const rawBranding = localStorage.getItem('skp_global_branding');
         if (rawBranding) {
           const brandConf = JSON.parse(rawBranding);
-          if (brandConf.websiteName) s.websiteName = brandConf.websiteName;
+          if (brandConf.websiteName !== undefined) s.websiteName = brandConf.websiteName;
           if (brandConf.websiteLogo !== undefined) s.websiteLogo = brandConf.websiteLogo;
           if (brandConf.websiteFavicon !== undefined) s.websiteFavicon = brandConf.websiteFavicon;
           if (brandConf.websiteBadgeText !== undefined) s.websiteBadgeText = brandConf.websiteBadgeText;
@@ -591,13 +591,13 @@ export const StorageService = {
           if (brandObj.websiteTagline !== undefined) {
             localStorage.setItem('skp_brand_tagline', brandObj.websiteTagline);
           }
-          if (brandObj.websiteName) {
+          if (brandObj.websiteName !== undefined) {
             localStorage.setItem('skp_brand_name', brandObj.websiteName);
           }
-          if (brandObj.websiteLogo) {
+          if (brandObj.websiteLogo !== undefined) {
             localStorage.setItem('skp_brand_logo', brandObj.websiteLogo);
           }
-          if (brandObj.websiteFavicon) {
+          if (brandObj.websiteFavicon !== undefined) {
             localStorage.setItem('skp_brand_favicon', brandObj.websiteFavicon);
           }
           if (brandObj.websiteSupportLocation !== undefined) {

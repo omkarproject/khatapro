@@ -951,11 +951,14 @@ export async function POST(req: NextRequest) {
         };
 
         if (
-          data.settings.websiteName ||
-          data.settings.websiteLogo ||
-          data.settings.websiteFavicon ||
-          data.settings.websiteBadgeText !== undefined ||
-          data.settings.websiteTagline
+          data.syncGlobalBranding === true &&
+          (
+            data.settings.websiteName ||
+            data.settings.websiteLogo ||
+            data.settings.websiteFavicon ||
+            data.settings.websiteBadgeText !== undefined ||
+            data.settings.websiteTagline
+          )
         ) {
           promises.push(
             saveGlobalBrandingToDb({

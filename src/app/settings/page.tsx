@@ -889,19 +889,54 @@ export default function SettingsPage() {
   const webLogoInputRef = useRef<HTMLInputElement>(null);
   const webFaviconInputRef = useRef<HTMLInputElement>(null);
   const isBrandingDirtyRef = useRef(false);
+  const isInitializedRef = useRef(false);
+  const lastSavedBaselineRef = useRef<any>(null);
 
   useEffect(() => {
-    if (isBrandingDirtyRef.current || isSavingBranding) return;
-    if (settings.websiteName !== undefined) setWebName(settings.websiteName);
-    if (settings.websiteBadgeText !== undefined) setWebBadgeText(settings.websiteBadgeText);
-    if (settings.websiteBadgeBg) setWebBadgeBg(settings.websiteBadgeBg);
-    if (settings.websiteTagline !== undefined) setWebTagline(settings.websiteTagline);
-    if (settings.websiteSupportLocation !== undefined) setWebSupportLocation(settings.websiteSupportLocation);
-    if (settings.websiteSupportPhone !== undefined) setWebSupportPhone(settings.websiteSupportPhone);
-    if (settings.websiteSupportEmail !== undefined) setWebSupportEmail(settings.websiteSupportEmail);
-    if (settings.websiteLogo !== undefined) setWebLogo(settings.websiteLogo);
-    if (settings.websiteFavicon !== undefined) setWebFavicon(settings.websiteFavicon);
-  }, [settings.websiteName, settings.websiteBadgeText, settings.websiteBadgeBg, settings.websiteTagline, settings.websiteSupportLocation, settings.websiteSupportPhone, settings.websiteSupportEmail, settings.websiteLogo, settings.websiteFavicon, isSavingBranding]);
+    // If user has modified the form, never overwrite with background settings updates
+    if (isBrandingDirtyRef.current) return;
+
+    // If we just saved something, protect against stale context settings clobbering
+    if (lastSavedBaselineRef.current) {
+      const isCaughtUp =
+        settings.websiteName === lastSavedBaselineRef.current.websiteName &&
+        settings.websiteLogo === lastSavedBaselineRef.current.websiteLogo &&
+        settings.websiteFavicon === lastSavedBaselineRef.current.websiteFavicon &&
+        settings.websiteBadgeText === lastSavedBaselineRef.current.websiteBadgeText &&
+        settings.websiteTagline === lastSavedBaselineRef.current.websiteTagline &&
+        settings.websiteBadgeBg === lastSavedBaselineRef.current.websiteBadgeBg &&
+        settings.websiteSupportLocation === lastSavedBaselineRef.current.websiteSupportLocation &&
+        settings.websiteSupportPhone === lastSavedBaselineRef.current.websiteSupportPhone &&
+        settings.websiteSupportEmail === lastSavedBaselineRef.current.websiteSupportEmail;
+
+      if (isCaughtUp) {
+        lastSavedBaselineRef.current = null;
+      }
+      return;
+    }
+
+    if (settings) {
+      if (settings.websiteName !== undefined) setWebName(settings.websiteName);
+      if (settings.websiteBadgeText !== undefined) setWebBadgeText(settings.websiteBadgeText);
+      if (settings.websiteBadgeBg) setWebBadgeBg(settings.websiteBadgeBg);
+      if (settings.websiteTagline !== undefined) setWebTagline(settings.websiteTagline);
+      if (settings.websiteSupportLocation !== undefined) setWebSupportLocation(settings.websiteSupportLocation);
+      if (settings.websiteSupportPhone !== undefined) setWebSupportPhone(settings.websiteSupportPhone);
+      if (settings.websiteSupportEmail !== undefined) setWebSupportEmail(settings.websiteSupportEmail);
+      if (settings.websiteLogo !== undefined) setWebLogo(settings.websiteLogo);
+      if (settings.websiteFavicon !== undefined) setWebFavicon(settings.websiteFavicon);
+    }
+  }, [
+    settings.websiteName,
+    settings.websiteBadgeText,
+    settings.websiteBadgeBg,
+    settings.websiteTagline,
+    settings.websiteSupportLocation,
+    settings.websiteSupportPhone,
+    settings.websiteSupportEmail,
+    settings.websiteLogo,
+    settings.websiteFavicon,
+  ]);
 
   // Handle Website Logo Upload with auto-resize
   const handleUploadWebLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1039,6 +1074,7 @@ export default function SettingsPage() {
       websiteSupportPhone: finalSupportPhone,
       websiteSupportEmail: finalSupportEmail,
     };
+    lastSavedBaselineRef.current = brandPayload;
 
     try {
       // 1. Direct await save to Supabase cloud database
