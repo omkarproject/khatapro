@@ -362,28 +362,28 @@ export default function GoogleDriveBackupPanel() {
 
       {/* Main Content Area */}
       <div className="mt-6 space-y-6">
-        {/* Multi-Tenant Automated Daily Backup Status */}
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-indigo-500/10 to-teal-500/10 border border-emerald-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Automated Daily Cloud Backups
-                </h4>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                  Active (All Users)
-                </span>
+        {/* Multi-Tenant Automated Daily Backup Status (Admin Only) */}
+        {isAdmin && (
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-indigo-500/10 to-teal-500/10 border border-emerald-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                <ShieldCheck className="w-5 h-5" />
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Daily auto-backup runs automatically for all <strong>{totalMerchants} merchants</strong>. Isolated folders per merchant + master system archive.
-              </p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Automated Daily Cloud Backups
+                  </h4>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                    Active (All Users)
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Daily auto-backup runs automatically for all <strong>{totalMerchants} merchants</strong>. Isolated folders per merchant + master system archive.
+                </p>
+              </div>
             </div>
-          </div>
 
-          {isAdmin && (
             <button
               type="button"
               onClick={handleBackupAllUsersNow}
@@ -402,8 +402,8 @@ export default function GoogleDriveBackupPanel() {
                 </>
               )}
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Connected Details Bar */}
         {isConnected ? (

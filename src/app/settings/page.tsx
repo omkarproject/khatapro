@@ -3833,27 +3833,6 @@ export default function SettingsPage() {
       {mainTab === 'backup' && (
         <div className="space-y-6 animate-in fade-in">
           
-          {/* Active Database Banner (Compact & Sleek) */}
-          <div className="p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-emerald-500/10 border border-indigo-200/80 dark:border-indigo-900/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              <span className="text-[11px] font-mono font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-                Active Database: Supabase PostgreSQL (Cloud Active)
-              </span>
-              <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">&bull;</span>
-              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Google Drive Cloud Sync &amp; Local Backup
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 self-start sm:self-auto text-[10.5px]">
-              <span className="text-slate-400 font-mono">Last Snapshot:</span>
-              <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
-                {lastBackupDate}
-              </span>
-            </div>
-          </div>
-          
           {/* SUB-TABS: 1) Google Drive Cloud Sync  2) Export / Import Local */}
           <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
             <button
