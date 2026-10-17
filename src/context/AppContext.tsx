@@ -518,6 +518,26 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
               d.settings.paymentSettings.khataGroupNotifications.forEach((n: any) => StorageService.addGroupNotification(n));
               setGroupNotifications(StorageService.getGroupNotifications());
             }
+
+            // Also fetch all cloud-shared groups where this user is creator, member, or auto-linked merchant
+            try {
+              const gRes = await fetch(`/api/groups?userId=${userId}`);
+              if (gRes.ok) {
+                const gData = await gRes.json();
+                if (gData.success) {
+                  if (Array.isArray(gData.groups)) {
+                    gData.groups.forEach((g: any) => StorageService.saveGroup(g));
+                    setGroups(StorageService.getGroups());
+                  }
+                  if (Array.isArray(gData.notifications)) {
+                    gData.notifications.forEach((n: any) => StorageService.addGroupNotification(n));
+                    setGroupNotifications(StorageService.getGroupNotifications());
+                  }
+                }
+              }
+            } catch (gErr) {
+              console.warn('Could not load shared groups:', gErr);
+            }
           }
           if (d.user) {
             if (d.user.language) setActiveLanguage(d.user.language);
@@ -1615,6 +1635,16 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     StorageService.saveGroup(group);
     setGroups(StorageService.getGroups());
     syncWithDatabase();
+    if (currentUser?.id) {
+      fetch('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          group,
+          userId: currentUser.id,
+        }),
+      }).catch(e => console.warn('Could not sync group to cloud:', e));
+    }
     addToast('Group Saved', `Group "${group.name}" (@${group.username}) updated.`, 'success');
   };
 
@@ -1622,6 +1652,11 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     StorageService.deleteGroup(id);
     setGroups(StorageService.getGroups());
     syncWithDatabase();
+    if (currentUser?.id) {
+      fetch(`/api/groups?id=${id}&creatorUserId=${currentUser.id}`, {
+        method: 'DELETE',
+      }).catch(e => console.warn('Could not delete group from cloud:', e));
+    }
     addToast('Group Removed', 'Group has been deleted.', 'info');
   };
 
@@ -1629,6 +1664,16 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     StorageService.addGroupNotification(notif);
     setGroupNotifications(StorageService.getGroupNotifications());
     syncWithDatabase();
+    if (currentUser?.id) {
+      fetch('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          notification: notif,
+          userId: currentUser.id,
+        }),
+      }).catch(e => console.warn('Could not sync notification to cloud:', e));
+    }
   };
 
   const dismissGroupNotification = (id: string) => {

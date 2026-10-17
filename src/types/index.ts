@@ -120,9 +120,11 @@ export interface KhataGroupMember {
   customerId: string;
   name: string;
   phone?: string;
+  email?: string;
   avatar?: string;
   role?: 'admin' | 'member';
   joinedAt?: string;
+  merchantUserId?: string;
 }
 
 export interface TransactionSplitMember {

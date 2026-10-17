@@ -4,6 +4,13 @@ import { getGlobalBrandingFromDb, saveGlobalBrandingToDb } from '@/lib/globalBra
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function normalizePhone(p?: string | null): string {
+  if (!p) return '';
+  const digits = p.replace(/\D/g, '');
+  if (digits.length > 10) return digits.slice(-10);
+  return digits;
+}
+
 // --- MAPPERS: Frontend camelCase -> Supabase snake_case ---
 
 function customerToDb(c: any, userId: string) {
@@ -804,6 +811,179 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// WhatsApp-style Peer Merchant Sync
+// When User A adds a customer whose phone/email matches registered Merchant B:
+// 1. User A automatically appears in Merchant B's customer list (as peer_cust_${userIdA}).
+// 2. Transactions recorded by User A mirror into Merchant B's ledger with inverted accounting (Credit <-> Debit).
+// 3. Outstanding balance is automatically updated in real-time.
+async function syncPeerMerchants(
+  supabase: any,
+  currentUserId: string,
+  customers: any[],
+  transactions: any[]
+) {
+  try {
+    const { data: allProfiles, error: profErr } = await supabase
+      .from('profiles')
+      .select('id, name, full_name, email, phone, business_name, avatar_url');
+
+    if (profErr || !Array.isArray(allProfiles) || allProfiles.length === 0) {
+      return;
+    }
+
+    const currentProfile = allProfiles.find((p: any) => p.id === currentUserId);
+    if (!currentProfile) return;
+
+    const curPhone = normalizePhone(currentProfile.phone);
+    const curEmail = (currentProfile.email || '').toLowerCase().trim();
+    const curDisplayName = (
+      currentProfile.business_name ||
+      currentProfile.name ||
+      currentProfile.full_name ||
+      'Merchant'
+    ).trim();
+
+    for (const cust of customers) {
+      if (!cust || !cust.id) continue;
+      const cPhone = normalizePhone(cust.phone);
+      const cEmail = (cust.email || '').toLowerCase().trim();
+      if (!cPhone && !cEmail) continue;
+
+      const peerProfile = allProfiles.find((p: any) => {
+        if (p.id === currentUserId) return false;
+        const pPhone = normalizePhone(p.phone);
+        const pEmail = (p.email || '').toLowerCase().trim();
+        if (cPhone && pPhone && cPhone === pPhone) return true;
+        if (cEmail && pEmail && cEmail === pEmail) return true;
+        return false;
+      });
+
+      if (!peerProfile) continue;
+      const peerUserId = peerProfile.id;
+
+      // Ensure reciprocal customer exists for peerUserId
+      const { data: peerCustomers } = await supabase
+        .from('customers')
+        .select('id, phone, email')
+        .eq('user_id', peerUserId);
+
+      let reciprocalCust = (peerCustomers || []).find((pc: any) => {
+        if (pc.id === `peer_cust_${currentUserId}`) return true;
+        const pcPhone = normalizePhone(pc.phone);
+        const pcEmail = (pc.email || '').toLowerCase().trim();
+        if (curPhone && pcPhone && curPhone === pcPhone) return true;
+        if (curEmail && pcEmail && curEmail === pcEmail) return true;
+        return false;
+      });
+
+      const reciprocalCustId = reciprocalCust?.id || `peer_cust_${currentUserId}`;
+
+      await supabase.from('customers').upsert({
+        id: reciprocalCustId,
+        user_id: peerUserId,
+        name: curDisplayName,
+        phone: currentProfile.phone || '',
+        email: currentProfile.email || '',
+        business_name: currentProfile.business_name || '',
+        avatar: currentProfile.avatar_url || null,
+        category: 'Merchant',
+        status: 'active',
+        rating: 5,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'id, user_id' });
+
+      // Mirror transactions from currentUserId to peerUserId
+      const directTxns = (transactions || []).filter((t: any) => 
+        t && String(t.customerId) === String(cust.id) && !String(t.id).startsWith('peer_txn_')
+      );
+
+      const activePeerTxnIds = new Set<string>();
+
+      for (const t of directTxns) {
+        const peerTxnId = `peer_txn_${t.id}`;
+        activePeerTxnIds.add(peerTxnId);
+
+        let invertedType = 'debit';
+        if (t.type === 'credit') {
+          invertedType = 'debit'; // User A gave -> Peer B got
+        } else if (t.type === 'debit' || t.type === 'collection') {
+          invertedType = 'credit'; // User A got -> Peer B gave
+        } else if (t.type === 'income') {
+          invertedType = 'expense';
+        } else if (t.type === 'expense') {
+          invertedType = 'income';
+        } else {
+          invertedType = t.type;
+        }
+
+        await supabase.from('transactions').upsert({
+          id: peerTxnId,
+          user_id: peerUserId,
+          customer_id: reciprocalCustId,
+          customer_name: curDisplayName,
+          type: invertedType,
+          amount: Number(t.amount) || 0,
+          date: t.date || new Date().toISOString().split('T')[0],
+          category: t.category || 'General',
+          payment_mode: t.paymentMode || t.payment_mode || 'upi',
+          note: t.note || '',
+          status: t.status || 'completed',
+          reference_no: String(t.id),
+          created_by: curDisplayName,
+          created_at: t.createdAt || t.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'id, user_id' });
+      }
+
+      // Clean up deleted peer transactions
+      const { data: existingPeerTxns } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('user_id', peerUserId)
+        .eq('customer_id', reciprocalCustId)
+        .like('id', 'peer_txn_%');
+
+      if (existingPeerTxns && existingPeerTxns.length > 0) {
+        const staleIds = existingPeerTxns
+          .map((pt: any) => pt.id)
+          .filter((pid: string) => !activePeerTxnIds.has(pid));
+
+        if (staleIds.length > 0) {
+          await supabase
+            .from('transactions')
+            .delete()
+            .eq('user_id', peerUserId)
+            .in('id', staleIds);
+        }
+      }
+
+      // Update peer's customer outstanding balance
+      const { data: peerAllTxns } = await supabase
+        .from('transactions')
+        .select('type, amount')
+        .eq('user_id', peerUserId)
+        .eq('customer_id', reciprocalCustId);
+
+      let peerBalance = 0;
+      if (peerAllTxns) {
+        for (const pt of peerAllTxns) {
+          const amt = Number(pt.amount) || 0;
+          if (pt.type === 'credit') peerBalance += amt;
+          else if (pt.type === 'debit' || pt.type === 'collection') peerBalance -= amt;
+        }
+      }
+
+      await supabase
+        .from('customers')
+        .update({ outstanding_balance: peerBalance, updated_at: new Date().toISOString() })
+        .eq('id', reciprocalCustId)
+        .eq('user_id', peerUserId);
+    }
+  } catch (err) {
+    console.warn('syncPeerMerchants error:', err);
+  }
+}
+
 // POST: Save or bulk-sync all user data to Supabase Cloud PostgreSQL
 export async function POST(req: NextRequest) {
   try {
@@ -1013,6 +1193,11 @@ export async function POST(req: NextRequest) {
       }
 
       await Promise.all(promises);
+
+      // WhatsApp-style reciprocal customer creation and mirrored transactions for matching merchants
+      if (Array.isArray(data.customers)) {
+        await syncPeerMerchants(supabase, userId, data.customers, Array.isArray(data.transactions) ? data.transactions : []);
+      }
     }
 
     return NextResponse.json({

@@ -148,11 +148,15 @@ function KhataPageInner() {
   const [selectedCustomerIdsForGroup, setSelectedCustomerIdsForGroup] = useState<string[]>([]);
   const [createGroupError, setCreateGroupError] = useState<string | null>(null);
   const [isUploadingGroupPic, setIsUploadingGroupPic] = useState(false);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const groupPicInputRef = useRef<HTMLInputElement>(null);
 
   // Join Group Form States
   const [joinGroupUsername, setJoinGroupUsername] = useState('');
   const [joinGroupError, setJoinGroupError] = useState<string | null>(null);
+  const [isJoiningGroup, setIsJoiningGroup] = useState(false);
+  const [cloudPreviewGroup, setCloudPreviewGroup] = useState<KhataGroup | null>(null);
+  const [isSearchingGroup, setIsSearchingGroup] = useState(false);
 
   // Group Transaction Split Members Selection State (Screen 3)
   const [splitMemberIds, setSplitMemberIds] = useState<string[]>([]);
@@ -526,8 +530,52 @@ function KhataPageInner() {
     reader.readAsDataURL(file);
   };
 
-  // Handle Create New Group with Handle Uniqueness Check
-  const handleCreateGroup = (e: React.FormEvent) => {
+  // Dynamic Group Handle search (Local & Cloud Supabase)
+  useEffect(() => {
+    const clean = joinGroupUsername.trim().replace(/^@+/, '').toLowerCase();
+    if (!clean || clean.length < 2) {
+      setCloudPreviewGroup(null);
+      setIsSearchingGroup(false);
+      return;
+    }
+
+    const localMatch = groups.find(g => g.username.toLowerCase() === clean);
+    if (localMatch) {
+      setCloudPreviewGroup(localMatch);
+      setIsSearchingGroup(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsSearchingGroup(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/groups?username=${encodeURIComponent(clean)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted) {
+            if (data.success && data.group) {
+              setCloudPreviewGroup(data.group);
+            } else {
+              setCloudPreviewGroup(null);
+            }
+          }
+        }
+      } catch {
+        if (isMounted) setCloudPreviewGroup(null);
+      } finally {
+        if (isMounted) setIsSearchingGroup(false);
+      }
+    }, 300);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [joinGroupUsername, groups]);
+
+  // Handle Create New Group with Handle Uniqueness Check & Cloud Supabase Sync
+  const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateGroupError(null);
 
@@ -544,7 +592,7 @@ function KhataPageInner() {
       return;
     }
 
-    // Check unique username across existing groups
+    // Check unique username across existing local groups
     const isDuplicate = groups.some(g => g.username.toLowerCase() === rawUsername);
     if (isDuplicate) {
       setCreateGroupError(`Group username @${rawUsername} already taken! Please enter a unique handle.`);
@@ -560,6 +608,7 @@ function KhataPageInner() {
         customerId: currentUserId,
         name: currentUserName,
         phone: currentUser?.phone || profile.phone || '',
+        email: currentUser?.email || profile.email || '',
         avatar: profile.logo || undefined,
         role: 'admin',
         joinedAt: new Date().toISOString(),
@@ -573,6 +622,7 @@ function KhataPageInner() {
           customerId: c.id,
           name: c.name,
           phone: c.phone,
+          email: c.email || undefined,
           avatar: c.avatar || c.avatarUrl,
           role: 'member',
           joinedAt: new Date().toISOString(),
@@ -591,23 +641,47 @@ function KhataPageInner() {
       members: membersList,
     };
 
-    saveGroup(newGroup);
-    setSelectedGroupId(newGroup.id);
-    setFilterType('group');
-    setIsCreateGroupOpen(false);
+    setIsCreatingGroup(true);
+    try {
+      const res = await fetch('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          group: newGroup,
+          userId: currentUserId,
+        }),
+      });
 
-    // Reset fields
-    setNewGroupName('');
-    setNewGroupUsername('');
-    setNewGroupPic(null);
-    setSelectedCustomerIdsForGroup([]);
-    setCreateGroupError(null);
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setCreateGroupError(data.message || 'Failed to create group');
+        setIsCreatingGroup(false);
+        return;
+      }
 
-    addToast('Group Created', `Group "${newGroup.name}" (@${newGroup.username}) created with ${membersList.length} members.`, 'success');
+      const savedGroup: KhataGroup = data.group || newGroup;
+      saveGroup(savedGroup);
+      setSelectedGroupId(savedGroup.id);
+      setFilterType('group');
+      setIsCreateGroupOpen(false);
+
+      // Reset fields
+      setNewGroupName('');
+      setNewGroupUsername('');
+      setNewGroupPic(null);
+      setSelectedCustomerIdsForGroup([]);
+      setCreateGroupError(null);
+
+      addToast('Group Created', `Group "${savedGroup.name}" (@${savedGroup.username}) created with ${savedGroup.members.length} members.`, 'success');
+    } catch (err: any) {
+      setCreateGroupError(err.message || 'Failed to create group');
+    } finally {
+      setIsCreatingGroup(false);
+    }
   };
 
-  // Handle Join Group via Username Handle
-  const handleJoinGroup = (e: React.FormEvent) => {
+  // Handle Join Group via Username Handle (WhatsApp-style Cloud Join)
+  const handleJoinGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     setJoinGroupError(null);
 
@@ -617,66 +691,53 @@ function KhataPageInner() {
       return;
     }
 
-    const targetGroup = groups.find(g => g.username.toLowerCase() === rawHandle);
-    if (!targetGroup) {
-      setJoinGroupError(`No group found with username @${rawHandle}. Please verify handle.`);
-      return;
-    }
-
     const currentUserId = currentUser?.id || 'admin_user';
     const currentUserName = currentUser?.businessName || settings.businessName || 'Merchant';
 
-    const alreadyJoined = targetGroup.members.some(m => m.customerId === currentUserId);
-    if (alreadyJoined) {
-      setSelectedGroupId(targetGroup.id);
+    setIsJoiningGroup(true);
+    try {
+      const res = await fetch('/api/groups/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: rawHandle,
+          user: {
+            id: currentUserId,
+            name: currentUserName,
+            phone: currentUser?.phone || profile.phone || '',
+            email: currentUser?.email || profile.email || '',
+            avatar: profile.logo || undefined,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setJoinGroupError(data.message || `No group found with username @${rawHandle}. Please verify handle.`);
+        setIsJoiningGroup(false);
+        return;
+      }
+
+      const joinedGroup: KhataGroup = data.group;
+      saveGroup(joinedGroup);
+
+      setSelectedGroupId(joinedGroup.id);
       setFilterType('group');
       setIsJoinGroupOpen(false);
       setJoinGroupUsername('');
-      addToast('Group Opened', `You are already a member of @${rawHandle}.`, 'info');
-      return;
+      setJoinGroupError(null);
+      setCloudPreviewGroup(null);
+
+      if (data.alreadyMember) {
+        addToast('Group Opened', `You are already a member of @${rawHandle}.`, 'info');
+      } else {
+        addToast('Joined Group', `You successfully joined @${joinedGroup.username}!`, 'success');
+      }
+    } catch (err: any) {
+      setJoinGroupError(err.message || 'Failed to join group');
+    } finally {
+      setIsJoiningGroup(false);
     }
-
-    const updatedMembers = [
-      ...targetGroup.members,
-      {
-        customerId: currentUserId,
-        name: currentUserName,
-        phone: currentUser?.phone || profile.phone || '',
-        avatar: profile.logo || undefined,
-        role: 'member' as const,
-        joinedAt: new Date().toISOString(),
-      },
-    ];
-
-    const updatedGroup: KhataGroup = {
-      ...targetGroup,
-      members: updatedMembers,
-      updatedAt: new Date().toISOString(),
-    };
-
-    saveGroup(updatedGroup);
-
-    // Send notification to existing members:
-    const notif: KhataGroupNotification = {
-      id: `notif_${Date.now()}`,
-      groupId: targetGroup.id,
-      groupName: targetGroup.name,
-      type: 'member_joined',
-      title: 'New Member Joined Group',
-      message: `${currentUserName} joined group @${targetGroup.username} (${updatedMembers.length} total members)`,
-      createdAt: new Date().toISOString(),
-      read: false,
-      memberIds: targetGroup.members.map(m => m.customerId),
-    };
-    addGroupNotification(notif);
-
-    setSelectedGroupId(targetGroup.id);
-    setFilterType('group');
-    setIsJoinGroupOpen(false);
-    setJoinGroupUsername('');
-    setJoinGroupError(null);
-
-    addToast('Joined Group', `You successfully joined @${targetGroup.username}!`, 'success');
   };
 
   // Handle Remove Member From Group (Creator permission only)
@@ -6385,17 +6446,28 @@ function KhataPageInner() {
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
+                  disabled={isCreatingGroup}
                   onClick={() => setIsCreateGroupOpen(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                  disabled={isCreatingGroup}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-60"
                 >
-                  <Users className="w-4 h-4" />
-                  <span>Create Group</span>
+                  {isCreatingGroup ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                      <span>Creating Group...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Users className="w-4 h-4" />
+                      <span>Create Group</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -6426,6 +6498,7 @@ function KhataPageInner() {
                   setIsJoinGroupOpen(false);
                   setJoinGroupError(null);
                   setJoinGroupUsername('');
+                  setCloudPreviewGroup(null);
                 }}
                 className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
@@ -6459,10 +6532,18 @@ function KhataPageInner() {
                 </p>
               </div>
 
-              {/* Group match preview if found */}
+              {/* Group match preview if found (Local or Cloud) */}
               {(() => {
-                const queryHandle = joinGroupUsername.trim().replace(/^@+/, '').toLowerCase();
-                const matched = queryHandle ? groups.find(g => g.username.toLowerCase() === queryHandle) : null;
+                const clean = joinGroupUsername.trim().replace(/^@+/, '').toLowerCase();
+                const matched = cloudPreviewGroup || groups.find(g => g.username.toLowerCase() === clean);
+                if (isSearchingGroup && !matched) {
+                  return (
+                    <div className="p-3 rounded-2xl bg-purple-50/50 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-800/40 flex items-center gap-2.5 text-xs text-purple-700 dark:text-purple-300 animate-pulse">
+                      <div className="w-3.5 h-3.5 border-2 border-purple-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                      <span>Checking @{clean} across cloud groups...</span>
+                    </div>
+                  );
+                }
                 if (!matched) return null;
                 return (
                   <div className="p-3 rounded-2xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200/80 dark:border-purple-800/60 flex items-center gap-3">
@@ -6508,21 +6589,33 @@ function KhataPageInner() {
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
+                  disabled={isJoiningGroup}
                   onClick={() => {
                     setIsJoinGroupOpen(false);
                     setJoinGroupError(null);
                     setJoinGroupUsername('');
+                    setCloudPreviewGroup(null);
                   }}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md shadow-purple-600/20 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                  disabled={isJoiningGroup}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md shadow-purple-600/20 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-60"
                 >
-                  <LogIn className="w-4 h-4" />
-                  <span>Join Group Now</span>
+                  {isJoiningGroup ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                      <span>Joining Group...</span>
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="w-4 h-4" />
+                      <span>Join Group Now</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
