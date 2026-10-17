@@ -15,7 +15,10 @@ export async function GET(req: NextRequest) {
     }
 
     const searchParams = req.nextUrl.searchParams;
-    const userId = searchParams.get('userId') || req.cookies.get('skp_auth_session')?.value || 'guest_user';
+    let userId = searchParams.get('userId');
+    if (!userId || userId === 'guest_user') {
+      userId = req.cookies.get('skp_auth_session')?.value || '';
+    }
     const returnUrl = searchParams.get('returnUrl') || '/';
 
     // Cryptographic state token with embedded userId, returnUrl, and random bytes

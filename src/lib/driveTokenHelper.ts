@@ -14,10 +14,19 @@ export interface StoredDriveTokens {
   last_connected_at?: string;
 }
 
+function isValidUuid(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+}
+
 export async function getUserDriveTokens(userId: string): Promise<StoredDriveTokens | null> {
   const supabase = getSupabaseAdmin();
-  if (supabase) {
-    try {
+  if (!supabase || !userId) return null;
+
+  try {
+    const isUuid = isValidUuid(userId);
+
+    // 1. Direct query by user_id
+    if (isUuid) {
       const { data, error } = await supabase
         .from('google_drive_tokens')
         .select('*')
@@ -29,7 +38,73 @@ export async function getUserDriveTokens(userId: string): Promise<StoredDriveTok
       if (data && data.length > 0 && !error) {
         return data[0] as StoredDriveTokens;
       }
-    } catch {}
+    }
+
+    // 2. Query by email fallback (if user profile has email matching token)
+    let userEmail: string | null = null;
+    if (isUuid) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', userId)
+        .maybeSingle();
+      if (profile?.email) {
+        userEmail = profile.email.toLowerCase().trim();
+      }
+    } else if (userId.includes('@')) {
+      userEmail = userId.toLowerCase().trim();
+    }
+
+    if (userEmail) {
+      const { data: emailTokens, error: emailErr } = await supabase
+        .from('google_drive_tokens')
+        .select('*')
+        .eq('google_email', userEmail)
+        .eq('is_connected', true)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      if (emailTokens && emailTokens.length > 0 && !emailErr) {
+        const token = emailTokens[0] as StoredDriveTokens;
+        // Auto-heal: If this user now has a valid UUID, link the token to their user_id
+        if (isUuid && token.user_id !== userId) {
+          try {
+            await supabase
+              .from('google_drive_tokens')
+              .update({ user_id: userId, updated_at: new Date().toISOString() })
+              .eq('google_email', userEmail);
+          } catch {}
+        }
+        return token;
+      }
+    }
+
+    // 3. System Settings flag check
+    if (isUuid) {
+      const { data: userSettings } = await supabase
+        .from('system_settings')
+        .select('payment_settings')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (userSettings?.payment_settings?.isDriveConnected) {
+        const connEmail = userSettings.payment_settings.driveConnectedEmail;
+        if (connEmail) {
+          const { data: emailTokens } = await supabase
+            .from('google_drive_tokens')
+            .select('*')
+            .eq('google_email', connEmail)
+            .eq('is_connected', true)
+            .order('updated_at', { ascending: false })
+            .limit(1);
+          if (emailTokens && emailTokens.length > 0) {
+            return emailTokens[0] as StoredDriveTokens;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Error reading user drive tokens:', err);
   }
 
   return null;

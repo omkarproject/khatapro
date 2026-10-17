@@ -6,7 +6,10 @@ import { isGoogleDriveConfigured, getDriveStorageQuota } from '@/lib/googleDrive
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId') || req.cookies.get('skp_auth_session')?.value || 'default_user';
+    let userId = searchParams.get('userId');
+    if (!userId || userId === 'default_user' || userId === 'guest_user') {
+      userId = req.cookies.get('skp_auth_session')?.value || '';
+    }
 
     const isConfigured = isGoogleDriveConfigured();
     const tokenRecord = await getUserDriveTokens(userId);

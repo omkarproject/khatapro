@@ -57,28 +57,43 @@ export async function POST(req: NextRequest) {
 
     // Fallback to regular signUp if admin createUser is restricted
     if (!createdUserId) {
-      const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-        email: cleanEmail,
-        password,
-        options: {
-          data: {
-            name: cleanName,
-            business_name: cleanBusinessName,
-            phone: cleanPhone,
-            role: userRole,
+      try {
+        const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password,
+          options: {
+            data: {
+              name: cleanName,
+              business_name: cleanBusinessName,
+              phone: cleanPhone,
+              role: userRole,
+            },
           },
-        },
-      });
+        });
 
-      if (signUpErr) {
-        return NextResponse.json({
-          success: false,
-          message: signUpErr.message || 'Registration failed with Supabase Auth',
-        }, { status: 400 });
+        if (!signUpErr && signUpData?.user) {
+          createdUserId = signUpData.user.id;
+        }
+      } catch {}
+    }
+
+    // Fallback 3: If user already exists in auth.users (e.g. from signInWithOtp), find and update password
+    if (!createdUserId) {
+      try {
+        const { data: listRes } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        const found = listRes?.users?.find(u => u.email?.toLowerCase() === cleanEmail);
+        if (found?.id) {
+          createdUserId = found.id;
+        }
+      } catch (listErr) {
+        console.warn('Error listing users during registration:', listErr);
       }
+    }
 
-      if (signUpData.user) {
-        createdUserId = signUpData.user.id;
+    if (!createdUserId) {
+      const { data: existingUser } = await supabase.from('profiles').select('id').eq('email', cleanEmail).maybeSingle();
+      if (existingUser?.id) {
+        createdUserId = existingUser.id;
       }
     }
 
@@ -87,6 +102,22 @@ export async function POST(req: NextRequest) {
         success: false,
         message: 'Failed to create user in Supabase Auth.',
       }, { status: 500 });
+    }
+
+    // CRITICAL: Ensure password and metadata are up to date on auth.users
+    try {
+      await supabase.auth.admin.updateUserById(createdUserId, {
+        password,
+        email_confirm: true,
+        user_metadata: {
+          name: cleanName,
+          business_name: cleanBusinessName,
+          phone: cleanPhone,
+          role: userRole,
+        },
+      });
+    } catch (updErr) {
+      console.warn('admin.updateUserById note in register:', updErr);
     }
 
     // 2. Ensure profile exists in public.profiles table

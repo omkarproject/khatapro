@@ -22,6 +22,9 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
           if (u.email === 'anantyadav8924@gmail.com') {
             return true;
           }
+          if (u.id && localStorage.getItem('skp_gdrive_connected_' + u.id) === 'true') {
+            return true;
+          }
         } catch {}
       }
     }
@@ -77,11 +80,20 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       }
     }
 
+    // Pre-check cached connection state
+    const cached = typeof window !== 'undefined' ? localStorage.getItem('skp_gdrive_connected_' + currentUser.id) : null;
+    if (cached === 'true') {
+      setIsDriveConnected(true);
+    }
+
     let active = true;
     fetch(`/api/backup/google-drive/status?userId=${encodeURIComponent(currentUser.id)}`)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('Status HTTP ' + res.status);
+        return res.json();
+      })
       .then((data) => {
-        if (active) {
+        if (active && data && data.success) {
           const connected = Boolean(data?.isConnected);
           setIsDriveConnected(connected);
           try {
@@ -96,8 +108,10 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       .catch((err) => {
         console.warn('Failed to verify drive connection status in AuthGuard:', err);
         if (active) {
-          const cached = typeof window !== 'undefined' ? localStorage.getItem('skp_gdrive_connected_' + currentUser.id) : null;
-          setIsDriveConnected(cached === 'true');
+          const cachedAgain = typeof window !== 'undefined' ? localStorage.getItem('skp_gdrive_connected_' + currentUser.id) : null;
+          if (cachedAgain === 'true') {
+            setIsDriveConnected(true);
+          }
         }
       });
 

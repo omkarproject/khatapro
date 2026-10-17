@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
     // 1. Verify code: Check local store first, then check Supabase verifyOtp
     let isCodeValid = false;
     let storedRecord: any = null;
+    let sbVerifiedUser: any = null;
 
     const localCheck = verifyLocalOtp(cleanEmail, purpose as any, cleanCode);
     if (localCheck.valid) {
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
 
         if (!sbVerifyErr && sbVerifyData?.user) {
           isCodeValid = true;
+          sbVerifiedUser = sbVerifyData.user;
           // Retrieve metadata from local in-memory OTP store if available
           storedRecord = getOtp(cleanEmail, purpose as any);
         }
@@ -80,9 +82,9 @@ export async function POST(req: NextRequest) {
       // Every other new account is ALWAYS created as 'user' (Merchant).
       const userRole = cleanEmail === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user';
 
-      let createdUserId: string | null = null;
+      let createdUserId: string | null = sbVerifiedUser?.id || null;
 
-      // Create confirmed user in Supabase Auth
+      // 1. Create or confirm user in Supabase Auth
       try {
         const { data: newUser, error: createErr } = await supabase.auth.admin.createUser({
           email: cleanEmail,
@@ -99,18 +101,55 @@ export async function POST(req: NextRequest) {
         if (!createErr && newUser?.user) {
           createdUserId = newUser.user.id;
         }
-      } catch {}
+      } catch (createErr) {
+        console.warn('admin.createUser note:', createErr);
+      }
 
+      // 2. If user already exists in auth.users (e.g. created by signInWithOtp), locate by email
       if (!createdUserId) {
-        // Fallback: check if user already created
-        const { data: existingUser } = await supabase.from('profiles').select('id').eq('email', cleanEmail).single();
-        if (existingUser) {
+        try {
+          const { data: listRes } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+          const found = listRes?.users?.find(u => u.email?.toLowerCase() === cleanEmail);
+          if (found?.id) {
+            createdUserId = found.id;
+          }
+        } catch (listErr) {
+          console.warn('Error listing users during signup verify:', listErr);
+        }
+      }
+
+      // 3. Fallback: check if user already created in public.profiles
+      if (!createdUserId) {
+        const { data: existingUser } = await supabase.from('profiles').select('id').eq('email', cleanEmail).maybeSingle();
+        if (existingUser?.id) {
           createdUserId = existingUser.id;
         }
       }
 
       if (!createdUserId) {
         return NextResponse.json({ success: false, message: 'Failed to create user in database.' }, { status: 500 });
+      }
+
+      // CRITICAL: Always update the user in Supabase Auth with the chosen password and confirm email!
+      // This guarantees the merchant can log in immediately with their email & password!
+      try {
+        const { error: updErr } = await supabase.auth.admin.updateUserById(createdUserId, {
+          password,
+          email_confirm: true,
+          user_metadata: {
+            name,
+            business_name: businessName,
+            phone,
+            role: userRole,
+          },
+        });
+        if (updErr) {
+          console.error('CRITICAL: Failed to update password on auth.users for signup:', updErr);
+        } else {
+          console.log(`[SmartKhata Auth] Successfully set password and confirmed user ${cleanEmail} (${createdUserId})`);
+        }
+      } catch (authUpdErr) {
+        console.error('Error updating user in auth.users on signup:', authUpdErr);
       }
 
       // Upsert profiles with merchant role

@@ -32,9 +32,18 @@ export default function DriveConnectVIPScreen({ onConnected }: DriveConnectVIPSc
 
   const handleConnect = () => {
     setIsRedirecting(true);
-    const userId = currentUser?.id || 'guest_user';
+    let userId = currentUser?.id;
+    if (!userId && typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('skp_auth_user');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.id) userId = parsed.id;
+        }
+      } catch {}
+    }
     const returnPath = typeof window !== 'undefined' ? window.location.pathname : '/';
-    window.location.href = `/api/backup/google-drive/auth?userId=${encodeURIComponent(userId)}&returnUrl=${encodeURIComponent(returnPath)}`;
+    window.location.href = `/api/backup/google-drive/auth?userId=${encodeURIComponent(userId || '')}&returnUrl=${encodeURIComponent(returnPath)}`;
   };
 
   const handleVerifyAgain = async () => {
