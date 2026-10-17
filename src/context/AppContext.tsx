@@ -577,12 +577,11 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
               };
             });
 
-            if (Array.isArray(d.settings.paymentSettings?.khataGroups)) {
-              d.settings.paymentSettings.khataGroups.forEach((g: any) => StorageService.saveGroup(g));
-              setGroups(StorageService.getGroups());
-            }
+            // Note: Groups are fetched authoritatively below from /api/groups to prevent state flickering
             if (Array.isArray(d.settings.paymentSettings?.khataGroupNotifications)) {
-              d.settings.paymentSettings.khataGroupNotifications.forEach((n: any) => StorageService.addGroupNotification(n));
+              d.settings.paymentSettings.khataGroupNotifications
+                .filter((n: any) => n.actorUserId !== userId && n.details?.actorUserId !== userId && n.details?.applicantId !== userId)
+                .forEach((n: any) => StorageService.addGroupNotification(n));
               setGroupNotifications(StorageService.getGroupNotifications());
             }
 
@@ -606,7 +605,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
                   }
                   if (Array.isArray(gData.notifications)) {
                     gData.notifications
-                      .filter((n: any) => n.actorUserId !== userId && n.details?.actorUserId !== userId)
+                      .filter((n: any) => n.actorUserId !== userId && n.details?.actorUserId !== userId && n.details?.applicantId !== userId)
                       .forEach((n: any) => StorageService.addGroupNotification(n));
                     setGroupNotifications(StorageService.getGroupNotifications());
                   }

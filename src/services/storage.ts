@@ -1357,8 +1357,17 @@ export const StorageService = {
     const idx = list.findIndex(g => g.id === group.id);
     let updated: KhataGroup[];
     if (idx >= 0) {
+      const existing = list[idx];
+      const pendingRequests = group.pendingRequests !== undefined ? group.pendingRequests : existing.pendingRequests;
+      const blockedMerchants = group.blockedMerchants !== undefined ? group.blockedMerchants : existing.blockedMerchants;
       updated = [...list];
-      updated[idx] = { ...group, updatedAt: new Date().toISOString() };
+      updated[idx] = {
+        ...existing,
+        ...group,
+        pendingRequests,
+        blockedMerchants,
+        updatedAt: new Date().toISOString(),
+      };
     } else {
       updated = [{ ...group, createdAt: group.createdAt || new Date().toISOString() }, ...list];
     }
@@ -1366,7 +1375,7 @@ export const StorageService = {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('khatapro_groups_updated', { detail: updated }));
     }
-    return group;
+    return updated[idx >= 0 ? idx : 0];
   },
   deleteGroup: (groupId: string): void => {
     const list = StorageService.getGroups().filter(g => g.id !== groupId);

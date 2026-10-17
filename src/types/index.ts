@@ -167,6 +167,16 @@ export interface KhataGroupJoinRequest {
   requestedAt: string;
 }
 
+export interface KhataGroupBlockedMerchant {
+  userId: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  avatar?: string;
+  blockedAt: string;
+  reason?: string;
+}
+
 export interface KhataGroup {
   id: string;
   name: string;
@@ -176,6 +186,7 @@ export interface KhataGroup {
   memberCustomerIds?: string[]; // customer IDs in this group
   members: KhataGroupMember[]; // list of members in this group
   pendingRequests?: KhataGroupJoinRequest[]; // List of pending join requests awaiting creator approval
+  blockedMerchants?: KhataGroupBlockedMerchant[]; // Merchants blocked from joining this group
   creatorId: string; // userId of creator/admin
   creatorName?: string;
   createdAt: string;

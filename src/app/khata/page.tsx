@@ -7,7 +7,7 @@ import Loading from '@/components/Loading';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
 import { getActiveCurrency, t } from '@/lib/i18n';
 import { convertCurrency, getExcelNumFmt, formatMoney } from '@/lib/currencyService';
-import { Customer, Transaction, TransactionType, PaymentReminder, KhataGroup, KhataGroupNotification, TransactionSplitMember, TransactionEditAudit, KhataGroupJoinRequest } from '@/types';
+import { Customer, Transaction, TransactionType, PaymentReminder, KhataGroup, KhataGroupNotification, TransactionSplitMember, TransactionEditAudit, KhataGroupJoinRequest, KhataGroupBlockedMerchant } from '@/types';
 import { uploadToDriveFiles, deleteFromDriveFiles } from '@/lib/driveUploadClient';
 import { StorageService } from '@/services/storage';
 import QRCode from 'qrcode';
@@ -61,6 +61,7 @@ import {
   Square,
   Eye,
   RotateCcw,
+  Ban,
 } from 'lucide-react';
 
 function normalizePhone(p?: string): string {
@@ -947,7 +948,11 @@ function KhataPageInner() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setJoinGroupError(data.message || `No group found with username @${rawHandle}. Please verify handle.`);
+        if (data.isBlocked) {
+          setJoinGroupError('You are locked for this group. You have sent requests too many times.');
+        } else {
+          setJoinGroupError(data.message || `No group found with username @${rawHandle}. Please verify handle.`);
+        }
         setIsJoiningGroup(false);
         return;
       }
@@ -1059,6 +1064,101 @@ function KhataPageInner() {
       addToast('Request Rejected', `Join request from ${req.name} was rejected.`, 'info');
     } catch (err: any) {
       addToast('Error', err.message || 'Failed to reject request.', 'error');
+    }
+  };
+
+  // Handle Block Merchant from Group (Creator side)
+  const handleBlockMerchant = async (req: KhataGroupJoinRequest) => {
+    if (!activeGroup) return;
+    const currentUserId = currentUser?.id || 'admin_user';
+    try {
+      const res = await fetch('/api/groups/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'block',
+          groupId: activeGroup.id,
+          requestId: req.id,
+          creatorUserId: currentUserId,
+          userId: req.userId,
+          name: req.name,
+          phone: req.phone,
+          avatar: req.avatar,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        addToast('Block Failed', data.message || 'Could not block merchant.', 'error');
+        return;
+      }
+
+      if (data.group) {
+        saveGroup(data.group);
+      }
+      addToast('Merchant Blocked', `${req.name} has been blocked from this group.`, 'warning');
+    } catch (err: any) {
+      addToast('Error', err.message || 'Failed to block merchant.', 'error');
+    }
+  };
+
+  // Handle Unblock Merchant (Creator side)
+  const handleUnblockMerchant = async (merchant: KhataGroupBlockedMerchant) => {
+    if (!activeGroup) return;
+    try {
+      const res = await fetch('/api/groups/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'unblock',
+          groupId: activeGroup.id,
+          userId: merchant.userId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        addToast('Unblock Failed', data.message || 'Could not unblock merchant.', 'error');
+        return;
+      }
+
+      if (data.group) {
+        saveGroup(data.group);
+      }
+      addToast('Merchant Unblocked', `${merchant.name} is unblocked. They can send join requests again.`, 'success');
+    } catch (err: any) {
+      addToast('Error', err.message || 'Failed to unblock merchant.', 'error');
+    }
+  };
+
+  // Handle Direct Join Now for a Merchant / Blocked Merchant (Creator side)
+  const handleDirectJoinMerchant = async (merchant: KhataGroupBlockedMerchant) => {
+    if (!activeGroup) return;
+    try {
+      const res = await fetch('/api/groups/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'direct_join',
+          groupId: activeGroup.id,
+          targetUser: {
+            id: merchant.userId,
+            name: merchant.name,
+            phone: merchant.phone || '',
+            avatar: merchant.avatar,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        addToast('Join Failed', data.message || 'Could not add merchant to group.', 'error');
+        return;
+      }
+
+      if (data.group) {
+        saveGroup(data.group);
+      }
+      addToast('Merchant Joined ✓', `${merchant.name} added to group! They can now transact.`, 'success');
+    } catch (err: any) {
+      addToast('Error', err.message || 'Failed to add merchant to group.', 'error');
     }
   };
 
@@ -4644,11 +4744,20 @@ function KhataPageInner() {
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleBlockMerchant(req)}
+                                className="px-2.5 py-1.5 rounded-xl border border-rose-300/80 dark:border-rose-900/60 bg-rose-100/70 hover:bg-rose-200 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
+                                title="Block this merchant from sending join requests again"
+                              >
+                                <Ban className="w-3.5 h-3.5" />
+                                <span>Block</span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => handleRejectJoinRequest(req)}
-                                className="px-3 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-300 text-xs font-bold flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
+                                className="px-2.5 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white hover:bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
                                 title="Reject join request"
                               >
                                 <X className="w-3.5 h-3.5" />
@@ -4657,7 +4766,7 @@ function KhataPageInner() {
                               <button
                                 type="button"
                                 onClick={() => handleApproveJoinRequest(req)}
-                                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer"
+                                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer"
                                 title="Approve join request"
                               >
                                 <Check className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -7612,6 +7721,77 @@ function KhataPageInner() {
                   })}
                 </div>
               </div>
+
+              {/* Blocked Merchants Section (Visible only to Group Creator) */}
+              {isGroupCreator && (
+                <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300 px-1">
+                    <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+                      <ShieldAlert className="w-4 h-4" />
+                      <span>Blocked Merchants ({activeGroup.blockedMerchants?.length || 0})</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      Creator controls
+                    </span>
+                  </div>
+
+                  {(!activeGroup.blockedMerchants || activeGroup.blockedMerchants.length === 0) ? (
+                    <div className="p-3 text-center text-xs text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+                      No blocked merchants.
+                    </div>
+                  ) : (
+                    <div className="border border-rose-200 dark:border-rose-950/80 rounded-2xl divide-y divide-rose-100 dark:divide-rose-950/60 overflow-hidden bg-rose-50/20 dark:bg-rose-950/10">
+                      {activeGroup.blockedMerchants.map((merchant) => (
+                        <div
+                          key={merchant.userId}
+                          className="flex items-center justify-between p-3 hover:bg-rose-50/40 dark:hover:bg-rose-950/30 transition-colors gap-2"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-9 h-9 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 flex items-center justify-center text-xs font-black shrink-0 overflow-hidden">
+                              {merchant.avatar ? (
+                                <img src={merchant.avatar} alt={merchant.name} className="w-full h-full object-cover" />
+                              ) : (
+                                merchant.name.charAt(0).toUpperCase()
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold text-slate-900 dark:text-white truncate flex items-center gap-1.5">
+                                <span className="truncate">{merchant.name}</span>
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                                  Blocked
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                {merchant.phone || 'No phone'}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleUnblockMerchant(merchant)}
+                              className="px-2.5 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white hover:bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold cursor-pointer active:scale-95 transition-all"
+                              title="Unblock merchant so they can send join requests again"
+                            >
+                              Unblock
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDirectJoinMerchant(merchant)}
+                              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 cursor-pointer active:scale-95 transition-all shadow-xs"
+                              title="Directly add this merchant into the group now"
+                            >
+                              <UserPlus className="w-3.5 h-3.5 stroke-[2.5]" />
+                              <span>Join Now</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
             </div>
 

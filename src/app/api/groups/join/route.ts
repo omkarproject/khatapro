@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
-import { KhataGroup, KhataGroupMember, KhataGroupNotification, KhataGroupJoinRequest } from '@/types';
+import { KhataGroup, KhataGroupMember, KhataGroupNotification, KhataGroupJoinRequest, KhataGroupBlockedMerchant } from '@/types';
 
 function normalizePhone(p?: string): string {
   if (!p) return '';
@@ -104,12 +104,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: 'Group not found.' }, { status: 404 });
       }
 
-      const reqToApprove = (targetGroup.pendingRequests || []).find(r => r.id === requestId || r.userId === user?.id);
+      const reqToApprove = (targetGroup.pendingRequests || []).find(r => r.id === requestId || r.userId === user?.id || r.userId === body.userId);
       if (!reqToApprove) {
         return NextResponse.json({ success: false, message: 'Pending request not found.' }, { status: 404 });
       }
 
-      // Check if already in members
       const alreadyMember = (targetGroup.members || []).some(m => m.customerId === reqToApprove.userId || m.merchantUserId === reqToApprove.userId);
 
       const newMember: KhataGroupMember = {
@@ -125,11 +124,13 @@ export async function POST(req: NextRequest) {
 
       const updatedMembers = alreadyMember ? targetGroup.members : [...(targetGroup.members || []), newMember];
       const updatedRequests = (targetGroup.pendingRequests || []).filter(r => r.id !== reqToApprove.id);
+      const updatedBlocked = (targetGroup.blockedMerchants || []).filter(b => b.userId !== reqToApprove.userId);
 
       const updatedGroup: KhataGroup = {
         ...targetGroup,
         members: updatedMembers,
         pendingRequests: updatedRequests,
+        blockedMerchants: updatedBlocked,
         updatedAt: new Date().toISOString(),
       };
 
@@ -150,10 +151,12 @@ export async function POST(req: NextRequest) {
         title: 'Join Request Approved',
         message: `${newMember.name} is now an approved member of "${targetGroup.name}" (@${targetGroup.username}). Total members: ${updatedMembers.length}.`,
         actorName: targetGroup.name,
+        actorUserId: creatorUserId || targetGroup.creatorId,
         createdAt: new Date().toISOString(),
         read: false,
         memberIds: recipientIds,
         details: {
+          actorUserId: creatorUserId || targetGroup.creatorId,
           requestId: reqToApprove.id,
           memberName: newMember.name,
           memberPhone: newMember.phone || '',
@@ -208,8 +211,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: 'Group not found.' }, { status: 404 });
       }
 
-      const reqToReject = (targetGroup.pendingRequests || []).find(r => r.id === requestId || r.userId === user?.id);
-      const rejectedUserId = reqToReject?.userId || user?.id;
+      const reqToReject = (targetGroup.pendingRequests || []).find(r => r.id === requestId || r.userId === user?.id || r.userId === body.userId);
+      const rejectedUserId = reqToReject?.userId || user?.id || body.userId;
 
       const updatedRequests = (targetGroup.pendingRequests || []).filter(
         r => r.id !== requestId && (!rejectedUserId || r.userId !== rejectedUserId)
@@ -259,6 +262,199 @@ export async function POST(req: NextRequest) {
     }
 
     // =========================================================================
+    // ACTION: BLOCK MERCHANT (Creator blocks an applicant)
+    // =========================================================================
+    if (action === 'block') {
+      const targetGroup = groups.find(g => g.id === groupId);
+      if (!targetGroup) {
+        return NextResponse.json({ success: false, message: 'Group not found.' }, { status: 404 });
+      }
+
+      const reqToBlock = (targetGroup.pendingRequests || []).find(r => r.id === requestId || r.userId === user?.id || r.userId === body.userId);
+      const blockedUserId = reqToBlock?.userId || user?.id || body.userId;
+      const blockedName = reqToBlock?.name || body.name || user?.name || 'Merchant';
+      const blockedPhone = reqToBlock?.phone || body.phone || user?.phone || '';
+      const blockedEmail = reqToBlock?.email || body.email || user?.email || '';
+      const blockedAvatar = reqToBlock?.avatar || body.avatar || user?.avatar;
+
+      if (!blockedUserId) {
+        return NextResponse.json({ success: false, message: 'User ID is required to block merchant.' }, { status: 400 });
+      }
+
+      const newBlockedEntry: KhataGroupBlockedMerchant = {
+        userId: blockedUserId,
+        name: blockedName,
+        phone: blockedPhone,
+        email: blockedEmail,
+        avatar: blockedAvatar,
+        blockedAt: new Date().toISOString(),
+        reason: 'Blocked by creator',
+      };
+
+      const updatedBlocked = [
+        ...(targetGroup.blockedMerchants || []).filter(b => b.userId !== blockedUserId),
+        newBlockedEntry,
+      ];
+
+      const updatedRequests = (targetGroup.pendingRequests || []).filter(
+        r => r.userId !== blockedUserId && r.id !== requestId
+      );
+
+      const updatedGroup: KhataGroup = {
+        ...targetGroup,
+        blockedMerchants: updatedBlocked,
+        pendingRequests: updatedRequests,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedGroups = groups.map(g => g.id === targetGroup.id ? updatedGroup : g);
+
+      await supabase.from('global_config').upsert({
+        id: 'shared_khata_groups',
+        maintenance_mode: {
+          groups: updatedGroups,
+          groupNotifications: groupNotifications.slice(-200),
+          groupTransactions,
+        },
+        updated_at: new Date().toISOString(),
+      });
+
+      // Remove from blocked user's system_settings so group completely vanishes from their directory
+      try {
+        const { data: userSetRow } = await supabase.from('system_settings').select('payment_settings').eq('user_id', blockedUserId).maybeSingle();
+        const pSet = userSetRow?.payment_settings || {};
+        const currentList: KhataGroup[] = pSet.khataGroups || [];
+        const filteredList = currentList.filter(g => g.id !== targetGroup.id);
+        await supabase.from('system_settings').upsert({
+          user_id: blockedUserId,
+          payment_settings: {
+            ...pSet,
+            khataGroups: filteredList,
+          },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+      } catch {}
+
+      return NextResponse.json({
+        success: true,
+        message: `${blockedName} has been blocked from this group.`,
+        group: updatedGroup,
+      });
+    }
+
+    // =========================================================================
+    // ACTION: UNBLOCK MERCHANT (Creator unblocks a merchant)
+    // =========================================================================
+    if (action === 'unblock') {
+      const targetGroup = groups.find(g => g.id === groupId);
+      if (!targetGroup) {
+        return NextResponse.json({ success: false, message: 'Group not found.' }, { status: 404 });
+      }
+
+      const unblockUserId = user?.id || body.userId;
+      const updatedBlocked = (targetGroup.blockedMerchants || []).filter(b => b.userId !== unblockUserId);
+
+      const updatedGroup: KhataGroup = {
+        ...targetGroup,
+        blockedMerchants: updatedBlocked,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedGroups = groups.map(g => g.id === targetGroup.id ? updatedGroup : g);
+
+      await supabase.from('global_config').upsert({
+        id: 'shared_khata_groups',
+        maintenance_mode: {
+          groups: updatedGroups,
+          groupNotifications: groupNotifications.slice(-200),
+          groupTransactions,
+        },
+        updated_at: new Date().toISOString(),
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Merchant unblocked successfully.',
+        group: updatedGroup,
+      });
+    }
+
+    // =========================================================================
+    // ACTION: DIRECT JOIN NOW (Creator directly joins a merchant / blocked merchant)
+    // =========================================================================
+    if (action === 'direct_join') {
+      const targetGroup = groups.find(g => g.id === groupId);
+      if (!targetGroup) {
+        return NextResponse.json({ success: false, message: 'Group not found.' }, { status: 404 });
+      }
+
+      const targetUser = user || body.targetUser;
+      if (!targetUser || !targetUser.id) {
+        return NextResponse.json({ success: false, message: 'Target user required to join group.' }, { status: 400 });
+      }
+
+      const newMember: KhataGroupMember = {
+        customerId: targetUser.id,
+        name: targetUser.name || 'Merchant',
+        phone: targetUser.phone || '',
+        email: targetUser.email || '',
+        avatar: targetUser.avatar,
+        role: 'member',
+        joinedAt: new Date().toISOString(),
+        merchantUserId: targetUser.id,
+      };
+
+      const updatedMembers = [
+        ...(targetGroup.members || []).filter(m => m.customerId !== targetUser.id && m.merchantUserId !== targetUser.id),
+        newMember,
+      ];
+      const updatedBlocked = (targetGroup.blockedMerchants || []).filter(b => b.userId !== targetUser.id);
+      const updatedRequests = (targetGroup.pendingRequests || []).filter(r => r.userId !== targetUser.id);
+
+      const updatedGroup: KhataGroup = {
+        ...targetGroup,
+        members: updatedMembers,
+        blockedMerchants: updatedBlocked,
+        pendingRequests: updatedRequests,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedGroups = groups.map(g => g.id === targetGroup.id ? updatedGroup : g);
+
+      await supabase.from('global_config').upsert({
+        id: 'shared_khata_groups',
+        maintenance_mode: {
+          groups: updatedGroups,
+          groupNotifications: groupNotifications.slice(-200),
+          groupTransactions,
+        },
+        updated_at: new Date().toISOString(),
+      });
+
+      // Update merchant's system_settings so group immediately appears in their directory
+      try {
+        const { data: userSetRow } = await supabase.from('system_settings').select('payment_settings').eq('user_id', targetUser.id).maybeSingle();
+        const pSet = userSetRow?.payment_settings || {};
+        const currentList: KhataGroup[] = pSet.khataGroups || [];
+        const mergedList = [updatedGroup, ...currentList.filter(g => g.id !== updatedGroup.id)];
+        await supabase.from('system_settings').upsert({
+          user_id: targetUser.id,
+          payment_settings: {
+            ...pSet,
+            khataGroups: mergedList,
+          },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+      } catch {}
+
+      return NextResponse.json({
+        success: true,
+        message: `${targetUser.name} joined group successfully!`,
+        group: updatedGroup,
+      });
+    }
+
+    // =========================================================================
     // DEFAULT ACTION: SEND JOIN REQUEST (Applicant clicks "Join Group Now")
     // =========================================================================
     if (!username || !username.trim()) {
@@ -284,7 +480,20 @@ export async function POST(req: NextRequest) {
     const userPhone = normalizePhone(user.phone);
     const userEmail = (user.email || '').toLowerCase().trim();
 
-    // Check if user is creator
+    // 1. Check if user is blocked by creator
+    const isBlocked = (targetGroup.blockedMerchants || []).some(
+      b => b.userId === user.id || (userPhone && normalizePhone(b.phone) === userPhone) || (userEmail && b.email && b.email.toLowerCase().trim() === userEmail)
+    );
+
+    if (isBlocked) {
+      return NextResponse.json({
+        success: false,
+        isBlocked: true,
+        message: 'You are locked for this group. You have sent requests too many times.',
+      }, { status: 403 });
+    }
+
+    // 2. Check if user is creator
     if (targetGroup.creatorId === user.id) {
       return NextResponse.json({
         success: true,
@@ -295,7 +504,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Check if user is already a member
+    // 3. Check if user is already a member
     const alreadyMember = targetGroup.members?.some(m => {
       if (m.customerId === user.id || m.merchantUserId === user.id) return true;
       if (userPhone && normalizePhone(m.phone) === userPhone) return true;
@@ -312,7 +521,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Check if join request is already pending
+    // 4. Check if join request is already pending
     const existingPending = (targetGroup.pendingRequests || []).find(
       r => r.userId === user.id || (userPhone && normalizePhone(r.phone) === userPhone)
     );
@@ -350,7 +559,7 @@ export async function POST(req: NextRequest) {
       updatedAt: new Date().toISOString(),
     };
 
-    // Notification to group creator
+    // Notification to group creator ONLY (actorUserId ensures sender never receives it)
     const newNotification: KhataGroupNotification = {
       id: `notif_${Date.now()}`,
       groupId: targetGroup.id,
@@ -360,11 +569,12 @@ export async function POST(req: NextRequest) {
       title: 'New Group Join Request',
       message: `${newRequest.name}${newRequest.phone ? ` (${newRequest.phone})` : ''} wants to join group "${targetGroup.name}" (@${targetGroup.username}).`,
       actorName: newRequest.name,
+      actorUserId: user.id,
       createdAt: new Date().toISOString(),
       read: false,
       memberIds: [targetGroup.creatorId],
       details: {
-        requestId: newRequest.id,
+        actorUserId: user.id,
         applicantId: user.id,
         applicantName: newRequest.name,
         applicantPhone: newRequest.phone || '',
@@ -408,7 +618,6 @@ export async function POST(req: NextRequest) {
       alreadyMember: false,
       message: 'Request sent successfully',
       group: updatedGroup,
-      notification: newNotification,
     });
   } catch (error: any) {
     console.error('Join group error:', error);
