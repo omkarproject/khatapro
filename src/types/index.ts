@@ -153,6 +153,20 @@ export interface TransactionEditAudit {
   newSplit?: any;
 }
 
+export interface KhataGroupJoinRequest {
+  id: string;
+  groupId: string;
+  groupName: string;
+  groupUsername: string;
+  userId: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  avatar?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requestedAt: string;
+}
+
 export interface KhataGroup {
   id: string;
   name: string;
@@ -161,6 +175,7 @@ export interface KhataGroup {
   avatarUrl?: string;
   memberCustomerIds?: string[]; // customer IDs in this group
   members: KhataGroupMember[]; // list of members in this group
+  pendingRequests?: KhataGroupJoinRequest[]; // List of pending join requests awaiting creator approval
   creatorId: string; // userId of creator/admin
   creatorName?: string;
   createdAt: string;
@@ -172,7 +187,7 @@ export interface KhataGroupNotification {
   groupId: string;
   groupName: string;
   groupUsername?: string;
-  type: 'member_joined' | 'record_edited' | 'amount_divided';
+  type: 'member_joined' | 'record_edited' | 'amount_divided' | 'join_request' | 'request_approved' | 'request_rejected';
   title: string;
   message: string;
   actorName?: string;

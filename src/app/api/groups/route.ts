@@ -119,6 +119,9 @@ export async function GET(req: NextRequest) {
 
       const userGroups = groups.filter(g => {
         if (g.creatorId === userId) return true;
+        if (Array.isArray(g.pendingRequests) && g.pendingRequests.some(r => (r.userId === userId || (userPhone && normalizePhone(r.phone) === userPhone)) && r.status === 'pending')) {
+          return true;
+        }
         if (!Array.isArray(g.members)) return false;
         return g.members.some(m => {
           if (m.customerId === userId || m.merchantUserId === userId) return true;
@@ -140,8 +143,24 @@ export async function GET(req: NextRequest) {
         );
       });
 
-      const userGroupIds = new Set(userGroups.map(g => g.id));
-      const relevantTransactions = groupTransactions.filter(t => t.groupId && userGroupIds.has(t.groupId));
+      // Relevant transactions should ONLY be provided to groups where the user is an active member or creator, NOT pending!
+      const activeMemberGroupIds = new Set(
+        userGroups
+          .filter(g => {
+            if (g.creatorId === userId) return true;
+            if (Array.isArray(g.members)) {
+              return g.members.some(m => {
+                if (m.customerId === userId || m.merchantUserId === userId) return true;
+                if (userPhone && normalizePhone(m.phone) === userPhone) return true;
+                if (userEmail && (m as any).email && (m as any).email.toLowerCase().trim() === userEmail) return true;
+                return false;
+              });
+            }
+            return false;
+          })
+          .map(g => g.id)
+      );
+      const relevantTransactions = groupTransactions.filter(t => t.groupId && activeMemberGroupIds.has(t.groupId));
 
       return NextResponse.json({
         success: true,

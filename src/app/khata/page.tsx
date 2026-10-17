@@ -7,7 +7,7 @@ import Loading from '@/components/Loading';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
 import { getActiveCurrency, t } from '@/lib/i18n';
 import { convertCurrency, getExcelNumFmt, formatMoney } from '@/lib/currencyService';
-import { Customer, Transaction, TransactionType, PaymentReminder, KhataGroup, KhataGroupNotification, TransactionSplitMember, TransactionEditAudit } from '@/types';
+import { Customer, Transaction, TransactionType, PaymentReminder, KhataGroup, KhataGroupNotification, TransactionSplitMember, TransactionEditAudit, KhataGroupJoinRequest } from '@/types';
 import { uploadToDriveFiles, deleteFromDriveFiles } from '@/lib/driveUploadClient';
 import { StorageService } from '@/services/storage';
 import QRCode from 'qrcode';
@@ -62,6 +62,13 @@ import {
   Eye,
   RotateCcw,
 } from 'lucide-react';
+
+function normalizePhone(p?: string): string {
+  if (!p) return '';
+  const digits = p.replace(/\D/g, '');
+  if (digits.length > 10) return digits.slice(-10);
+  return digits;
+}
 
 function getCustomerRatingColor(rating: number = 5): string {
   if (rating <= 2) return 'text-rose-600 dark:text-rose-400';
@@ -388,6 +395,42 @@ function KhataPageInner() {
     if (!selectedGroupId) return null;
     return groups.find(g => g.id === selectedGroupId) || null;
   }, [groups, selectedGroupId]);
+
+  // Check if current user is a pending applicant in active group (Transactions hidden until approved)
+  const isPendingInActiveGroup = useMemo(() => {
+    if (!activeGroup) return false;
+    const currentUserId = currentUser?.id || 'admin_user';
+    const currentUserPhone = normalizePhone(currentUser?.phone || profile?.phone || '');
+    if (activeGroup.creatorId === currentUserId) return false;
+    const isApproved = (activeGroup.members || []).some(m => {
+      if (m.customerId === currentUserId || m.merchantUserId === currentUserId) return true;
+      if (currentUserPhone && normalizePhone(m.phone) === currentUserPhone) return true;
+      return false;
+    });
+    if (isApproved) return false;
+
+    return Boolean(
+      (activeGroup.pendingRequests || []).some(r => {
+        if (r.userId === currentUserId && r.status === 'pending') return true;
+        if (currentUserPhone && normalizePhone(r.phone) === currentUserPhone && r.status === 'pending') return true;
+        return false;
+      })
+    );
+  }, [activeGroup, currentUser, profile]);
+
+  // Check if current user is creator of active group
+  const isGroupCreator = useMemo(() => {
+    if (!activeGroup) return false;
+    const currentUserId = currentUser?.id || 'admin_user';
+    const currentUserName = currentUser?.businessName || settings.businessName || '';
+    return activeGroup.creatorId === currentUserId || (Boolean(activeGroup.creatorName) && activeGroup.creatorName === currentUserName);
+  }, [activeGroup, currentUser, settings]);
+
+  // Pending join requests waiting for creator approval
+  const pendingJoinRequests = useMemo(() => {
+    if (!activeGroup) return [];
+    return (activeGroup.pendingRequests || []).filter(r => r.status === 'pending');
+  }, [activeGroup]);
 
   // Sync profile edit temp fields when customer changes
   useEffect(() => {
@@ -919,7 +962,9 @@ function KhataPageInner() {
       setJoinGroupError(null);
       setCloudPreviewGroup(null);
 
-      if (data.alreadyMember) {
+      if (data.isPending) {
+        addToast('Request Sent Successfully', 'Request send successfully. Group creator approval pending.', 'info');
+      } else if (data.alreadyMember) {
         addToast('Group Opened', `You are already a member of @${rawHandle}.`, 'info');
       } else {
         addToast('Joined Group', `You successfully joined @${joinedGroup.username}!`, 'success');
@@ -928,6 +973,92 @@ function KhataPageInner() {
       setJoinGroupError(err.message || 'Failed to join group');
     } finally {
       setIsJoiningGroup(false);
+    }
+  };
+
+  // Handle Cancel Join Request (Applicant side)
+  const handleCancelJoinRequest = async () => {
+    if (!activeGroup) return;
+    const currentUserId = currentUser?.id || 'admin_user';
+    const targetGroupId = activeGroup.id;
+    try {
+      await fetch('/api/groups/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'cancel',
+          groupId: targetGroupId,
+          userId: currentUserId,
+        }),
+      });
+
+      // Remove group from local storage and state
+      deleteGroup(targetGroupId);
+      setSelectedGroupId(null);
+      addToast('Request Cancelled', 'Join request cancelled successfully.', 'info');
+    } catch (err: any) {
+      addToast('Error', err.message || 'Failed to cancel join request.', 'error');
+    }
+  };
+
+  // Handle Approve Join Request (Creator side)
+  const handleApproveJoinRequest = async (req: KhataGroupJoinRequest) => {
+    if (!activeGroup) return;
+    const currentUserId = currentUser?.id || 'admin_user';
+    try {
+      const res = await fetch('/api/groups/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'approve',
+          groupId: activeGroup.id,
+          requestId: req.id,
+          creatorUserId: currentUserId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        addToast('Approval Failed', data.message || 'Could not approve member.', 'error');
+        return;
+      }
+
+      if (data.group) {
+        saveGroup(data.group);
+      }
+      addToast('Member Approved ✓', `${req.name} has been added to group!`, 'success');
+    } catch (err: any) {
+      addToast('Error', err.message || 'Failed to approve request.', 'error');
+    }
+  };
+
+  // Handle Reject Join Request (Creator side)
+  const handleRejectJoinRequest = async (req: KhataGroupJoinRequest) => {
+    if (!activeGroup) return;
+    const currentUserId = currentUser?.id || 'admin_user';
+    try {
+      const res = await fetch('/api/groups/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reject',
+          groupId: activeGroup.id,
+          requestId: req.id,
+          creatorUserId: currentUserId,
+          userId: req.userId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        addToast('Rejection Failed', data.message || 'Could not reject request.', 'error');
+        return;
+      }
+
+      if (data.group) {
+        saveGroup(data.group);
+      }
+      addToast('Request Rejected', `Join request from ${req.name} was rejected.`, 'info');
+    } catch (err: any) {
+      addToast('Error', err.message || 'Failed to reject request.', 'error');
     }
   };
 
@@ -3760,9 +3891,23 @@ function KhataPageInner() {
                                 <span>PIN</span>
                               </button>
                             )}
-                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
-                              Group
-                            </span>
+                            {(() => {
+                              const currentUserId = currentUser?.id || 'admin_user';
+                              const currentUserPhone = normalizePhone(currentUser?.phone || profile?.phone || '');
+                              const isGrpPendingForUser = grp.creatorId !== currentUserId &&
+                                !(grp.members || []).some((m: any) => m.customerId === currentUserId || m.merchantUserId === currentUserId || (currentUserPhone && normalizePhone(m.phone) === currentUserPhone)) &&
+                                Boolean((grp.pendingRequests || []).some((r: any) => (r.userId === currentUserId || (currentUserPhone && normalizePhone(r.phone) === currentUserPhone)) && r.status === 'pending'));
+
+                              return isGrpPendingForUser ? (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                                  Pending
+                                </span>
+                              ) : (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                                  Group
+                                </span>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -4274,11 +4419,13 @@ function KhataPageInner() {
                               {activeGroup.name}
                             </div>
                             <div
-                              onClick={() => setIsGroupInfoOpen(true)}
+                              onClick={() => {
+                                if (!isPendingInActiveGroup) setIsGroupInfoOpen(true);
+                              }}
                               className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-500 dark:text-slate-400 font-medium -mt-0.5 hover:opacity-80 transition-opacity"
-                              title="Click to manage members"
+                              title={isPendingInActiveGroup ? 'Join Request Pending' : 'Click to manage members'}
                             >
-                              <span>{activeGroup.members.length} members</span>
+                              <span>{isPendingInActiveGroup ? 'Join Request Pending' : `${activeGroup.members.length} members`}</span>
                             </div>
                           </div>
                         </>
@@ -4357,14 +4504,16 @@ function KhataPageInner() {
                     {/* Right action icons */}
                     <div className="flex items-center gap-1">
                       {activeGroup ? (
-                        <button
-                          type="button"
-                          onClick={() => setIsGroupInfoOpen(true)}
-                          className="p-2 rounded-xl text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer flex items-center gap-1"
-                          title="Manage Group & Members"
-                        >
-                          <Users className="w-5 h-5" />
-                        </button>
+                        !isPendingInActiveGroup && (
+                          <button
+                            type="button"
+                            onClick={() => setIsGroupInfoOpen(true)}
+                            className="p-2 rounded-xl text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer flex items-center gap-1"
+                            title="Manage Group & Members"
+                          >
+                            <Users className="w-5 h-5" />
+                          </button>
+                        )
                       ) : (
                         <>
                           <button
@@ -4383,22 +4532,24 @@ function KhataPageInner() {
                           </button>
                         </>
                       )}
-                      <button
-                        onClick={() => setIsChatSearchOpen(prev => !prev)}
-                        className={`p-2 rounded-xl transition-colors cursor-pointer ${
-                          isChatSearchOpen
-                            ? 'bg-slate-200 dark:bg-slate-700 text-slate-900'
-                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
-                        title="Search Ledger"
-                      >
-                        <Search className="w-5 h-5 text-slate-700 dark:text-slate-300" />
-                      </button>
+                      {!isPendingInActiveGroup && (
+                        <button
+                          onClick={() => setIsChatSearchOpen(prev => !prev)}
+                          className={`p-2 rounded-xl transition-colors cursor-pointer ${
+                            isChatSearchOpen
+                              ? 'bg-slate-200 dark:bg-slate-700 text-slate-900'
+                              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                          title="Search Ledger"
+                        >
+                          <Search className="w-5 h-5 text-slate-700 dark:text-slate-300" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
                   {/* Group Members Balances Horizontal Sub-Bar */}
-                  {activeGroup && (
+                  {activeGroup && !isPendingInActiveGroup && (
                     <div className="px-3.5 py-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-b border-slate-200/80 dark:border-slate-800 flex items-center gap-2 overflow-x-auto scrollbar-thin shrink-0 shadow-xs">
                       <button
                         type="button"
@@ -4460,6 +4611,65 @@ function KhataPageInner() {
                     </div>
                   )}
 
+                  {/* Join Requests Pending Creator Approval (Under all member chips row) */}
+                  {activeGroup && isGroupCreator && pendingJoinRequests.length > 0 && (
+                    <div className="mx-3.5 my-2 p-3 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50 to-pink-50 dark:from-purple-950/40 dark:via-indigo-950/40 dark:to-pink-950/40 border border-purple-200 dark:border-purple-800/60 shadow-xs space-y-2 shrink-0 animate-in fade-in slide-in-from-top-1 duration-150">
+                      <div className="flex items-center justify-between text-xs font-bold text-purple-900 dark:text-purple-200">
+                        <div className="flex items-center gap-1.5">
+                          <UserPlus className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                          <span>Join Request ({pendingJoinRequests.length})</span>
+                        </div>
+                        <span className="text-[10px] text-purple-700 dark:text-purple-300 font-medium bg-purple-100/80 dark:bg-purple-900/50 px-2 py-0.5 rounded-full">
+                          Creator Approval Needed
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {pendingJoinRequests.map(req => (
+                          <div key={req.id} className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-purple-100 dark:border-slate-800 shadow-xs gap-3">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+                                {req.avatar ? (
+                                  <img src={req.avatar} alt={req.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  req.name.charAt(0).toUpperCase()
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                  {req.name}
+                                </div>
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                                  {req.phone ? req.phone : 'Merchant'} • Wants to join group
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleRejectJoinRequest(req)}
+                                className="px-3 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-300 text-xs font-bold flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
+                                title="Reject join request"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                                <span>Reject</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApproveJoinRequest(req)}
+                                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer"
+                                title="Approve join request"
+                              >
+                                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                <span>Approve</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Optional Chat Search Bar */}
                   {isChatSearchOpen && (
                     <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2 animate-in slide-in-from-top-2 duration-150 shrink-0">
@@ -4480,11 +4690,42 @@ function KhataPageInner() {
                     </div>
                   )}
 
-                  {/* Transactions Stream / Chat Area (Exact replica of Image 2) */}
-                  <div 
-                    ref={chatContainerRef}
-                    className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#F2F5F4] dark:bg-[#0B101D]"
-                  >
+                  {/* Conditional: If user is Pending Applicant, show Join Request Pending card instead of Transactions */}
+                  {activeGroup && isPendingInActiveGroup ? (
+                    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-[#F2F5F4] dark:bg-[#0B101D]">
+                      <div className="max-w-sm w-full p-6 rounded-3xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/50 shadow-xl space-y-4 animate-in zoom-in-95 duration-150">
+                        <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 flex items-center justify-center text-amber-600 dark:text-amber-400 mx-auto">
+                          <Clock className="w-8 h-8 animate-pulse" />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <h3 className="text-base font-black text-slate-900 dark:text-white">
+                            Join Request Pending
+                          </h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Aapki request group creator ke approval ke liye pending hai. Creator ke approve karte hi aap is group ke transactions dekh aur add kar sakenge.
+                          </p>
+                        </div>
+
+                        <div className="pt-2">
+                          <button
+                            type="button"
+                            onClick={handleCancelJoinRequest}
+                            className="w-full py-2.5 px-4 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer shadow-xs"
+                          >
+                            <X className="w-4 h-4" />
+                            <span>Cancel Request</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Transactions Stream / Chat Area (Exact replica of Image 2) */}
+                      <div 
+                        ref={chatContainerRef}
+                        className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#F2F5F4] dark:bg-[#0B101D]"
+                      >
                     {Object.keys(groupedTransactions).length > 0 ? (
                       Object.entries(groupedTransactions).map(([dateBadge, txns]) => (
                         <div key={dateBadge} className="space-y-4">
@@ -4888,6 +5129,8 @@ function KhataPageInner() {
                       <span>Given</span>
                     </button>
                   </div>
+                    </>
+                  )}
 
                 </div>
               )}
