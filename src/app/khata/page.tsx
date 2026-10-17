@@ -9,6 +9,7 @@ import { getActiveCurrency, t } from '@/lib/i18n';
 import { convertCurrency, getExcelNumFmt, formatMoney } from '@/lib/currencyService';
 import { Customer, Transaction, TransactionType, PaymentReminder, KhataGroup, KhataGroupNotification, TransactionSplitMember, TransactionEditAudit } from '@/types';
 import { uploadToDriveFiles, deleteFromDriveFiles } from '@/lib/driveUploadClient';
+import { StorageService } from '@/services/storage';
 import QRCode from 'qrcode';
 import {
   ArrowLeft,
@@ -84,6 +85,14 @@ function formatTime(dateStr: string): string {
   } catch {
     return '';
   }
+}
+
+function PinIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6l1 1 1-1v-6H18v-2l-2-2z" />
+    </svg>
+  );
 }
 
 function KhataPageInner() {
@@ -182,6 +191,73 @@ function KhataPageInner() {
   const [filterType, setFilterType] = useState<'all' | 'credit' | 'debit' | 'group'>(() => {
     return groupIdParam ? 'group' : 'all';
   });
+
+  // WhatsApp-style Pinned Chats State (Persisted in localStorage via StorageService)
+  const [pinnedChatIds, setPinnedChatIds] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      return StorageService.getPinnedChatIds();
+    }
+    return [];
+  });
+
+  const [pinActionTarget, setPinActionTarget] = useState<{
+    id: string;
+    name: string;
+    kind: 'customer' | 'group';
+    isPinned: boolean;
+  } | null>(null);
+
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isLongPressActiveRef = useRef<boolean>(false);
+  const startPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  useEffect(() => {
+    setPinnedChatIds(StorageService.getPinnedChatIds());
+  }, [currentUser?.id]);
+
+  const handleStartPress = (
+    id: string,
+    name: string,
+    kind: 'customer' | 'group',
+    e: React.MouseEvent | React.TouchEvent
+  ) => {
+    isLongPressActiveRef.current = false;
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    startPosRef.current = { x: clientX, y: clientY };
+
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      isLongPressActiveRef.current = true;
+      if (typeof navigator !== 'undefined' && (navigator as any).vibrate) {
+        try { (navigator as any).vibrate(40); } catch {}
+      }
+      const isPinned = StorageService.getPinnedChatIds().includes(id);
+      setPinActionTarget({
+        id,
+        name,
+        kind,
+        isPinned,
+      });
+    }, 450);
+  };
+
+  const handleCancelPress = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handleMovePress = (e: React.TouchEvent | React.MouseEvent) => {
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    const diffX = Math.abs(clientX - startPosRef.current.x);
+    const diffY = Math.abs(clientY - startPosRef.current.y);
+    if (diffX > 10 || diffY > 10) {
+      handleCancelPress();
+    }
+  };
 
   // Screen View Mode: 'chat' (Screen 2), 'entry' (Screen 3), 'profile' (Screen 1)
   const [screenView, setScreenView] = useState<'chat' | 'entry' | 'profile'>('chat');
@@ -564,6 +640,39 @@ function KhataPageInner() {
       return matchSearch;
     });
   }, [groups, searchTerm]);
+
+  // Unified directory items for rendering (combining Groups & Customers in 'all', or filtering by 'group', 'credit', 'debit')
+  const directoryItems = useMemo(() => {
+    let list: Array<
+      | { kind: 'group'; data: KhataGroup }
+      | { kind: 'customer'; data: Customer }
+    > = [];
+
+    if (filterType === 'group') {
+      list = filteredGroups.map((g) => ({ kind: 'group' as const, data: g }));
+    } else if (filterType === 'all') {
+      const grpItems = filteredGroups.map((g) => ({ kind: 'group' as const, data: g }));
+      const custItems = filteredCustomers.map((c) => ({ kind: 'customer' as const, data: c }));
+      list = [...grpItems, ...custItems];
+    } else {
+      list = filteredCustomers.map((c) => ({ kind: 'customer' as const, data: c }));
+    }
+
+    // Sort pinned items to the top (WhatsApp style)
+    return list.sort((a, b) => {
+      const aPinnedIndex = pinnedChatIds.indexOf(a.data.id);
+      const bPinnedIndex = pinnedChatIds.indexOf(b.data.id);
+      const aIsPinned = aPinnedIndex !== -1;
+      const bIsPinned = bPinnedIndex !== -1;
+
+      if (aIsPinned && bIsPinned) {
+        return aPinnedIndex - bPinnedIndex;
+      }
+      if (aIsPinned) return -1;
+      if (bIsPinned) return 1;
+      return 0;
+    });
+  }, [filterType, filteredGroups, filteredCustomers, pinnedChatIds]);
 
   // Group Picture Upload Handler
   const handleGroupPicUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3408,9 +3517,26 @@ function KhataPageInner() {
           {/* Top Search & Add Customer / Group */}
           <div className="space-y-2 p-1">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">
-                {filterType === 'group' ? `Groups (${groups.length})` : `Customers (${customers.length})`}
-              </h2>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider truncate">
+                  {filterType === 'group'
+                    ? `Groups (${groups.length})`
+                    : filterType === 'all'
+                    ? `All (${customers.filter(c => !c.isDeleted && c.status !== 'deleted').length + groups.length})`
+                    : filterType === 'credit'
+                    ? `Due (${customers.filter(c => !c.isDeleted && c.status !== 'deleted' && c.outstandingBalance > 0).length})`
+                    : `Advance (${customers.filter(c => !c.isDeleted && c.status !== 'deleted' && c.outstandingBalance < 0).length})`}
+                </h2>
+                {pinnedChatIds.length > 0 && (
+                  <span
+                    title={`${pinnedChatIds.length} chat(s) pinned on top`}
+                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 border border-amber-300/60 dark:border-amber-700/60 shrink-0"
+                  >
+                    <PinIcon className="w-2.5 h-2.5 rotate-45" />
+                    <span>{pinnedChatIds.length}</span>
+                  </span>
+                )}
+              </div>
               
               {/* Add Button with Dropdown Menu */}
               <div className="relative">
@@ -3476,7 +3602,13 @@ function KhataPageInner() {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={filterType === 'group' ? 'Search group name or @handle...' : 'Search name, phone, or email...'}
+                placeholder={
+                  filterType === 'group'
+                    ? 'Search group name or @handle...'
+                    : filterType === 'all'
+                    ? 'Search customer or group name...'
+                    : 'Search name, phone, or email...'
+                }
                 className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none"
               />
             </div>
@@ -3485,22 +3617,22 @@ function KhataPageInner() {
             <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl text-[11px] font-semibold">
               <button
                 type="button"
-                onClick={() => { setFilterType('all'); setSelectedGroupId(null); }}
-                className={`flex-1 py-1 rounded-lg transition-colors ${filterType === 'all' && !selectedGroupId ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold' : 'text-slate-500'}`}
+                onClick={() => { setFilterType('all'); }}
+                className={`flex-1 py-1 rounded-lg transition-colors ${filterType === 'all' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold' : 'text-slate-500'}`}
               >
                 All
               </button>
               <button
                 type="button"
                 onClick={() => { setFilterType('credit'); setSelectedGroupId(null); }}
-                className={`flex-1 py-1 rounded-lg transition-colors ${filterType === 'credit' && !selectedGroupId ? 'bg-white dark:bg-slate-700 text-rose-600 shadow-xs font-bold' : 'text-slate-500'}`}
+                className={`flex-1 py-1 rounded-lg transition-colors ${filterType === 'credit' ? 'bg-white dark:bg-slate-700 text-rose-600 shadow-xs font-bold' : 'text-slate-500'}`}
               >
                 Due
               </button>
               <button
                 type="button"
                 onClick={() => { setFilterType('debit'); setSelectedGroupId(null); }}
-                className={`flex-1 py-1 rounded-lg transition-colors ${filterType === 'debit' && !selectedGroupId ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-xs font-bold' : 'text-slate-500'}`}
+                className={`flex-1 py-1 rounded-lg transition-colors ${filterType === 'debit' ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-xs font-bold' : 'text-slate-500'}`}
               >
                 Advance
               </button>
@@ -3512,7 +3644,7 @@ function KhataPageInner() {
                     setSelectedGroupId(groups[0].id);
                   }
                 }}
-                className={`flex-1 py-1 rounded-lg transition-colors flex items-center justify-center gap-1 ${filterType === 'group' || selectedGroupId ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold' : 'text-slate-500'}`}
+                className={`flex-1 py-1 rounded-lg transition-colors flex items-center justify-center gap-1 ${filterType === 'group' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold' : 'text-slate-500'}`}
               >
                 <Users className="w-3 h-3" />
                 <span>Group</span>
@@ -3520,24 +3652,50 @@ function KhataPageInner() {
             </div>
           </div>
 
-          {/* Directory Scroll List: Groups OR Customers */}
+          {/* Directory Scroll List: Unified Groups & Customers (WhatsApp Style with Pin on Top) */}
           <div className="flex-1 overflow-y-auto space-y-1.5 mt-2 pr-1">
-            {filterType === 'group' ? (
-              filteredGroups.length > 0 ? (
-                filteredGroups.map((grp) => {
+            {directoryItems.length > 0 ? (
+              directoryItems.map((item) => {
+                if (item.kind === 'group') {
+                  const grp = item.data;
                   const isSelected = grp.id === selectedGroupId;
+                  const isPinned = pinnedChatIds.includes(grp.id);
                   return (
                     <div
                       key={grp.id}
-                      onClick={() => {
+                      onMouseDown={(e) => handleStartPress(grp.id, grp.name, 'group', e)}
+                      onMouseUp={handleCancelPress}
+                      onMouseLeave={handleCancelPress}
+                      onTouchStart={(e) => handleStartPress(grp.id, grp.name, 'group', e)}
+                      onTouchEnd={handleCancelPress}
+                      onTouchMove={handleMovePress}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        handleCancelPress();
+                        setPinActionTarget({
+                          id: grp.id,
+                          name: grp.name,
+                          kind: 'group',
+                          isPinned,
+                        });
+                      }}
+                      onClick={(e) => {
+                        if (isLongPressActiveRef.current) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          isLongPressActiveRef.current = false;
+                          return;
+                        }
                         setSelectedGroupId(grp.id);
                         setSelectedMemberFilterId(null);
                         setScreenView('chat');
                         setMobileActivePanel('ledger');
                       }}
-                      className={`p-3 rounded-2xl cursor-pointer transition-all border ${
+                      className={`p-3 rounded-2xl cursor-pointer transition-all border select-none relative ${
                         isSelected
                           ? 'bg-indigo-50/90 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700 shadow-sm'
+                          : isPinned
+                          ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200/70 dark:border-amber-800/50 hover:bg-amber-50 dark:hover:bg-amber-950/30'
                           : 'bg-white/50 dark:bg-slate-800/30 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/70'
                       }`}
                     >
@@ -3552,7 +3710,15 @@ function KhataPageInner() {
                           </div>
                           <div className="min-w-0">
                             <div className="text-xs font-bold truncate text-slate-900 dark:text-white flex items-center gap-1.5">
-                              <span>{grp.name}</span>
+                              <span className="truncate">{grp.name}</span>
+                              {isPinned && (
+                                <span
+                                  title="Pinned chat on top"
+                                  className="inline-flex items-center text-amber-500 dark:text-amber-400 shrink-0"
+                                >
+                                  <PinIcon className="w-3 h-3 rotate-45" />
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">
                               <span>@{grp.username}</span>
@@ -3561,126 +3727,234 @@ function KhataPageInner() {
                           </div>
                         </div>
 
-                        <div className="text-right">
-                          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
-                            Group
-                          </span>
+                        <div className="text-right flex flex-col items-end gap-1">
+                          <div className="flex items-center gap-1">
+                            {isPinned && (
+                              <button
+                                type="button"
+                                title="Click to unpin from top"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPinActionTarget({
+                                    id: grp.id,
+                                    name: grp.name,
+                                    kind: 'group',
+                                    isPinned: true,
+                                  });
+                                }}
+                                className="text-[9px] px-1.5 py-0.5 rounded-full font-black bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 hover:opacity-80 transition-opacity flex items-center gap-0.5"
+                              >
+                                <PinIcon className="w-2 h-2 rotate-45" />
+                                <span>PIN</span>
+                              </button>
+                            )}
+                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                              Group
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
                   );
-                })
-              ) : (
-                <div className="p-6 text-center space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
-                    <Users className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200">No Groups Found</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Create a new group or join with a handle.</p>
-                  </div>
-                  <div className="flex items-center justify-center gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setIsCreateGroupOpen(true)}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm cursor-pointer"
+                } else {
+                  const cust = item.data;
+                  const isSelected = !selectedGroupId && cust.id === activeCustomer?.id;
+                  const isPinned = pinnedChatIds.includes(cust.id);
+                  return (
+                    <div
+                      key={cust.id}
+                      onMouseDown={(e) => handleStartPress(cust.id, cust.name, 'customer', e)}
+                      onMouseUp={handleCancelPress}
+                      onMouseLeave={handleCancelPress}
+                      onTouchStart={(e) => handleStartPress(cust.id, cust.name, 'customer', e)}
+                      onTouchEnd={handleCancelPress}
+                      onTouchMove={handleMovePress}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        handleCancelPress();
+                        setPinActionTarget({
+                          id: cust.id,
+                          name: cust.name,
+                          kind: 'customer',
+                          isPinned,
+                        });
+                      }}
+                      onClick={(e) => {
+                        if (isLongPressActiveRef.current) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          isLongPressActiveRef.current = false;
+                          return;
+                        }
+                        setSelectedCustomerId(cust.id);
+                        setSelectedGroupId(null);
+                        setScreenView('chat');
+                        setMobileActivePanel('ledger');
+                      }}
+                      className={`p-3 rounded-2xl cursor-pointer transition-all border select-none relative ${
+                        isSelected
+                          ? 'bg-indigo-50/90 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700 shadow-sm'
+                          : isPinned
+                          ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200/70 dark:border-amber-800/50 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                          : 'bg-white/50 dark:bg-slate-800/30 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/70'
+                      }`}
                     >
-                      + Create Group
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsJoinGroupOpen(true)}
-                      className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 cursor-pointer"
-                    >
-                      Join Group
-                    </button>
-                  </div>
-                </div>
-              )
-            ) : (
-              filteredCustomers.map((cust) => {
-                const isSelected = !selectedGroupId && cust.id === activeCustomer?.id;
-                return (
-                  <div
-                    key={cust.id}
-                    onClick={() => {
-                      setSelectedCustomerId(cust.id);
-                      setSelectedGroupId(null);
-                      setScreenView('chat');
-                      setMobileActivePanel('ledger');
-                    }}
-                    className={`p-3 rounded-2xl cursor-pointer transition-all border ${
-                      isSelected
-                        ? 'bg-indigo-50/90 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700 shadow-sm'
-                        : 'bg-white/50 dark:bg-slate-800/30 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/70'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenAvatarReview(cust);
-                          }}
-                          className={`w-11 h-11 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-sm shrink-0 aspect-square overflow-hidden cursor-pointer hover:ring-2 hover:ring-emerald-500/50 transition-all ${getCustomerRatingBorder(cust.rating)}`}
-                          title="Click to view/change profile photo"
-                        >
-                          {(cust.avatar || cust.avatarUrl) ? (
-                            <img
-                              src={cust.avatar || cust.avatarUrl}
-                              alt={cust.name}
-                              className="w-full h-full object-cover object-center rounded-full"
-                              style={{ imageRendering: 'auto' }}
-                              onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                            />
-                          ) : (
-                            <span className="font-black text-sm">{cust.name.charAt(0)}</span>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`text-xs font-bold truncate ${getCustomerRatingColor(cust.rating)}`}>
-                              {cust.name}
-                            </span>
-                            {(cust.category === 'Merchant' || cust.id.startsWith('peer_cust_')) && (
-                              <span className="px-1.5 py-0.2 rounded-full text-[8px] font-black bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0 shadow-2xs">
-                                P2P
-                              </span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenAvatarReview(cust);
+                            }}
+                            className={`w-11 h-11 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-sm shrink-0 aspect-square overflow-hidden cursor-pointer hover:ring-2 hover:ring-emerald-500/50 transition-all ${getCustomerRatingBorder(cust.rating)}`}
+                            title="Click to view/change profile photo"
+                          >
+                            {(cust.avatar || cust.avatarUrl) ? (
+                              <img
+                                src={cust.avatar || cust.avatarUrl}
+                                alt={cust.name}
+                                className="w-full h-full object-cover object-center rounded-full"
+                                style={{ imageRendering: 'auto' }}
+                                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                              />
+                            ) : (
+                              <span className="font-black text-sm">{cust.name.charAt(0)}</span>
                             )}
                           </div>
-                          <div className="flex items-center gap-1.5 text-[10px] text-slate-400 truncate">
-                            <span>{cust.phone}</span>
-                            <span className="flex items-center gap-0.5 shrink-0">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <Star
-                                  key={star}
-                                  className={`w-2.5 h-2.5 ${
-                                    star <= (cust.rating || 5)
-                                      ? 'fill-amber-400 text-amber-400'
-                                      : 'text-slate-300 dark:text-slate-600'
-                                  }`}
-                                />
-                              ))}
-                            </span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-xs font-bold truncate ${getCustomerRatingColor(cust.rating)}`}>
+                                {cust.name}
+                              </span>
+                              {isPinned && (
+                                <span
+                                  title="Pinned chat on top"
+                                  className="inline-flex items-center text-amber-500 dark:text-amber-400 shrink-0"
+                                >
+                                  <PinIcon className="w-3 h-3 rotate-45" />
+                                </span>
+                              )}
+                              {(cust.category === 'Merchant' || cust.id.startsWith('peer_cust_')) && (
+                                <span className="px-1.5 py-0.2 rounded-full text-[8px] font-black bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0 shadow-2xs">
+                                  P2P
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 truncate">
+                              <span>{cust.phone}</span>
+                              <span className="flex items-center gap-0.5 shrink-0">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <Star
+                                    key={star}
+                                    className={`w-2.5 h-2.5 ${
+                                      star <= (cust.rating || 5)
+                                        ? 'fill-amber-400 text-amber-400'
+                                        : 'text-slate-300 dark:text-slate-600'
+                                    }`}
+                                  />
+                                ))}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="text-right">
-                        <div className={`text-xs font-bold font-mono ${
-                          cust.outstandingBalance > 0 ? 'text-rose-600' :
-                          cust.outstandingBalance < 0 ? 'text-emerald-600' : 'text-slate-400'
-                        }`}>
-                          {formatINR(Math.abs(cust.outstandingBalance))}
-                        </div>
-                        <div className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">
-                          {cust.outstandingBalance > 0 ? 'Due' : cust.outstandingBalance < 0 ? 'Advance' : 'Settled'}
+                        <div className="text-right flex flex-col items-end gap-0.5">
+                          <div className="flex items-center gap-1">
+                            {isPinned && (
+                              <button
+                                type="button"
+                                title="Click to unpin from top"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPinActionTarget({
+                                    id: cust.id,
+                                    name: cust.name,
+                                    kind: 'customer',
+                                    isPinned: true,
+                                  });
+                                }}
+                                className="text-[9px] px-1.5 py-0.5 rounded-full font-black bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 hover:opacity-80 transition-opacity flex items-center gap-0.5"
+                              >
+                                <PinIcon className="w-2 h-2 rotate-45" />
+                                <span>PIN</span>
+                              </button>
+                            )}
+                            <div className={`text-xs font-bold font-mono ${
+                              cust.outstandingBalance > 0 ? 'text-rose-600' :
+                              cust.outstandingBalance < 0 ? 'text-emerald-600' : 'text-slate-400'
+                            }`}>
+                              {formatINR(Math.abs(cust.outstandingBalance))}
+                            </div>
+                          </div>
+                          <div className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">
+                            {cust.outstandingBalance > 0 ? 'Due' : cust.outstandingBalance < 0 ? 'Advance' : 'Settled'}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                );
+                  );
+                }
               })
+            ) : filterType === 'group' ? (
+              <div className="p-6 text-center space-y-3">
+                <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
+                  <Users className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200">No Groups Found</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Create a new group or join with a handle.</p>
+                </div>
+                <div className="flex items-center justify-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateGroupOpen(true)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm cursor-pointer"
+                  >
+                    + Create Group
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsJoinGroupOpen(true)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 cursor-pointer"
+                  >
+                    Join Group
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-6 text-center space-y-3">
+                <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                  <User className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    {searchTerm ? 'No matching entries found' : filterType === 'all' ? 'No Customers or Groups Yet' : 'No Customers Found'}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {searchTerm ? 'Try adjusting your search query' : 'Add your first customer or group to get started.'}
+                  </p>
+                </div>
+                {!searchTerm && (
+                  <div className="flex items-center justify-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddCustomerOpen(true)}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-white fintech-gradient-primary shadow-sm cursor-pointer"
+                    >
+                      + Add Customer
+                    </button>
+                    {filterType === 'all' && (
+                      <button
+                        type="button"
+                        onClick={() => setIsCreateGroupOpen(true)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 cursor-pointer"
+                      >
+                        + Create Group
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -5241,6 +5515,105 @@ function KhataPageInner() {
         </div>
 
       </div>
+
+      {/* WhatsApp-Style Pin On Top Action Modal */}
+      {pinActionTarget && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setPinActionTarget(null)}
+        >
+          <div 
+            className="bg-white dark:bg-slate-900 rounded-3xl p-5 max-w-sm w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-950/70 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <PinIcon className="w-4 h-4 rotate-45" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    {pinActionTarget.isPinned ? 'Unpin Chat' : 'Pin to Top'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">WhatsApp style quick access</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPinActionTarget(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-sm font-black text-slate-700 dark:text-slate-200 shrink-0">
+                {pinActionTarget.kind === 'group' ? (
+                  <Users className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                ) : (
+                  pinActionTarget.name.charAt(0)
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                  {pinActionTarget.name}
+                </p>
+                <p className="text-[10px] text-slate-400 capitalize">
+                  {pinActionTarget.kind === 'group' ? 'Khata Group Chat' : 'Customer Ledger Account'}
+                </p>
+              </div>
+              {pinActionTarget.isPinned && (
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 shrink-0 flex items-center gap-1">
+                  <PinIcon className="w-2.5 h-2.5 rotate-45" />
+                  <span>Pinned</span>
+                </span>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              {pinActionTarget.isPinned
+                ? `Remove "${pinActionTarget.name}" from top pinned chats? It will return to its standard chronological position.`
+                : `Keep "${pinActionTarget.name}" permanently pinned at the very top of your chat directory for instant access.`}
+            </p>
+
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = StorageService.togglePinChat(pinActionTarget.id);
+                  setPinnedChatIds(updated);
+                  const wasPinned = pinActionTarget.isPinned;
+                  addToast(
+                    wasPinned ? 'Chat Unpinned' : '📌 Pinned on Top',
+                    wasPinned
+                      ? `${pinActionTarget.name} unpinned from top.`
+                      : `${pinActionTarget.name} is now pinned to the top of your list!`,
+                    'success'
+                  );
+                  setPinActionTarget(null);
+                }}
+                className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-all ${
+                  pinActionTarget.isPinned
+                    ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800'
+                    : 'fintech-gradient-primary text-white hover:opacity-95'
+                }`}
+              >
+                <PinIcon className="w-3.5 h-3.5 rotate-45" />
+                <span>{pinActionTarget.isPinned ? 'Unpin from Top' : 'Pin to Top'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPinActionTarget(null)}
+                className="w-full py-2 px-4 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Add New Customer */}
       {isAddCustomerOpen && (

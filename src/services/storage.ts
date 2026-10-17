@@ -40,6 +40,7 @@ const STORAGE_KEYS = {
   PASSWORDS: 'skp_passwords',
   GROUPS: 'skp_groups',
   GROUP_NOTIFICATIONS: 'skp_group_notifications',
+  PINNED_CHATS: 'skp_pinned_chats',
   INITIALIZED: 'skp_db_v1_initialized',
 };
 
@@ -1462,4 +1463,22 @@ export const StorageService = {
       return false;
     }
   },
+
+  // Pinned Chats (WhatsApp-style Pin on Top for Customer & Group chats)
+  getPinnedChatIds: (): string[] => {
+    return getLocalItem<string[]>(STORAGE_KEYS.PINNED_CHATS, []);
+  },
+
+  setPinnedChatIds: (ids: string[]): void => {
+    setLocalItem(STORAGE_KEYS.PINNED_CHATS, ids);
+  },
+
+  togglePinChat: (id: string): string[] => {
+    const current = StorageService.getPinnedChatIds();
+    const isPinned = current.includes(id);
+    const updated = isPinned ? current.filter((x) => x !== id) : [id, ...current];
+    StorageService.setPinnedChatIds(updated);
+    return updated;
+  },
 };
+
