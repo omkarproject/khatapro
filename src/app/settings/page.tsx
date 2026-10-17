@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { StorageService } from '@/services/storage';
-import { BackendProvider, SystemSettings, PaymentSettings, PaymentCollectionMode, TelegramBackupSettings, BackupFrequency, BackupDayOfWeek, BroadcastMessage, BroadcastType, BroadcastSeverity } from '@/types';
+import { BackendProvider, SystemSettings, PaymentSettings, PaymentCollectionMode, TelegramBackupSettings, BackupFrequency, BackupDayOfWeek, BroadcastMessage, BroadcastType, BroadcastSeverity, UserProfile } from '@/types';
 import { SupabaseAdapter } from '@/services/backendManager';
 import {
   Settings,
@@ -112,6 +112,67 @@ export default function SettingsPage() {
   const [adminSubTab, setAdminSubTab] = useState<'supabase' | 'drive' | 'users' | 'maintenance'>('supabase');
   const [backupSubTab, setBackupSubTab] = useState<'drive' | 'local'>('drive');
   const [isSyncingData, setIsSyncingData] = useState(false);
+  const isBusinessDirtyRef = useRef(false);
+  const [isSavingBusiness, setIsSavingBusiness] = useState(false);
+
+  // Business Profile State
+  const [bLogo, setBLogo] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      const p = StorageService.getProfile();
+      return s.businessLogo || p?.avatarUrl || settings.businessLogo || profile?.avatarUrl || '';
+    }
+    return settings.businessLogo || profile?.avatarUrl || '';
+  });
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const [bName, setBName] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      const p = StorageService.getProfile();
+      return s.businessName || p?.businessName || settings.businessName || profile?.businessName || currentUser?.businessName || '';
+    }
+    return settings.businessName || profile?.businessName || currentUser?.businessName || '';
+  });
+  const [bTagline, setBTagline] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      return s.businessTagline || settings.businessTagline || 'Track Money, Manage Business, Grow Faster';
+    }
+    return settings.businessTagline || 'Track Money, Manage Business, Grow Faster';
+  });
+  const [bPhone, setBPhone] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      const p = StorageService.getProfile();
+      return s.businessPhone || p?.phone || settings.businessPhone || profile?.phone || currentUser?.phone || '';
+    }
+    return settings.businessPhone || profile?.phone || currentUser?.phone || '';
+  });
+  const [bEmail, setBEmail] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      const p = StorageService.getProfile();
+      return s.businessEmail || p?.email || settings.businessEmail || profile?.email || currentUser?.email || '';
+    }
+    return settings.businessEmail || profile?.email || currentUser?.email || '';
+  });
+  const [bAddress, setBAddress] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      const p = StorageService.getProfile();
+      return s.businessAddress || p?.businessAddress || settings.businessAddress || profile?.businessAddress || '';
+    }
+    return settings.businessAddress || profile?.businessAddress || '';
+  });
+  const [bGst, setBGst] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const s = StorageService.getSettings();
+      const p = StorageService.getProfile();
+      return s.paymentSettings?.businessGst || p?.businessGst || settings.paymentSettings?.businessGst || profile?.businessGst || '';
+    }
+    return settings.paymentSettings?.businessGst || profile?.businessGst || '';
+  });
 
   // Currency & Language Settings State
   const [isSettingsCurrencyModalOpen, setIsSettingsCurrencyModalOpen] = useState(false);
@@ -414,6 +475,7 @@ export default function SettingsPage() {
 
   // Keep logo state in sync when settings / profile / localStorage updates
   useEffect(() => {
+    if (isBusinessDirtyRef.current) return;
     const currentLogo =
       settings.businessLogo ||
       profile?.avatarUrl ||
@@ -422,7 +484,7 @@ export default function SettingsPage() {
     if (currentLogo && !bLogo) {
       setBLogo(currentLogo);
     }
-  }, [settings.businessLogo, profile?.avatarUrl, currentUser?.avatarUrl]);
+  }, [settings.businessLogo, profile?.avatarUrl, currentUser?.avatarUrl, bLogo]);
 
   // Save Maintenance & Beta Testing Settings
   const handleSaveMaintenance = (enableMode?: boolean) => {
@@ -569,64 +631,6 @@ export default function SettingsPage() {
     }
   };
 
-  // Business Profile State
-  const [bLogo, setBLogo] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const s = StorageService.getSettings();
-      const p = StorageService.getProfile();
-      return s.businessLogo || p?.avatarUrl || settings.businessLogo || profile?.avatarUrl || '';
-    }
-    return settings.businessLogo || profile?.avatarUrl || '';
-  });
-  const logoInputRef = useRef<HTMLInputElement>(null);
-
-  const [bName, setBName] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const s = StorageService.getSettings();
-      const p = StorageService.getProfile();
-      return s.businessName || p?.businessName || settings.businessName || profile?.businessName || currentUser?.businessName || '';
-    }
-    return settings.businessName || profile?.businessName || currentUser?.businessName || '';
-  });
-  const [bTagline, setBTagline] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const s = StorageService.getSettings();
-      return s.businessTagline || settings.businessTagline || 'Track Money, Manage Business, Grow Faster';
-    }
-    return settings.businessTagline || 'Track Money, Manage Business, Grow Faster';
-  });
-  const [bPhone, setBPhone] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const s = StorageService.getSettings();
-      const p = StorageService.getProfile();
-      return s.businessPhone || p?.phone || settings.businessPhone || profile?.phone || currentUser?.phone || '';
-    }
-    return settings.businessPhone || profile?.phone || currentUser?.phone || '';
-  });
-  const [bEmail, setBEmail] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const s = StorageService.getSettings();
-      const p = StorageService.getProfile();
-      return s.businessEmail || p?.email || settings.businessEmail || profile?.email || currentUser?.email || '';
-    }
-    return settings.businessEmail || profile?.email || currentUser?.email || '';
-  });
-  const [bAddress, setBAddress] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const s = StorageService.getSettings();
-      const p = StorageService.getProfile();
-      return s.businessAddress || p?.businessAddress || settings.businessAddress || profile?.businessAddress || '';
-    }
-    return settings.businessAddress || profile?.businessAddress || '';
-  });
-  const [bGst, setBGst] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const s = StorageService.getSettings();
-      const p = StorageService.getProfile();
-      return s.paymentSettings?.businessGst || p?.businessGst || settings.paymentSettings?.businessGst || profile?.businessGst || '';
-    }
-    return settings.paymentSettings?.businessGst || profile?.businessGst || '';
-  });
 
   // UPI & Payment Collection Modes (Direct UPI, Cashfree Gateway, UPI Gateway)
   const [collectionMode, setCollectionMode] = useState<PaymentCollectionMode>(() => {
@@ -762,13 +766,15 @@ export default function SettingsPage() {
       if (settings.paymentSettings.upiGatewaySecret) setUpiGatewaySecret(settings.paymentSettings.upiGatewaySecret);
       if (settings.paymentSettings.upiGatewayWebhookUrl) setUpiGatewayWebhookUrl(settings.paymentSettings.upiGatewayWebhookUrl);
     }
-    if (settings.businessName) setBName(settings.businessName);
-    if (settings.businessLogo) setBLogo(settings.businessLogo);
-    if (settings.businessTagline) setBTagline(settings.businessTagline);
-    if (settings.businessPhone) setBPhone(settings.businessPhone);
-    if (settings.businessEmail) setBEmail(settings.businessEmail);
-    if (settings.businessAddress) setBAddress(settings.businessAddress);
-    if (settings.paymentSettings?.businessGst) setBGst(settings.paymentSettings.businessGst);
+    if (!isBusinessDirtyRef.current) {
+      if (settings.businessName !== undefined) setBName(settings.businessName);
+      if (settings.businessLogo !== undefined) setBLogo(settings.businessLogo);
+      if (settings.businessTagline !== undefined) setBTagline(settings.businessTagline);
+      if (settings.businessPhone !== undefined) setBPhone(settings.businessPhone);
+      if (settings.businessEmail !== undefined) setBEmail(settings.businessEmail);
+      if (settings.businessAddress !== undefined) setBAddress(settings.businessAddress);
+      if (settings.paymentSettings?.businessGst !== undefined) setBGst(settings.paymentSettings.businessGst);
+    }
   }, [settings]);
 
   // Sync with server Cashfree config if available
@@ -848,8 +854,11 @@ export default function SettingsPage() {
             ctx?.drawImage(img, 0, 0, width, height);
             const compressed = canvas.toDataURL('image/jpeg', 0.85);
             setBLogo(compressed);
-            updateSettings({ businessLogo: compressed });
-            setProfile({ ...profile, avatarUrl: compressed });
+            isBusinessDirtyRef.current = true;
+            StorageService.updateSettings({ businessLogo: compressed });
+            StorageService.updateProfile({ ...profile, avatarUrl: compressed });
+            updateSettings({ businessLogo: compressed }, { silent: true });
+            setProfile({ ...profile, avatarUrl: compressed }, { silent: true });
             addToast('Logo Updated', 'Profile & business logo updated successfully.', 'success');
           };
           img.src = result;
@@ -862,8 +871,12 @@ export default function SettingsPage() {
 
   const handleRemoveLogo = () => {
     setBLogo('');
-    updateSettings({ businessLogo: '' });
-    setProfile({ ...profile, avatarUrl: '' });
+    isBusinessDirtyRef.current = true;
+    try { localStorage.removeItem('khatapro_business_logo'); } catch {}
+    StorageService.updateSettings({ businessLogo: '' });
+    StorageService.updateProfile({ ...profile, avatarUrl: '' });
+    updateSettings({ businessLogo: '' }, { silent: true });
+    setProfile({ ...profile, avatarUrl: '' }, { silent: true });
     addToast('Logo Removed', 'Profile logo has been removed.', 'info');
   };
 
@@ -1317,47 +1330,77 @@ export default function SettingsPage() {
   };
 
   // Handle Business Save
-  const handleSaveBusiness = (e: React.FormEvent) => {
+  const handleSaveBusiness = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanBName = bName.trim();
-    const cleanBTagline = bTagline.trim();
-    const cleanBPhone = bPhone.trim();
-    const cleanBEmail = bEmail.trim();
-    const cleanBAddress = bAddress.trim();
-    const cleanBGst = bGst.trim();
+    setIsSavingBusiness(true);
+    try {
+      const cleanBName = bName.trim();
+      const cleanBTagline = bTagline.trim();
+      const cleanBPhone = bPhone.trim();
+      const cleanBEmail = bEmail.trim();
+      const cleanBAddress = bAddress.trim();
+      const cleanBGst = bGst.trim();
 
-    const updated: SystemSettings = {
-      ...settings,
-      businessName: cleanBName,
-      businessLogo: bLogo,
-      businessTagline: cleanBTagline,
-      businessPhone: cleanBPhone,
-      businessEmail: cleanBEmail,
-      businessAddress: cleanBAddress,
-      paymentSettings: {
-        ...settings.paymentSettings,
+      const updated: SystemSettings = {
+        ...settings,
+        businessName: cleanBName,
+        businessLogo: bLogo,
+        businessTagline: cleanBTagline,
+        businessPhone: cleanBPhone,
+        businessEmail: cleanBEmail,
+        businessAddress: cleanBAddress,
+        paymentSettings: {
+          ...settings.paymentSettings,
+          businessGst: cleanBGst,
+          payeeName: cleanBName || settings.paymentSettings?.payeeName || '',
+          currency: activeSettingsCurrency.code,
+        },
+      };
+
+      const updatedProfile: UserProfile = {
+        ...profile,
+        businessName: cleanBName,
+        avatarUrl: bLogo,
         businessGst: cleanBGst,
-        payeeName: cleanBName || settings.paymentSettings?.payeeName || '',
+        businessAddress: cleanBAddress,
+        phone: cleanBPhone,
+        email: cleanBEmail,
         currency: activeSettingsCurrency.code,
-      },
-    };
-    updateSettings(updated);
-    setActiveCurrency(activeSettingsCurrency.code);
-    setActiveLanguage(activeSettingsLanguage.code);
-    setProfile({
-      ...profile,
-      businessName: cleanBName,
-      avatarUrl: bLogo,
-      businessGst: cleanBGst,
-      businessAddress: cleanBAddress,
-      phone: cleanBPhone,
-      email: cleanBEmail,
-      currency: activeSettingsCurrency.code,
-      currencySymbol: activeSettingsCurrency.symbol,
-      language: activeSettingsLanguage.code,
-    });
-    if (cleanBName) {
-      setPayeeName(cleanBName);
+        currencySymbol: activeSettingsCurrency.symbol,
+        language: activeSettingsLanguage.code,
+      };
+
+      // 1. Immediately persist to localStorage via StorageService
+      StorageService.updateSettings(updated);
+      StorageService.updateProfile(updatedProfile);
+
+      setActiveCurrency(activeSettingsCurrency.code);
+      setActiveLanguage(activeSettingsLanguage.code);
+
+      // 2. Mark form not dirty
+      isBusinessDirtyRef.current = false;
+
+      // 3. Update React context state silently to avoid double toast notifications
+      updateSettings(updated, { silent: true });
+      setProfile(updatedProfile, { silent: true });
+
+      if (cleanBName) {
+        setPayeeName(cleanBName);
+      }
+
+      // 4. Synchronize immediately to Supabase Cloud PostgreSQL
+      await syncWithDatabase();
+
+      addToast(
+        'Business Details Saved! 🏢',
+        'Enterprise information, contact details, and currency saved and synchronized successfully.',
+        'success'
+      );
+    } catch (err: any) {
+      console.error('Failed to save business details:', err);
+      addToast('Save Failed', err.message || 'Could not save business details.', 'error');
+    } finally {
+      setIsSavingBusiness(false);
     }
   };
 
@@ -1822,7 +1865,10 @@ export default function SettingsPage() {
                 type="text"
                 required
                 value={bName}
-                onChange={(e) => setBName(e.target.value)}
+                onChange={(e) => {
+                  setBName(e.target.value);
+                  isBusinessDirtyRef.current = true;
+                }}
                 className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
               />
             </div>
@@ -1834,7 +1880,10 @@ export default function SettingsPage() {
               <input
                 type="text"
                 value={bTagline}
-                onChange={(e) => setBTagline(e.target.value)}
+                onChange={(e) => {
+                  setBTagline(e.target.value);
+                  isBusinessDirtyRef.current = true;
+                }}
                 className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
               />
             </div>
@@ -1848,7 +1897,10 @@ export default function SettingsPage() {
               <input
                 type="tel"
                 value={bPhone}
-                onChange={(e) => setBPhone(e.target.value)}
+                onChange={(e) => {
+                  setBPhone(e.target.value);
+                  isBusinessDirtyRef.current = true;
+                }}
                 className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
               />
             </div>
@@ -1860,7 +1912,10 @@ export default function SettingsPage() {
               <input
                 type="email"
                 value={bEmail}
-                onChange={(e) => setBEmail(e.target.value)}
+                onChange={(e) => {
+                  setBEmail(e.target.value);
+                  isBusinessDirtyRef.current = true;
+                }}
                 className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
               />
             </div>
@@ -1874,7 +1929,10 @@ export default function SettingsPage() {
               <input
                 type="text"
                 value={bGst}
-                onChange={(e) => setBGst(e.target.value)}
+                onChange={(e) => {
+                  setBGst(e.target.value);
+                  isBusinessDirtyRef.current = true;
+                }}
                 placeholder="e.g. 27AABCS1429B1Z8"
                 className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono"
               />
@@ -1902,8 +1960,9 @@ export default function SettingsPage() {
                 onChange={(e) => {
                   const c = setActiveCurrency(e.target.value);
                   setActiveSettingsCurrency(c);
+                  isBusinessDirtyRef.current = true;
                   if (profile) {
-                    setProfile({ ...profile, currency: c.code, currencySymbol: c.symbol });
+                    setProfile({ ...profile, currency: c.code, currencySymbol: c.symbol }, { silent: true });
                   }
                   addToast('Currency Updated', `Default monetary unit set to ${c.name} (${c.symbol}).`, 'success');
                 }}
@@ -1942,8 +2001,9 @@ export default function SettingsPage() {
                 onChange={(e) => {
                   const l = setActiveLanguage(e.target.value);
                   setActiveSettingsLanguage(l);
+                  isBusinessDirtyRef.current = true;
                   if (profile) {
-                    setProfile({ ...profile, language: l.code });
+                    setProfile({ ...profile, language: l.code }, { silent: true });
                   }
                   addToast('Language Updated', `Language set to ${l.nativeName} (${l.name}).`, 'success');
                 }}
@@ -1973,7 +2033,10 @@ export default function SettingsPage() {
             </label>
             <textarea
               value={bAddress}
-              onChange={(e) => setBAddress(e.target.value)}
+              onChange={(e) => {
+                setBAddress(e.target.value);
+                isBusinessDirtyRef.current = true;
+              }}
               rows={2}
               className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
             />
@@ -1982,10 +2045,20 @@ export default function SettingsPage() {
           <div className="pt-2 flex justify-end">
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 flex items-center gap-2"
+              disabled={isSavingBusiness}
+              className="px-5 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 flex items-center gap-2 cursor-pointer disabled:opacity-60 active:scale-95 transition-all"
             >
-              <Save className="w-4 h-4" />
-              Save Business Details
+              {isSavingBusiness ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>Save Business Details</span>
+                </>
+              )}
             </button>
           </div>
         </form>

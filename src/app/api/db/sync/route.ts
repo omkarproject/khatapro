@@ -1347,12 +1347,14 @@ export async function POST(req: NextRequest) {
         promises.push(syncRowsWithDeletions('customer_drive_files', rows));
       }
 
-      const logoToSave = data.settings?.businessLogo || data.profile?.avatarUrl || '';
+      const logoToSave = data.settings?.businessLogo !== undefined 
+        ? data.settings.businessLogo 
+        : (data.profile?.avatarUrl !== undefined ? data.profile.avatarUrl : '');
 
       if (data.settings) {
         const paymentSettingsWithLogo = {
           ...(data.settings.paymentSettings || {}),
-          businessLogo: logoToSave || data.settings.paymentSettings?.businessLogo || '',
+          businessLogo: logoToSave,
           websiteName: data.settings.websiteName || '',
           websiteLogo: data.settings.websiteLogo || '',
           websiteFavicon: data.settings.websiteFavicon || '',
@@ -1419,7 +1421,7 @@ export async function POST(req: NextRequest) {
               business_name: data.profile.businessName,
               business_gst: data.profile.businessGst || '',
               business_address: data.profile.businessAddress || '',
-              avatar_url: logoToSave || data.profile.avatarUrl || '',
+              avatar_url: logoToSave,
               updated_at: new Date().toISOString(),
             }, { onConflict: 'id' })
           )

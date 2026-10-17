@@ -49,7 +49,7 @@ export interface ToastMessage {
 interface AppContextType {
   isMounted: boolean;
   profile: UserProfile;
-  setProfile: (p: UserProfile) => void;
+  setProfile: (p: UserProfile, options?: { silent?: boolean }) => void;
   customers: Customer[];
   transactions: Transaction[];
   products: Product[];
@@ -98,7 +98,7 @@ interface AppContextType {
   deleteTask: (id: string) => void;
   savePassword: (item: PasswordItem) => void;
   deletePassword: (id: string) => void;
-  updateSettings: (settings: Partial<SystemSettings>) => void;
+  updateSettings: (settings: Partial<SystemSettings>, options?: { silent?: boolean }) => void;
   
   // Khata Groups & Split Notifications
   groups: KhataGroup[];
@@ -542,8 +542,12 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           if (d.settings) {
             setSettingsState(prev => {
               const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
-              const incomingLogo = d.settings.businessLogo || d.user?.avatarUrl || (d.user as any)?.avatar_url || '';
-              const preservedLogo = incomingLogo || prev.businessLogo || globalLogo;
+              const incomingLogo = d.settings.businessLogo !== undefined 
+                ? d.settings.businessLogo 
+                : (d.user?.avatarUrl !== undefined ? d.user.avatarUrl : ((d.user as any)?.avatar_url || ''));
+              const preservedLogo = incomingLogo !== undefined && incomingLogo !== null
+                ? incomingLogo
+                : (prev.businessLogo ?? globalLogo);
 
               let brandStored: any = {};
               if (typeof window !== 'undefined') {
@@ -632,8 +636,12 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
             if (d.user.currency) setActiveCurrency(d.user.currency);
             setProfileState(prev => {
               const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
-              const incomingAvatar = d.user.avatarUrl || (d.user as any)?.avatar_url || d.settings?.businessLogo || '';
-              const preservedAvatar = incomingAvatar || prev.avatarUrl || globalLogo;
+              const incomingAvatar = d.user.avatarUrl !== undefined 
+                ? d.user.avatarUrl 
+                : ((d.user as any)?.avatar_url !== undefined ? (d.user as any).avatar_url : (d.settings?.businessLogo || ''));
+              const preservedAvatar = incomingAvatar !== undefined && incomingAvatar !== null
+                ? incomingAvatar
+                : (prev.avatarUrl ?? globalLogo);
               return {
                 ...prev,
                 ...d.user,
@@ -643,8 +651,12 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
             setCurrentUserState(prev => {
               if (!prev) return null;
               const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
-              const incomingAvatar = d.user.avatarUrl || (d.user as any)?.avatar_url || d.settings?.businessLogo || '';
-              const preservedAvatar = incomingAvatar || prev.avatarUrl || globalLogo;
+              const incomingAvatar = d.user.avatarUrl !== undefined 
+                ? d.user.avatarUrl 
+                : ((d.user as any)?.avatar_url !== undefined ? (d.user as any).avatar_url : (d.settings?.businessLogo || ''));
+              const preservedAvatar = incomingAvatar !== undefined && incomingAvatar !== null
+                ? incomingAvatar
+                : (prev.avatarUrl ?? globalLogo);
               const updated = {
                 ...prev,
                 ...d.user,
@@ -1257,27 +1269,46 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     StorageService.updateSettings(updated);
   };
 
-  const setProfile = (p: UserProfile) => {
+  const setProfile = (p: UserProfile, options?: { silent?: boolean }) => {
     if (p.language) setActiveLanguage(p.language);
     if (p.currency) setActiveCurrency(p.currency);
     setProfileState(p);
     StorageService.updateProfile(p);
-    if (p.businessName && p.businessName.trim()) {
+    if (p.businessName !== undefined) {
       setSettingsState(prev => ({ ...prev, businessName: p.businessName.trim() }));
     }
     if (p.avatarUrl !== undefined) {
       setSettingsState(prev => ({ ...prev, businessLogo: p.avatarUrl }));
+      if (p.avatarUrl) {
+        try { localStorage.setItem('khatapro_business_logo', p.avatarUrl); } catch {}
+      } else {
+        try { localStorage.removeItem('khatapro_business_logo'); } catch {}
+      }
+    }
+    if (p.phone !== undefined || p.email !== undefined || p.businessAddress !== undefined || p.businessGst !== undefined) {
+      setSettingsState(prev => ({
+        ...prev,
+        businessPhone: p.phone !== undefined ? p.phone : prev.businessPhone,
+        businessEmail: p.email !== undefined ? p.email : prev.businessEmail,
+        businessAddress: p.businessAddress !== undefined ? p.businessAddress : prev.businessAddress,
+        paymentSettings: {
+          ...(prev.paymentSettings || {}),
+          businessGst: p.businessGst !== undefined ? p.businessGst : prev.paymentSettings?.businessGst,
+        },
+      }));
     }
     if (currentUser) {
       const updatedUser = { ...currentUser, ...p };
       setCurrentUserState(updatedUser);
       StorageService.setCurrentUser(updatedUser);
     }
-    addToast('Profile Updated', 'Business and merchant profile saved successfully.', 'success');
+    if (!options?.silent) {
+      addToast('Profile Updated', 'Business and merchant profile saved successfully.', 'success');
+    }
     syncWithDatabase();
   };
 
-  const updateSettings = (newSettings: Partial<SystemSettings>) => {
+  const updateSettings = (newSettings: Partial<SystemSettings>, options?: { silent?: boolean }) => {
     const merged = StorageService.updateSettings(newSettings);
     setSettingsState(merged);
 
@@ -1335,6 +1366,11 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
     if (merged.businessLogo !== undefined) {
       setProfileState(prev => ({ ...prev, avatarUrl: merged.businessLogo }));
+      if (merged.businessLogo) {
+        try { localStorage.setItem('khatapro_business_logo', merged.businessLogo); } catch {}
+      } else {
+        try { localStorage.removeItem('khatapro_business_logo'); } catch {}
+      }
       if (currentUser) {
         const updatedUser = { ...currentUser, avatarUrl: merged.businessLogo };
         setCurrentUserState(updatedUser);
@@ -1342,7 +1378,9 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       }
     }
 
-    addToast('Settings Saved', 'System configurations updated successfully.', 'success');
+    if (!options?.silent) {
+      addToast('Settings Saved', 'System configurations updated successfully.', 'success');
+    }
     syncWithDatabase();
   };
 
