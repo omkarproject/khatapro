@@ -101,7 +101,7 @@ export interface Customer {
   state?: string;
   creditLimit: number;
   outstandingBalance: number; // positive = customer owes us (Credit), negative = we owe customer (Debit)
-  category: 'VIP' | 'Regular' | 'Wholesale' | 'Retail';
+  category: 'VIP' | 'Regular' | 'Wholesale' | 'Retail' | 'Merchant';
   status: 'active' | 'overdue' | 'blocked';
   rating: number; // 1 - 5
   notes?: string;

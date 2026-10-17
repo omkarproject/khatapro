@@ -113,6 +113,8 @@ function KhataPageInner() {
     deleteGroup,
     groupNotifications,
     addGroupNotification,
+    loadUserDataFromCloud,
+    syncWithDatabase,
   } = useApp();
 
   // Payment Reminder Modal State for Transactions
@@ -240,6 +242,7 @@ function KhataPageInner() {
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
   const [newCustName, setNewCustName] = useState('');
   const [newCustPhone, setNewCustPhone] = useState('');
+  const [newCustEmail, setNewCustEmail] = useState('');
   const [newCustBusiness, setNewCustBusiness] = useState('');
   const [newCustAddress, setNewCustAddress] = useState('');
 
@@ -433,6 +436,16 @@ function KhataPageInner() {
       return () => clearTimeout(timer);
     }
   }, [screenView, activeTransactions.length, selectedCustomerId, selectedGroupId, selectedMemberFilterId]);
+
+  // Realtime Live Stream Poller for P2P and Group Ledgers (keeps chat ledger fresh if two merchants transact)
+  useEffect(() => {
+    if (screenView === 'chat' && currentUser?.id) {
+      const interval = setInterval(() => {
+        loadUserDataFromCloud(currentUser.id, true /* silent */);
+      }, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [screenView, currentUser?.id, loadUserDataFromCloud]);
 
   // Group transactions by date for the chat stream (Screen 2)
   const groupedTransactions = useMemo(() => {
@@ -2122,8 +2135,8 @@ function KhataPageInner() {
     const created: Customer = {
       id: `cust_${Date.now()}`,
       name: newCustName.trim(),
-      phone: newCustPhone.trim() || '+91 98000 00000',
-      email: '',
+      phone: newCustPhone.trim(),
+      email: newCustEmail.trim().toLowerCase(),
       businessName: newCustBusiness.trim(),
       address: newCustAddress.trim(),
       creditLimit: 100000,
@@ -2141,6 +2154,7 @@ function KhataPageInner() {
     setMobileActivePanel('ledger');
     setNewCustName('');
     setNewCustPhone('');
+    setNewCustEmail('');
     setNewCustBusiness('');
     setNewCustAddress('');
   };
@@ -3513,8 +3527,15 @@ function KhataPageInner() {
                           )}
                         </div>
                         <div className="min-w-0">
-                          <div className={`text-xs font-bold truncate ${getCustomerRatingColor(cust.rating)}`}>
-                            {cust.name}
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-xs font-bold truncate ${getCustomerRatingColor(cust.rating)}`}>
+                              {cust.name}
+                            </span>
+                            {(cust.category === 'Merchant' || cust.id.startsWith('peer_cust_')) && (
+                              <span className="px-1.5 py-0.2 rounded-full text-[8px] font-black bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0 shadow-2xs">
+                                P2P
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-1.5 text-[10px] text-slate-400 truncate">
                             <span>{cust.phone}</span>
@@ -3899,12 +3920,20 @@ function KhataPageInner() {
 
                           {/* Customer Name (Color based on rating) + CRM Star Rating - Click opens View Profile */}
                           <div className="min-w-0">
-                            <div
-                              onClick={() => setScreenView('profile')}
-                              className={`text-[17px] font-black leading-tight truncate cursor-pointer hover:opacity-85 transition-opacity ${getCustomerRatingColor(activeCustomer.rating)}`}
-                              title="Click to view/edit profile"
-                            >
-                              {activeCustomer.name}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span
+                                onClick={() => setScreenView('profile')}
+                                className={`text-[17px] font-black leading-tight truncate cursor-pointer hover:opacity-85 transition-opacity ${getCustomerRatingColor(activeCustomer.rating)}`}
+                                title="Click to view/edit profile"
+                              >
+                                {activeCustomer.name}
+                              </span>
+                              {(activeCustomer.category === 'Merchant' || activeCustomer.id.startsWith('peer_cust_')) && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shadow-2xs">
+                                  <Sparkles className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400" />
+                                  P2P Active
+                                </span>
+                              )}
                             </div>
                             {/* Customer CRM Rating - Only Stars Visible */}
                             <div
@@ -4143,6 +4172,11 @@ function KhataPageInner() {
                                     </div>
 
                                     <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium shrink-0 ml-2">
+                                      {(t.id.startsWith('peer_txn_') || (Array.isArray(t.tags) && t.tags.includes('__p2p_peer'))) && (
+                                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                          Peer
+                                        </span>
+                                      )}
                                       <span>{formatDate(t.date)}, {formatTime(t.createdAt || t.date)}</span>
                                       <span>✓</span>
                                       <button
@@ -5093,6 +5127,19 @@ function KhataPageInner() {
                   value={newCustPhone}
                   onChange={(e) => setNewCustPhone(e.target.value)}
                   placeholder="e.g. 9960992747"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Gmail / Email Address
+                </label>
+                <input
+                  type="email"
+                  value={newCustEmail}
+                  onChange={(e) => setNewCustEmail(e.target.value)}
+                  placeholder="e.g. merchant@gmail.com"
                   className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
                 />
               </div>

@@ -218,7 +218,7 @@ export default function CustomersPage() {
   const [formAddress, setFormAddress] = useState('');
   const [formCity, setFormCity] = useState('');
   const [formCreditLimit, setFormCreditLimit] = useState('150000');
-  const [formCategory, setFormCategory] = useState<'VIP' | 'Regular' | 'Wholesale' | 'Retail'>('Regular');
+  const [formCategory, setFormCategory] = useState<'VIP' | 'Regular' | 'Wholesale' | 'Retail' | 'Merchant'>('Regular');
   const [formRating, setFormRating] = useState('5');
   const [formNotes, setFormNotes] = useState('');
 
@@ -1800,6 +1800,7 @@ export default function CustomersPage() {
                     <option value="Wholesale">Wholesale</option>
                     <option value="Regular">Regular</option>
                     <option value="Retail">Retail</option>
+                    <option value="Merchant">Merchant (P2P)</option>
                   </select>
                 </div>
                 <div>

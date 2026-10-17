@@ -141,6 +141,7 @@ interface AppContextType {
   logout: () => void;
   cloudSyncStatus: 'synced' | 'syncing' | 'offline' | 'error';
   syncWithDatabase: () => Promise<void>;
+  loadUserDataFromCloud: (userId: string, silent?: boolean) => Promise<void>;
 
   // Payment Details Modal & Sound Notification
   activePaymentDetail: Transaction | null;
@@ -281,6 +282,26 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           },
         });
       }
+
+      // If broadcasting specifically to a peer merchant's channel
+      const supabase = getSupabaseClient();
+      if (supabase && userId && userId !== currentUserRef.current?.id) {
+        const peerChan = supabase.channel(`khatapro_realtime_${userId}`);
+        peerChan.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            peerChan.send({
+              type: 'broadcast',
+              event: 'khatapro_device_sync',
+              payload: {
+                userId,
+                originDeviceId: deviceId,
+                action,
+                timestamp,
+              },
+            });
+          }
+        });
+      }
     } catch (wsErr) {
       console.warn('Realtime broadcast error:', wsErr);
     }
@@ -372,6 +393,17 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         lastCloudSyncTimestampRef.current = Date.now();
         // ⚡ Instantly broadcast live update to all other devices & tabs!
         broadcastRealtimeChange(userId, 'database_update');
+
+        try {
+          const syncJson = await res.json();
+          if (syncJson.peerLinked && Array.isArray(syncJson.matchedPeers) && syncJson.matchedPeers.length > 0) {
+            syncJson.matchedPeers.forEach((mp: any) => {
+              broadcastRealtimeChange(mp.id, 'peer_merchant_update');
+            });
+            // Silently reload user data so that newly linked peer merchant customer is loaded into local state
+            loadUserDataFromCloud(userId, true);
+          }
+        } catch {}
       } else {
         setCloudSyncStatus('error');
       }
@@ -1804,6 +1836,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         logout,
         cloudSyncStatus,
         syncWithDatabase,
+        loadUserDataFromCloud,
         refreshData,
         isMounted: mounted,
         activeLanguage,

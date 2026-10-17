@@ -862,30 +862,87 @@ export async function GET(req: NextRequest) {
 // 1. User A automatically appears in Merchant B's customer list (as peer_cust_${userIdA}).
 // 2. Transactions recorded by User A mirror into Merchant B's ledger with inverted accounting (Credit <-> Debit).
 // 3. Outstanding balance is automatically updated in real-time.
+// WhatsApp-style Peer Merchant Sync
+// When User A adds a customer whose phone/email matches registered Merchant B:
+// 1. User A automatically appears in Merchant B's customer list (as peer_cust_${userIdA} or matched customer).
+// 2. Transactions recorded by User A mirror into Merchant B's ledger with inverted accounting (Credit <-> Debit).
+// 3. Outstanding balance is automatically updated in real-time.
 async function syncPeerMerchants(
   supabase: any,
   currentUserId: string,
   customers: any[],
   transactions: any[]
-) {
-  try {
-    const { data: allProfiles, error: profErr } = await supabase
-      .from('profiles')
-      .select('id, name, full_name, email, phone, business_name, avatar_url');
+): Promise<{ peerLinked: boolean; matchedPeers: Array<{ id: string; name: string; phone: string }> }> {
+  const matchedPeers: Array<{ id: string; name: string; phone: string }> = [];
 
-    if (profErr || !Array.isArray(allProfiles) || allProfiles.length === 0) {
-      return;
+  try {
+    let allProfiles: any[] = [];
+    const { data: profData, error: profErr } = await supabase
+      .from('profiles')
+      .select('id, name, email, phone, business_name, avatar_url');
+
+    if (!profErr && Array.isArray(profData)) {
+      allProfiles = [...profData];
     }
 
-    const currentProfile = allProfiles.find((p: any) => p.id === currentUserId);
-    if (!currentProfile) return;
+    // Try fallback to auth.admin if available to ensure we have every registered merchant
+    try {
+      if (supabase.auth?.admin) {
+        const { data: authList } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        if (authList?.users) {
+          for (const u of authList.users) {
+            const meta = u.user_metadata || {};
+            const existing = allProfiles.find((p: any) => p.id === u.id);
+            if (!existing) {
+              allProfiles.push({
+                id: u.id,
+                name: meta.name || u.email?.split('@')[0] || 'Merchant',
+                email: u.email || '',
+                phone: meta.phone || u.phone || '',
+                business_name: meta.business_name || '',
+                avatar_url: meta.avatar_url || '',
+              });
+            } else {
+              if (!existing.phone && (meta.phone || u.phone)) existing.phone = meta.phone || u.phone;
+              if (!existing.business_name && meta.business_name) existing.business_name = meta.business_name;
+              if (!existing.name && meta.name) existing.name = meta.name;
+            }
+          }
+        }
+      }
+    } catch {}
+
+    let currentProfile = allProfiles.find((p: any) => p.id === currentUserId);
+    if (!currentProfile) {
+      try {
+        if (supabase.auth?.admin) {
+          const { data: uData } = await supabase.auth.admin.getUserById(currentUserId);
+          if (uData?.user) {
+            const u = uData.user;
+            const meta = u.user_metadata || {};
+            currentProfile = {
+              id: u.id,
+              name: meta.name || u.email?.split('@')[0] || 'Merchant',
+              email: u.email || '',
+              phone: meta.phone || u.phone || '',
+              business_name: meta.business_name || '',
+              avatar_url: meta.avatar_url || '',
+            };
+            allProfiles.push(currentProfile);
+          }
+        }
+      } catch {}
+    }
+
+    if (!currentProfile) {
+      return { peerLinked: false, matchedPeers: [] };
+    }
 
     const curPhone = normalizePhone(currentProfile.phone);
     const curEmail = (currentProfile.email || '').toLowerCase().trim();
     const curDisplayName = (
       currentProfile.business_name ||
       currentProfile.name ||
-      currentProfile.full_name ||
       'Merchant'
     ).trim();
 
@@ -906,8 +963,22 @@ async function syncPeerMerchants(
 
       if (!peerProfile) continue;
       const peerUserId = peerProfile.id;
+      matchedPeers.push({
+        id: peerUserId,
+        name: peerProfile.business_name || peerProfile.name || 'Peer Merchant',
+        phone: peerProfile.phone || '',
+      });
 
-      // Ensure reciprocal customer exists for peerUserId
+      // Update current user's customer record to mark verified Merchant category
+      await supabase.from('customers').update({
+        category: 'Merchant',
+        business_name: peerProfile.business_name || cust.businessName || cust.business_name || '',
+        avatar: peerProfile.avatar_url || cust.avatar || null,
+        notes: cust.notes || 'Verified Peer Merchant (P2P Connected)',
+        updated_at: new Date().toISOString(),
+      }).eq('id', cust.id).eq('user_id', currentUserId);
+
+      // Ensure reciprocal customer exists for peerUserId (User B sees User A)
       const { data: peerCustomers } = await supabase
         .from('customers')
         .select('id, phone, email')
@@ -935,6 +1006,7 @@ async function syncPeerMerchants(
         category: 'Merchant',
         status: 'active',
         rating: 5,
+        notes: 'Verified Peer Merchant (P2P Connected)',
         updated_at: new Date().toISOString(),
       }, { onConflict: 'id, user_id' });
 
@@ -951,9 +1023,9 @@ async function syncPeerMerchants(
 
         let invertedType = 'debit';
         if (t.type === 'credit') {
-          invertedType = 'debit'; // User A gave -> Peer B got
+          invertedType = 'debit'; // User A gave (Credit) -> Peer B received (Debit)
         } else if (t.type === 'debit' || t.type === 'collection') {
-          invertedType = 'credit'; // User A got -> Peer B gave
+          invertedType = 'credit'; // User A received (Debit) -> Peer B gave (Credit)
         } else if (t.type === 'income') {
           invertedType = 'expense';
         } else if (t.type === 'expense') {
@@ -970,9 +1042,11 @@ async function syncPeerMerchants(
           type: invertedType,
           amount: Number(t.amount) || 0,
           date: t.date || new Date().toISOString().split('T')[0],
-          category: t.category || 'General',
+          category: t.category || (invertedType === 'credit' ? 'Credit Given' : 'Payment Received'),
           payment_mode: t.paymentMode || t.payment_mode || 'upi',
           note: t.note || '',
+          tags: Array.isArray(t.tags) ? t.tags : ['__p2p_peer'],
+          attachments: Array.isArray(t.attachments) ? t.attachments : [],
           status: t.status || 'completed',
           reference_no: String(t.id),
           created_by: curDisplayName,
@@ -1028,6 +1102,8 @@ async function syncPeerMerchants(
   } catch (err) {
     console.warn('syncPeerMerchants error:', err);
   }
+
+  return { peerLinked: matchedPeers.length > 0, matchedPeers };
 }
 
 // POST: Save or bulk-sync all user data to Supabase Cloud PostgreSQL
@@ -1058,6 +1134,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Could not connect to Supabase Cloud Database' }, { status: 500 });
     }
 
+    let peerSyncResult = { peerLinked: false, matchedPeers: [] as any[] };
+
     if (data) {
       // Helper to batch upsert converted rows and remove deleted records from Supabase
       const syncRowsWithDeletions = async (table: string, rows: any[]) => {
@@ -1070,7 +1148,16 @@ export async function POST(req: NextRequest) {
           .eq('user_id', userId);
 
         if (!fetchErr && existing && existing.length > 0) {
-          const toDelete = existing.map(e => String(e.id)).filter(id => !activeIds.has(id));
+          const toDelete = existing
+            .map(e => String(e.id))
+            .filter(id => {
+              if (activeIds.has(id)) return false;
+              // CRITICAL: NEVER delete peer-mirrored customers or transactions during regular user deletion sync!
+              // They are managed strictly by syncPeerMerchants
+              if (table === 'customers' && id.startsWith('peer_cust_')) return false;
+              if (table === 'transactions' && id.startsWith('peer_txn_')) return false;
+              return true;
+            });
           if (toDelete.length > 0) {
             for (let i = 0; i < toDelete.length; i += 50) {
               const chunk = toDelete.slice(i, i + 50);
@@ -1242,7 +1329,7 @@ export async function POST(req: NextRequest) {
 
       // WhatsApp-style reciprocal customer creation and mirrored transactions for matching merchants
       if (Array.isArray(data.customers)) {
-        await syncPeerMerchants(supabase, userId, data.customers, Array.isArray(data.transactions) ? data.transactions : []);
+        peerSyncResult = await syncPeerMerchants(supabase, userId, data.customers, Array.isArray(data.transactions) ? data.transactions : []);
       }
     }
 
@@ -1250,6 +1337,8 @@ export async function POST(req: NextRequest) {
       success: true,
       message: 'All business data synchronized successfully to Supabase PostgreSQL!',
       provider: 'supabase',
+      peerLinked: peerSyncResult.peerLinked,
+      matchedPeers: peerSyncResult.matchedPeers,
       timestamp: new Date().toISOString(),
     });
   } catch (error: any) {
