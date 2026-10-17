@@ -459,7 +459,7 @@ function KhataPageInner() {
 
     if (!activeCustomer) return [];
     return transactions
-      .filter(t => t.customerId === activeCustomer.id)
+      .filter(t => String(t.customerId) === String(activeCustomer.id) || (activeCustomer.phone && (t as any).customerPhone === activeCustomer.phone))
       .sort((a, b) => {
         const timeA = new Date(a.date).getTime();
         const timeB = new Date(b.date).getTime();
@@ -1255,7 +1255,7 @@ function KhataPageInner() {
     setScreenView('entry');
   };
 
-  // Delete transaction currently being edited
+  // Delete transaction currently being edited (soft delete - shows as deleted/excluded in ledger)
   const handleDeleteEditingTransaction = () => {
     if (!editingTxnId) return;
     deleteTransaction(editingTxnId);
@@ -1264,6 +1264,19 @@ function KhataPageInner() {
     setEntryNotes('');
     setEntryAttachments([]);
     setScreenView('chat');
+  };
+
+  // Permanent Delete transaction (header trash icon - removes completely so it doesn't show at all)
+  const handlePermanentDeleteEditingTransaction = async () => {
+    if (!editingTxnId) return;
+    if (confirm('Permanently delete this transaction? It will be completely removed and will not appear in the ledger.')) {
+      await hardDeleteTransaction(editingTxnId);
+      setEditingTxnId(null);
+      setEntryAmountStr('');
+      setEntryNotes('');
+      setEntryAttachments([]);
+      setScreenView('chat');
+    }
   };
 
   // Open Payment Reminder Modal for a specific transaction
@@ -1368,7 +1381,7 @@ function KhataPageInner() {
   const handleConfirmEntry = async () => {
     const num = parseFloat(entryAmountStr);
     if (!num || num <= 0) {
-      addToast('Amount Required', 'Please enter a valid amount using the keypad.', 'warning');
+      addToast('Amount Required', 'Please enter a valid amount.', 'warning');
       return;
     }
 
@@ -3720,9 +3733,8 @@ function KhataPageInner() {
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">
-                              <span>@{grp.username}</span>
-                              <span className="text-slate-400">• {grp.members.length} members</span>
+                            <div className="flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                              <span>{grp.members.length} members</span>
                             </div>
                           </div>
                         </div>
@@ -4959,9 +4971,9 @@ function KhataPageInner() {
                     {editingTxnId ? (
                       <button
                         type="button"
-                        onClick={handleDeleteEditingTransaction}
+                        onClick={handlePermanentDeleteEditingTransaction}
                         className="p-1.5 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
-                        title="Delete this transaction"
+                        title="Permanently Delete Transaction"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -4973,19 +4985,29 @@ function KhataPageInner() {
                   {/* Scrollable Upper Section: Big Amount + Note + Date + Bill photo */}
                   <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     
-                    {/* Big Amount Input Display with Cursor (Image 3) */}
+                    {/* Big Amount Input Field (Supports Mobile & Laptop Keyboard) */}
                     <div className="py-4 text-center">
                       <div className="inline-flex items-center justify-center text-4xl font-black font-mono tracking-tight">
                         <span className={entryType === 'received' ? 'text-emerald-700 dark:text-emerald-400 mr-1' : 'text-rose-600 mr-1'}>
                           ₹
                         </span>
-                        <span className="text-slate-900 dark:text-white">
-                          {entryAmountStr || '0'}
-                        </span>
-                        <span className={`w-0.5 h-9 ml-1 animate-pulse ${entryType === 'received' ? 'bg-emerald-600' : 'bg-rose-600'}`} />
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          autoFocus
+                          value={entryAmountStr}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                            const parts = val.split('.');
+                            if (parts.length > 2) return;
+                            setEntryAmountStr(val);
+                          }}
+                          placeholder="0"
+                          className="w-52 text-center text-4xl font-black font-mono bg-transparent text-slate-900 dark:text-white focus:outline-none placeholder-slate-300 dark:placeholder-slate-700"
+                        />
                       </div>
-                      {/* Underline accent (Image 3) */}
-                      <div className={`w-48 h-0.5 mx-auto mt-2 ${entryType === 'received' ? 'bg-emerald-600' : 'bg-rose-600'}`} />
+                      {/* Underline accent */}
+                      <div className={`w-52 h-0.5 mx-auto mt-2 ${entryType === 'received' ? 'bg-emerald-600' : 'bg-rose-600'}`} />
                       {editingTxnId && (
                         <div className="mt-2">
                           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80">
@@ -5316,14 +5338,14 @@ function KhataPageInner() {
                     </div>
                   </div>
 
-                  {/* Middle Action Buttons (Image 3) */}
-                  <div className="px-4 py-2.5 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-3 max-w-sm mx-auto w-full shrink-0">
+                  {/* Action Buttons */}
+                  <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2.5 max-w-sm mx-auto w-full shrink-0">
                     {editingTxnId ? (
                       <>
                         <button
                           type="button"
                           onClick={handleDeleteEditingTransaction}
-                          className="py-2.5 px-3 rounded-full bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 border border-rose-200 dark:border-rose-900/60 hover:bg-rose-100 transition-colors cursor-pointer"
+                          className="flex-1 py-2.5 px-3 rounded-xl bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 border border-rose-200 dark:border-rose-900/60 hover:bg-rose-100 transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                           Delete Entry
@@ -5332,24 +5354,24 @@ function KhataPageInner() {
                         <button
                           type="button"
                           onClick={() => handleCreateBillAndSave(true)}
-                          className="py-2.5 px-3 rounded-full bg-[#E8F5E9] text-[#2E7D32] dark:bg-emerald-950/60 dark:text-emerald-300 font-bold text-xs flex items-center justify-center gap-1.5 border border-[#C8E6C9] dark:border-emerald-800 active:scale-95 transition-all cursor-pointer"
+                          className="flex-1 py-2.5 px-3 rounded-xl bg-[#E8F5E9] text-[#2E7D32] dark:bg-emerald-950/60 dark:text-emerald-300 font-bold text-xs flex items-center justify-center gap-1.5 border border-[#C8E6C9] dark:border-emerald-800 active:scale-95 transition-all cursor-pointer"
                           title="Save changes and generate PDF Bill"
                         >
                           <FileSpreadsheet className="w-3.5 h-3.5" />
-                          Create Bill
+                          Bill
                         </button>
 
                         <button
                           type="button"
                           onClick={handleConfirmEntry}
-                          className={`py-2.5 px-4 rounded-full text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer ${
+                          className={`flex-1 py-2.5 px-3 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer ${
                             entryType === 'received'
                               ? 'bg-[#1E7E34] hover:bg-[#155d27] shadow-emerald-600/20'
                               : 'bg-[#D32F2F] hover:bg-[#b71c1c] shadow-rose-600/20'
                           }`}
                         >
                           <Check className="w-4 h-4 stroke-[3]" />
-                          Save Changes
+                          Save
                         </button>
                       </>
                     ) : (
@@ -5357,17 +5379,17 @@ function KhataPageInner() {
                         <button
                           type="button"
                           onClick={() => handleCreateBillAndSave(false)}
-                          className="py-2.5 px-3 rounded-full bg-[#E8F5E9] text-[#2E7D32] dark:bg-emerald-950/60 dark:text-emerald-300 font-bold text-xs flex items-center justify-center gap-1.5 border border-[#C8E6C9] dark:border-emerald-800 active:scale-95 transition-all cursor-pointer"
+                          className="flex-1 py-3 px-4 rounded-xl bg-[#E8F5E9] text-[#2E7D32] dark:bg-emerald-950/60 dark:text-emerald-300 font-bold text-xs flex items-center justify-center gap-2 border border-[#C8E6C9] dark:border-emerald-800 active:scale-95 transition-all cursor-pointer"
                           title="Add transaction to Khata & generate PDF Bill for this amount"
                         >
-                          <FileSpreadsheet className="w-3.5 h-3.5" />
+                          <FileSpreadsheet className="w-4 h-4" />
                           Create Bill
                         </button>
 
                         <button
                           type="button"
                           onClick={handleConfirmEntry}
-                          className={`py-2.5 px-4 rounded-full text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer ${
+                          className={`flex-1 py-3 px-4 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all cursor-pointer ${
                             entryType === 'received'
                               ? 'bg-[#1E7E34] hover:bg-[#155d27] shadow-emerald-600/20'
                               : 'bg-[#D32F2F] hover:bg-[#b71c1c] shadow-rose-600/20'
@@ -5378,128 +5400,6 @@ function KhataPageInner() {
                         </button>
                       </>
                     )}
-                  </div>
-
-                  {/* Custom Mobile Keypad (Image 3) */}
-                  <div className="p-3 bg-[#F2F6F5] dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-700 shrink-0 max-w-sm mx-auto w-full">
-                    <div className="grid grid-cols-4 gap-2">
-                      {/* Row 1 */}
-                      <button
-                        type="button"
-                        onClick={() => handleKeypadPress('1')}
-                        className="py-3 rounded-2xl bg-white dark:bg-slate-900 text-lg font-bold text-slate-800 dark:text-white shadow-xs active:bg-slate-100"
-                      >
-                        1
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleKeypadPress('2')}
-                        className="py-3 rounded-2xl bg-white dark:bg-slate-900 text-lg font-bold text-slate-800 dark:text-white shadow-xs active:bg-slate-100"
-                      >
-                        2
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleKeypadPress('3')}
-                        className="py-3 rounded-2xl bg-white dark:bg-slate-900 text-lg font-bold text-slate-800 dark:text-white shadow-xs active:bg-slate-100"
-                      >
-                        3
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleKeypadPress('backspace')}
-                        className="py-3 rounded-2xl bg-[#FFE4E6] dark:bg-rose-950/60 text-rose-600 flex items-center justify-center active:opacity-75 shadow-xs"
-                      >
-                        <Delete className="w-5 h-5" />
-                      </button>
-
-                      {/* Row 2 */}
-                      <button
-                        type="button"
-                        onClick={() => handleKeypadPress('4')}
-                        className="py-3 rounded-2xl bg-white dark:bg-slate-900 text-lg font-bold text-slate-800 dark:text-white shadow-xs active:bg-slate-100"
-                      >
-                        4
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleKeypadPress('5')}
-                        className="py-3 rounded-2xl bg-white dark:bg-slate-900 text-lg font-bold text-slate-800 dark:text-white shadow-xs active:bg-slate-100"
-                      >
-                        5
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleKeypadPress('6')}
-                        className="py-3 rounded-2xl bg-white dark:bg-slate-900 text-lg font-bold text-slate-800 dark:text-white shadow-xs active:bg-slate-100"
-                      >
-                        6
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleKeypadPress('clear')}
-                        className="py-3 rounded-2xl bg-white dark:bg-slate-900 text-base font-bold text-slate-500 shadow-xs active:bg-slate-100"
-                      >
-                        ×
-                      </button>
-
-                      {/* Row 3 */}
-                      <button
-                        type="button"
-                        onClick={() => handleKeypadPress('7')}
-                        className="py-3 rounded-2xl bg-white dark:bg-slate-900 text-lg font-bold text-slate-800 dark:text-white shadow-xs active:bg-slate-100"
-                      >
-                        7
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleKeypadPress('8')}
-                        className="py-3 rounded-2xl bg-white dark:bg-slate-900 text-lg font-bold text-slate-800 dark:text-white shadow-xs active:bg-slate-100"
-                      >
-                        8
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleKeypadPress('9')}
-                        className="py-3 rounded-2xl bg-white dark:bg-slate-900 text-lg font-bold text-slate-800 dark:text-white shadow-xs active:bg-slate-100"
-                      >
-                        9
-                      </button>
-                      <button
-                        type="button"
-                        className="py-3 rounded-2xl bg-white dark:bg-slate-900 text-lg font-bold text-slate-500 shadow-xs"
-                      >
-                        -
-                      </button>
-
-                      {/* Row 4 */}
-                      <button
-                        type="button"
-                        onClick={() => handleKeypadPress('.')}
-                        className="py-3 rounded-2xl bg-white dark:bg-slate-900 text-lg font-bold text-slate-800 dark:text-white shadow-xs"
-                      >
-                        .
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleKeypadPress('0')}
-                        className="py-3 rounded-2xl bg-white dark:bg-slate-900 text-lg font-bold text-slate-800 dark:text-white shadow-xs"
-                      >
-                        0
-                      </button>
-                      <button
-                        type="button"
-                        className="py-3 rounded-2xl bg-[#C8E6C9] dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 text-lg font-bold shadow-xs"
-                      >
-                        =
-                      </button>
-                      <button
-                        type="button"
-                        className="py-3 rounded-2xl bg-white dark:bg-slate-900 text-lg font-bold text-slate-500 shadow-xs"
-                      >
-                        +
-                      </button>
-                    </div>
                   </div>
 
                 </div>
@@ -5535,7 +5435,6 @@ function KhataPageInner() {
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                     {pinActionTarget.isPinned ? 'Unpin Chat' : 'Pin to Top'}
                   </h3>
-                  <p className="text-[11px] text-slate-400">WhatsApp style quick access</p>
                 </div>
               </div>
               <button
@@ -5570,12 +5469,6 @@ function KhataPageInner() {
                 </span>
               )}
             </div>
-
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              {pinActionTarget.isPinned
-                ? `Remove "${pinActionTarget.name}" from top pinned chats? It will return to its standard chronological position.`
-                : `Keep "${pinActionTarget.name}" permanently pinned at the very top of your chat directory for instant access.`}
-            </p>
 
             <div className="space-y-2 pt-1">
               <button

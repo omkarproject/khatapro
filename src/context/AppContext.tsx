@@ -449,17 +449,38 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
             } catch {}
           }
 
-          // Accurately reflect cloud state (even if empty after deletions)
-          if (Array.isArray(d.customers)) setCustomers(d.customers);
+          // Accurately reflect cloud state (merging with local to preserve soft-deletions and local groups)
+          if (Array.isArray(d.customers)) {
+            const localCusts = StorageService.getCustomers();
+            const custMap = new Map<string, Customer>();
+            localCusts.forEach((c) => custMap.set(c.id, c));
+            d.customers.forEach((c: any) => {
+              const existing = custMap.get(c.id);
+              if (existing && (existing.isDeleted || existing.status === 'deleted') && !c.isDeleted && c.status !== 'deleted') {
+                custMap.set(c.id, { ...c, isDeleted: true, status: 'deleted', deletedAt: existing.deletedAt });
+              } else {
+                custMap.set(c.id, c);
+              }
+            });
+            const mergedCusts = Array.from(custMap.values());
+            StorageService.setCustomers(mergedCusts);
+            setCustomers(mergedCusts);
+          }
+
           if (Array.isArray(d.transactions)) {
-            const currentGroupTxns = StorageService.getTransactions().filter((t: any) => t.groupId);
-            const txnMap = new Map<string, Transaction>(d.transactions.map((t: any) => [t.id, t]));
-            currentGroupTxns.forEach((gt: any) => {
-              if (!txnMap.has(gt.id)) {
-                txnMap.set(gt.id, gt);
+            const localTxns = StorageService.getTransactions();
+            const txnMap = new Map<string, Transaction>();
+            localTxns.forEach((t) => txnMap.set(t.id, t));
+            d.transactions.forEach((t: any) => {
+              const existing = txnMap.get(t.id);
+              if (existing && (existing.isDeleted || existing.status === 'deleted') && !t.isDeleted && t.status !== 'deleted') {
+                txnMap.set(t.id, { ...t, isDeleted: true, status: 'deleted', deletedAt: existing.deletedAt, deletedBy: existing.deletedBy });
+              } else {
+                txnMap.set(t.id, t);
               }
             });
             const mergedTxns: Transaction[] = Array.from(txnMap.values());
+            StorageService.setTransactions(mergedTxns);
             setTransactions(mergedTxns);
           }
           if (Array.isArray(d.products)) setProducts(d.products);

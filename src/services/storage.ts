@@ -684,6 +684,9 @@ export const StorageService = {
   getCustomers: (): Customer[] => {
     return getLocalItem(STORAGE_KEYS.CUSTOMERS, []);
   },
+  setCustomers: (customers: Customer[]): void => {
+    setLocalItem(STORAGE_KEYS.CUSTOMERS, customers);
+  },
   saveCustomer: (customer: Customer): Customer[] => {
     const customers = StorageService.getCustomers();
     const idx = customers.findIndex(c => c.id === customer.id);
@@ -740,6 +743,9 @@ export const StorageService = {
   // Transactions / Ledger Entries
   getTransactions: (): Transaction[] => {
     return getLocalItem(STORAGE_KEYS.TRANSACTIONS, []);
+  },
+  setTransactions: (transactions: Transaction[]): void => {
+    setLocalItem(STORAGE_KEYS.TRANSACTIONS, transactions);
   },
   addTransaction: (transaction: Transaction): Transaction[] => {
     const list = StorageService.getTransactions();
