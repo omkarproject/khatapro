@@ -71,12 +71,12 @@ interface AppContextType {
   saveCustomer: (cust: Customer) => void;
   deleteCustomer: (id: string) => void;
   restoreCustomer: (id: string) => void;
-  hardDeleteCustomer: (id: string) => void;
+  hardDeleteCustomer: (id: string) => Promise<void>;
   addTransaction: (txn: Transaction) => void;
   updateTransaction: (txn: Transaction) => void;
   deleteTransaction: (id: string) => void;
   restoreTransaction: (id: string) => void;
-  hardDeleteTransaction: (id: string) => void;
+  hardDeleteTransaction: (id: string) => Promise<void>;
   updateTransactionAttachments: (transactionId: string, attachments: string[]) => void;
   saveInvoice: (inv: Invoice) => void;
   deleteInvoice: (id: string) => void;
@@ -1367,7 +1367,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     syncWithDatabase();
   };
 
-  const hardDeleteCustomer = (id: string) => {
+  const hardDeleteCustomer = async (id: string) => {
     const cd = StorageService.getCustomerDriveData(id);
     if (cd && Array.isArray(cd.files) && cd.files.length > 0) {
       deleteFromDriveFiles({
@@ -1375,11 +1375,44 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         fileNames: cd.files.map((f: any) => f.name).filter(Boolean),
       });
     }
+
+    // If it's a peer customer or matched customer, record in deletedPeerIds so it never resurrects
+    const targetCust = StorageService.getCustomers().find(c => c.id === id);
+    let peerUserId = id.startsWith('peer_cust_') ? id.replace('peer_cust_', '') : null;
+
+    if (!peerUserId && targetCust?.phone) {
+      try {
+        const cleanP = targetCust.phone.replace(/\D/g, '');
+        if (cleanP.length >= 10) {
+          const res = await fetch(`/api/users/lookup?phone=${encodeURIComponent(cleanP)}&currentUserId=${encodeURIComponent(currentUser?.id || '')}`);
+          const lData = await res.json();
+          if (lData?.found && lData?.merchant?.id) {
+            peerUserId = lData.merchant.id;
+          }
+        }
+      } catch {}
+    }
+
+    if (peerUserId) {
+      const curSettings = StorageService.getSettings();
+      const curPay = curSettings.paymentSettings || {};
+      const deletedPeerIds = Array.isArray(curPay.deletedPeerIds) ? [...curPay.deletedPeerIds] : [];
+      if (!deletedPeerIds.includes(peerUserId)) {
+        deletedPeerIds.push(peerUserId);
+        updateSettings({
+          paymentSettings: {
+            ...curPay,
+            deletedPeerIds,
+          },
+        });
+      }
+    }
+
     const updated = StorageService.hardDeleteCustomer(id);
     setCustomers(updated);
     setTransactions(StorageService.getTransactions());
     addToast('Customer Deleted Permanently', 'Customer was permanently removed from records.', 'info');
-    syncWithDatabase();
+    await syncWithDatabase();
   };
 
   const addTransaction = (txn: Transaction) => {
@@ -1490,7 +1523,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     syncWithDatabase();
   };
 
-  const hardDeleteTransaction = (id: string) => {
+  const hardDeleteTransaction = async (id: string) => {
     const existing = StorageService.getTransactions().find(t => t.id === id);
     if (existing && Array.isArray(existing.attachments) && existing.attachments.length > 0) {
       const fileNames: string[] = [];
@@ -1524,7 +1557,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setTransactions(updatedTxns);
     setCustomers(StorageService.getCustomers());
     addToast('Transaction Deleted Permanently', 'Transaction was removed permanently.', 'info');
-    syncWithDatabase();
+    await syncWithDatabase();
   };
 
   const updateTransactionAttachments = (transactionId: string, attachments: string[]) => {

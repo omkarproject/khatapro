@@ -998,8 +998,34 @@ async function syncPeerMerchants(
       'Merchant'
     ).trim();
 
+    // 1. If any customer of currentUserId is deleted or soft-deleted, mirror deleted status to reciprocal peer customer
+    for (const cust of customers) {
+      if (cust && (cust.isDeleted || cust.status === 'deleted')) {
+        const cPhone = normalizePhone(cust.phone);
+        const cEmail = (cust.email || '').toLowerCase().trim();
+        if (cPhone || cEmail) {
+          const peer = allProfiles.find((p: any) => {
+            if (p.id === currentUserId) return false;
+            if (cPhone && normalizePhone(p.phone) === cPhone) return true;
+            if (cEmail && (p.email || '').toLowerCase().trim() === cEmail) return true;
+            return false;
+          });
+          if (peer) {
+            await supabase.from('customers').update({
+              status: 'deleted',
+              updated_at: new Date().toISOString(),
+            }).eq('id', `peer_cust_${currentUserId}`).eq('user_id', peer.id);
+          }
+        }
+      }
+    }
+
+    // 2. Active peer merchants linking
     for (const cust of customers) {
       if (!cust || !cust.id || cust.isDeleted || cust.status === 'deleted') continue;
+      // Do not use a peer-mirrored customer as a source to generate further reciprocal peers
+      if (String(cust.id).startsWith('peer_cust_')) continue;
+
       const cPhone = normalizePhone(cust.phone);
       const cEmail = (cust.email || '').toLowerCase().trim();
       if (!cPhone && !cEmail) continue;
@@ -1015,6 +1041,20 @@ async function syncPeerMerchants(
 
       if (!peerProfile) continue;
       const peerUserId = peerProfile.id;
+
+      // Check if peerUserId has permanently deleted this peer in their settings
+      const { data: peerSettings } = await supabase
+        .from('system_settings')
+        .select('payment_settings')
+        .eq('user_id', peerUserId)
+        .maybeSingle();
+
+      const peerDeletedPeerIds = peerSettings?.payment_settings?.deletedPeerIds || [];
+      if (Array.isArray(peerDeletedPeerIds) && peerDeletedPeerIds.includes(currentUserId)) {
+        // Peer has permanently deleted currentUserId! Do not recreate!
+        continue;
+      }
+
       matchedPeers.push({
         id: peerUserId,
         name: peerProfile.business_name || peerProfile.name || 'Peer Merchant',
@@ -1033,7 +1073,7 @@ async function syncPeerMerchants(
       // Ensure reciprocal customer exists for peerUserId (User B sees User A)
       const { data: peerCustomers } = await supabase
         .from('customers')
-        .select('id, phone, email')
+        .select('id, phone, email, status')
         .eq('user_id', peerUserId);
 
       let reciprocalCust = (peerCustomers || []).find((pc: any) => {
@@ -1045,6 +1085,8 @@ async function syncPeerMerchants(
         return false;
       });
 
+      // Preserve 'deleted' status if peer explicitly soft-deleted it
+      const reciprocalStatus = reciprocalCust?.status === 'deleted' ? 'deleted' : 'active';
       const reciprocalCustId = reciprocalCust?.id || `peer_cust_${currentUserId}`;
 
       await supabase.from('customers').upsert({
@@ -1056,7 +1098,7 @@ async function syncPeerMerchants(
         business_name: currentProfile.business_name || '',
         avatar: currentProfile.avatar_url || null,
         category: 'Merchant',
-        status: 'active',
+        status: reciprocalStatus,
         rating: 5,
         notes: 'Verified Peer Merchant (P2P Connected)',
         updated_at: new Date().toISOString(),
@@ -1211,18 +1253,16 @@ export async function POST(req: NextRequest) {
         if (!fetchErr && existing && existing.length > 0) {
           const toDelete = existing
             .map(e => String(e.id))
-            .filter(id => {
-              if (activeIds.has(id)) return false;
-              // CRITICAL: NEVER delete peer-mirrored customers or transactions during regular user deletion sync!
-              // They are managed strictly by syncPeerMerchants
-              if (table === 'customers' && id.startsWith('peer_cust_')) return false;
-              if (table === 'transactions' && id.startsWith('peer_txn_')) return false;
-              return true;
-            });
+            .filter(id => !activeIds.has(id));
+
           if (toDelete.length > 0) {
+            console.log(`[syncRowsWithDeletions] Deleting ${toDelete.length} records from ${table} for user ${userId}:`, toDelete);
             for (let i = 0; i < toDelete.length; i += 50) {
               const chunk = toDelete.slice(i, i + 50);
-              await supabase.from(table).delete().eq('user_id', userId).in('id', chunk);
+              const { error: delErr } = await supabase.from(table).delete().eq('user_id', userId).in('id', chunk);
+              if (delErr) {
+                console.error(`Error deleting from ${table}:`, delErr.message);
+              }
             }
           }
         }

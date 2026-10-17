@@ -7246,11 +7246,10 @@ function KhataPageInner() {
 
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (confirm('Permanently delete this transaction? This action cannot be undone.')) {
-                    hardDeleteTransaction(inspectDeletedTxn.id);
+                    await hardDeleteTransaction(inspectDeletedTxn.id);
                     setInspectDeletedTxn(null);
-                    addToast('Transaction Deleted Forever', 'Transaction permanently removed.', 'info');
                   }
                 }}
                 className="py-2.5 px-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"

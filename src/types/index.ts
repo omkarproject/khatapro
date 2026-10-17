@@ -431,6 +431,7 @@ export interface PaymentSettings {
   upiGatewayKey?: string;
   upiGatewaySecret?: string;
   upiGatewayWebhookUrl?: string;
+  deletedPeerIds?: string[];
 }
 
 export type BackendProvider = 'supabase';

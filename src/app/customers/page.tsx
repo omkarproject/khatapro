@@ -1557,10 +1557,9 @@ export default function CustomersPage() {
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           if (confirm(`Are you sure you want to permanently delete ${cust.name}? This action cannot be undone.`)) {
-                            hardDeleteCustomer(cust.id);
-                            addToast('Permanently Deleted', `${cust.name} was permanently removed.`, 'info');
+                            await hardDeleteCustomer(cust.id);
                           }
                         }}
                         className="px-2.5 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
