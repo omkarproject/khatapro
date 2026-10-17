@@ -697,9 +697,40 @@ export const StorageService = {
     return updated;
   },
   deleteCustomer: (id: string): Customer[] => {
+    const customers = StorageService.getCustomers();
+    const updated = customers.map(c => {
+      if (c.id === id) {
+        return {
+          ...c,
+          status: 'deleted' as const,
+          isDeleted: true,
+          deletedAt: new Date().toISOString(),
+        };
+      }
+      return c;
+    });
+    setLocalItem(STORAGE_KEYS.CUSTOMERS, updated);
+    return updated;
+  },
+  restoreCustomer: (id: string): Customer[] => {
+    const customers = StorageService.getCustomers();
+    const updated = customers.map(c => {
+      if (c.id === id) {
+        return {
+          ...c,
+          status: 'active' as const,
+          isDeleted: false,
+          deletedAt: undefined,
+        };
+      }
+      return c;
+    });
+    setLocalItem(STORAGE_KEYS.CUSTOMERS, updated);
+    return updated;
+  },
+  hardDeleteCustomer: (id: string): Customer[] => {
     const customers = StorageService.getCustomers().filter(c => c.id !== id);
     setLocalItem(STORAGE_KEYS.CUSTOMERS, customers);
-    // Also remove ledger transactions linked to this customer
     const txns = StorageService.getTransactions().filter(t => t.customerId !== id);
     setLocalItem(STORAGE_KEYS.TRANSACTIONS, txns);
     return customers;
@@ -781,16 +812,28 @@ export const StorageService = {
 
     return updatedList;
   },
-  deleteTransaction: (transactionId: string): Transaction[] => {
+  deleteTransaction: (transactionId: string, deletedBy?: string): Transaction[] => {
     const list = StorageService.getTransactions();
     const txnToDelete = list.find(t => t.id === transactionId);
     if (!txnToDelete) return list;
 
-    const updatedList = list.filter(t => t.id !== transactionId);
+    // Soft delete: mark status = 'deleted', isDeleted = true
+    const updatedList = list.map(t => {
+      if (t.id === transactionId) {
+        return {
+          ...t,
+          status: 'deleted' as const,
+          isDeleted: true,
+          deletedAt: new Date().toISOString(),
+          deletedBy: deletedBy || t.createdBy || 'User',
+        };
+      }
+      return t;
+    });
     setLocalItem(STORAGE_KEYS.TRANSACTIONS, updatedList);
 
-    // Reverse customer balance impact
-    if (txnToDelete.customerId) {
+    // Reverse customer balance impact so deleted transaction is excluded from balance
+    if (txnToDelete.customerId && txnToDelete.status !== 'deleted' && !txnToDelete.isDeleted) {
       const customers = StorageService.getCustomers();
       const custIdx = customers.findIndex(c => c.id === txnToDelete.customerId);
       if (custIdx >= 0) {
@@ -805,6 +848,51 @@ export const StorageService = {
       }
     }
 
+    return updatedList;
+  },
+
+  restoreTransaction: (transactionId: string): Transaction[] => {
+    const list = StorageService.getTransactions();
+    const txnToRestore = list.find(t => t.id === transactionId);
+    if (!txnToRestore) return list;
+
+    const updatedList = list.map(t => {
+      if (t.id === transactionId) {
+        return {
+          ...t,
+          status: 'completed' as const,
+          isDeleted: false,
+          deletedAt: undefined,
+          deletedBy: undefined,
+        };
+      }
+      return t;
+    });
+    setLocalItem(STORAGE_KEYS.TRANSACTIONS, updatedList);
+
+    // Re-apply customer balance impact
+    if (txnToRestore.customerId && (txnToRestore.status === 'deleted' || txnToRestore.isDeleted)) {
+      const customers = StorageService.getCustomers();
+      const custIdx = customers.findIndex(c => c.id === txnToRestore.customerId);
+      if (custIdx >= 0) {
+        const cust = { ...customers[custIdx] };
+        if (txnToRestore.type === 'credit') {
+          cust.outstandingBalance += txnToRestore.amount;
+        } else if (txnToRestore.type === 'debit' || txnToRestore.type === 'collection') {
+          cust.outstandingBalance -= txnToRestore.amount;
+        }
+        customers[custIdx] = cust;
+        setLocalItem(STORAGE_KEYS.CUSTOMERS, customers);
+      }
+    }
+
+    return updatedList;
+  },
+
+  hardDeleteTransaction: (transactionId: string): Transaction[] => {
+    const list = StorageService.getTransactions();
+    const updatedList = list.filter(t => t.id !== transactionId);
+    setLocalItem(STORAGE_KEYS.TRANSACTIONS, updatedList);
     return updatedList;
   },
 

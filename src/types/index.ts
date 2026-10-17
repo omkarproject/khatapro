@@ -102,7 +102,9 @@ export interface Customer {
   creditLimit: number;
   outstandingBalance: number; // positive = customer owes us (Credit), negative = we owe customer (Debit)
   category: 'VIP' | 'Regular' | 'Wholesale' | 'Retail' | 'Merchant';
-  status: 'active' | 'overdue' | 'blocked';
+  status: 'active' | 'overdue' | 'blocked' | 'deleted';
+  isDeleted?: boolean;
+  deletedAt?: string;
   rating: number; // 1 - 5
   notes?: string;
   avatar?: string;
@@ -199,7 +201,10 @@ export interface Transaction {
   tags?: string[];
   attachments?: string[];
   referenceNo?: string;
-  status: 'completed' | 'pending' | 'failed' | 'cancelled';
+  status: 'completed' | 'pending' | 'failed' | 'cancelled' | 'deleted';
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
   createdBy: string;
   createdAt: string;
   updatedAt?: string;

@@ -43,7 +43,7 @@ function customerToDb(c: any, userId: string) {
     credit_limit: Number(c.creditLimit) || 0,
     outstanding_balance: Number(c.outstandingBalance) || 0,
     category: c.category || 'Regular',
-    status: c.status || 'active',
+    status: (c.isDeleted || c.status === 'deleted') ? 'deleted' : (c.status || 'active'),
     rating: Number(c.rating) || 5,
     notes: c.notes || '',
     avatar: safeAvatar || null,
@@ -97,6 +97,11 @@ function transactionToDb(t: any, userId: string) {
   if (Array.isArray(t.editHistory) && t.editHistory.length > 0) {
     baseTags.push(`__grp_edits:${JSON.stringify(t.editHistory)}`);
   }
+  if (t.isDeleted || t.status === 'deleted') {
+    baseTags.push('__is_deleted:true');
+    if (t.deletedAt) baseTags.push(`__del_at:${t.deletedAt}`);
+    if (t.deletedBy) baseTags.push(`__del_by:${encodeURIComponent(t.deletedBy)}`);
+  }
 
   return {
     id: String(t.id),
@@ -112,7 +117,7 @@ function transactionToDb(t: any, userId: string) {
     tags: baseTags,
     attachments: sanitizedAttachments,
     reference_no: t.referenceNo || '',
-    status: t.status || 'completed',
+    status: (t.isDeleted || t.status === 'deleted') ? 'deleted' : (t.status || 'completed'),
     created_by: t.createdBy || '',
     created_at: t.createdAt || new Date().toISOString(),
     updated_at: t.updatedAt || new Date().toISOString(),
@@ -382,6 +387,7 @@ function customerFromDb(row: any) {
     outstandingBalance: Number(row.outstanding_balance) || 0,
     category: row.category || 'Regular',
     status: row.status || 'active',
+    isDeleted: Boolean(row.status === 'deleted'),
     rating: Number(row.rating) || 5,
     notes: row.notes || '',
     avatar: avatarUrl,
@@ -424,6 +430,9 @@ function transactionFromDb(row: any) {
   let groupName: string | undefined = undefined;
   let splitMembers: any[] | undefined = undefined;
   let editHistory: any[] | undefined = undefined;
+  let isDeleted = row.status === 'deleted';
+  let deletedAt: string | undefined = undefined;
+  let deletedBy: string | undefined = undefined;
 
   const cleanTags: string[] = [];
   (row.tags || []).forEach((t: string) => {
@@ -443,6 +452,18 @@ function transactionFromDb(row: any) {
       try {
         editHistory = JSON.parse(t.replace('__grp_edits:', ''));
       } catch {}
+    } else if (t.startsWith('__del_at:')) {
+      deletedAt = t.replace('__del_at:', '');
+      isDeleted = true;
+    } else if (t.startsWith('__del_by:')) {
+      try {
+        deletedBy = decodeURIComponent(t.replace('__del_by:', ''));
+      } catch {
+        deletedBy = t.replace('__del_by:', '');
+      }
+      isDeleted = true;
+    } else if (t.startsWith('__is_deleted:')) {
+      isDeleted = true;
     } else {
       cleanTags.push(t);
     }
@@ -461,7 +482,10 @@ function transactionFromDb(row: any) {
     tags: cleanTags,
     attachments: transformedAttachments,
     referenceNo: row.reference_no || '',
-    status: row.status || 'completed',
+    status: isDeleted ? 'deleted' : (row.status || 'completed'),
+    isDeleted,
+    deletedAt,
+    deletedBy,
     createdBy: row.created_by || '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -975,7 +999,7 @@ async function syncPeerMerchants(
     ).trim();
 
     for (const cust of customers) {
-      if (!cust || !cust.id) continue;
+      if (!cust || !cust.id || cust.isDeleted || cust.status === 'deleted') continue;
       const cPhone = normalizePhone(cust.phone);
       const cEmail = (cust.email || '').toLowerCase().trim();
       if (!cPhone && !cEmail) continue;
@@ -1062,6 +1086,14 @@ async function syncPeerMerchants(
           invertedType = t.type;
         }
 
+        const isTxnDeleted = Boolean(t.isDeleted || t.status === 'deleted');
+        const peerTags = Array.isArray(t.tags) ? [...t.tags] : ['__p2p_peer'];
+        if (isTxnDeleted) {
+          peerTags.push('__is_deleted:true');
+          if (t.deletedAt) peerTags.push(`__del_at:${t.deletedAt}`);
+          if (t.deletedBy) peerTags.push(`__del_by:${encodeURIComponent(t.deletedBy)}`);
+        }
+
         await supabase.from('transactions').upsert({
           id: peerTxnId,
           user_id: peerUserId,
@@ -1073,9 +1105,9 @@ async function syncPeerMerchants(
           category: t.category || (invertedType === 'credit' ? 'Credit Given' : 'Payment Received'),
           payment_mode: t.paymentMode || t.payment_mode || 'upi',
           note: t.note || '',
-          tags: Array.isArray(t.tags) ? t.tags : ['__p2p_peer'],
+          tags: peerTags,
           attachments: Array.isArray(t.attachments) ? t.attachments : [],
-          status: t.status || 'completed',
+          status: isTxnDeleted ? 'deleted' : (t.status || 'completed'),
           reference_no: String(t.id),
           created_by: curDisplayName,
           created_at: t.createdAt || t.created_at || new Date().toISOString(),
@@ -1105,16 +1137,17 @@ async function syncPeerMerchants(
         }
       }
 
-      // Update peer's customer outstanding balance
+      // Update peer's customer outstanding balance (exclude deleted transactions)
       const { data: peerAllTxns } = await supabase
         .from('transactions')
-        .select('type, amount')
+        .select('type, amount, status')
         .eq('user_id', peerUserId)
         .eq('customer_id', reciprocalCustId);
 
       let peerBalance = 0;
       if (peerAllTxns) {
         for (const pt of peerAllTxns) {
+          if (pt.status === 'deleted') continue;
           const amt = Number(pt.amount) || 0;
           if (pt.type === 'credit') peerBalance += amt;
           else if (pt.type === 'debit' || pt.type === 'collection') peerBalance -= amt;

@@ -58,6 +58,8 @@ import {
   Sparkles,
   CheckSquare,
   Square,
+  Eye,
+  RotateCcw,
 } from 'lucide-react';
 
 function getCustomerRatingColor(rating: number = 5): string {
@@ -95,6 +97,8 @@ function KhataPageInner() {
     addTransaction,
     updateTransaction,
     deleteTransaction,
+    restoreTransaction,
+    hardDeleteTransaction,
     updateTransactionAttachments,
     saveCustomer,
     deleteCustomer,
@@ -142,6 +146,7 @@ function KhataPageInner() {
   const [isGroupInfoOpen, setIsGroupInfoOpen] = useState(false);
   const [selectedMemberFilterId, setSelectedMemberFilterId] = useState<string | null>(null);
   const [historyModalTxn, setHistoryModalTxn] = useState<Transaction | null>(null);
+  const [inspectDeletedTxn, setInspectDeletedTxn] = useState<Transaction | null>(null);
 
   // Create Group Form States
   const [newGroupName, setNewGroupName] = useState('');
@@ -344,6 +349,17 @@ function KhataPageInner() {
     }
   }, [groupIdParam, groups]);
 
+  // Reset selectedGroupId if user was removed from the group
+  useEffect(() => {
+    if (selectedGroupId && !groups.some(g => g.id === selectedGroupId)) {
+      setSelectedGroupId(null);
+      if (filterType === 'group') {
+        setFilterType('all');
+        setMobileActivePanel('directory');
+      }
+    }
+  }, [groups, selectedGroupId, filterType]);
+
   // Active transactions for ledger chat (Group transactions or Customer transactions)
   const activeTransactions = useMemo(() => {
     if (activeGroup) {
@@ -382,6 +398,7 @@ function KhataPageInner() {
   const enrichedTransactions = useMemo(() => {
     let running = 0;
     return activeTransactions.map((t) => {
+      const isTxnDeleted = Boolean(t.isDeleted || t.status === 'deleted');
       // In group mode when filtering a specific member, track running balance for that member's share
       let txnVal = t.amount;
       if (activeGroup && selectedMemberFilterId && t.splitMembers && t.splitMembers.length > 0) {
@@ -391,17 +408,21 @@ function KhataPageInner() {
         }
       }
 
-      if (t.type === 'credit') {
-        running += txnVal;
-      } else if (t.type === 'debit' || t.type === 'collection') {
-        running -= txnVal;
+      if (!isTxnDeleted) {
+        if (t.type === 'credit') {
+          running += txnVal;
+        } else if (t.type === 'debit' || t.type === 'collection') {
+          running -= txnVal;
+        }
       }
-      const balanceLabel =
-        running > 0
-          ? `₹${Math.abs(running).toLocaleString('en-IN')} Due`
-          : running < 0
-          ? `₹${Math.abs(running).toLocaleString('en-IN')} Advance`
-          : '₹0 Due';
+
+      const balanceLabel = isTxnDeleted
+        ? 'Excluded (Deleted)'
+        : running > 0
+        ? `₹${Math.abs(running).toLocaleString('en-IN')} Due`
+        : running < 0
+        ? `₹${Math.abs(running).toLocaleString('en-IN')} Advance`
+        : '₹0 Due';
 
       return {
         ...t,
@@ -426,7 +447,7 @@ function KhataPageInner() {
       };
     });
 
-    const gTxns = transactions.filter(t => t.groupId === activeGroup.id);
+    const gTxns = transactions.filter(t => t.groupId === activeGroup.id && !t.isDeleted && t.status !== 'deleted');
     gTxns.forEach(t => {
       const isGot = t.type === 'debit' || t.type === 'collection';
       if (t.splitMembers && t.splitMembers.length > 0) {
@@ -517,6 +538,7 @@ function KhataPageInner() {
   const filteredCustomers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return customers.filter(c => {
+      if (c.isDeleted || c.status === 'deleted') return false;
       const matchSearch =
         !term ||
         c.name.toLowerCase().includes(term) ||
@@ -2253,7 +2275,7 @@ function KhataPageInner() {
   const activeCustomerTransactions = useMemo(() => {
     if (!activeCustomer) return [];
     return transactions
-      .filter(t => t.customerId === activeCustomer.id)
+      .filter(t => t.customerId === activeCustomer.id && !t.isDeleted && t.status !== 'deleted')
       .sort((a, b) => {
         const timeA = new Date(a.date).getTime();
         const timeB = new Date(b.date).getTime();
@@ -2266,13 +2288,13 @@ function KhataPageInner() {
 
   const customerTotalGiven = useMemo(() => {
     return activeCustomerTransactions
-      .filter(t => t.type === 'credit')
+      .filter(t => t.type === 'credit' && !t.isDeleted && t.status !== 'deleted')
       .reduce((sum, t) => sum + t.amount, 0);
   }, [activeCustomerTransactions]);
 
   const customerTotalReceived = useMemo(() => {
     return activeCustomerTransactions
-      .filter(t => t.type === 'debit' || t.type === 'collection')
+      .filter(t => (t.type === 'debit' || t.type === 'collection') && !t.isDeleted && t.status !== 'deleted')
       .reduce((sum, t) => sum + t.amount, 0);
   }, [activeCustomerTransactions]);
 
@@ -2291,10 +2313,10 @@ function KhataPageInner() {
 
   const getPageSummary = (pageTxns: Transaction[]) => {
     const received = pageTxns
-      .filter(t => t.type === 'debit' || t.type === 'collection')
+      .filter(t => (t.type === 'debit' || t.type === 'collection') && !t.isDeleted && t.status !== 'deleted')
       .reduce((sum, t) => sum + t.amount, 0);
     const given = pageTxns
-      .filter(t => t.type === 'credit')
+      .filter(t => t.type === 'credit' && !t.isDeleted && t.status !== 'deleted')
       .reduce((sum, t) => sum + t.amount, 0);
     const net = given - received; // > 0 = Due to Pay, < 0 = Advance, === 0 = Settled
     return { received, given, net };
@@ -4191,6 +4213,7 @@ function KhataPageInner() {
                           {/* Chat Bubbles */}
                           {txns.map((t) => {
                             const isReceived = t.type === 'debit' || t.type === 'collection';
+                            const isTxnDeleted = Boolean(t.isDeleted || t.status === 'deleted');
 
                             return (
                               <div
@@ -4198,66 +4221,109 @@ function KhataPageInner() {
                                 className={`flex flex-col ${isReceived ? 'items-start' : 'items-end'}`}
                               >
                                 {/* The Bubble Card */}
-                                <div className="w-full max-w-[85%] sm:max-w-sm rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden p-3 space-y-2">
+                                <div
+                                  onClick={isTxnDeleted ? () => setInspectDeletedTxn(t) : undefined}
+                                  className={`w-full max-w-[85%] sm:max-w-sm rounded-2xl shadow-xs overflow-hidden p-3 space-y-2 transition-all ${
+                                    isTxnDeleted
+                                      ? 'bg-slate-100/90 dark:bg-slate-900/80 border border-dashed border-rose-300 dark:border-rose-900 opacity-75 cursor-pointer hover:border-rose-400'
+                                      : 'bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80'
+                                  }`}
+                                >
                                   
                                   {/* Header: Arrow + Amount + Pencil + Clock + Time + Check + Print */}
                                   <div
                                     className="flex items-center justify-between pb-1"
                                   >
                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                      <div
-                                        onClick={() => handleOpenEditTransaction(t)}
-                                        className="flex items-center gap-1.5 cursor-pointer hover:opacity-85 transition-opacity"
-                                        title="Click to edit entry"
-                                      >
-                                        {isReceived ? (
-                                          <ArrowDown className="w-5 h-5 text-emerald-600 dark:text-emerald-400 stroke-[3]" />
-                                        ) : (
-                                          <ArrowUp className="w-5 h-5 text-rose-600 dark:text-rose-400 stroke-[3]" />
-                                        )}
-                                        <span className={`text-xl font-black tracking-tight ${
-                                          isReceived
-                                            ? 'text-emerald-600 dark:text-emerald-400'
-                                            : 'text-rose-600 dark:text-rose-400'
-                                        }`}>
-                                          ₹{t.amount.toLocaleString('en-IN')}
-                                        </span>
-                                      </div>
+                                      {isTxnDeleted ? (
+                                        <div
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setInspectDeletedTxn(t);
+                                          }}
+                                          className="flex items-center gap-1.5 cursor-pointer hover:opacity-85 transition-opacity"
+                                          title="Deleted Entry (Excluded). Click to inspect details or restore."
+                                        >
+                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400 border border-rose-200 dark:border-rose-900">
+                                            🚫 Deleted (Excluded)
+                                          </span>
+                                          <span className="text-xl font-bold tracking-tight line-through text-slate-400 dark:text-slate-500">
+                                            ₹{t.amount.toLocaleString('en-IN')}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <div
+                                          onClick={() => handleOpenEditTransaction(t)}
+                                          className="flex items-center gap-1.5 cursor-pointer hover:opacity-85 transition-opacity"
+                                          title="Click to edit entry"
+                                        >
+                                          {isReceived ? (
+                                            <ArrowDown className="w-5 h-5 text-emerald-600 dark:text-emerald-400 stroke-[3]" />
+                                          ) : (
+                                            <ArrowUp className="w-5 h-5 text-rose-600 dark:text-rose-400 stroke-[3]" />
+                                          )}
+                                          <span className={`text-xl font-black tracking-tight ${
+                                            isReceived
+                                              ? 'text-emerald-600 dark:text-emerald-400'
+                                              : 'text-rose-600 dark:text-rose-400'
+                                          }`}>
+                                            ₹{t.amount.toLocaleString('en-IN')}
+                                          </span>
+                                        </div>
+                                      )}
 
-                                      {/* Pencil Edit Icon */}
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleOpenEditTransaction(t);
-                                        }}
-                                        className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg transition-colors cursor-pointer"
-                                        title="Edit Transaction"
-                                      >
-                                        <Pencil className="w-3.5 h-3.5" />
-                                      </button>
-
-                                      {/* Clock Reminder Icon */}
-                                      {(() => {
-                                        const txnReminder = reminders.find(r => r.transactionId === t.id);
-                                        return (
+                                      {/* If deleted, show Details Inspection button */}
+                                      {isTxnDeleted ? (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setInspectDeletedTxn(t);
+                                          }}
+                                          className="p-1 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 rounded-lg transition-colors cursor-pointer text-xs font-bold flex items-center gap-1"
+                                          title="Inspect deleted transaction"
+                                        >
+                                          <Eye className="w-3.5 h-3.5" />
+                                          <span className="text-[10px]">Details</span>
+                                        </button>
+                                      ) : (
+                                        <>
+                                          {/* Pencil Edit Icon */}
                                           <button
                                             type="button"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              handleOpenReminderModal(t);
+                                              handleOpenEditTransaction(t);
                                             }}
-                                            className={`p-1 rounded-lg transition-all cursor-pointer ${
-                                              txnReminder
-                                                ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/70 border border-amber-200 dark:border-amber-800 shadow-xs'
-                                                : 'text-slate-400 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
-                                            }`}
-                                            title={txnReminder ? `Reminder set for ${formatDate(txnReminder.dueDate)} (Click to view/edit)` : 'Set Payment Reminder'}
+                                            className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg transition-colors cursor-pointer"
+                                            title="Edit Transaction"
                                           >
-                                            <Clock className="w-3.5 h-3.5" />
+                                            <Pencil className="w-3.5 h-3.5" />
                                           </button>
-                                        );
-                                      })()}
+
+                                          {/* Clock Reminder Icon */}
+                                          {(() => {
+                                            const txnReminder = reminders.find(r => r.transactionId === t.id);
+                                            return (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleOpenReminderModal(t);
+                                                }}
+                                                className={`p-1 rounded-lg transition-all cursor-pointer ${
+                                                  txnReminder
+                                                    ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/70 border border-amber-200 dark:border-amber-800 shadow-xs'
+                                                    : 'text-slate-400 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+                                                }`}
+                                                title={txnReminder ? `Reminder set for ${formatDate(txnReminder.dueDate)} (Click to view/edit)` : 'Set Payment Reminder'}
+                                              >
+                                                <Clock className="w-3.5 h-3.5" />
+                                              </button>
+                                            );
+                                          })()}
+                                        </>
+                                      )}
                                     </div>
 
                                     <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium shrink-0 ml-2">
@@ -7048,6 +7114,150 @@ function KhataPageInner() {
                 className="px-5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
               >
                 Close
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: DELETED TRANSACTION DETAILS & RESTORE ================= */}
+      {inspectDeletedTxn && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] max-w-lg w-full border border-rose-200 dark:border-rose-900 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0 bg-rose-50/50 dark:bg-rose-950/20">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 flex items-center justify-center text-base">
+                  🚫
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    Deleted Transaction Details
+                  </h3>
+                  <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium">
+                    Excluded from ledger totals & balance
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectDeletedTxn(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 overflow-y-auto space-y-4">
+              {/* Amount Banner */}
+              <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                    {inspectDeletedTxn.type === 'credit' ? 'You Gave (Debit)' : 'You Got / Received (Credit)'}
+                  </span>
+                  <div className="text-2xl font-black text-slate-900 dark:text-white line-through opacity-80">
+                    ₹{inspectDeletedTxn.amount.toLocaleString('en-IN')}
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-200/80 dark:bg-rose-900/80 text-rose-800 dark:text-rose-200 border border-rose-300 dark:border-rose-800">
+                  Disabled
+                </span>
+              </div>
+
+              {/* Transaction Key Details */}
+              <div className="space-y-2 text-xs divide-y divide-slate-100 dark:divide-slate-800">
+                <div className="flex justify-between py-2">
+                  <span className="text-slate-400">Transaction ID</span>
+                  <span className="font-mono text-slate-700 dark:text-slate-300 select-all font-medium">{inspectDeletedTxn.id}</span>
+                </div>
+                <div className="flex justify-between py-2">
+                  <span className="text-slate-400">Entry Date & Time</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">
+                    {formatDate(inspectDeletedTxn.date)}, {formatTime(inspectDeletedTxn.createdAt || inspectDeletedTxn.date)}
+                  </span>
+                </div>
+                {inspectDeletedTxn.customerName && (
+                  <div className="flex justify-between py-2">
+                    <span className="text-slate-400">Customer / Member</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{inspectDeletedTxn.customerName}</span>
+                  </div>
+                )}
+                {inspectDeletedTxn.note && (
+                  <div className="flex justify-between py-2">
+                    <span className="text-slate-400">Note / Description</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300 max-w-[240px] text-right">{inspectDeletedTxn.note}</span>
+                  </div>
+                )}
+                {inspectDeletedTxn.paymentMode && (
+                  <div className="flex justify-between py-2">
+                    <span className="text-slate-400">Payment Mode</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 capitalize">{inspectDeletedTxn.paymentMode}</span>
+                  </div>
+                )}
+                {inspectDeletedTxn.createdBy && (
+                  <div className="flex justify-between py-2">
+                    <span className="text-slate-400">Created / Recorded By</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">{inspectDeletedTxn.createdBy}</span>
+                  </div>
+                )}
+                {inspectDeletedTxn.deletedAt && (
+                  <div className="flex justify-between py-2">
+                    <span className="text-slate-400">Deleted On</span>
+                    <span className="font-semibold text-rose-600 dark:text-rose-400">
+                      {new Date(inspectDeletedTxn.deletedAt).toLocaleString('en-IN', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true,
+                      })}
+                    </span>
+                  </div>
+                )}
+                {inspectDeletedTxn.deletedBy && (
+                  <div className="flex justify-between py-2">
+                    <span className="text-slate-400">Deleted By User</span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300">{inspectDeletedTxn.deletedBy}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-900/50">
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm('Restore this transaction? It will be active again and re-calculated into balance.')) {
+                    restoreTransaction(inspectDeletedTxn.id);
+                    setInspectDeletedTxn(null);
+                    addToast('Transaction Restored', 'Transaction is restored and included in balance.', 'success');
+                  }
+                }}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-all cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Restore Transaction</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm('Permanently delete this transaction? This action cannot be undone.')) {
+                    hardDeleteTransaction(inspectDeletedTxn.id);
+                    setInspectDeletedTxn(null);
+                    addToast('Transaction Deleted Forever', 'Transaction permanently removed.', 'info');
+                  }
+                }}
+                className="py-2.5 px-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Delete Permanently"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Forever</span>
               </button>
             </div>
 

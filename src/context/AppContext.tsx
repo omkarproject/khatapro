@@ -70,9 +70,13 @@ interface AppContextType {
   // Data actions
   saveCustomer: (cust: Customer) => void;
   deleteCustomer: (id: string) => void;
+  restoreCustomer: (id: string) => void;
+  hardDeleteCustomer: (id: string) => void;
   addTransaction: (txn: Transaction) => void;
   updateTransaction: (txn: Transaction) => void;
   deleteTransaction: (id: string) => void;
+  restoreTransaction: (id: string) => void;
+  hardDeleteTransaction: (id: string) => void;
   updateTransactionAttachments: (transactionId: string, attachments: string[]) => void;
   saveInvoice: (inv: Invoice) => void;
   deleteInvoice: (id: string) => void;
@@ -568,6 +572,14 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
                 const gData = await gRes.json();
                 if (gData.success) {
                   if (Array.isArray(gData.groups)) {
+                    const cloudGroupIds = new Set(gData.groups.map((g: any) => g.id));
+                    const localGroups = StorageService.getGroups();
+                    // Purge groups from local storage if the user was removed from members on the cloud
+                    localGroups.forEach((lg: any) => {
+                      if (lg.creatorId !== userId && !cloudGroupIds.has(lg.id)) {
+                        StorageService.deleteGroup(lg.id);
+                      }
+                    });
                     gData.groups.forEach((g: any) => StorageService.saveGroup(g));
                     setGroups(StorageService.getGroups());
                   }
@@ -1342,6 +1354,20 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   };
 
   const deleteCustomer = (id: string) => {
+    const updated = StorageService.deleteCustomer(id);
+    setCustomers(updated);
+    addToast('Customer Moved to Deleted', 'Customer moved to Deleted tab. You can retrieve them anytime.', 'info');
+    syncWithDatabase();
+  };
+
+  const restoreCustomer = (id: string) => {
+    const updated = StorageService.restoreCustomer(id);
+    setCustomers(updated);
+    addToast('Customer Restored', 'Customer has been restored to active list.', 'success');
+    syncWithDatabase();
+  };
+
+  const hardDeleteCustomer = (id: string) => {
     const cd = StorageService.getCustomerDriveData(id);
     if (cd && Array.isArray(cd.files) && cd.files.length > 0) {
       deleteFromDriveFiles({
@@ -1349,10 +1375,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         fileNames: cd.files.map((f: any) => f.name).filter(Boolean),
       });
     }
-    const updated = StorageService.deleteCustomer(id);
+    const updated = StorageService.hardDeleteCustomer(id);
     setCustomers(updated);
     setTransactions(StorageService.getTransactions());
-    addToast('Customer Deleted', 'Customer was removed from records.', 'info');
+    addToast('Customer Deleted Permanently', 'Customer was permanently removed from records.', 'info');
     syncWithDatabase();
   };
 
@@ -1408,6 +1434,64 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
   const deleteTransaction = (id: string) => {
     const existing = StorageService.getTransactions().find(t => t.id === id);
+    if (!existing) return;
+
+    const actorName = currentUser?.businessName || currentUser?.name || profile?.name || 'User';
+
+    if (existing.groupId) {
+      fetch('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transaction: {
+            ...existing,
+            status: 'deleted',
+            isDeleted: true,
+            deletedAt: new Date().toISOString(),
+            deletedBy: actorName,
+          },
+          userId: currentUser?.id,
+        }),
+      }).catch(e => console.warn('Could not sync group transaction soft-delete:', e));
+    }
+
+    const updatedTxns = StorageService.deleteTransaction(id, actorName);
+    setTransactions(updatedTxns);
+    setCustomers(StorageService.getCustomers()); // balance updated to exclude deleted txn
+    addToast('Transaction Deleted', 'Transaction has been disabled and excluded from calculations.', 'info');
+    syncWithDatabase();
+  };
+
+  const restoreTransaction = (id: string) => {
+    const existing = StorageService.getTransactions().find(t => t.id === id);
+    if (!existing) return;
+
+    if (existing.groupId) {
+      fetch('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transaction: {
+            ...existing,
+            status: 'completed',
+            isDeleted: false,
+            deletedAt: undefined,
+            deletedBy: undefined,
+          },
+          userId: currentUser?.id,
+        }),
+      }).catch(e => console.warn('Could not sync group transaction restore:', e));
+    }
+
+    const updatedTxns = StorageService.restoreTransaction(id);
+    setTransactions(updatedTxns);
+    setCustomers(StorageService.getCustomers()); // balance updated to re-include txn
+    addToast('Transaction Restored', 'Transaction restored and re-included in calculations.', 'success');
+    syncWithDatabase();
+  };
+
+  const hardDeleteTransaction = (id: string) => {
+    const existing = StorageService.getTransactions().find(t => t.id === id);
     if (existing && Array.isArray(existing.attachments) && existing.attachments.length > 0) {
       const fileNames: string[] = [];
       const fileIds: string[] = [];
@@ -1436,10 +1520,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       }).catch(e => console.warn('Could not delete group transaction:', e));
     }
 
-    const updatedTxns = StorageService.deleteTransaction(id);
+    const updatedTxns = StorageService.hardDeleteTransaction(id);
     setTransactions(updatedTxns);
-    setCustomers(StorageService.getCustomers()); // balance updated
-    addToast('Transaction Deleted', 'Transaction was removed from the ledger.', 'info');
+    setCustomers(StorageService.getCustomers());
+    addToast('Transaction Deleted Permanently', 'Transaction was removed permanently.', 'info');
     syncWithDatabase();
   };
 
@@ -1805,9 +1889,13 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         toggleDarkMode,
         saveCustomer,
         deleteCustomer,
+        restoreCustomer,
+        hardDeleteCustomer,
         addTransaction,
         updateTransaction,
         deleteTransaction,
+        restoreTransaction,
+        hardDeleteTransaction,
         updateTransactionAttachments,
         saveInvoice,
         deleteInvoice,

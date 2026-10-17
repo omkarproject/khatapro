@@ -51,6 +51,7 @@ import {
   Scissors,
   ClipboardPaste,
   Loader2,
+  RotateCcw,
 } from 'lucide-react';
 
 const POPULAR_BANKS = [
@@ -125,6 +126,8 @@ export default function CustomersPage() {
     customers,
     saveCustomer,
     deleteCustomer,
+    restoreCustomer,
+    hardDeleteCustomer,
     openCollectModal,
     transactions,
     settings,
@@ -344,6 +347,14 @@ export default function CustomersPage() {
   const filteredCustomers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return customers.filter(c => {
+      const isCustDeleted = Boolean(c.isDeleted || c.status === 'deleted');
+      if (selectedCategory === 'Deleted') {
+        if (!isCustDeleted) return false;
+      } else {
+        if (isCustDeleted) return false;
+        if (selectedCategory !== 'all' && c.category !== selectedCategory) return false;
+      }
+
       const matchSearch =
         !term ||
         c.name.toLowerCase().includes(term) ||
@@ -352,8 +363,7 @@ export default function CustomersPage() {
         (c.businessName && c.businessName.toLowerCase().includes(term)) ||
         (c.gstNumber && c.gstNumber.toLowerCase().includes(term)) ||
         (c.city && c.city.toLowerCase().includes(term));
-      const matchCat = selectedCategory === 'all' || c.category === selectedCategory;
-      return matchSearch && matchCat;
+      return matchSearch;
     });
   }, [customers, searchTerm, selectedCategory]);
 
@@ -1365,25 +1375,43 @@ export default function CustomersPage() {
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto">
-          {['all', 'VIP', 'Wholesale', 'Regular', 'Retail', 'Merchant'].map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all shrink-0 ${
-                selectedCategory === cat
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
+          {['all', 'VIP', 'Wholesale', 'Regular', 'Retail', 'Merchant', 'Deleted'].map((cat) => {
+            const isDeletedTab = cat === 'Deleted';
+            const deletedCount = customers.filter(c => c.isDeleted || c.status === 'deleted').length;
+            return (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all shrink-0 flex items-center gap-1.5 ${
+                  selectedCategory === cat
+                    ? isDeletedTab
+                      ? 'bg-rose-600 text-white shadow-sm'
+                      : 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <span>{cat}</span>
+                {isDeletedTab && deletedCount > 0 && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      selectedCategory === cat
+                        ? 'bg-white/25 text-white'
+                        : 'bg-rose-100 text-rose-600 dark:bg-rose-950 dark:text-rose-400'
+                    }`}
+                  >
+                    {deletedCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Customers Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filteredCustomers.map((cust) => {
+          const isCustDeleted = Boolean(cust.isDeleted || cust.status === 'deleted');
           const creditUtilization = cust.creditLimit > 0
             ? Math.min(100, Math.round((Math.max(0, cust.outstandingBalance) / cust.creditLimit) * 100))
             : 0;
@@ -1391,7 +1419,9 @@ export default function CustomersPage() {
           return (
             <div
               key={cust.id}
-              className="glass-card p-5 space-y-4 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all flex flex-col justify-between"
+              className={`glass-card p-5 space-y-4 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all flex flex-col justify-between ${
+                isCustDeleted ? 'border-dashed border-rose-300 dark:border-rose-800/80 bg-rose-50/20 dark:bg-rose-950/15' : ''
+              }`}
             >
               <div>
                 {/* Header */}
@@ -1427,13 +1457,19 @@ export default function CustomersPage() {
                     </div>
                   </div>
 
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
-                    cust.category === 'VIP' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' :
-                    cust.category === 'Wholesale' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400' :
-                    'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                  }`}>
-                    {cust.category}
-                  </span>
+                  {isCustDeleted ? (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400 border border-rose-200 dark:border-rose-900">
+                      Deleted
+                    </span>
+                  ) : (
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                      cust.category === 'VIP' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' :
+                      cust.category === 'Wholesale' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400' :
+                      'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                    }`}>
+                      {cust.category}
+                    </span>
+                  )}
                 </div>
 
                 {/* Contact & GST info */}
@@ -1499,78 +1535,134 @@ export default function CustomersPage() {
 
               {/* Action Buttons */}
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setActiveCustomer(cust)}
-                    className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-                  >
-                    360° Profile
-                  </button>
-                  <span className="text-slate-300">•</span>
-                  <Link
-                    href={`/khata?id=${cust.id}`}
-                    className="p-1 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 rounded-lg transition-colors cursor-pointer"
-                    title="Open Khata Ledger"
-                  >
-                    <BookOpen className="w-4 h-4" />
-                  </Link>
-                </div>
+                {isCustDeleted ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Restore ${cust.name} back to active customers?`)) {
+                            restoreCustomer(cust.id);
+                            addToast('Customer Restored', `${cust.name} is now restored and active.`, 'success');
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
+                        title="Restore / Retrieve Customer (वापस लाएं)"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Restore (वापस लाएं)</span>
+                      </button>
+                    </div>
 
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => handleOpenDriveModal(cust)}
-                    className="p-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 text-amber-600 dark:text-amber-400 transition-colors"
-                    title="Customer Cloud Drive / Documents"
-                  >
-                    <HardDrive className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleOpenBankModal(cust)}
-                    className="p-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-400 transition-colors"
-                    title="Customer Bank Accounts & UPI QRs"
-                  >
-                    <Landmark className="w-4 h-4" />
-                  </button>
-                  {cust.outstandingBalance > 0 && (
-                    <button
-                      onClick={() =>
-                        openCollectModal({
-                          customerId: cust.id,
-                          customerName: cust.name,
-                          customerPhone: cust.phone,
-                          amount: cust.outstandingBalance,
-                          note: `Collection for ${cust.name}`,
-                        })
-                      }
-                      className="p-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-400 transition-colors"
-                      title="Collect UPI"
-                    >
-                      <QrCode className="w-4 h-4" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => openEditModal(cust)}
-                    className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                    title="Edit Customer"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm(`Are you sure you want to delete ${cust.name}?`)) {
-                        deleteCustomer(cust.id);
-                      }
-                    }}
-                    className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600"
-                    title="Delete Customer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to permanently delete ${cust.name}? This action cannot be undone.`)) {
+                            hardDeleteCustomer(cust.id);
+                            addToast('Permanently Deleted', `${cust.name} was permanently removed.`, 'info');
+                          }
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                        title="Delete Permanently"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete Forever</span>
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setActiveCustomer(cust)}
+                        className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                      >
+                        360° Profile
+                      </button>
+                      <span className="text-slate-300">•</span>
+                      <Link
+                        href={`/khata?id=${cust.id}`}
+                        className="p-1 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 rounded-lg transition-colors cursor-pointer"
+                        title="Open Khata Ledger"
+                      >
+                        <BookOpen className="w-4 h-4" />
+                      </Link>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleOpenDriveModal(cust)}
+                        className="p-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 text-amber-600 dark:text-amber-400 transition-colors"
+                        title="Customer Cloud Drive / Documents"
+                      >
+                        <HardDrive className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleOpenBankModal(cust)}
+                        className="p-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-400 transition-colors"
+                        title="Customer Bank Accounts & UPI QRs"
+                      >
+                        <Landmark className="w-4 h-4" />
+                      </button>
+                      {cust.outstandingBalance > 0 && (
+                        <button
+                          onClick={() =>
+                            openCollectModal({
+                              customerId: cust.id,
+                              customerName: cust.name,
+                              customerPhone: cust.phone,
+                              amount: cust.outstandingBalance,
+                              note: `Collection for ${cust.name}`,
+                            })
+                          }
+                          className="p-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-400 transition-colors"
+                          title="Collect UPI"
+                        >
+                          <QrCode className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => openEditModal(cust)}
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        title="Edit Customer"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to delete ${cust.name}?`)) {
+                            deleteCustomer(cust.id);
+                          }
+                        }}
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600"
+                        title="Delete Customer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           );
         })}
+
+        {filteredCustomers.length === 0 && (
+          <div className="col-span-full py-16 text-center space-y-2 glass-card">
+            <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+              <Users className="w-6 h-6" />
+            </div>
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+              {selectedCategory === 'Deleted' ? 'No deleted customers' : 'No customers found'}
+            </p>
+            <p className="text-xs text-slate-400">
+              {selectedCategory === 'Deleted'
+                ? 'Any customer you delete will appear here, and you can retrieve/restore or delete them permanently.'
+                : 'Try adjusting your search or category filter, or add a new customer.'}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* 360° Customer Profile Drawer Modal */}
