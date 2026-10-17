@@ -174,6 +174,7 @@ export interface KhataGroupNotification {
   title: string;
   message: string;
   actorName?: string;
+  actorUserId?: string;
   targetCustomerIds?: string[];
   memberIds?: string[];
   transactionId?: string;

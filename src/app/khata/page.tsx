@@ -437,15 +437,7 @@ function KhataPageInner() {
     }
   }, [screenView, activeTransactions.length, selectedCustomerId, selectedGroupId, selectedMemberFilterId]);
 
-  // Realtime Live Stream Poller for P2P and Group Ledgers (keeps chat ledger fresh if two merchants transact)
-  useEffect(() => {
-    if (screenView === 'chat' && currentUser?.id) {
-      const interval = setInterval(() => {
-        loadUserDataFromCloud(currentUser.id, true /* silent */);
-      }, 4000);
-      return () => clearInterval(interval);
-    }
-  }, [screenView, currentUser?.id, loadUserDataFromCloud]);
+
 
   // Group transactions by date for the chat stream (Screen 2)
   const groupedTransactions = useMemo(() => {
@@ -1288,6 +1280,8 @@ function KhataPageInner() {
           type: 'record_edited',
           title: 'Group Record Edited',
           message: `${audit.editedBy} edited record: ₹${(audit.previousAmount ?? audit.prevAmount ?? 0).toLocaleString('en-IN')} ➔ ₹${num.toLocaleString('en-IN')} (₹${sharePerMember.toLocaleString('en-IN')} each for ${membersForSplit.length} members)`,
+          actorName: audit.editedBy,
+          actorUserId: currentUser?.id,
           createdAt: new Date().toISOString(),
           read: false,
           memberIds: membersForSplit,
@@ -1295,6 +1289,7 @@ function KhataPageInner() {
             transactionId: editingTxnId,
             oldAmount: audit.previousAmount ?? audit.prevAmount ?? 0,
             newAmount: num,
+            actorUserId: currentUser?.id,
             editedBy: audit.editedBy,
           },
         };
@@ -1338,11 +1333,14 @@ function KhataPageInner() {
           type: 'amount_divided',
           title: 'New Group Expense Divided',
           message: `₹${num.toLocaleString('en-IN')} ${isGot ? 'Received' : 'Given'} divided among ${membersForSplit.length} members (₹${sharePerMember.toLocaleString('en-IN')} each)`,
+          actorName: currentUser?.businessName || settings.businessName || 'Admin',
+          actorUserId: currentUser?.id,
           createdAt: new Date().toISOString(),
           read: false,
           memberIds: membersForSplit,
           details: {
             newAmount: num,
+            actorUserId: currentUser?.id,
             editedBy: currentUser?.businessName || settings.businessName || 'Admin',
           },
         };

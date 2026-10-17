@@ -447,7 +447,17 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
           // Accurately reflect cloud state (even if empty after deletions)
           if (Array.isArray(d.customers)) setCustomers(d.customers);
-          if (Array.isArray(d.transactions)) setTransactions(d.transactions);
+          if (Array.isArray(d.transactions)) {
+            const currentGroupTxns = StorageService.getTransactions().filter((t: any) => t.groupId);
+            const txnMap = new Map<string, Transaction>(d.transactions.map((t: any) => [t.id, t]));
+            currentGroupTxns.forEach((gt: any) => {
+              if (!txnMap.has(gt.id)) {
+                txnMap.set(gt.id, gt);
+              }
+            });
+            const mergedTxns: Transaction[] = Array.from(txnMap.values());
+            setTransactions(mergedTxns);
+          }
           if (Array.isArray(d.products)) setProducts(d.products);
           if (Array.isArray(d.invoices)) setInvoices(d.invoices);
           if (Array.isArray(d.expenses)) setExpenses(d.expenses);
@@ -562,7 +572,9 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
                     setGroups(StorageService.getGroups());
                   }
                   if (Array.isArray(gData.notifications)) {
-                    gData.notifications.forEach((n: any) => StorageService.addGroupNotification(n));
+                    gData.notifications
+                      .filter((n: any) => n.actorUserId !== userId && n.details?.actorUserId !== userId)
+                      .forEach((n: any) => StorageService.addGroupNotification(n));
                     setGroupNotifications(StorageService.getGroupNotifications());
                   }
                   if (Array.isArray(gData.transactions) && gData.transactions.length > 0) {
@@ -1740,16 +1752,20 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   };
 
   const addGroupNotification = (notif: KhataGroupNotification) => {
-    StorageService.addGroupNotification(notif);
-    setGroupNotifications(StorageService.getGroupNotifications());
+    const currentUserId = currentUser?.id;
+    // The user who performed the action should NOT receive their own notification
+    if (!currentUserId || (notif.actorUserId !== currentUserId && notif.details?.actorUserId !== currentUserId)) {
+      StorageService.addGroupNotification(notif);
+      setGroupNotifications(StorageService.getGroupNotifications());
+    }
     syncWithDatabase();
-    if (currentUser?.id) {
+    if (currentUserId) {
       fetch('/api/groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           notification: notif,
-          userId: currentUser.id,
+          userId: currentUserId,
         }),
       }).catch(e => console.warn('Could not sync notification to cloud:', e));
     }

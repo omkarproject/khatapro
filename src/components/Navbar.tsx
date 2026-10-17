@@ -455,8 +455,15 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     customerDriveProgress?.batchId &&
     !dismissedAlerts.includes(`drive_upload_${customerDriveProgress.batchId}`);
 
+  const currentUserId = currentUser?.id;
   const unreadGroupAlerts = (groupNotifications || []).filter(
-    (n) => !dismissedAlerts.includes(`grp_notif_${n.id}`)
+    (n) => {
+      if (dismissedAlerts.includes(`grp_notif_${n.id}`)) return false;
+      if (currentUserId && (n.actorUserId === currentUserId || (n.details && n.details.actorUserId === currentUserId))) {
+        return false;
+      }
+      return true;
+    }
   );
 
   const handleDismissGroupAlert = (notifId: string) => {

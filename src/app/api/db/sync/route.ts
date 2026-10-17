@@ -845,6 +845,34 @@ export async function GET(req: NextRequest) {
       user: finalUser,
     };
 
+    // Always merge shared group transactions so client never drops group entries
+    try {
+      const { data: grpCfg } = await supabase
+        .from('global_config')
+        .select('maintenance_mode')
+        .eq('id', 'shared_khata_groups')
+        .maybeSingle();
+
+      const shared = grpCfg?.maintenance_mode;
+      if (shared && Array.isArray(shared.groupTransactions) && shared.groupTransactions.length > 0) {
+        const userGroups = Array.isArray(shared.groups) ? shared.groups.filter((g: any) => 
+          g.creatorId === userId || (Array.isArray(g.members) && g.members.some((m: any) => m.customerId === userId || m.merchantUserId === userId))
+        ) : [];
+        const userGroupIds = new Set(userGroups.map((g: any) => g.id));
+        const matchedGrpTxns = shared.groupTransactions.filter((t: any) => t.groupId && userGroupIds.has(t.groupId));
+
+        if (matchedGrpTxns.length > 0) {
+          const txnMap = new Map((finalData.transactions || []).map((t: any) => [t.id, t]));
+          matchedGrpTxns.forEach((gt: any) => {
+            txnMap.set(gt.id, gt);
+          });
+          finalData.transactions = Array.from(txnMap.values());
+        }
+      }
+    } catch (grpErr) {
+      console.warn('Error merging shared group transactions in GET sync:', grpErr);
+    }
+
     return NextResponse.json({
       success: true,
       userId,

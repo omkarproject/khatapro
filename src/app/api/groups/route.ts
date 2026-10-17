@@ -128,8 +128,11 @@ export async function GET(req: NextRequest) {
         });
       });
 
-      // User notifications
+      // User notifications (exclude actor so the user who recorded the transaction does not get alerted)
       const userNotifs = groupNotifications.filter(n => {
+        if (n.actorUserId && n.actorUserId === userId) return false;
+        if (n.details && (n.details.actorUserId === userId || n.details.actorId === userId)) return false;
+
         if (!Array.isArray(n.memberIds) && !Array.isArray(n.targetCustomerIds)) return true;
         return (
           (n.memberIds && n.memberIds.includes(userId)) ||
