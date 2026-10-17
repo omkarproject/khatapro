@@ -245,6 +245,57 @@ function KhataPageInner() {
   const [newCustEmail, setNewCustEmail] = useState('');
   const [newCustBusiness, setNewCustBusiness] = useState('');
   const [newCustAddress, setNewCustAddress] = useState('');
+  const [khataP2PMatched, setKhataP2PMatched] = useState(false);
+  const [khataMatchedPeer, setKhataMatchedPeer] = useState<any>(null);
+  const [isCheckingKhataPhone, setIsCheckingKhataPhone] = useState(false);
+
+  // Auto-detect registered merchant on phone number input in Khata customer modal (P2P auto-fill)
+  useEffect(() => {
+    if (!isAddCustomerOpen) {
+      setKhataP2PMatched(false);
+      setKhataMatchedPeer(null);
+      return;
+    }
+
+    const cleanDigits = newCustPhone.replace(/\D/g, '');
+    if (cleanDigits.length < 10) {
+      setKhataP2PMatched(false);
+      setKhataMatchedPeer(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setIsCheckingKhataPhone(true);
+        const res = await fetch(
+          `/api/users/lookup?phone=${encodeURIComponent(cleanDigits)}&currentUserId=${encodeURIComponent(currentUser?.id || '')}`
+        );
+        const data = await res.json();
+        if (data.success && data.found && data.merchant) {
+          setKhataP2PMatched(true);
+          setKhataMatchedPeer(data.merchant);
+          if (data.merchant.name) setNewCustName(data.merchant.name);
+          if (data.merchant.email) setNewCustEmail(data.merchant.email);
+          if (data.merchant.businessName) setNewCustBusiness(data.merchant.businessName);
+          if (data.merchant.businessAddress) setNewCustAddress(data.merchant.businessAddress);
+          addToast(
+            '⚡ P2P Merchant Matched',
+            `Auto-filled details for ${data.merchant.name} (${data.merchant.businessName || 'Merchant'}). P2P Enabled!`,
+            'success'
+          );
+        } else {
+          setKhataP2PMatched(false);
+          setKhataMatchedPeer(null);
+        }
+      } catch (err) {
+        console.warn('Khata phone lookup error:', err);
+      } finally {
+        setIsCheckingKhataPhone(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [newCustPhone, isAddCustomerOpen, currentUser?.id]);
 
   // Active Customer Object
   const activeCustomer = useMemo(() => {
@@ -2139,9 +2190,11 @@ function KhataPageInner() {
       address: newCustAddress.trim(),
       creditLimit: 100000,
       outstandingBalance: 0,
-      category: 'Regular',
+      category: khataP2PMatched ? 'Merchant' : 'Regular',
       status: 'active',
       rating: 5,
+      avatar: khataMatchedPeer?.avatarUrl || undefined,
+      avatarUrl: khataMatchedPeer?.avatarUrl || undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -2150,11 +2203,49 @@ function KhataPageInner() {
     setIsAddCustomerOpen(false);
     setScreenView('chat');
     setMobileActivePanel('ledger');
+
+    // Bi-directional P2P linking: auto-add current merchant into other merchant's customer list
+    if (khataP2PMatched || khataMatchedPeer) {
+      fetch('/api/users/p2p-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentUserId: currentUser?.id,
+          peerUserId: khataMatchedPeer?.id,
+          peerPhone: created.phone,
+          peerEmail: created.email,
+          currentUserProfile: {
+            name: profile?.name || currentUser?.name || profile?.businessName || 'Merchant',
+            phone: profile?.phone || currentUser?.phone || settings?.businessPhone || '',
+            email: profile?.email || currentUser?.email || settings?.businessEmail || '',
+            businessName: profile?.businessName || currentUser?.businessName || settings?.businessName || '',
+            businessGst: profile?.businessGst || settings?.paymentSettings?.businessGst || '',
+            businessAddress: profile?.businessAddress || settings?.businessAddress || '',
+            avatarUrl: profile?.avatarUrl || currentUser?.avatarUrl || settings?.businessLogo || '',
+          },
+          peerCustomerData: created,
+        }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.success && data.linked) {
+            addToast(
+              '⚡ P2P Connected!',
+              `You have also been added to ${created.name}'s customer list automatically.`,
+              'success'
+            );
+          }
+        })
+        .catch((err) => console.warn('P2P linking error in khata:', err));
+    }
+
     setNewCustName('');
     setNewCustPhone('');
     setNewCustEmail('');
     setNewCustBusiness('');
     setNewCustAddress('');
+    setKhataP2PMatched(false);
+    setKhataMatchedPeer(null);
   };
 
   // Customer specific ledger entries and calculations for Due Bill & Statement
@@ -5117,15 +5208,34 @@ function KhataPageInner() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  Mobile Number
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    Mobile Number
+                    {khataP2PMatched && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-500 text-white shadow-xs animate-pulse">
+                        P2P
+                      </span>
+                    )}
+                  </span>
+                  {isCheckingKhataPhone && (
+                    <span className="text-[10px] text-indigo-500 font-semibold animate-pulse">Checking P2P...</span>
+                  )}
+                  {!isCheckingKhataPhone && khataP2PMatched && (
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                      ✓ Verified Merchant
+                    </span>
+                  )}
                 </label>
                 <input
                   type="tel"
                   value={newCustPhone}
                   onChange={(e) => setNewCustPhone(e.target.value)}
                   placeholder="e.g. 9960992747"
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
+                  className={`w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border transition-colors ${
+                    khataP2PMatched
+                      ? 'border-emerald-500 dark:border-emerald-500 ring-2 ring-emerald-500/20'
+                      : 'border-slate-300 dark:border-slate-700'
+                  }`}
                 />
               </div>
 

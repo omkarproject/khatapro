@@ -128,6 +128,8 @@ export default function CustomersPage() {
     openCollectModal,
     transactions,
     settings,
+    currentUser,
+    profile,
     addToast,
     syncWithDatabase,
     activeCurrency,
@@ -221,6 +223,9 @@ export default function CustomersPage() {
   const [formCategory, setFormCategory] = useState<'VIP' | 'Regular' | 'Wholesale' | 'Retail' | 'Merchant'>('Regular');
   const [formRating, setFormRating] = useState('5');
   const [formNotes, setFormNotes] = useState('');
+  const [isP2PMatched, setIsP2PMatched] = useState(false);
+  const [matchedPeer, setMatchedPeer] = useState<any>(null);
+  const [isCheckingPhone, setIsCheckingPhone] = useState(false);
 
   // Customer Profile Photo Review / Change / Delete Modal State
   const [reviewAvatarCustomer, setReviewAvatarCustomer] = useState<Customer | null>(null);
@@ -352,11 +357,67 @@ export default function CustomersPage() {
     });
   }, [customers, searchTerm, selectedCategory]);
 
+  // Auto-detect registered merchant on phone number input (P2P auto-fill)
+  useEffect(() => {
+    if (!isModalOpen) {
+      setIsP2PMatched(false);
+      setMatchedPeer(null);
+      return;
+    }
+
+    const cleanDigits = formPhone.replace(/\D/g, '');
+    if (cleanDigits.length < 10) {
+      setIsP2PMatched(false);
+      setMatchedPeer(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setIsCheckingPhone(true);
+        const res = await fetch(
+          `/api/users/lookup?phone=${encodeURIComponent(cleanDigits)}&currentUserId=${encodeURIComponent(currentUser?.id || '')}`
+        );
+        const data = await res.json();
+        if (data.success && data.found && data.merchant) {
+          setIsP2PMatched(true);
+          setMatchedPeer(data.merchant);
+          // Auto fill fields
+          if (data.merchant.avatarUrl) setFormAvatar(data.merchant.avatarUrl);
+          if (data.merchant.name) setFormName(data.merchant.name);
+          if (data.merchant.email) setFormEmail(data.merchant.email);
+          if (data.merchant.businessName) setFormBusiness(data.merchant.businessName);
+          if (data.merchant.businessGst) setFormGst(data.merchant.businessGst);
+          setFormCategory('Merchant');
+          if (data.merchant.businessAddress) {
+            setFormAddress(data.merchant.businessAddress);
+          }
+          addToast(
+            '⚡ P2P Merchant Matched',
+            `Auto-filled details for ${data.merchant.name} (${data.merchant.businessName || 'Merchant'}). P2P Enabled!`,
+            'success'
+          );
+        } else {
+          setIsP2PMatched(false);
+          setMatchedPeer(null);
+        }
+      } catch (err) {
+        console.warn('Phone lookup error:', err);
+      } finally {
+        setIsCheckingPhone(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [formPhone, isModalOpen, currentUser?.id]);
+
   const openAddModal = () => {
     setEditingId(null);
     setFormAvatar(null);
     setFormDriveAvatarId(null);
     setIsUploadingAvatar(false);
+    setIsP2PMatched(false);
+    setMatchedPeer(null);
     setFormName('');
     setFormPhone('');
     setFormEmail('');
@@ -376,6 +437,8 @@ export default function CustomersPage() {
     setFormAvatar(c.avatar || c.avatarUrl || null);
     setFormDriveAvatarId(c.driveAvatarId || null);
     setIsUploadingAvatar(false);
+    setIsP2PMatched(c.category === 'Merchant' || c.id.startsWith('peer_cust_'));
+    setMatchedPeer(null);
     setFormName(c.name);
     setFormPhone(c.phone);
     setFormEmail(c.email || '');
@@ -459,6 +522,41 @@ export default function CustomersPage() {
       setActiveCustomer(customerData);
     }
     setIsModalOpen(false);
+
+    // Bi-directional P2P linking: auto-add current merchant into other merchant's customer list
+    if (isP2PMatched || matchedPeer || formCategory === 'Merchant') {
+      fetch('/api/users/p2p-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentUserId: currentUser?.id,
+          peerUserId: matchedPeer?.id,
+          peerPhone: customerData.phone,
+          peerEmail: customerData.email,
+          currentUserProfile: {
+            name: profile?.name || currentUser?.name || profile?.businessName || 'Merchant',
+            phone: profile?.phone || currentUser?.phone || settings?.businessPhone || '',
+            email: profile?.email || currentUser?.email || settings?.businessEmail || '',
+            businessName: profile?.businessName || currentUser?.businessName || settings?.businessName || '',
+            businessGst: profile?.businessGst || settings?.paymentSettings?.businessGst || '',
+            businessAddress: profile?.businessAddress || settings?.businessAddress || '',
+            avatarUrl: profile?.avatarUrl || currentUser?.avatarUrl || settings?.businessLogo || '',
+          },
+          peerCustomerData: customerData,
+        }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.success && data.linked) {
+            addToast(
+              '⚡ P2P Connected!',
+              `You have also been added to ${customerData.name}'s customer list automatically.`,
+              'success'
+            );
+          }
+        })
+        .catch((err) => console.warn('P2P linking error:', err));
+    }
   };
 
   // Customer Cloud Drive Handlers
@@ -1267,7 +1365,7 @@ export default function CustomersPage() {
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto">
-          {['all', 'VIP', 'Wholesale', 'Regular', 'Retail'].map((cat) => (
+          {['all', 'VIP', 'Wholesale', 'Regular', 'Retail', 'Merchant'].map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
@@ -1719,8 +1817,23 @@ export default function CustomersPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    Phone Number *
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      Phone Number *
+                      {isP2PMatched && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-500 text-white shadow-xs animate-pulse">
+                          P2P
+                        </span>
+                      )}
+                    </span>
+                    {isCheckingPhone && (
+                      <span className="text-[10px] text-indigo-500 font-semibold animate-pulse">Checking P2P...</span>
+                    )}
+                    {!isCheckingPhone && isP2PMatched && (
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                        ✓ Verified Merchant
+                      </span>
+                    )}
                   </label>
                   <input
                     type="tel"
@@ -1728,7 +1841,11 @@ export default function CustomersPage() {
                     value={formPhone}
                     onChange={(e) => setFormPhone(e.target.value)}
                     placeholder="e.g. +91 98765 43210"
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
+                    className={`w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border transition-colors ${
+                      isP2PMatched
+                        ? 'border-emerald-500 dark:border-emerald-500 ring-2 ring-emerald-500/20'
+                        : 'border-slate-300 dark:border-slate-700'
+                    }`}
                   />
                 </div>
               </div>
