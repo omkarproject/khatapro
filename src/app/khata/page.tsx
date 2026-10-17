@@ -150,6 +150,10 @@ function KhataPageInner() {
   const [isUploadingGroupPic, setIsUploadingGroupPic] = useState(false);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const groupPicInputRef = useRef<HTMLInputElement>(null);
+  const groupAvatarEditInputRef = useRef<HTMLInputElement>(null);
+  const [isEditingGroupName, setIsEditingGroupName] = useState(false);
+  const [tempGroupName, setTempGroupName] = useState('');
+  const [isUpdatingGroupAvatar, setIsUpdatingGroupAvatar] = useState(false);
 
   // Join Group Form States
   const [joinGroupUsername, setJoinGroupUsername] = useState('');
@@ -765,6 +769,70 @@ function KhataPageInner() {
       saveGroup(updatedGroup);
       addToast('Member Removed', `${targetMember.name} removed from ${activeGroup.name}.`, 'info');
     }
+  };
+
+  // Handle Update Group Avatar (Creator only)
+  const handleUpdateGroupAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!activeGroup) return;
+    const currentUserId = currentUser?.id || 'admin_user';
+    const isCreator = activeGroup.creatorId === currentUserId || activeGroup.creatorName === (currentUser?.businessName || settings.businessName);
+    if (!isCreator) {
+      addToast('Unauthorized', 'Only the group creator can update the group profile photo.', 'error');
+      return;
+    }
+
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      addToast('File too large', 'Image size should be less than 2MB', 'error');
+      return;
+    }
+
+    setIsUpdatingGroupAvatar(true);
+    const reader = new FileReader();
+    reader.onload = (uploadEvent) => {
+      const base64 = uploadEvent.target?.result as string;
+      const updatedGroup: KhataGroup = {
+        ...activeGroup,
+        avatar: base64,
+        updatedAt: new Date().toISOString(),
+      };
+      saveGroup(updatedGroup);
+      setIsUpdatingGroupAvatar(false);
+      addToast('Group Icon Updated', 'Group profile photo updated successfully!', 'success');
+    };
+    reader.onerror = () => {
+      setIsUpdatingGroupAvatar(false);
+      addToast('Upload Failed', 'Failed to read image file', 'error');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle Save Group Name (Creator only)
+  const handleSaveGroupName = () => {
+    if (!activeGroup) return;
+    const currentUserId = currentUser?.id || 'admin_user';
+    const isCreator = activeGroup.creatorId === currentUserId || activeGroup.creatorName === (currentUser?.businessName || settings.businessName);
+    if (!isCreator) {
+      addToast('Unauthorized', 'Only the group creator can rename the group.', 'error');
+      return;
+    }
+
+    const trimmed = tempGroupName.trim();
+    if (!trimmed) {
+      addToast('Invalid Name', 'Group name cannot be empty', 'error');
+      return;
+    }
+
+    const updatedGroup: KhataGroup = {
+      ...activeGroup,
+      name: trimmed,
+      updatedAt: new Date().toISOString(),
+    };
+    saveGroup(updatedGroup);
+    setIsEditingGroupName(false);
+    addToast('Group Renamed', `Group name changed to "${trimmed}"`, 'success');
   };
 
   // Keypad click handlers (Screen 3)
@@ -3789,11 +3857,10 @@ function KhataPageInner() {
                             </div>
                             <div
                               onClick={() => setIsGroupInfoOpen(true)}
-                              className="flex items-center gap-1.5 cursor-pointer text-[11px] text-indigo-600 dark:text-indigo-400 font-mono -mt-0.5 hover:opacity-80 transition-opacity"
+                              className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-500 dark:text-slate-400 font-medium -mt-0.5 hover:opacity-80 transition-opacity"
                               title="Click to manage members"
                             >
-                              <span>@{activeGroup.username}</span>
-                              <span className="text-slate-400">• {activeGroup.members.length} members</span>
+                              <span>{activeGroup.members.length} members</span>
                             </div>
                           </div>
                         </>
@@ -3917,7 +3984,7 @@ function KhataPageInner() {
                         }`}
                       >
                         <Users className="w-3.5 h-3.5" />
-                        <span>All Members ({activeGroup.members.length})</span>
+                        <span>All</span>
                       </button>
 
                       {activeGroup.members.map((member) => {
@@ -4414,8 +4481,8 @@ function KhataPageInner() {
                         </div>
                         <div className="text-[10px] font-bold">
                           {activeGroup ? (
-                            <span className="text-indigo-600 dark:text-indigo-400">
-                              @{activeGroup.username} • {activeGroup.members.length} Members
+                            <span className="text-slate-500 dark:text-slate-400">
+                              {activeGroup.members.length} members
                             </span>
                           ) : (
                             <span className="text-rose-500">
@@ -6651,28 +6718,109 @@ function KhataPageInner() {
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <input
+                ref={groupAvatarEditInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleUpdateGroupAvatar}
+                className="hidden"
+              />
               
               {/* Group Hero Card */}
-              <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/40 dark:to-purple-950/40 border border-indigo-100 dark:border-indigo-900/60">
-                <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-black flex items-center justify-center text-lg overflow-hidden shrink-0 ring-2 ring-indigo-500/30">
-                  {activeGroup.avatar ? (
-                    <img src={activeGroup.avatar} alt={activeGroup.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <Users className="w-7 h-7" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h4 className="text-base font-black text-slate-900 dark:text-white truncate">
-                    {activeGroup.name}
-                  </h4>
-                  <div className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                    @{activeGroup.username}
+              {(() => {
+                const currentUserId = currentUser?.id || 'admin_user';
+                const amICreator = activeGroup.creatorId === currentUserId || activeGroup.creatorName === (currentUser?.businessName || settings.businessName);
+
+                return (
+                  <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/40 dark:to-purple-950/40 border border-indigo-100 dark:border-indigo-900/60">
+                    <div
+                      onClick={() => {
+                        if (amICreator && !isUpdatingGroupAvatar) {
+                          groupAvatarEditInputRef.current?.click();
+                        }
+                      }}
+                      className={`w-14 h-14 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-black flex items-center justify-center text-lg overflow-hidden shrink-0 ring-2 ring-indigo-500/30 relative ${
+                        amICreator ? 'cursor-pointer hover:ring-indigo-600 hover:scale-105 transition-all group' : ''
+                      }`}
+                      title={amICreator ? 'Click to change group profile photo' : undefined}
+                    >
+                      {activeGroup.avatar ? (
+                        <img src={activeGroup.avatar} alt={activeGroup.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Users className="w-7 h-7" />
+                      )}
+                      {amICreator && (
+                        <div className="absolute inset-0 bg-black/50 rounded-full flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          {isUpdatingGroupAvatar ? (
+                            <Loader2 className="w-5 h-5 text-white animate-spin" />
+                          ) : (
+                            <Camera className="w-5 h-5 text-white" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      {isEditingGroupName ? (
+                        <div className="flex items-center gap-1.5 my-0.5">
+                          <input
+                            type="text"
+                            value={tempGroupName}
+                            onChange={(e) => setTempGroupName(e.target.value)}
+                            className="px-2 py-1 text-sm font-bold bg-white dark:bg-slate-800 border border-indigo-500 rounded-lg text-slate-900 dark:text-white outline-none w-full shadow-inner"
+                            autoFocus
+                            placeholder="Enter group name"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveGroupName();
+                              if (e.key === 'Escape') setIsEditingGroupName(false);
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSaveGroupName}
+                            className="p-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs shrink-0"
+                            title="Save name"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingGroupName(false)}
+                            className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 transition-colors shrink-0"
+                            title="Cancel"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="text-base font-black text-slate-900 dark:text-white truncate">
+                            {activeGroup.name}
+                          </h4>
+                          {amICreator && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTempGroupName(activeGroup.name);
+                                setIsEditingGroupName(true);
+                              }}
+                              className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 transition-colors shrink-0"
+                              title="Rename group"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      <div className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                        @{activeGroup.username}
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        Created by <strong className="text-slate-700 dark:text-slate-200">{activeGroup.creatorName}</strong>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    Created by <strong className="text-slate-700 dark:text-slate-200">{activeGroup.creatorName}</strong>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Members Section */}
               <div className="space-y-2">

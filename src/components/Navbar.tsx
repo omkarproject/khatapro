@@ -985,8 +985,10 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                                     <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider font-mono bg-purple-500 text-white">
                                       @{notif.groupUsername}
                                     </span>
-                                    <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-rose-500 text-white font-mono animate-pulse">
-                                      {notif.type === 'record_edited' ? 'Record Edited' : notif.type === 'member_joined' ? 'New Member Joined' : 'Amount Divided'}
+                                    <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider text-white font-mono ${
+                                      notif.type === 'member_joined' ? 'bg-purple-600 animate-pulse' : notif.type === 'record_edited' ? 'bg-amber-600' : 'bg-rose-500'
+                                    }`}>
+                                      {notif.type === 'record_edited' ? 'Record Edited' : notif.type === 'member_joined' ? 'New Merchant Joined' : 'Amount Divided'}
                                     </span>
                                   </div>
                                   <div className="text-[10px] text-slate-700 dark:text-slate-300 font-medium truncate mt-0.5">

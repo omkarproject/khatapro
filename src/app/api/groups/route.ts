@@ -10,8 +10,8 @@ function normalizePhone(p?: string): string {
   return digits;
 }
 
-// Fetch shared groups and notifications from global_config
-async function getSharedGroupsData(supabase: any): Promise<{ groups: KhataGroup[]; groupNotifications: KhataGroupNotification[] }> {
+// Fetch shared groups, notifications, and group transactions from global_config
+async function getSharedGroupsData(supabase: any): Promise<{ groups: KhataGroup[]; groupNotifications: KhataGroupNotification[]; groupTransactions: any[] }> {
   try {
     const { data } = await supabase
       .from('global_config')
@@ -22,21 +22,28 @@ async function getSharedGroupsData(supabase: any): Promise<{ groups: KhataGroup[
     const payload = data?.maintenance_mode || {};
     const groups: KhataGroup[] = Array.isArray(payload.groups) ? payload.groups : [];
     const groupNotifications: KhataGroupNotification[] = Array.isArray(payload.groupNotifications) ? payload.groupNotifications : [];
-    return { groups, groupNotifications };
+    const groupTransactions: any[] = Array.isArray(payload.groupTransactions) ? payload.groupTransactions : [];
+    return { groups, groupNotifications, groupTransactions };
   } catch (err) {
     console.warn('Error reading shared_khata_groups:', err);
-    return { groups: [], groupNotifications: [] };
+    return { groups: [], groupNotifications: [], groupTransactions: [] };
   }
 }
 
-// Save shared groups and notifications to global_config
-async function saveSharedGroupsData(supabase: any, groups: KhataGroup[], groupNotifications: KhataGroupNotification[]): Promise<boolean> {
+// Save shared groups, notifications, and group transactions to global_config
+async function saveSharedGroupsData(
+  supabase: any,
+  groups: KhataGroup[],
+  groupNotifications: KhataGroupNotification[],
+  groupTransactions: any[] = []
+): Promise<boolean> {
   try {
     const { error } = await supabase.from('global_config').upsert({
       id: 'shared_khata_groups',
       maintenance_mode: {
         groups,
         groupNotifications: groupNotifications.slice(-200), // retain latest 200 notifications
+        groupTransactions: groupTransactions.slice(-500),   // retain latest 500 group transactions
       },
       updated_at: new Date().toISOString(),
     });
@@ -68,7 +75,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Supabase admin client unavailable' }, { status: 500 });
     }
 
-    const { groups, groupNotifications } = await getSharedGroupsData(supabase);
+    const { groups, groupNotifications, groupTransactions } = await getSharedGroupsData(supabase);
 
     // 1. Check Username Availability
     if (checkUsername) {
@@ -89,9 +96,11 @@ export async function GET(req: NextRequest) {
           message: `No group found with username @${username}. Please verify handle.`,
         }, { status: 404 });
       }
+      const relevantTransactions = groupTransactions.filter(t => t.groupId === target.id);
       return NextResponse.json({
         success: true,
         group: target,
+        transactions: relevantTransactions,
       });
     }
 
@@ -128,10 +137,14 @@ export async function GET(req: NextRequest) {
         );
       });
 
+      const userGroupIds = new Set(userGroups.map(g => g.id));
+      const relevantTransactions = groupTransactions.filter(t => t.groupId && userGroupIds.has(t.groupId));
+
       return NextResponse.json({
         success: true,
         groups: userGroups,
         notifications: userNotifs,
+        transactions: relevantTransactions,
       });
     }
 
@@ -139,6 +152,7 @@ export async function GET(req: NextRequest) {
       success: true,
       groups,
       notifications: groupNotifications,
+      transactions: groupTransactions,
     });
   } catch (error: any) {
     console.error('Groups GET error:', error);
@@ -149,13 +163,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { group, userId, notification } = body;
-
-    if (!group || !group.name || !group.username) {
-      return NextResponse.json({ success: false, message: 'Group name and username handle are required.' }, { status: 400 });
-    }
-
-    const cleanUsername = group.username.trim().replace(/^@+/, '').toLowerCase();
+    const { group, userId, notification, transaction, deleteTransactionId } = body;
 
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ success: false, message: 'Database not configured' }, { status: 500 });
@@ -166,7 +174,41 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Supabase admin client unavailable' }, { status: 500 });
     }
 
-    const { groups, groupNotifications } = await getSharedGroupsData(supabase);
+    const { groups, groupNotifications, groupTransactions } = await getSharedGroupsData(supabase);
+
+    // 1. Handle Transaction Add / Update
+    if (transaction && transaction.id) {
+      const updatedTxns = [...groupTransactions];
+      const tIdx = updatedTxns.findIndex((t: any) => t.id === transaction.id);
+      if (tIdx >= 0) {
+        updatedTxns[tIdx] = { ...updatedTxns[tIdx], ...transaction, updatedAt: new Date().toISOString() };
+      } else {
+        updatedTxns.unshift(transaction);
+      }
+      await saveSharedGroupsData(supabase, groups, groupNotifications, updatedTxns);
+      return NextResponse.json({ success: true, transaction });
+    }
+
+    // 2. Handle Transaction Delete
+    if (deleteTransactionId) {
+      const updatedTxns = groupTransactions.filter((t: any) => t.id !== deleteTransactionId);
+      await saveSharedGroupsData(supabase, groups, groupNotifications, updatedTxns);
+      return NextResponse.json({ success: true, deletedId: deleteTransactionId });
+    }
+
+    // 3. Handle Notification Prepend without group
+    if (notification && !group) {
+      const updatedNotifs = [notification, ...groupNotifications];
+      await saveSharedGroupsData(supabase, groups, updatedNotifs, groupTransactions);
+      return NextResponse.json({ success: true, notification });
+    }
+
+    // 4. Handle Group Create / Update
+    if (!group || !group.name || !group.username) {
+      return NextResponse.json({ success: false, message: 'Group name and username handle are required.' }, { status: 400 });
+    }
+
+    const cleanUsername = group.username.trim().replace(/^@+/, '').toLowerCase();
 
     // Check unique username constraint (must not conflict with other groups)
     const existingGroupIndex = groups.findIndex(g => g.username?.toLowerCase() === cleanUsername);
@@ -243,7 +285,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    await saveSharedGroupsData(supabase, updatedGroups, updatedNotifs);
+    await saveSharedGroupsData(supabase, updatedGroups, updatedNotifs, groupTransactions);
 
     // Also update creator's system_settings for redundancy
     if (userId) {

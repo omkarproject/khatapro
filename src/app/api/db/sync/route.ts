@@ -84,6 +84,20 @@ function transactionToDb(t: any, userId: string) {
     return '';
   }).filter(Boolean);
 
+  const baseTags = Array.isArray(t.tags) ? [...t.tags] : [];
+  if (t.groupId) {
+    baseTags.push(`__grp_id:${t.groupId}`);
+  }
+  if (t.groupName) {
+    baseTags.push(`__grp_name:${encodeURIComponent(t.groupName)}`);
+  }
+  if (Array.isArray(t.splitMembers) && t.splitMembers.length > 0) {
+    baseTags.push(`__grp_split:${JSON.stringify(t.splitMembers)}`);
+  }
+  if (Array.isArray(t.editHistory) && t.editHistory.length > 0) {
+    baseTags.push(`__grp_edits:${JSON.stringify(t.editHistory)}`);
+  }
+
   return {
     id: String(t.id),
     user_id: userId,
@@ -95,7 +109,7 @@ function transactionToDb(t: any, userId: string) {
     category: t.category || 'General',
     payment_mode: t.paymentMode || 'upi',
     note: t.note || '',
-    tags: Array.isArray(t.tags) ? t.tags : [],
+    tags: baseTags,
     attachments: sanitizedAttachments,
     reference_no: t.referenceNo || '',
     status: t.status || 'completed',
@@ -406,6 +420,34 @@ function transactionFromDb(row: any) {
     }
   });
 
+  let groupId: string | undefined = undefined;
+  let groupName: string | undefined = undefined;
+  let splitMembers: any[] | undefined = undefined;
+  let editHistory: any[] | undefined = undefined;
+
+  const cleanTags: string[] = [];
+  (row.tags || []).forEach((t: string) => {
+    if (t.startsWith('__grp_id:')) {
+      groupId = t.replace('__grp_id:', '');
+    } else if (t.startsWith('__grp_name:')) {
+      try {
+        groupName = decodeURIComponent(t.replace('__grp_name:', ''));
+      } catch {
+        groupName = t.replace('__grp_name:', '');
+      }
+    } else if (t.startsWith('__grp_split:')) {
+      try {
+        splitMembers = JSON.parse(t.replace('__grp_split:', ''));
+      } catch {}
+    } else if (t.startsWith('__grp_edits:')) {
+      try {
+        editHistory = JSON.parse(t.replace('__grp_edits:', ''));
+      } catch {}
+    } else {
+      cleanTags.push(t);
+    }
+  });
+
   return {
     id: row.id,
     type: row.type,
@@ -416,13 +458,17 @@ function transactionFromDb(row: any) {
     category: row.category || 'General',
     paymentMode: row.payment_mode || 'upi',
     note: row.note || '',
-    tags: row.tags || [],
+    tags: cleanTags,
     attachments: transformedAttachments,
     referenceNo: row.reference_no || '',
     status: row.status || 'completed',
     createdBy: row.created_by || '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    groupId,
+    groupName,
+    splitMembers,
+    editHistory,
   };
 }
 

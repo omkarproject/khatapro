@@ -533,6 +533,18 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
                     gData.notifications.forEach((n: any) => StorageService.addGroupNotification(n));
                     setGroupNotifications(StorageService.getGroupNotifications());
                   }
+                  if (Array.isArray(gData.transactions) && gData.transactions.length > 0) {
+                    const currentTxns = StorageService.getTransactions();
+                    const txnMap = new Map(currentTxns.map((t: any) => [t.id, t]));
+                    gData.transactions.forEach((gt: any) => {
+                      txnMap.set(gt.id, gt);
+                    });
+                    const mergedTxns = Array.from(txnMap.values());
+                    try {
+                      localStorage.setItem('skp_transactions', JSON.stringify(mergedTxns));
+                    } catch {}
+                    setTransactions(mergedTxns);
+                  }
                 }
               }
             } catch (gErr) {
@@ -1306,6 +1318,17 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setCustomers(StorageService.getCustomers()); // balance changed
     syncWithDatabase();
 
+    if (txn.groupId) {
+      fetch('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transaction: txn,
+          userId: currentUser?.id,
+        }),
+      }).catch(e => console.warn('Could not sync group transaction:', e));
+    }
+
     if (txn.type === 'collection' || txn.type === 'credit' || txn.type === 'income') {
       playPaymentNotificationSound();
       addToast(
@@ -1323,6 +1346,18 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     const updatedTxns = StorageService.updateTransaction(txn);
     setTransactions(updatedTxns);
     setCustomers(StorageService.getCustomers()); // balance updated
+
+    if (txn.groupId) {
+      fetch('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transaction: txn,
+          userId: currentUser?.id,
+        }),
+      }).catch(e => console.warn('Could not sync group transaction update:', e));
+    }
+
     addToast('Transaction Updated', `₹${txn.amount.toLocaleString('en-IN')} updated successfully.`, 'success');
     syncWithDatabase();
   };
@@ -1345,6 +1380,18 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         deleteFromDriveFiles({ fileIds, fileNames });
       }
     }
+
+    if (existing?.groupId) {
+      fetch('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deleteTransactionId: id,
+          userId: currentUser?.id,
+        }),
+      }).catch(e => console.warn('Could not delete group transaction:', e));
+    }
+
     const updatedTxns = StorageService.deleteTransaction(id);
     setTransactions(updatedTxns);
     setCustomers(StorageService.getCustomers()); // balance updated

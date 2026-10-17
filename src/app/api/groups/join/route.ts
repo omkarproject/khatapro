@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
     const payload = configRow?.maintenance_mode || {};
     const groups: KhataGroup[] = Array.isArray(payload.groups) ? payload.groups : [];
     const groupNotifications: KhataGroupNotification[] = Array.isArray(payload.groupNotifications) ? payload.groupNotifications : [];
+    const groupTransactions: any[] = Array.isArray(payload.groupTransactions) ? payload.groupTransactions : [];
 
     // 2. Find group by username
     const targetGroup = groups.find(g => g.username?.toLowerCase() === cleanUsername);
@@ -79,9 +80,11 @@ export async function POST(req: NextRequest) {
       customerId: user.id,
       name: user.name || user.businessName || 'Merchant',
       phone: user.phone || '',
+      email: user.email || '',
       avatar: user.avatar || user.avatarUrl || undefined,
       role: 'member',
       joinedAt: new Date().toISOString(),
+      merchantUserId: user.id,
     };
 
     const updatedMembers = [...(targetGroup.members || []), newMember];
@@ -92,19 +95,30 @@ export async function POST(req: NextRequest) {
       updatedAt: new Date().toISOString(),
     };
 
-    // 5. Send Realtime Notification to all existing members
+    // 5. Send Realtime Notification to creator and all existing members
+    const recipientIds: string[] = Array.from(new Set([
+      targetGroup.creatorId,
+      ...targetGroup.members.map(m => m.customerId),
+      ...targetGroup.members.map(m => m.merchantUserId).filter((id): id is string => Boolean(id))
+    ])).filter((id): id is string => Boolean(id));
+
     const newNotification: KhataGroupNotification = {
       id: `notif_${Date.now()}`,
       groupId: targetGroup.id,
       groupName: targetGroup.name,
       groupUsername: targetGroup.username,
       type: 'member_joined',
-      title: 'New Member Joined Group',
-      message: `${newMember.name} joined group @${targetGroup.username} (${updatedMembers.length} total members)`,
+      title: 'New Merchant Joined Group',
+      message: `${newMember.name}${newMember.phone ? ` (${newMember.phone})` : ''} joined group "${targetGroup.name}" (@${targetGroup.username}). Total members: ${updatedMembers.length}.`,
       actorName: newMember.name,
       createdAt: new Date().toISOString(),
       read: false,
-      memberIds: targetGroup.members.map(m => m.customerId || (m as any).merchantUserId || m.name),
+      memberIds: recipientIds,
+      details: {
+        memberName: newMember.name,
+        memberPhone: newMember.phone || '',
+        joinedAt: new Date().toISOString(),
+      },
     };
 
     // 6. Update in Supabase Cloud
@@ -116,6 +130,7 @@ export async function POST(req: NextRequest) {
       maintenance_mode: {
         groups: updatedGroups,
         groupNotifications: updatedNotifs.slice(-200),
+        groupTransactions,
       },
       updated_at: new Date().toISOString(),
     });
