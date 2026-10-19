@@ -1588,5 +1588,42 @@ export const StorageService = {
     StorageService.setPinnedChatIds(updated);
     return updated;
   },
+
+  // Completely wipe local and session storage on logout (preserving only public branding for /login)
+  clearOnLogout: (): void => {
+    if (typeof window === 'undefined') return;
+    try {
+      const preserved: Record<string, string> = {};
+      const keysToPreserve = [
+        'skp_global_branding',
+        'skp_global_system_config',
+        'skp_brand_name',
+        'skp_brand_logo',
+        'skp_brand_favicon',
+        'skp_brand_badge',
+        'skp_brand_badge_bg',
+        'skp_brand_tagline',
+        'skp_brand_support_location',
+        'skp_brand_support_phone',
+        'skp_brand_support_email',
+        'skp_policy_terms',
+        'skp_policy_refunds',
+        'skp_policy_privacy',
+      ];
+      for (const k of keysToPreserve) {
+        const val = localStorage.getItem(k);
+        if (val !== null) preserved[k] = val;
+      }
+
+      localStorage.clear();
+      sessionStorage.clear();
+
+      for (const [k, v] of Object.entries(preserved)) {
+        localStorage.setItem(k, v);
+      }
+    } catch (e) {
+      console.warn('StorageService.clearOnLogout failed:', e);
+    }
+  },
 };
 
