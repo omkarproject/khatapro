@@ -133,20 +133,30 @@ export async function GET(req: NextRequest) {
 
       // User notifications: strictly enforce group membership and non-actor delivery
       const userGroupIds = new Set(userGroups.map(g => g.id));
-      const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+      const twoDaysAgo = Date.now() - 48 * 60 * 60 * 1000;
 
       const userNotifs = groupNotifications.filter(n => {
         // Notification must belong to one of this user's joined/created groups
         if (n.groupId && !userGroupIds.has(n.groupId)) return false;
 
-        // Ignore notifications older than 14 days
-        if (n.createdAt && !isNaN(new Date(n.createdAt).getTime()) && new Date(n.createdAt).getTime() < fourteenDaysAgo) {
+        // Ignore notifications older than 48 hours
+        if (n.createdAt && !isNaN(new Date(n.createdAt).getTime()) && new Date(n.createdAt).getTime() < twoDaysAgo) {
           return false;
         }
 
         // Never notify the actor who performed the action
         if (n.actorUserId && n.actorUserId === userId) return false;
         if (n.details && (n.details.actorUserId === userId || n.details.actorId === userId || n.details.applicantId === userId)) return false;
+
+        // If join request, ensure it is still actually pending (not already approved or member joined)
+        if (n.type === 'join_request') {
+          const targetGrp = groups.find(g => g.id === n.groupId);
+          if (targetGrp) {
+            const reqId = n.details?.requestId;
+            const isPending = Array.isArray(targetGrp.pendingRequests) && targetGrp.pendingRequests.some(r => r.id === reqId && r.status === 'pending');
+            if (!isPending) return false;
+          }
+        }
 
         // If specific targets are defined, user must be included
         const hasMemberTargets = Array.isArray(n.memberIds) && n.memberIds.length > 0;
@@ -238,7 +248,12 @@ export async function POST(req: NextRequest) {
 
     // 3. Handle Notification Prepend without group
     if (notification && !group) {
-      const updatedNotifs = [notification, ...groupNotifications];
+      const twoDaysAgo = Date.now() - 48 * 60 * 60 * 1000;
+      const validOldNotifs = groupNotifications.filter(n => {
+        if (n.createdAt && !isNaN(new Date(n.createdAt).getTime()) && new Date(n.createdAt).getTime() < twoDaysAgo) return false;
+        return true;
+      });
+      const updatedNotifs = [notification, ...validOldNotifs].slice(0, 50);
       await saveSharedGroupsData(supabase, groups, updatedNotifs, groupTransactions);
       return NextResponse.json({ success: true, notification });
     }

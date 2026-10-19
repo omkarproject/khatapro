@@ -516,11 +516,24 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
             localList.forEach(item => {
               if (item && item.id) map.set(item.id, item);
             });
+            const cloudIds = new Set(cloudList.map(item => item?.id).filter(Boolean));
+
+            // Clean stale mirrored peer transactions that were deleted from the cloud ledger
+            map.forEach((item, id) => {
+              if (id.startsWith('peer_txn_') && !cloudIds.has(id)) {
+                map.delete(id);
+              }
+            });
+
             cloudList.forEach(item => {
               if (item && item.id) {
                 const existing = map.get(item.id);
-                if (existing && ((existing as any).isDeleted || (existing as any).status === 'deleted') && !(item as any).isDeleted && (item as any).status !== 'deleted') {
-                  map.set(item.id, { ...item, isDeleted: true, status: 'deleted', deletedAt: (existing as any).deletedAt, deletedBy: (existing as any).deletedBy });
+                if (existing) {
+                  const cloudTime = new Date((item as any).updatedAt || (item as any).updated_at || (item as any).createdAt || 0).getTime();
+                  const localTime = new Date((existing as any).updatedAt || (existing as any).updated_at || (existing as any).createdAt || 0).getTime();
+                  if (cloudTime >= localTime) {
+                    map.set(item.id, item);
+                  }
                 } else {
                   map.set(item.id, item);
                 }

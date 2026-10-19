@@ -1034,24 +1034,32 @@ async function syncPeerMerchants(
       }
     }
 
-    // 2. Active peer merchants linking
+    // 2. Active peer merchants linking (both regular customers and reciprocal peer_cust_ entries)
     for (const cust of customers) {
       if (!cust || !cust.id || cust.isDeleted || cust.status === 'deleted') continue;
-      // Do not use a peer-mirrored customer as a source to generate further reciprocal peers
-      if (String(cust.id).startsWith('peer_cust_')) continue;
 
       const cPhone = normalizePhone(cust.phone);
       const cEmail = (cust.email || '').toLowerCase().trim();
-      if (!cPhone && !cEmail) continue;
+      const isPeerCust = String(cust.id).startsWith('peer_cust_');
 
-      const peerProfile = allProfiles.find((p: any) => {
-        if (p.id === currentUserId) return false;
-        const pPhone = normalizePhone(p.phone);
-        const pEmail = (p.email || '').toLowerCase().trim();
-        if (cPhone && pPhone && cPhone === pPhone) return true;
-        if (cEmail && pEmail && cEmail === pEmail) return true;
-        return false;
-      });
+      if (!cPhone && !cEmail && !isPeerCust) continue;
+
+      let peerProfile: any = null;
+      if (isPeerCust) {
+        const potentialPeerId = String(cust.id).replace('peer_cust_', '');
+        peerProfile = allProfiles.find((p: any) => p.id === potentialPeerId);
+      }
+
+      if (!peerProfile) {
+        peerProfile = allProfiles.find((p: any) => {
+          if (p.id === currentUserId) return false;
+          const pPhone = normalizePhone(p.phone);
+          const pEmail = (p.email || '').toLowerCase().trim();
+          if (cPhone && pPhone && cPhone === pPhone) return true;
+          if (cEmail && pEmail && cEmail === pEmail) return true;
+          return false;
+        });
+      }
 
       if (!peerProfile) continue;
       const peerUserId = peerProfile.id;
@@ -1118,10 +1126,14 @@ async function syncPeerMerchants(
         updated_at: new Date().toISOString(),
       }, { onConflict: 'id, user_id' });
 
-      // Mirror transactions from currentUserId to peerUserId
-      const directTxns = (transactions || []).filter((t: any) => 
-        t && String(t.customerId) === String(cust.id) && !String(t.id).startsWith('peer_txn_')
-      );
+      // Mirror transactions from currentUserId to peerUserId (both camelCase and snake_case customerId)
+      const directTxns = (transactions || []).filter((t: any) => {
+        if (!t || !t.id) return false;
+        const tCustId = String(t.customerId || t.customer_id || '');
+        const isThisCust = tCustId === String(cust.id);
+        const isNotMirrored = !String(t.id).startsWith('peer_txn_');
+        return isThisCust && isNotMirrored;
+      });
 
       const activePeerTxnIds = new Set<string>();
 
@@ -1143,7 +1155,10 @@ async function syncPeerMerchants(
         }
 
         const isTxnDeleted = Boolean(t.isDeleted || t.status === 'deleted');
-        const peerTags = Array.isArray(t.tags) ? [...t.tags] : ['__p2p_peer'];
+        let peerTags = Array.isArray(t.tags)
+          ? t.tags.filter((tag: string) => !tag.startsWith('__del_') && tag !== '__is_deleted:true')
+          : [];
+        if (!peerTags.includes('__p2p_peer')) peerTags.push('__p2p_peer');
         if (isTxnDeleted) {
           peerTags.push('__is_deleted:true');
           if (t.deletedAt) peerTags.push(`__del_at:${t.deletedAt}`);
@@ -1282,7 +1297,11 @@ export async function POST(req: NextRequest) {
           } else {
             const toDelete = existing
               .map(e => String(e.id))
-              .filter(id => !activeIds.has(id));
+              .filter(id => {
+                // Safeguard: peer_txn_ rows are managed exclusively by syncPeerMerchants
+                if (table === 'transactions' && id.startsWith('peer_txn_')) return false;
+                return !activeIds.has(id);
+              });
 
             if (toDelete.length > 0) {
               console.log(`[syncRowsWithDeletions] Deleting ${toDelete.length} records from ${table} for user ${userId}:`, toDelete);

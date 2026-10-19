@@ -293,11 +293,24 @@ export const StorageService = {
       localList.forEach(item => {
         if (item && item.id) map.set(item.id, item);
       });
+      const incomingIds = new Set(incomingList.map(item => item?.id).filter(Boolean));
+
+      // Clean stale mirrored peer transactions that were deleted from the cloud ledger
+      map.forEach((item, id) => {
+        if (id.startsWith('peer_txn_') && !incomingIds.has(id)) {
+          map.delete(id);
+        }
+      });
+
       incomingList.forEach(item => {
         if (item && item.id) {
           const existing = map.get(item.id);
-          if (existing && ((existing as any).isDeleted || (existing as any).status === 'deleted') && !(item as any).isDeleted && (item as any).status !== 'deleted') {
-            map.set(item.id, { ...item, isDeleted: true, status: 'deleted', deletedAt: (existing as any).deletedAt, deletedBy: (existing as any).deletedBy });
+          if (existing) {
+            const incomingTime = new Date((item as any).updatedAt || (item as any).updated_at || (item as any).createdAt || 0).getTime();
+            const localTime = new Date((existing as any).updatedAt || (existing as any).updated_at || (existing as any).createdAt || 0).getTime();
+            if (incomingTime >= localTime) {
+              map.set(item.id, item);
+            }
           } else {
             map.set(item.id, item);
           }
@@ -1462,7 +1475,13 @@ export const StorageService = {
   getGroupNotifications: (): KhataGroupNotification[] => {
     const list = getLocalItem<KhataGroupNotification[]>(STORAGE_KEYS.GROUP_NOTIFICATIONS, []);
     const dismissed = StorageService.getDismissedNotificationIds();
-    return list.filter(n => n && n.id && !dismissed.has(n.id));
+    const twoDaysAgo = Date.now() - 48 * 60 * 60 * 1000;
+    return list.filter(n => {
+      if (!n || !n.id) return false;
+      if (dismissed.has(n.id)) return false;
+      if (n.createdAt && !isNaN(new Date(n.createdAt).getTime()) && new Date(n.createdAt).getTime() < twoDaysAgo) return false;
+      return true;
+    });
   },
   addGroupNotification: (notif: KhataGroupNotification): void => {
     if (!notif || !notif.id) return;

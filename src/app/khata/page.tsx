@@ -502,8 +502,17 @@ function KhataPageInner() {
     }
 
     if (!activeCustomer) return [];
+    const normPhone = activeCustomer.phone ? activeCustomer.phone.replace(/\D/g, '').slice(-10) : '';
     return transactions
-      .filter(t => String(t.customerId) === String(activeCustomer.id) || (activeCustomer.phone && (t as any).customerPhone === activeCustomer.phone))
+      .filter(t => {
+        if (!t) return false;
+        if (String(t.customerId) === String(activeCustomer.id)) return true;
+        // Also match peer customer ID variants (e.g. peer_cust_UUID)
+        if (activeCustomer.id.startsWith('peer_cust_') && t.customerId === activeCustomer.id.replace('peer_cust_', '')) return true;
+        if (t.customerId && String(t.customerId).startsWith('peer_cust_') && activeCustomer.id === String(t.customerId).replace('peer_cust_', '')) return true;
+        if (normPhone && (t as any).customerPhone && (t as any).customerPhone.replace(/\D/g, '').slice(-10) === normPhone) return true;
+        return false;
+      })
       .sort((a, b) => {
         const timeA = new Date(a.date).getTime();
         const timeB = new Date(b.date).getTime();

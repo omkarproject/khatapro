@@ -82,6 +82,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     saveSavingsGoal,
     addToast,
     settings,
+    updateSettings,
     currentUser,
     openAuthModal,
     logout,
@@ -170,29 +171,44 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     };
   }, []);
 
-  // User-scoped dismissed alerts tracking
+  // User-scoped dismissed alerts tracking (merged with cloud settings)
   const dismissedAlertsKey = currentUser?.id ? `khatapro_dismissed_alerts_${currentUser.id}` : 'khatapro_dismissed_alerts';
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(dismissedAlertsKey);
-      if (saved) {
-        setDismissedAlerts(JSON.parse(saved));
-      } else {
-        setDismissedAlerts([]);
-      }
+      const localIds: string[] = saved ? JSON.parse(saved) : [];
+      const cloudIds: string[] = Array.isArray(settings?.paymentSettings?.dismissedAlertIds)
+        ? settings.paymentSettings.dismissedAlertIds
+        : [];
+      const merged = Array.from(new Set([...localIds, ...cloudIds]));
+      setDismissedAlerts(merged);
     } catch (e) {
       setDismissedAlerts([]);
     }
-  }, [dismissedAlertsKey]);
+  }, [dismissedAlertsKey, settings?.paymentSettings?.dismissedAlertIds]);
 
   const handleDismissAlert = (alertKey: string) => {
     setDismissedAlerts((prev) => {
-      const next = [...prev, alertKey];
+      const next = Array.from(new Set([...prev, alertKey]));
       try {
         localStorage.setItem(dismissedAlertsKey, JSON.stringify(next));
       } catch (e) {}
+
+      // Persist to cloud settings for cross-device & post-logout retention
+      if (updateSettings && settings) {
+        const curPay = settings.paymentSettings || {};
+        const existingCloud = Array.isArray(curPay.dismissedAlertIds) ? curPay.dismissedAlertIds : [];
+        if (!existingCloud.includes(alertKey)) {
+          updateSettings({
+            paymentSettings: {
+              ...curPay,
+              dismissedAlertIds: [...existingCloud, alertKey].slice(-200),
+            },
+          });
+        }
+      }
       return next;
     });
   };
@@ -520,6 +536,19 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
       try {
         localStorage.setItem(dismissedAlertsKey, JSON.stringify(next));
       } catch (e) {}
+
+      // Persist to cloud settings for cross-device & post-logout retention
+      if (updateSettings && settings) {
+        const curPay = settings.paymentSettings || {};
+        const existingCloud = Array.isArray(curPay.dismissedAlertIds) ? curPay.dismissedAlertIds : [];
+        const nextCloud = Array.from(new Set([...existingCloud, ...allIds])).slice(-300);
+        updateSettings({
+          paymentSettings: {
+            ...curPay,
+            dismissedAlertIds: nextCloud,
+          },
+        });
+      }
       return next;
     });
     addToast('Alerts Cleared', 'All notifications and alerts have been dismissed.', 'info');
