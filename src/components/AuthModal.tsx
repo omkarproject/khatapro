@@ -171,6 +171,9 @@ export default function AuthModal() {
 
     setIsLoading(true);
     try {
+      if (mode === 'signup' && password) {
+        try { sessionStorage.setItem('skp_pending_signup_pwd', password); } catch {}
+      }
       const res = await fetch('/api/auth/otp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -223,6 +226,8 @@ export default function AuthModal() {
 
     setIsLoading(true);
     try {
+      const storedSignupPwd = typeof window !== 'undefined' ? sessionStorage.getItem('skp_pending_signup_pwd') || '' : '';
+      const finalPassword = password || storedSignupPwd;
       const res = await fetch('/api/auth/otp/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -233,7 +238,7 @@ export default function AuthModal() {
           name: name.trim(),
           businessName: businessName.trim(),
           phone: phone.trim(),
-          password: password,
+          password: finalPassword,
           newPassword: newPassword.trim(),
         }),
       });

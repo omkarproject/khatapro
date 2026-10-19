@@ -261,6 +261,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSyncingFromCloudRef = useRef<boolean>(false);
   const currentUserRef = useRef<UserProfile | null>(currentUser);
+  const seenTransactionIdsRef = useRef<Set<string>>(new Set());
+  const isInitialCloudLoadedRef = useRef<boolean>(false);
 
   useEffect(() => {
     currentUserRef.current = currentUser;
@@ -336,6 +338,12 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const syncWithDatabase = async (targetUser?: UserProfile | null) => {
     const activeU = targetUser !== undefined ? targetUser : currentUser;
     const userId = activeU?.id || 'usr_001';
+
+    // Safeguard: Wait until initial cloud data has completed loading before pushing local state to cloud
+    if (activeU?.id && !isInitialCloudLoadedRef.current) {
+      console.log('Database background sync deferred until initial cloud data is loaded.');
+      return;
+    }
 
     try {
       setCloudSyncStatus('syncing');
@@ -427,17 +435,44 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         if (json.success && json.data) {
           const d = json.data;
 
-          // If silently received live update from another device, check for new payment to chime
+          // Universal entity merger to protect against empty arrays overwriting local records
+          const mergeEntities = <T extends { id: string }>(localList: T[], cloudList?: T[]): T[] => {
+            if (!Array.isArray(cloudList)) return localList;
+            const map = new Map<string, T>();
+            localList.forEach(item => {
+              if (item && item.id) map.set(item.id, item);
+            });
+            cloudList.forEach(item => {
+              if (item && item.id) {
+                const existing = map.get(item.id);
+                if (existing && ((existing as any).isDeleted || (existing as any).status === 'deleted') && !(item as any).isDeleted && (item as any).status !== 'deleted') {
+                  map.set(item.id, { ...item, isDeleted: true, status: 'deleted', deletedAt: (existing as any).deletedAt, deletedBy: (existing as any).deletedBy });
+                } else {
+                  map.set(item.id, item);
+                }
+              }
+            });
+            return Array.from(map.values());
+          };
+
+          // If silently received live update from another device, check for genuine new recent payment to chime
           if (silent && Array.isArray(d.transactions)) {
             try {
-              const prevTxns = StorageService.getTransactions();
-              const prevIds = new Set(prevTxns.map((t: any) => t.id));
+              const now = Date.now();
               const incomingPayment = d.transactions.find(
                 (t: any) =>
-                  !prevIds.has(t.id) &&
-                  (t.type === 'collection' || t.type === 'credit' || t.type === 'income')
+                  t &&
+                  t.id &&
+                  !seenTransactionIdsRef.current.has(t.id) &&
+                  (t.type === 'collection' || t.type === 'credit' || t.type === 'income') &&
+                  !t.isDeleted &&
+                  t.status !== 'deleted' &&
+                  // Must be created recently (within last 90 seconds)
+                  !isNaN(new Date(t.date || t.createdAt || '').getTime()) &&
+                  (now - new Date(t.date || t.createdAt || '').getTime() < 90000)
               );
               if (incomingPayment) {
+                seenTransactionIdsRef.current.add(incomingPayment.id);
                 playPaymentNotificationSound();
                 addToast(
                   '💰 Payment Received (Live Sync)',
@@ -449,49 +484,70 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
             } catch {}
           }
 
+          // Mark all incoming cloud transaction IDs as seen
+          if (Array.isArray(d.transactions)) {
+            d.transactions.forEach((t: any) => {
+              if (t && t.id) seenTransactionIdsRef.current.add(t.id);
+            });
+          }
+
           // Accurately reflect cloud state (merging with local to preserve soft-deletions and local groups)
           if (Array.isArray(d.customers)) {
-            const localCusts = StorageService.getCustomers();
-            const custMap = new Map<string, Customer>();
-            localCusts.forEach((c) => custMap.set(c.id, c));
-            d.customers.forEach((c: any) => {
-              const existing = custMap.get(c.id);
-              if (existing && (existing.isDeleted || existing.status === 'deleted') && !c.isDeleted && c.status !== 'deleted') {
-                custMap.set(c.id, { ...c, isDeleted: true, status: 'deleted', deletedAt: existing.deletedAt });
-              } else {
-                custMap.set(c.id, c);
-              }
-            });
-            const mergedCusts = Array.from(custMap.values());
+            const mergedCusts = mergeEntities(StorageService.getCustomers(), d.customers);
             StorageService.setCustomers(mergedCusts);
             setCustomers(mergedCusts);
           }
 
           if (Array.isArray(d.transactions)) {
-            const localTxns = StorageService.getTransactions();
-            const txnMap = new Map<string, Transaction>();
-            localTxns.forEach((t) => txnMap.set(t.id, t));
-            d.transactions.forEach((t: any) => {
-              const existing = txnMap.get(t.id);
-              if (existing && (existing.isDeleted || existing.status === 'deleted') && !t.isDeleted && t.status !== 'deleted') {
-                txnMap.set(t.id, { ...t, isDeleted: true, status: 'deleted', deletedAt: existing.deletedAt, deletedBy: existing.deletedBy });
-              } else {
-                txnMap.set(t.id, t);
-              }
-            });
-            const mergedTxns: Transaction[] = Array.from(txnMap.values());
+            const mergedTxns = mergeEntities(StorageService.getTransactions(), d.transactions);
             StorageService.setTransactions(mergedTxns);
             setTransactions(mergedTxns);
           }
-          if (Array.isArray(d.products)) setProducts(d.products);
-          if (Array.isArray(d.invoices)) setInvoices(d.invoices);
-          if (Array.isArray(d.expenses)) setExpenses(d.expenses);
-          if (Array.isArray(d.savingsGoals)) setSavingsGoals(d.savingsGoals);
-          if (Array.isArray(d.reminders)) setReminders(d.reminders);
-          if (Array.isArray(d.documents)) setDocuments(d.documents);
-          if (Array.isArray(d.notes)) setNotes(d.notes);
-          if (Array.isArray(d.tasks)) setTasks(d.tasks);
-          if (Array.isArray(d.passwords)) setPasswords(d.passwords);
+          if (Array.isArray(d.products)) {
+            const merged = mergeEntities(StorageService.getProducts(), d.products);
+            StorageService.setProducts(merged);
+            setProducts(merged);
+          }
+          if (Array.isArray(d.invoices)) {
+            const merged = mergeEntities(StorageService.getInvoices(), d.invoices);
+            StorageService.setInvoices(merged);
+            setInvoices(merged);
+          }
+          if (Array.isArray(d.expenses)) {
+            const merged = mergeEntities(StorageService.getExpenses(), d.expenses);
+            StorageService.setExpenses(merged);
+            setExpenses(merged);
+          }
+          if (Array.isArray(d.savingsGoals)) {
+            const merged = mergeEntities(StorageService.getSavingsGoals(), d.savingsGoals);
+            StorageService.setSavingsGoals(merged);
+            setSavingsGoals(merged);
+          }
+          if (Array.isArray(d.reminders)) {
+            const merged = mergeEntities(StorageService.getReminders(), d.reminders);
+            StorageService.setReminders(merged);
+            setReminders(merged);
+          }
+          if (Array.isArray(d.documents)) {
+            const merged = mergeEntities(StorageService.getDocuments(), d.documents);
+            StorageService.setDocuments(merged);
+            setDocuments(merged);
+          }
+          if (Array.isArray(d.notes)) {
+            const merged = mergeEntities(StorageService.getNotes(), d.notes);
+            StorageService.setNotes(merged);
+            setNotes(merged);
+          }
+          if (Array.isArray(d.tasks)) {
+            const merged = mergeEntities(StorageService.getTasks(), d.tasks);
+            StorageService.setTasks(merged);
+            setTasks(merged);
+          }
+          if (Array.isArray(d.passwords)) {
+            const merged = mergeEntities(StorageService.getPasswords(), d.passwords);
+            StorageService.setPasswords(merged);
+            setPasswords(merged);
+          }
           if (Array.isArray(d.customerDriveFolders) || Array.isArray(d.customerDriveFiles)) {
             const byCust: Record<string, { folders: any[]; files: any[] }> = {};
             (d.customerDriveFolders || []).forEach((f: any) => {
@@ -582,9 +638,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
             });
 
             // Note: Groups are fetched authoritatively below from /api/groups to prevent state flickering
+            const dismissedNotifIds = StorageService.getDismissedNotificationIds();
             if (Array.isArray(d.settings.paymentSettings?.khataGroupNotifications)) {
               d.settings.paymentSettings.khataGroupNotifications
-                .filter((n: any) => n.actorUserId !== userId && n.details?.actorUserId !== userId && n.details?.applicantId !== userId)
+                .filter((n: any) => n && n.id && !dismissedNotifIds.has(n.id) && n.actorUserId !== userId && n.details?.actorUserId !== userId && n.details?.applicantId !== userId)
                 .forEach((n: any) => StorageService.addGroupNotification(n));
               setGroupNotifications(StorageService.getGroupNotifications());
             }
@@ -609,7 +666,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
                   }
                   if (Array.isArray(gData.notifications)) {
                     gData.notifications
-                      .filter((n: any) => n.actorUserId !== userId && n.details?.actorUserId !== userId && n.details?.applicantId !== userId)
+                      .filter((n: any) => n && n.id && !dismissedNotifIds.has(n.id) && n.actorUserId !== userId && n.details?.actorUserId !== userId && n.details?.applicantId !== userId)
                       .forEach((n: any) => StorageService.addGroupNotification(n));
                     setGroupNotifications(StorageService.getGroupNotifications());
                   }
@@ -669,11 +726,13 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
           // Update local cache
           StorageService.setAllUserData(d);
+          isInitialCloudLoadedRef.current = true;
           setCloudSyncStatus('synced');
           lastCloudSyncTimestampRef.current = Date.now();
           return;
         }
       }
+      isInitialCloudLoadedRef.current = true;
       setCloudSyncStatus('synced');
       lastCloudSyncTimestampRef.current = Date.now();
     } catch (err) {
@@ -868,6 +927,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     }
 
     // Refresh profile in memory
+    isInitialCloudLoadedRef.current = false;
     setProfileState(user);
     setActiveRole(user.role || (user.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user'));
 
@@ -911,6 +971,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       document.cookie = `skp_auth_session=${user.id || (user as any)._id}; Path=/; Max-Age=2592000; SameSite=Lax;`;
     }
 
+    isInitialCloudLoadedRef.current = false;
     setProfileState(user);
     setActiveRole(user.role || (user.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user'));
 
@@ -928,6 +989,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     if (typeof document !== 'undefined') {
       document.cookie = `skp_auth_session=${user.id || (user as any)._id}; Path=/; Max-Age=2592000; SameSite=Lax;`;
     }
+    isInitialCloudLoadedRef.current = false;
     setProfileState(user);
     setActiveRole(user.role || (user.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user'));
     await loadUserDataFromCloud(user.id);
@@ -938,6 +1000,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const logout = () => {
     setCurrentUserState(null);
     StorageService.setCurrentUser(null);
+    StorageService.clearAllGroupNotifications();
+    isInitialCloudLoadedRef.current = false;
     if (typeof document !== 'undefined') {
       document.cookie = 'skp_auth_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
     }
@@ -951,6 +1015,11 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setSavingsGoals([]);
     setReminders([]);
     setDocuments([]);
+    setNotes([]);
+    setTasks([]);
+    setPasswords([]);
+    setGroups([]);
+    setGroupNotifications([]);
     setSettingsState(getCleanDefaultSettings());
     addToast('Signed Out', 'You have logged out of your account.', 'info');
     if (typeof window !== 'undefined') {
@@ -1085,6 +1154,12 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     refreshData();
     setMounted(true);
 
+    // Seed seen transaction IDs with all initial transactions to prevent any false alarms
+    const initTxns = StorageService.getTransactions();
+    initTxns.forEach((t: any) => {
+      if (t && t.id) seenTransactionIdsRef.current.add(t.id);
+    });
+
     const curSettings = StorageService.getSettings();
 
     if (typeof document !== 'undefined') {
@@ -1104,19 +1179,30 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       if (e.key === 'skp_transactions' && e.newValue) {
         try {
           const freshTxns: Transaction[] = JSON.parse(e.newValue);
-          const oldTxns = StorageService.getTransactions();
-          if (freshTxns.length > oldTxns.length) {
-            const latest = freshTxns[0];
-            if (latest && (latest.type === 'collection' || latest.type === 'credit' || latest.type === 'income')) {
-              playPaymentNotificationSound();
-              addToast(
-                '💰 Payment Received!',
-                `₹${latest.amount.toLocaleString('en-IN')} received from ${latest.customerName || 'Customer'}. Click to view details.`,
-                'success',
-                latest
-              );
-            }
+          const now = Date.now();
+          const incoming = freshTxns.find((t: any) => {
+            if (!t || !t.id) return false;
+            if (seenTransactionIdsRef.current.has(t.id)) return false;
+            const isPaymentType = t.type === 'collection' || t.type === 'credit' || t.type === 'income';
+            if (!isPaymentType) return false;
+            if (t.isDeleted || t.status === 'deleted') return false;
+            const txnTime = new Date(t.date || t.createdAt || '').getTime();
+            return !isNaN(txnTime) && (now - txnTime < 90000);
+          });
+
+          if (incoming) {
+            seenTransactionIdsRef.current.add(incoming.id);
+            playPaymentNotificationSound();
+            addToast(
+              '💰 Payment Received!',
+              `₹${Number(incoming.amount).toLocaleString('en-IN')} received from ${incoming.customerName || 'Customer'}. Click to view details.`,
+              'success',
+              incoming
+            );
           }
+          freshTxns.forEach((t: any) => {
+            if (t && t.id) seenTransactionIdsRef.current.add(t.id);
+          });
           refreshData();
         } catch {
           refreshData();

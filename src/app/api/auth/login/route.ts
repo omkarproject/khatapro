@@ -9,33 +9,60 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Email and password are required' }, { status: 400 });
     }
 
-    const cleanEmail = email.toLowerCase().trim();
+    const cleanInput = email.trim();
+    let resolvedEmail = cleanInput.toLowerCase();
 
-    if (!isSupabaseConfigured()) {
-      return NextResponse.json({
-        success: false,
-        message: 'Supabase Cloud Database is not configured. Please check your Supabase credentials in Settings.',
-      }, { status: 500 });
-    }
+    // If input does not contain @, try resolving via phone or username
+    if (!cleanInput.includes('@')) {
+      const cleanPhone = cleanInput.replace(/\D/g, '');
+      const { data: matchedProfiles } = await supabase
+        .from('profiles')
+        .select('email, id')
+        .or(`phone.eq.${cleanInput}${cleanPhone ? `,phone.eq.${cleanPhone}` : ''},name.ilike.${cleanInput}`)
+        .limit(1);
 
-    const supabase = getSupabaseAdmin();
-    if (!supabase) {
-      return NextResponse.json({
-        success: false,
-        message: 'Could not connect to Supabase Cloud Database.',
-      }, { status: 500 });
+      if (matchedProfiles && matchedProfiles.length > 0 && matchedProfiles[0].email) {
+        resolvedEmail = matchedProfiles[0].email.toLowerCase().trim();
+      }
     }
 
     // Authenticate via Supabase Auth
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: cleanEmail,
+    let { data, error } = await supabase.auth.signInWithPassword({
+      email: resolvedEmail,
       password,
     });
+
+    // If initial login fails, check if the account exists with unconfirmed email
+    if (error || !data?.user) {
+      try {
+        const { data: listRes } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        const existingAuthUser = listRes?.users?.find(u => u.email?.toLowerCase() === resolvedEmail);
+
+        if (existingAuthUser) {
+          // If user exists and email is not confirmed, auto-confirm and retry signInWithPassword
+          if (!existingAuthUser.email_confirmed_at) {
+            await supabase.auth.admin.updateUserById(existingAuthUser.id, {
+              email_confirm: true,
+            });
+            const retryRes = await supabase.auth.signInWithPassword({
+              email: resolvedEmail,
+              password,
+            });
+            if (retryRes.data?.user) {
+              data = retryRes.data;
+              error = null;
+            }
+          }
+        }
+      } catch (authCheckErr) {
+        console.warn('Auth auto-confirm fallback error:', authCheckErr);
+      }
+    }
 
     if (error || !data?.user) {
       return NextResponse.json({
         success: false,
-        message: error?.message || 'Invalid email or password. Please verify your credentials.',
+        message: error?.message || 'Invalid email/phone or password. Please verify your credentials.',
       }, { status: 401 });
     }
 

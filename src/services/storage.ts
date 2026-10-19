@@ -269,7 +269,7 @@ export const StorageService = {
     }
   },
 
-  // Bulk set all user data from cloud Supabase
+  // Bulk set all user data from cloud Supabase with intelligent two-way merge
   setAllUserData: (data: {
     customers?: Customer[];
     transactions?: Transaction[];
@@ -286,17 +286,37 @@ export const StorageService = {
     user?: UserProfile;
   }) => {
     if (typeof window === 'undefined') return;
-    if (data.customers !== undefined) setLocalItem(STORAGE_KEYS.CUSTOMERS, data.customers);
-    if (data.transactions !== undefined) setLocalItem(STORAGE_KEYS.TRANSACTIONS, data.transactions);
-    if (data.products !== undefined) setLocalItem(STORAGE_KEYS.PRODUCTS, data.products);
-    if (data.invoices !== undefined) setLocalItem(STORAGE_KEYS.INVOICES, data.invoices);
-    if (data.expenses !== undefined) setLocalItem(STORAGE_KEYS.EXPENSES, data.expenses);
-    if (data.savingsGoals !== undefined) setLocalItem(STORAGE_KEYS.SAVINGS, data.savingsGoals);
-    if (data.reminders !== undefined) setLocalItem(STORAGE_KEYS.REMINDERS, data.reminders);
-    if (data.documents !== undefined) setLocalItem(STORAGE_KEYS.DOCUMENTS, data.documents);
-    if (data.notes !== undefined) setLocalItem(STORAGE_KEYS.NOTES, data.notes);
-    if (data.tasks !== undefined) setLocalItem(STORAGE_KEYS.TASKS, data.tasks);
-    if (data.passwords !== undefined) setLocalItem(STORAGE_KEYS.PASSWORDS, data.passwords);
+
+    const mergeEntities = <T extends { id: string }>(localList: T[], incomingList?: T[]): T[] => {
+      if (!Array.isArray(incomingList)) return localList;
+      const map = new Map<string, T>();
+      localList.forEach(item => {
+        if (item && item.id) map.set(item.id, item);
+      });
+      incomingList.forEach(item => {
+        if (item && item.id) {
+          const existing = map.get(item.id);
+          if (existing && ((existing as any).isDeleted || (existing as any).status === 'deleted') && !(item as any).isDeleted && (item as any).status !== 'deleted') {
+            map.set(item.id, { ...item, isDeleted: true, status: 'deleted', deletedAt: (existing as any).deletedAt, deletedBy: (existing as any).deletedBy });
+          } else {
+            map.set(item.id, item);
+          }
+        }
+      });
+      return Array.from(map.values());
+    };
+
+    if (data.customers !== undefined) setLocalItem(STORAGE_KEYS.CUSTOMERS, mergeEntities(StorageService.getCustomers(), data.customers));
+    if (data.transactions !== undefined) setLocalItem(STORAGE_KEYS.TRANSACTIONS, mergeEntities(StorageService.getTransactions(), data.transactions));
+    if (data.products !== undefined) setLocalItem(STORAGE_KEYS.PRODUCTS, mergeEntities(StorageService.getProducts(), data.products));
+    if (data.invoices !== undefined) setLocalItem(STORAGE_KEYS.INVOICES, mergeEntities(StorageService.getInvoices(), data.invoices));
+    if (data.expenses !== undefined) setLocalItem(STORAGE_KEYS.EXPENSES, mergeEntities(StorageService.getExpenses(), data.expenses));
+    if (data.savingsGoals !== undefined) setLocalItem(STORAGE_KEYS.SAVINGS, mergeEntities(StorageService.getSavingsGoals(), data.savingsGoals));
+    if (data.reminders !== undefined) setLocalItem(STORAGE_KEYS.REMINDERS, mergeEntities(StorageService.getReminders(), data.reminders));
+    if (data.documents !== undefined) setLocalItem(STORAGE_KEYS.DOCUMENTS, mergeEntities(StorageService.getDocuments(), data.documents));
+    if (data.notes !== undefined) setLocalItem(STORAGE_KEYS.NOTES, mergeEntities(StorageService.getNotes(), data.notes));
+    if (data.tasks !== undefined) setLocalItem(STORAGE_KEYS.TASKS, mergeEntities(StorageService.getTasks(), data.tasks));
+    if (data.passwords !== undefined) setLocalItem(STORAGE_KEYS.PASSWORDS, mergeEntities(StorageService.getPasswords(), data.passwords));
     if (data.settings !== undefined) {
       const existingSettings = StorageService.getSettings();
       const existingProfile = StorageService.getProfile();
@@ -1430,10 +1450,24 @@ export const StorageService = {
   },
 
   // Group Notifications
+  getDismissedNotificationIds: (): Set<string> => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const raw = localStorage.getItem(getScopedKey('skp_dismissed_notifs'));
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch {
+      return new Set();
+    }
+  },
   getGroupNotifications: (): KhataGroupNotification[] => {
-    return getLocalItem<KhataGroupNotification[]>(STORAGE_KEYS.GROUP_NOTIFICATIONS, []);
+    const list = getLocalItem<KhataGroupNotification[]>(STORAGE_KEYS.GROUP_NOTIFICATIONS, []);
+    const dismissed = StorageService.getDismissedNotificationIds();
+    return list.filter(n => n && n.id && !dismissed.has(n.id));
   },
   addGroupNotification: (notif: KhataGroupNotification): void => {
+    if (!notif || !notif.id) return;
+    const dismissed = StorageService.getDismissedNotificationIds();
+    if (dismissed.has(notif.id)) return;
     const list = StorageService.getGroupNotifications();
     const updated = [notif, ...list.filter(n => n.id !== notif.id)].slice(0, 100);
     setLocalItem(STORAGE_KEYS.GROUP_NOTIFICATIONS, updated);
@@ -1443,6 +1477,13 @@ export const StorageService = {
     }
   },
   dismissGroupNotification: (notifId: string): void => {
+    const dismissed = StorageService.getDismissedNotificationIds();
+    dismissed.add(notifId);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(getScopedKey('skp_dismissed_notifs'), JSON.stringify(Array.from(dismissed)));
+      } catch {}
+    }
     const list = StorageService.getGroupNotifications().filter(n => n.id !== notifId);
     setLocalItem(STORAGE_KEYS.GROUP_NOTIFICATIONS, list);
     if (typeof window !== 'undefined') {
@@ -1450,6 +1491,14 @@ export const StorageService = {
     }
   },
   clearAllGroupNotifications: (): void => {
+    const all = getLocalItem<KhataGroupNotification[]>(STORAGE_KEYS.GROUP_NOTIFICATIONS, []);
+    const dismissed = StorageService.getDismissedNotificationIds();
+    all.forEach(n => { if (n && n.id) dismissed.add(n.id); });
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(getScopedKey('skp_dismissed_notifs'), JSON.stringify(Array.from(dismissed)));
+      } catch {}
+    }
     setLocalItem(STORAGE_KEYS.GROUP_NOTIFICATIONS, []);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('khatapro_group_notifications_updated', { detail: [] }));

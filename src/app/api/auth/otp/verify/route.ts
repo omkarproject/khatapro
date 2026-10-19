@@ -76,7 +76,13 @@ export async function POST(req: NextRequest) {
       const name = (bodyName || meta.name || 'Business Owner').trim();
       const businessName = (bodyBusinessName || meta.businessName || `${name}'s Business`).trim();
       const phone = (bodyPhone || meta.phone || '').trim();
-      const password = bodyPassword || meta.password || 'Pass@12345';
+      const password = (bodyPassword || meta.password || '').trim();
+      if (!password) {
+        return NextResponse.json({
+          success: false,
+          message: 'Password is required to complete account registration.',
+        }, { status: 400 });
+      }
 
       // STRICT ROLE RULE: Only system owner (anantyadav8924@gmail.com) gets super_admin.
       // Every other new account is ALWAYS created as 'user' (Merchant).

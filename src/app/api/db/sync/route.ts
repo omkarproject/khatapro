@@ -1251,17 +1251,23 @@ export async function POST(req: NextRequest) {
           .eq('user_id', userId);
 
         if (!fetchErr && existing && existing.length > 0) {
-          const toDelete = existing
-            .map(e => String(e.id))
-            .filter(id => !activeIds.has(id));
+          // Safeguard: Never delete existing cloud records if incoming rows array is empty!
+          // An empty array in sync payload occurs on fresh device/browser or before initial load.
+          if (rows.length === 0) {
+            console.warn(`[syncRowsWithDeletions] Preserving ${existing.length} records in table ${table} for user ${userId} (incoming rows was empty)`);
+          } else {
+            const toDelete = existing
+              .map(e => String(e.id))
+              .filter(id => !activeIds.has(id));
 
-          if (toDelete.length > 0) {
-            console.log(`[syncRowsWithDeletions] Deleting ${toDelete.length} records from ${table} for user ${userId}:`, toDelete);
-            for (let i = 0; i < toDelete.length; i += 50) {
-              const chunk = toDelete.slice(i, i + 50);
-              const { error: delErr } = await supabase.from(table).delete().eq('user_id', userId).in('id', chunk);
-              if (delErr) {
-                console.error(`Error deleting from ${table}:`, delErr.message);
+            if (toDelete.length > 0) {
+              console.log(`[syncRowsWithDeletions] Deleting ${toDelete.length} records from ${table} for user ${userId}:`, toDelete);
+              for (let i = 0; i < toDelete.length; i += 50) {
+                const chunk = toDelete.slice(i, i + 50);
+                const { error: delErr } = await supabase.from(table).delete().eq('user_id', userId).in('id', chunk);
+                if (delErr) {
+                  console.error(`Error deleting from ${table}:`, delErr.message);
+                }
               }
             }
           }
