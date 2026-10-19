@@ -1166,6 +1166,18 @@ async function syncPeerMerchants(
           ? t.tags.filter((tag: string) => !tag.startsWith('__del_') && tag !== '__is_deleted:true')
           : [];
         if (!peerTags.includes('__p2p_peer')) peerTags.push('__p2p_peer');
+
+        // Preserve and sync editHistory on mirrored peer transactions
+        if (Array.isArray(t.editHistory) && t.editHistory.length > 0) {
+          peerTags = peerTags.filter((tag: string) => !tag.startsWith('__grp_edits:'));
+          peerTags.push(`__grp_edits:${JSON.stringify(t.editHistory)}`);
+        } else {
+          const origEditTag = (t.tags || []).find((tag: string) => typeof tag === 'string' && tag.startsWith('__grp_edits:'));
+          if (origEditTag && !peerTags.some((tag: string) => tag.startsWith('__grp_edits:'))) {
+            peerTags.push(origEditTag);
+          }
+        }
+
         if (isTxnDeleted) {
           peerTags.push('__is_deleted:true');
           if (t.deletedAt) peerTags.push(`__del_at:${t.deletedAt}`);

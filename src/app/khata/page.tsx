@@ -682,6 +682,81 @@ function KhataPageInner() {
     });
   }, [customers, searchTerm, filterType]);
 
+  // Group balances mapped by groupId for current user
+  const groupBalances = useMemo(() => {
+    const currentUserId = currentUser?.id || 'admin_user';
+    const currentUserPhone = normalizePhone(currentUser?.phone || profile?.phone || '');
+    const currentUserEmail = (currentUser?.email || profile?.email || '').toLowerCase().trim();
+
+    const res: { [groupId: string]: number } = {};
+
+    groups.forEach(grp => {
+      const gTxns = transactions.filter(t => t.groupId === grp.id && !t.isDeleted && t.status !== 'deleted');
+      if (gTxns.length === 0) {
+        res[grp.id] = 0;
+        return;
+      }
+
+      // Identify all member IDs representing the current user in this group
+      const userMemberIds = new Set<string>();
+      if (currentUserId) userMemberIds.add(currentUserId);
+
+      (grp.members || []).forEach(m => {
+        const mPhone = normalizePhone(m.phone);
+        const mEmail = (m.email || '').toLowerCase().trim();
+        const isMatch = (currentUserId && (m.customerId === currentUserId || m.merchantUserId === currentUserId)) ||
+          (currentUserPhone && mPhone && mPhone === currentUserPhone) ||
+          (currentUserEmail && mEmail && mEmail === currentUserEmail);
+        if (isMatch) {
+          if (m.customerId) userMemberIds.add(m.customerId);
+          if (m.merchantUserId) userMemberIds.add(m.merchantUserId);
+        }
+      });
+
+      let userGiven = 0;
+      let userReceived = 0;
+      let hasUserSpecificTxn = false;
+
+      gTxns.forEach(t => {
+        const isGot = t.type === 'debit' || t.type === 'collection';
+        if (t.splitMembers && t.splitMembers.length > 0) {
+          const mySplit = t.splitMembers.find(sm => userMemberIds.has(sm.customerId));
+          if (mySplit) {
+            hasUserSpecificTxn = true;
+            if (isGot) {
+              userReceived += mySplit.share;
+            } else {
+              userGiven += mySplit.share;
+            }
+          }
+        } else if (t.customerId && userMemberIds.has(t.customerId)) {
+          hasUserSpecificTxn = true;
+          if (isGot) {
+            userReceived += t.amount;
+          } else {
+            userGiven += t.amount;
+          }
+        }
+      });
+
+      if (hasUserSpecificTxn) {
+        res[grp.id] = Math.round((userGiven - userReceived) * 100) / 100;
+      } else {
+        // Fallback for creator / general ledger if user has no specific split share: overall group net
+        let totalGiven = 0;
+        let totalReceived = 0;
+        gTxns.forEach(t => {
+          const isGot = t.type === 'debit' || t.type === 'collection';
+          if (isGot) totalReceived += t.amount;
+          else totalGiven += t.amount;
+        });
+        res[grp.id] = Math.round((totalGiven - totalReceived) * 100) / 100;
+      }
+    });
+
+    return res;
+  }, [groups, transactions, currentUser, profile]);
+
   // Filtered groups list for Group tab
   const filteredGroups = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -708,6 +783,18 @@ function KhataPageInner() {
       const grpItems = filteredGroups.map((g) => ({ kind: 'group' as const, data: g }));
       const custItems = filteredCustomers.map((c) => ({ kind: 'customer' as const, data: c }));
       list = [...grpItems, ...custItems];
+    } else if (filterType === 'credit') {
+      const grpItems = filteredGroups
+        .filter(g => (groupBalances[g.id] || 0) > 0)
+        .map((g) => ({ kind: 'group' as const, data: g }));
+      const custItems = filteredCustomers.map((c) => ({ kind: 'customer' as const, data: c }));
+      list = [...grpItems, ...custItems];
+    } else if (filterType === 'debit') {
+      const grpItems = filteredGroups
+        .filter(g => (groupBalances[g.id] || 0) < 0)
+        .map((g) => ({ kind: 'group' as const, data: g }));
+      const custItems = filteredCustomers.map((c) => ({ kind: 'customer' as const, data: c }));
+      list = [...grpItems, ...custItems];
     } else {
       list = filteredCustomers.map((c) => ({ kind: 'customer' as const, data: c }));
     }
@@ -726,7 +813,7 @@ function KhataPageInner() {
       if (bIsPinned) return 1;
       return 0;
     });
-  }, [filterType, filteredGroups, filteredCustomers, pinnedChatIds]);
+  }, [filterType, filteredGroups, filteredCustomers, pinnedChatIds, groupBalances]);
 
   // Group Picture Upload Handler
   const handleGroupPicUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3832,8 +3919,8 @@ function KhataPageInner() {
                     : filterType === 'all'
                     ? `All (${customers.filter(c => !c.isDeleted && c.status !== 'deleted').length + groups.length})`
                     : filterType === 'credit'
-                    ? `Due (${customers.filter(c => !c.isDeleted && c.status !== 'deleted' && c.outstandingBalance > 0).length})`
-                    : `Advance (${customers.filter(c => !c.isDeleted && c.status !== 'deleted' && c.outstandingBalance < 0).length})`}
+                    ? `Due (${customers.filter(c => !c.isDeleted && c.status !== 'deleted' && c.outstandingBalance > 0).length + groups.filter(g => (groupBalances[g.id] || 0) > 0).length})`
+                    : `Advance (${customers.filter(c => !c.isDeleted && c.status !== 'deleted' && c.outstandingBalance < 0).length + groups.filter(g => (groupBalances[g.id] || 0) < 0).length})`}
                 </h2>
                 {pinnedChatIds.length > 0 && (
                   <span
@@ -4034,46 +4121,60 @@ function KhataPageInner() {
                           </div>
                         </div>
 
-                        <div className="text-right flex flex-col items-end gap-1">
-                          <div className="flex items-center gap-1">
-                            {isPinned && (
-                              <button
-                                type="button"
-                                title="Click to unpin from top"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setPinActionTarget({
-                                    id: grp.id,
-                                    name: grp.name,
-                                    kind: 'group',
-                                    isPinned: true,
-                                  });
-                                }}
-                                className="text-[9px] px-1.5 py-0.5 rounded-full font-black bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 hover:opacity-80 transition-opacity flex items-center gap-0.5"
-                              >
-                                <PinIcon className="w-2 h-2 rotate-45" />
-                                <span>PIN</span>
-                              </button>
-                            )}
-                            {(() => {
-                              const currentUserId = currentUser?.id || 'admin_user';
-                              const currentUserPhone = normalizePhone(currentUser?.phone || profile?.phone || '');
-                              const isGrpPendingForUser = grp.creatorId !== currentUserId &&
-                                !(grp.members || []).some((m: any) => m.customerId === currentUserId || m.merchantUserId === currentUserId || (currentUserPhone && normalizePhone(m.phone) === currentUserPhone)) &&
-                                Boolean((grp.pendingRequests || []).some((r: any) => (r.userId === currentUserId || (currentUserPhone && normalizePhone(r.phone) === currentUserPhone)) && r.status === 'pending'));
+                        {(() => {
+                          const grpBal = groupBalances[grp.id] || 0;
+                          const currentUserId = currentUser?.id || 'admin_user';
+                          const currentUserPhone = normalizePhone(currentUser?.phone || profile?.phone || '');
+                          const isGrpPendingForUser = grp.creatorId !== currentUserId &&
+                            !(grp.members || []).some((m: any) => m.customerId === currentUserId || m.merchantUserId === currentUserId || (currentUserPhone && normalizePhone(m.phone) === currentUserPhone)) &&
+                            Boolean((grp.pendingRequests || []).some((r: any) => (r.userId === currentUserId || (currentUserPhone && normalizePhone(r.phone) === currentUserPhone)) && r.status === 'pending'));
 
-                              return isGrpPendingForUser ? (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
-                                  Pending
+                          return (
+                            <div className="text-right flex flex-col items-end gap-0.5">
+                              <div className="flex items-center gap-1">
+                                {isPinned && (
+                                  <button
+                                    type="button"
+                                    title="Click to unpin from top"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setPinActionTarget({
+                                        id: grp.id,
+                                        name: grp.name,
+                                        kind: 'group',
+                                        isPinned: true,
+                                      });
+                                    }}
+                                    className="text-[9px] px-1.5 py-0.5 rounded-full font-black bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 hover:opacity-80 transition-opacity flex items-center gap-0.5"
+                                  >
+                                    <PinIcon className="w-2 h-2 rotate-45" />
+                                    <span>PIN</span>
+                                  </button>
+                                )}
+                                <div className={`text-xs font-bold font-mono ${
+                                  grpBal > 0 ? 'text-rose-600' :
+                                  grpBal < 0 ? 'text-emerald-600' : 'text-slate-400'
+                                }`}>
+                                  {formatINR(Math.abs(grpBal))}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">
+                                  {grpBal > 0 ? 'Due' : grpBal < 0 ? 'Advance' : 'Settled'}
                                 </span>
-                              ) : (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
-                                  Group
-                                </span>
-                              );
-                            })()}
-                          </div>
-                        </div>
+                                {isGrpPendingForUser ? (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                                    Pending
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                                    Group
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   );
@@ -4590,6 +4691,17 @@ function KhataPageInner() {
                               title={isPendingInActiveGroup ? 'Join Request Pending' : 'Click to manage members'}
                             >
                               <span>{isPendingInActiveGroup ? 'Join Request Pending' : `${activeGroup.members.length} members`}</span>
+                              {!isPendingInActiveGroup && (() => {
+                                const bal = groupBalances[activeGroup.id] || 0;
+                                return (
+                                  <>
+                                    <span>•</span>
+                                    <span className={`font-mono font-bold ${bal > 0 ? 'text-rose-600 dark:text-rose-400' : bal < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+                                      {formatINR(Math.abs(bal))} {bal > 0 ? 'Due' : bal < 0 ? 'Advance' : 'Settled'}
+                                    </span>
+                                  </>
+                                );
+                              })()}
                             </div>
                           </div>
                         </>
@@ -5372,12 +5484,17 @@ function KhataPageInner() {
                         </div>
                         <div className="text-[10px] font-bold">
                           {activeGroup ? (
-                            <span className="text-slate-500 dark:text-slate-400">
-                              {activeGroup.members.length} members
-                            </span>
+                            (() => {
+                              const bal = groupBalances[activeGroup.id] || 0;
+                              return (
+                                <span className={bal > 0 ? 'text-rose-500' : bal < 0 ? 'text-emerald-500' : 'text-slate-500 dark:text-slate-400'}>
+                                  ₹{Math.abs(bal).toLocaleString('en-IN')} {bal > 0 ? 'Due' : bal < 0 ? 'Advance' : 'Settled'} • {activeGroup.members.length} members
+                                </span>
+                              );
+                            })()
                           ) : (
-                            <span className="text-rose-500">
-                              ₹{Math.abs(activeCustomer?.outstandingBalance || 0).toLocaleString('en-IN')} Due
+                            <span className={activeCustomer?.outstandingBalance && activeCustomer.outstandingBalance < 0 ? 'text-emerald-500' : 'text-rose-500'}>
+                              ₹{Math.abs(activeCustomer?.outstandingBalance || 0).toLocaleString('en-IN')} {activeCustomer?.outstandingBalance && activeCustomer.outstandingBalance < 0 ? 'Advance' : 'Due'}
                             </span>
                           )}
                         </div>
