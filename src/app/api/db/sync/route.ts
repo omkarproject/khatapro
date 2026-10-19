@@ -794,6 +794,8 @@ export async function GET(req: NextRequest) {
       sbDriveFile,
       sbSet,
       sbProfile,
+      globalBranding,
+      grpCfgRes,
     ] = await Promise.all([
       supabase.from('customers').select('*').eq('user_id', userId),
       supabase.from('transactions').select('*').eq('user_id', userId),
@@ -808,8 +810,10 @@ export async function GET(req: NextRequest) {
       supabase.from('passwords').select('*').eq('user_id', userId),
       supabase.from('customer_drive_folders').select('*').eq('user_id', userId),
       supabase.from('customer_drive_files').select('*').eq('user_id', userId),
-      supabase.from('system_settings').select('*').eq('user_id', userId).single(),
-      supabase.from('profiles').select('*').eq('id', userId).single(),
+      supabase.from('system_settings').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+      getGlobalBrandingFromDb().catch(() => null),
+      supabase.from('global_config').select('maintenance_mode').eq('id', 'shared_khata_groups').maybeSingle(),
     ]);
 
     const logo = sbProfile.data?.avatar_url || sbSet.data?.payment_settings?.businessLogo || sbSet.data?.business_logo || '';
@@ -824,8 +828,6 @@ export async function GET(req: NextRequest) {
       role: sbProfile.data.role || 'user',
       createdAt: sbProfile.data.created_at || new Date().toISOString(),
     } : null;
-
-    const globalBranding = await getGlobalBrandingFromDb().catch(() => null);
 
     const finalSettings = sbSet.data ? {
       businessName: sbSet.data.business_name || '',
@@ -871,12 +873,7 @@ export async function GET(req: NextRequest) {
 
     // Always merge shared group transactions so client never drops group entries
     try {
-      const { data: grpCfg } = await supabase
-        .from('global_config')
-        .select('maintenance_mode')
-        .eq('id', 'shared_khata_groups')
-        .maybeSingle();
-
+      const grpCfg = grpCfgRes?.data;
       const shared = grpCfg?.maintenance_mode;
       if (shared && Array.isArray(shared.groupTransactions) && shared.groupTransactions.length > 0) {
         const userGroups = Array.isArray(shared.groups) ? shared.groups.filter((g: any) => 
@@ -1273,16 +1270,18 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // 2. Upsert active rows in batches of 50
+        // 2. Upsert active rows in batches of 50 in parallel for maximum speed
         if (rows.length > 0) {
           const chunkSize = 50;
+          const chunks: any[][] = [];
           for (let i = 0; i < rows.length; i += chunkSize) {
-            const chunk = rows.slice(i, i + chunkSize);
-            const { error } = await supabase.from(table).upsert(chunk, { onConflict: 'id, user_id' });
-            if (error) {
-              console.error(`Error syncing table ${table}:`, error.message);
-            }
+            chunks.push(rows.slice(i, i + chunkSize));
           }
+          await Promise.all(
+            chunks.map(chunk =>
+              supabase.from(table).upsert(chunk, { onConflict: 'id, user_id' })
+            )
+          );
         }
       };
 

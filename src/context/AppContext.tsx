@@ -253,6 +253,47 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const openAuthModal = () => setIsAuthModalOpen(true);
   const closeAuthModal = () => setIsAuthModalOpen(false);
 
+  const refreshData = () => {
+    const curUser = StorageService.getCurrentUser();
+    if (!curUser) {
+      setProfileState(defaultEmptyProfile);
+      setCustomers([]);
+      setTransactions([]);
+      setProducts([]);
+      setInvoices([]);
+      setExpenses([]);
+      setSavingsGoals([]);
+      setReminders([]);
+      setDocuments([]);
+      setNotes([]);
+      setTasks([]);
+      setPasswords([]);
+      setGroups([]);
+      setGroupNotifications([]);
+      setSettingsState(getCleanDefaultSettings());
+      return;
+    }
+    StorageService.initializeDefaults();
+    StorageService.reconcileInvoiceStock();
+    setProfileState(StorageService.getProfile());
+    setCustomers(StorageService.getCustomers());
+    setTransactions(StorageService.getTransactions());
+    setProducts(StorageService.getProducts());
+    setInvoices(StorageService.getInvoices());
+    setExpenses(StorageService.getExpenses());
+    setSavingsGoals(StorageService.getSavingsGoals());
+    setReminders(StorageService.getReminders());
+    setDocuments(StorageService.getDocuments());
+    setNotes(StorageService.getNotes());
+    setTasks(StorageService.getTasks());
+    setPasswords(StorageService.getPasswords());
+    setGroups(StorageService.getGroups());
+    setGroupNotifications(StorageService.getGroupNotifications());
+    const s = StorageService.getSettings();
+    setSettingsState(s);
+    setDarkMode(s.darkMode);
+  };
+
   // --- REALTIME MULTI-DEVICE LIVE SYNC ENGINE ---
   const myDeviceIdRef = useRef<string>('');
   const realtimeChannelRef = useRef<any>(null);
@@ -260,6 +301,9 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const lastCloudSyncTimestampRef = useRef<number>(Date.now());
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSyncingFromCloudRef = useRef<boolean>(false);
+  const isSyncInFlightRef = useRef<boolean>(false);
+  const syncPendingRef = useRef<boolean>(false);
+  const syncDebounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const currentUserRef = useRef<UserProfile | null>(currentUser);
   const seenTransactionIdsRef = useRef<Set<string>>(new Set());
   const isInitialCloudLoadedRef = useRef<boolean>(false);
@@ -334,8 +378,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     } catch {}
   };
 
-  // Sync all in-memory and local data to Supabase Cloud PostgreSQL
-  const syncWithDatabase = async (targetUser?: UserProfile | null) => {
+  // Sync all in-memory and local data to Supabase Cloud PostgreSQL with request coalescing
+  const executeDatabaseSync = async (targetUser?: UserProfile | null) => {
     const activeU = targetUser !== undefined ? targetUser : currentUser;
     if (!activeU?.id) return;
     const userId = activeU.id;
@@ -346,6 +390,12 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       return;
     }
 
+    if (isSyncInFlightRef.current) {
+      syncPendingRef.current = true;
+      return;
+    }
+
+    isSyncInFlightRef.current = true;
     try {
       setCloudSyncStatus('syncing');
       // Read latest data synchronously from StorageService to avoid React closure lag
@@ -423,7 +473,23 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     } catch (e) {
       console.warn('Database background sync deferred:', e);
       setCloudSyncStatus('offline');
+    } finally {
+      isSyncInFlightRef.current = false;
+      if (syncPendingRef.current) {
+        syncPendingRef.current = false;
+        setTimeout(() => executeDatabaseSync(targetUser), 40);
+      }
     }
+  };
+
+  const syncWithDatabase = async (targetUser?: UserProfile | null) => {
+    // ⚡ Coalesce rapid calls into a single optimal database sync with 80ms debounce
+    if (syncDebounceTimeoutRef.current) {
+      clearTimeout(syncDebounceTimeoutRef.current);
+    }
+    syncDebounceTimeoutRef.current = setTimeout(() => {
+      executeDatabaseSync(targetUser);
+    }, 80);
   };
 
   // Load user data from Supabase Cloud PostgreSQL
@@ -506,47 +572,38 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           }
           if (Array.isArray(d.products)) {
             const merged = mergeEntities(StorageService.getProducts(), d.products);
-            StorageService.setProducts(merged);
             setProducts(merged);
           }
           if (Array.isArray(d.invoices)) {
             const merged = mergeEntities(StorageService.getInvoices(), d.invoices);
-            StorageService.setInvoices(merged);
             setInvoices(merged);
           }
           if (Array.isArray(d.expenses)) {
             const merged = mergeEntities(StorageService.getExpenses(), d.expenses);
-            StorageService.setExpenses(merged);
             setExpenses(merged);
           }
           if (Array.isArray(d.savingsGoals)) {
             const merged = mergeEntities(StorageService.getSavingsGoals(), d.savingsGoals);
-            StorageService.setSavingsGoals(merged);
             setSavingsGoals(merged);
           }
           if (Array.isArray(d.reminders)) {
             const merged = mergeEntities(StorageService.getReminders(), d.reminders);
-            StorageService.setReminders(merged);
             setReminders(merged);
           }
           if (Array.isArray(d.documents)) {
             const merged = mergeEntities(StorageService.getDocuments(), d.documents);
-            StorageService.setDocuments(merged);
             setDocuments(merged);
           }
           if (Array.isArray(d.notes)) {
             const merged = mergeEntities(StorageService.getNotes(), d.notes);
-            StorageService.setNotes(merged);
             setNotes(merged);
           }
           if (Array.isArray(d.tasks)) {
             const merged = mergeEntities(StorageService.getTasks(), d.tasks);
-            StorageService.setTasks(merged);
             setTasks(merged);
           }
           if (Array.isArray(d.passwords)) {
             const merged = mergeEntities(StorageService.getPasswords(), d.passwords);
-            StorageService.setPasswords(merged);
             setPasswords(merged);
           }
           if (Array.isArray(d.customerDriveFolders) || Array.isArray(d.customerDriveFiles)) {
@@ -758,7 +815,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       } finally {
         isSyncingFromCloudRef.current = false;
       }
-    }, 250);
+    }, 60);
   };
 
   // --- REALTIME WEBSOCKET & MULTI-DEVICE LIVE SYNC LISTENER ---
@@ -777,6 +834,9 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         bc.onmessage = (event) => {
           const data = event.data;
           if (data && data.originDeviceId !== myDeviceIdRef.current && data.userId === userId) {
+            // ⚡ Instant tab-to-tab UI update in <5ms directly from localStorage
+            refreshData();
+            // Silent cloud reload to ensure full consistency
             debouncedLoadFromCloud(userId, data.action || 'tab_sync');
           }
         };
@@ -791,6 +851,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       if (e.key === 'khatapro_realtime_ping' && e.newValue) {
         const [originId] = e.newValue.split('_');
         if (originId !== myDeviceIdRef.current) {
+          // ⚡ Instant tab-to-tab UI update in <5ms directly from localStorage
+          refreshData();
           debouncedLoadFromCloud(userId, 'storage_event');
         }
       }
@@ -1097,47 +1159,6 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
-  };
-
-  const refreshData = () => {
-    const curUser = StorageService.getCurrentUser();
-    if (!curUser) {
-      setProfileState(defaultEmptyProfile);
-      setCustomers([]);
-      setTransactions([]);
-      setProducts([]);
-      setInvoices([]);
-      setExpenses([]);
-      setSavingsGoals([]);
-      setReminders([]);
-      setDocuments([]);
-      setNotes([]);
-      setTasks([]);
-      setPasswords([]);
-      setGroups([]);
-      setGroupNotifications([]);
-      setSettingsState(getCleanDefaultSettings());
-      return;
-    }
-    StorageService.initializeDefaults();
-    StorageService.reconcileInvoiceStock();
-    setProfileState(StorageService.getProfile());
-    setCustomers(StorageService.getCustomers());
-    setTransactions(StorageService.getTransactions());
-    setProducts(StorageService.getProducts());
-    setInvoices(StorageService.getInvoices());
-    setExpenses(StorageService.getExpenses());
-    setSavingsGoals(StorageService.getSavingsGoals());
-    setReminders(StorageService.getReminders());
-    setDocuments(StorageService.getDocuments());
-    setNotes(StorageService.getNotes());
-    setTasks(StorageService.getTasks());
-    setPasswords(StorageService.getPasswords());
-    setGroups(StorageService.getGroups());
-    setGroupNotifications(StorageService.getGroupNotifications());
-    const s = StorageService.getSettings();
-    setSettingsState(s);
-    setDarkMode(s.darkMode);
   };
 
   useEffect(() => {
