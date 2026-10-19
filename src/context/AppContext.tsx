@@ -378,6 +378,29 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     } catch {}
   };
 
+  // Broadcast realtime updates to all members of a specific Khata group
+  const broadcastToGroupMembers = (groupId: string, action: string) => {
+    try {
+      const allGroups = StorageService.getGroups();
+      const targetGroup = allGroups.find(g => g.id === groupId);
+      if (targetGroup) {
+        const memberIds = new Set<string>();
+        if (targetGroup.creatorId && targetGroup.creatorId !== currentUser?.id) {
+          memberIds.add(targetGroup.creatorId);
+        }
+        if (Array.isArray(targetGroup.members)) {
+          targetGroup.members.forEach(m => {
+            const mId = m.merchantUserId || (m.customerId !== currentUser?.id ? m.customerId : null);
+            if (mId && mId !== currentUser?.id) memberIds.add(mId);
+          });
+        }
+        memberIds.forEach(targetId => {
+          broadcastRealtimeChange(targetId, action);
+        });
+      }
+    } catch {}
+  };
+
   // Sync all in-memory and local data to Supabase Cloud PostgreSQL with request coalescing
   const executeDatabaseSync = async (targetUser?: UserProfile | null) => {
     const activeU = targetUser !== undefined ? targetUser : currentUser;
@@ -748,9 +771,20 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
                       .forEach((n: any) => StorageService.addGroupNotification(n));
                     setGroupNotifications(StorageService.getGroupNotifications());
                   }
-                  if (Array.isArray(gData.transactions) && gData.transactions.length > 0) {
+                  if (Array.isArray(gData.transactions) && Array.isArray(gData.groups)) {
                     const currentTxns = StorageService.getTransactions();
-                    const txnMap = new Map(currentTxns.map((t: any) => [t.id, t]));
+                    const cloudGrpIds = new Set(gData.groups.map((g: any) => g.id));
+                    const cloudTxnIds = new Set(gData.transactions.map((t: any) => t.id));
+                    const txnMap = new Map<string, any>();
+                    // Keep non-group transactions or transactions belonging to other groups
+                    currentTxns.forEach((t: any) => {
+                      if (!t.groupId || !cloudGrpIds.has(t.groupId)) {
+                        txnMap.set(t.id, t);
+                      } else if (cloudTxnIds.has(t.id)) {
+                        txnMap.set(t.id, t);
+                      }
+                    });
+                    // Merge authoritative group transactions from cloud
                     gData.transactions.forEach((gt: any) => {
                       txnMap.set(gt.id, gt);
                     });
@@ -1647,6 +1681,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     syncWithDatabase();
 
     if (txn.groupId) {
+      broadcastToGroupMembers(txn.groupId, 'group_transaction_added');
       fetch('/api/groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1676,6 +1711,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setCustomers(StorageService.getCustomers()); // balance updated
 
     if (txn.groupId) {
+      broadcastToGroupMembers(txn.groupId, 'group_transaction_updated');
       fetch('/api/groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1697,6 +1733,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     const actorName = currentUser?.businessName || currentUser?.name || profile?.name || 'User';
 
     if (existing.groupId) {
+      broadcastToGroupMembers(existing.groupId, 'group_transaction_deleted');
       fetch('/api/groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1725,6 +1762,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     if (!existing) return;
 
     if (existing.groupId) {
+      broadcastToGroupMembers(existing.groupId, 'group_transaction_restored');
       fetch('/api/groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1768,6 +1806,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     }
 
     if (existing?.groupId) {
+      broadcastToGroupMembers(existing.groupId, 'group_transaction_removed');
       fetch('/api/groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2068,6 +2107,9 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     StorageService.saveGroup(group);
     setGroups(StorageService.getGroups());
     syncWithDatabase();
+    if (group.id) {
+      broadcastToGroupMembers(group.id, 'group_details_updated');
+    }
     if (currentUser?.id) {
       fetch('/api/groups', {
         method: 'POST',
@@ -2082,6 +2124,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   };
 
   const deleteGroup = (id: string) => {
+    broadcastToGroupMembers(id, 'group_deleted');
     StorageService.deleteGroup(id);
     setGroups(StorageService.getGroups());
     syncWithDatabase();
@@ -2101,6 +2144,9 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       setGroupNotifications(StorageService.getGroupNotifications());
     }
     syncWithDatabase();
+    if (notif.groupId) {
+      broadcastToGroupMembers(notif.groupId, 'group_notification_added');
+    }
     if (currentUserId) {
       fetch('/api/groups', {
         method: 'POST',

@@ -455,6 +455,96 @@ export async function POST(req: NextRequest) {
     }
 
     // =========================================================================
+    // ACTION: LEAVE GROUP (Member voluntarily leaves the group)
+    // =========================================================================
+    if (action === 'leave') {
+      const targetId = groupId || body.group?.id;
+      const leavingUserId = user?.id || body.userId;
+      if (!targetId || !leavingUserId) {
+        return NextResponse.json({ success: false, message: 'Group ID and User ID required to leave group.' }, { status: 400 });
+      }
+
+      const targetGroup = groups.find(g => g.id === targetId);
+      if (!targetGroup) {
+        return NextResponse.json({ success: false, message: 'Group not found.' }, { status: 404 });
+      }
+
+      if (targetGroup.creatorId === leavingUserId) {
+        return NextResponse.json({ success: false, message: 'Group creator cannot leave. Use delete group instead.' }, { status: 400 });
+      }
+
+      const leavingMember = (targetGroup.members || []).find(m => m.customerId === leavingUserId || m.merchantUserId === leavingUserId);
+      const updatedMembers = (targetGroup.members || []).filter(
+        m => m.customerId !== leavingUserId && m.merchantUserId !== leavingUserId
+      );
+
+      const updatedGroup: KhataGroup = {
+        ...targetGroup,
+        members: updatedMembers,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedGroups = groups.map(g => g.id === targetGroup.id ? updatedGroup : g);
+
+      // Group notification
+      const memberName = leavingMember?.name || user?.name || 'A member';
+      const recipientIds: string[] = Array.from(new Set([
+        targetGroup.creatorId,
+        ...updatedMembers.map(m => m.customerId),
+        ...updatedMembers.map(m => m.merchantUserId).filter((id): id is string => Boolean(id))
+      ])).filter((id): id is string => Boolean(id));
+
+      const newNotification: KhataGroupNotification = {
+        id: `notif_${Date.now()}`,
+        groupId: targetGroup.id,
+        groupName: targetGroup.name,
+        groupUsername: targetGroup.username,
+        type: 'member_left',
+        title: 'Member Left Group',
+        message: `${memberName} has left "${targetGroup.name}". Remaining members: ${updatedMembers.length}.`,
+        actorName: memberName,
+        actorUserId: leavingUserId,
+        createdAt: new Date().toISOString(),
+        read: false,
+        memberIds: recipientIds,
+      };
+
+      const updatedNotifs = [newNotification, ...groupNotifications];
+
+      await supabase.from('global_config').upsert({
+        id: 'shared_khata_groups',
+        maintenance_mode: {
+          groups: updatedGroups,
+          groupNotifications: updatedNotifs.slice(-200),
+          groupTransactions,
+        },
+        updated_at: new Date().toISOString(),
+      });
+
+      // Remove from leaving user's system_settings
+      try {
+        const { data: userSetRow } = await supabase.from('system_settings').select('payment_settings').eq('user_id', leavingUserId).maybeSingle();
+        const pSet = userSetRow?.payment_settings || {};
+        const currentList: KhataGroup[] = pSet.khataGroups || [];
+        const filteredList = currentList.filter(g => g.id !== targetGroup.id);
+        await supabase.from('system_settings').upsert({
+          user_id: leavingUserId,
+          payment_settings: {
+            ...pSet,
+            khataGroups: filteredList,
+          },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+      } catch {}
+
+      return NextResponse.json({
+        success: true,
+        message: `You have successfully left "${targetGroup.name}".`,
+        group: updatedGroup,
+      });
+    }
+
+    // =========================================================================
     // DEFAULT ACTION: SEND JOIN REQUEST (Applicant clicks "Join Group Now")
     // =========================================================================
     if (!username || !username.trim()) {

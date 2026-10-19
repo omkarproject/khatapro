@@ -198,7 +198,7 @@ export interface KhataGroupNotification {
   groupId: string;
   groupName: string;
   groupUsername?: string;
-  type: 'member_joined' | 'record_edited' | 'amount_divided' | 'join_request' | 'request_approved' | 'request_rejected';
+  type: 'member_joined' | 'member_left' | 'record_edited' | 'amount_divided' | 'join_request' | 'request_approved' | 'request_rejected';
   title: string;
   message: string;
   actorName?: string;

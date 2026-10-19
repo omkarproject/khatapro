@@ -893,8 +893,15 @@ export async function GET(req: NextRequest) {
       const grpCfg = grpCfgRes?.data;
       const shared = grpCfg?.maintenance_mode;
       if (shared && Array.isArray(shared.groupTransactions) && shared.groupTransactions.length > 0) {
+        const uPhone = normalizePhone(finalUser?.phone);
+        const uEmail = (finalUser?.email || '').toLowerCase().trim();
         const userGroups = Array.isArray(shared.groups) ? shared.groups.filter((g: any) => 
-          g.creatorId === userId || (Array.isArray(g.members) && g.members.some((m: any) => m.customerId === userId || m.merchantUserId === userId))
+          g.creatorId === userId || (Array.isArray(g.members) && g.members.some((m: any) => {
+            if (m.customerId === userId || m.merchantUserId === userId) return true;
+            if (uPhone && normalizePhone(m.phone) === uPhone) return true;
+            if (uEmail && (m.email || '').toLowerCase().trim() === uEmail) return true;
+            return false;
+          }))
         ) : [];
         const userGroupIds = new Set(userGroups.map((g: any) => g.id));
         const matchedGrpTxns = shared.groupTransactions.filter((t: any) => t.groupId && userGroupIds.has(t.groupId));

@@ -62,6 +62,7 @@ import {
   Eye,
   RotateCcw,
   Ban,
+  LogOut,
 } from 'lucide-react';
 
 function normalizePhone(p?: string): string {
@@ -1195,6 +1196,60 @@ function KhataPageInner() {
       };
       saveGroup(updatedGroup);
       addToast('Member Removed', `${targetMember.name} removed from ${activeGroup.name}.`, 'info');
+    }
+  };
+
+  // Handle Delete Group (Creator only)
+  const handleDeleteActiveGroup = () => {
+    if (!activeGroup) return;
+    const currentUserId = currentUser?.id || 'admin_user';
+    const isCreator = activeGroup.creatorId === currentUserId || activeGroup.creatorName === (currentUser?.businessName || settings.businessName);
+    if (!isCreator) {
+      addToast('Unauthorized', 'Only the group creator can delete this group.', 'error');
+      return;
+    }
+    if (confirm(`Are you sure you want to permanently delete the group "${activeGroup.name}"? All group records and transactions will be removed.`)) {
+      const gId = activeGroup.id;
+      deleteGroup(gId);
+      setIsGroupInfoOpen(false);
+      setSelectedGroupId(null);
+      setFilterType('all');
+      addToast('Group Deleted', `Group "${activeGroup.name}" has been deleted.`, 'info');
+    }
+  };
+
+  // Handle Leave Group (Member only)
+  const handleLeaveGroup = async () => {
+    if (!activeGroup) return;
+    const currentUserId = currentUser?.id || 'admin_user';
+    if (activeGroup.creatorId === currentUserId) {
+      addToast('Cannot Leave', 'As the group creator, you cannot leave. You can delete the group instead.', 'warning');
+      return;
+    }
+    if (confirm(`Are you sure you want to leave the group "${activeGroup.name}"?`)) {
+      try {
+        const targetGroupId = activeGroup.id;
+        await fetch('/api/groups/join', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'leave',
+            groupId: targetGroupId,
+            userId: currentUserId,
+            user: {
+              id: currentUserId,
+              name: currentUser?.name || profile.name || 'Member',
+            },
+          }),
+        });
+        deleteGroup(targetGroupId);
+        setIsGroupInfoOpen(false);
+        setSelectedGroupId(null);
+        setFilterType('all');
+        addToast('Left Group', `You have left "${activeGroup.name}".`, 'info');
+      } catch (err: any) {
+        addToast('Error', err.message || 'Failed to leave group.', 'error');
+      }
     }
   };
 
@@ -7805,7 +7860,28 @@ function KhataPageInner() {
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+              <div>
+                {isGroupCreator ? (
+                  <button
+                    type="button"
+                    onClick={handleDeleteActiveGroup}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900 transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Group</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleLeaveGroup}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900 transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Leave Group</span>
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setIsGroupInfoOpen(false)}
