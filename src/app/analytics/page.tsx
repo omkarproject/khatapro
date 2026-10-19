@@ -77,12 +77,12 @@ export default function AnalyticsPage() {
 
   // Filter transactions, expenses, invoices based on timeframe and selectedMonth
   const scopedData = useMemo(() => {
-    let filteredTxns = transactions;
+    let filteredTxns = transactions.filter(t => !t.isDeleted && t.status !== 'deleted');
     let filteredExps = expenses;
     let filteredInvs = invoices;
 
     if (timeframe === 'monthly' && selectedMonth !== 'all') {
-      filteredTxns = transactions.filter(t => t.date?.startsWith(selectedMonth));
+      filteredTxns = filteredTxns.filter(t => t.date?.startsWith(selectedMonth));
       filteredExps = expenses.filter(e => e.date?.startsWith(selectedMonth));
       filteredInvs = invoices.filter(inv => inv.issueDate?.startsWith(selectedMonth));
     }
@@ -158,15 +158,17 @@ export default function AnalyticsPage() {
     const kReceived = transactions
       .filter(
         t =>
-          t.type === 'credit' ||
-          t.type === 'collection' ||
-          (t.type === 'debit' && t.category === 'Payment Received')
+          !t.isDeleted &&
+          t.status !== 'deleted' &&
+          (t.type === 'credit' ||
+            t.type === 'collection' ||
+            (t.type === 'debit' && t.category === 'Payment Received'))
       )
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
     const invPaid = invoices.reduce((sum, inv) => {
       const paid = Number(inv.paidAmount) || (inv.status === 'paid' ? Number(inv.total) : 0);
       const alreadyInTxns = transactions.some(
-        t => t.note?.includes(inv.invoiceNumber) || t.referenceNo === inv.id
+        t => !t.isDeleted && t.status !== 'deleted' && (t.note?.includes(inv.invoiceNumber) || t.referenceNo === inv.id)
       );
       return alreadyInTxns ? sum : sum + paid;
     }, 0);
@@ -186,7 +188,7 @@ export default function AnalyticsPage() {
   const retentionRate = customers.length > 0 ? Math.round((activeCustomers / customers.length) * 100) : 100;
   const repeatCustomersCount = useMemo(() => {
     return customers.filter(c => {
-      const custTxns = transactions.filter(t => t.customerId === c.id);
+      const custTxns = transactions.filter(t => !t.isDeleted && t.status !== 'deleted' && t.customerId === c.id);
       return custTxns.length >= 2;
     }).length;
   }, [customers, transactions]);
@@ -198,7 +200,7 @@ export default function AnalyticsPage() {
         // Trailing months in chronological order
         const monthsList = [...availableMonths].reverse().slice(-6);
         return monthsList.map(m => {
-          const mTxns = transactions.filter(t => t.date?.startsWith(m.key));
+          const mTxns = transactions.filter(t => !t.isDeleted && t.status !== 'deleted' && t.date?.startsWith(m.key));
           const mExps = expenses.filter(e => e.date?.startsWith(m.key));
           const mInvs = invoices.filter(inv => inv.issueDate?.startsWith(m.key));
 

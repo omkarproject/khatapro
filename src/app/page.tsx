@@ -165,9 +165,11 @@ export default function DashboardPage() {
     const khataReceived = transactions
       .filter(
         t =>
-          (t.type === 'debit' && (t.category === 'Payment Received' || t.note?.toLowerCase().includes('payment received'))) ||
-          t.type === 'collection' ||
-          t.type === 'income'
+          !t.isDeleted &&
+          t.status !== 'deleted' &&
+          (((t.type === 'debit' && (t.category === 'Payment Received' || t.note?.toLowerCase().includes('payment received'))) ||
+            t.type === 'collection' ||
+            t.type === 'income'))
       )
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
@@ -177,6 +179,8 @@ export default function DashboardPage() {
       if (paid <= 0) return sum;
       const alreadyInTxns = transactions.some(
         t =>
+          !t.isDeleted &&
+          t.status !== 'deleted' &&
           (t.type === 'collection' || t.type === 'income' || t.category === 'Online Payment Collection') &&
           (t.note?.includes(inv.invoiceNumber) || (t.referenceNo && t.referenceNo === inv.id))
       );
@@ -220,6 +224,8 @@ export default function DashboardPage() {
     const totalUPICollections = transactions
       .filter(
         t =>
+          !t.isDeleted &&
+          t.status !== 'deleted' &&
           ((t.type === 'collection' || (t.type === 'debit' && t.category === 'Payment Received')) &&
             t.paymentMode === 'upi')
       )
@@ -263,6 +269,7 @@ export default function DashboardPage() {
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
     transactions.forEach(t => {
+      if (t.isDeleted || t.status === 'deleted') return;
       try {
         const d = new Date(t.date);
         if (!isNaN(d.getTime())) {

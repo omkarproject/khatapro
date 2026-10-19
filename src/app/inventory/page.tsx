@@ -20,7 +20,8 @@ import {
   Sparkles,
   TrendingUp,
   Tag,
-  Trash2
+  Trash2,
+  Pencil,
 } from 'lucide-react';
 
 export default function InventoryPage() {
@@ -31,6 +32,7 @@ export default function InventoryPage() {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isStockAdjustOpen, setIsStockAdjustOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [stockDelta, setStockDelta] = useState('10');
   const [adjustType, setAdjustType] = useState<'in' | 'out'>('in');
 
@@ -64,6 +66,38 @@ export default function InventoryPage() {
     });
   }, [products, searchTerm, filterStock]);
 
+  const handleOpenAddModal = () => {
+    setEditingProduct(null);
+    setFormName('');
+    setFormSku('');
+    setFormBarcode('');
+    setFormCategory('General');
+    setFormBuyPrice('');
+    setFormSellPrice('');
+    setFormStock('50');
+    setFormMinStock('10');
+    setFormUnit('pcs');
+    setFormSupplier('');
+    setFormLocation('');
+    setIsProductModalOpen(true);
+  };
+
+  const handleOpenEditModal = (p: Product) => {
+    setEditingProduct(p);
+    setFormName(p.name);
+    setFormSku(p.sku);
+    setFormBarcode(p.barcode || '');
+    setFormCategory(p.category || 'General');
+    setFormBuyPrice(p.purchasePrice ? p.purchasePrice.toString() : '');
+    setFormSellPrice(p.sellingPrice ? p.sellingPrice.toString() : '');
+    setFormStock(p.currentStock.toString());
+    setFormMinStock(p.minStock.toString());
+    setFormUnit(p.unit as any);
+    setFormSupplier(p.supplier || '');
+    setFormLocation(p.location || '');
+    setIsProductModalOpen(true);
+  };
+
   const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) {
@@ -71,15 +105,15 @@ export default function InventoryPage() {
       return;
     }
 
-    const newProd: Product = {
-      id: `prod_${Date.now()}`,
+    const prodToSave: Product = {
+      id: editingProduct ? editingProduct.id : `prod_${Date.now()}`,
       name: formName.trim(),
-      sku: formSku.trim() || `SKP-${Math.floor(100 + Math.random() * 900)}`,
-      barcode: formBarcode.trim() || `890${Math.floor(1000000000 + Math.random() * 9000000000)}`,
-      category: formCategory.trim(),
+      sku: formSku.trim() || (editingProduct ? editingProduct.sku : `SKP-${Math.floor(100 + Math.random() * 900)}`),
+      barcode: formBarcode.trim() || (editingProduct ? editingProduct.barcode : `890${Math.floor(1000000000 + Math.random() * 9000000000)}`),
+      category: formCategory.trim() || 'General',
       purchasePrice: parseFloat(formBuyPrice) || 0,
       sellingPrice: parseFloat(formSellPrice) || 0,
-      currentStock: parseInt(formStock) || 0,
+      currentStock: editingProduct ? editingProduct.currentStock : (parseInt(formStock) || 0),
       minStock: parseInt(formMinStock) || 5,
       unit: formUnit as any,
       supplier: formSupplier.trim(),
@@ -87,12 +121,15 @@ export default function InventoryPage() {
       updatedAt: new Date().toISOString(),
     };
 
-    saveProduct(newProd);
+    saveProduct(prodToSave);
     setIsProductModalOpen(false);
+    setEditingProduct(null);
     setFormName('');
     setFormSku('');
+    setFormBarcode('');
     setFormBuyPrice('');
     setFormSellPrice('');
+    addToast(editingProduct ? 'Product Updated' : 'Product Added', `${prodToSave.name} saved successfully.`, 'success');
   };
 
   const handleStockAdjustment = (e: React.FormEvent) => {
@@ -121,8 +158,8 @@ export default function InventoryPage() {
         </div>
 
         <button
-          onClick={() => setIsProductModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all self-start sm:self-auto"
+          onClick={handleOpenAddModal}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all self-start sm:self-auto cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           Add Product
@@ -282,12 +319,19 @@ export default function InventoryPage() {
                           <ArrowUp className="w-3 h-3" /> Out
                         </button>
                         <button
+                          onClick={() => handleOpenEditModal(p)}
+                          className="p-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-slate-400 hover:text-indigo-600 transition-colors ml-1 cursor-pointer"
+                          title="Edit Product"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
                           onClick={() => {
                             if (confirm(`Are you sure you want to delete ${p.name}?`)) {
                               deleteProduct(p.id);
                             }
                           }}
-                          className="p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/60 text-slate-400 hover:text-rose-600 transition-colors ml-1"
+                          className="p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/60 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
                           title="Delete Product"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -302,16 +346,16 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* Modal: Add New Product */}
+      {/* Modal: Add or Edit Product */}
       {isProductModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                 <Boxes className="w-5 h-5 text-indigo-500" />
-                Add New Inventory Item
+                {editingProduct ? 'Edit Inventory Item' : 'Add New Inventory Item'}
               </h3>
-              <button onClick={() => setIsProductModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setIsProductModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -450,9 +494,9 @@ export default function InventoryPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20"
+                  className="px-5 py-2 rounded-xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 cursor-pointer active:scale-95 transition-all"
                 >
-                  Add to Inventory
+                  {editingProduct ? 'Save Changes' : 'Add to Inventory'}
                 </button>
               </div>
             </form>
