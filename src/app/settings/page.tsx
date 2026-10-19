@@ -606,7 +606,7 @@ export default function SettingsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: currentUser?.id || profile?.id || 'usr_001',
+          userId: currentUser?.id || profile?.id || '',
           email: currentUser?.email || profile?.email || '',
           currentPassword: currentPassword ? currentPassword.trim() : undefined,
           newPassword: newPassword.trim(),

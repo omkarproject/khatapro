@@ -337,10 +337,11 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   // Sync all in-memory and local data to Supabase Cloud PostgreSQL
   const syncWithDatabase = async (targetUser?: UserProfile | null) => {
     const activeU = targetUser !== undefined ? targetUser : currentUser;
-    const userId = activeU?.id || 'usr_001';
+    if (!activeU?.id) return;
+    const userId = activeU.id;
 
     // Safeguard: Wait until initial cloud data has completed loading before pushing local state to cloud
-    if (activeU?.id && !isInitialCloudLoadedRef.current) {
+    if (!isInitialCloudLoadedRef.current) {
       console.log('Database background sync deferred until initial cloud data is loaded.');
       return;
     }

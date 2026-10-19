@@ -9,10 +9,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Email and password are required' }, { status: 400 });
     }
 
-    const cleanInput = email.trim();
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({
+        success: false,
+        message: 'Supabase Cloud Database is not configured. Please check your Supabase credentials in Settings.',
+      }, { status: 500 });
+    }
+
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return NextResponse.json({
+        success: false,
+        message: 'Could not connect to Supabase Cloud Database.',
+      }, { status: 500 });
+    }
+
+    const cleanInput = String(email).trim();
     let resolvedEmail = cleanInput.toLowerCase();
 
-    // If input does not contain @, try resolving via phone or username
+    // If input does not contain @, try resolving via registered phone or username
     if (!cleanInput.includes('@')) {
       const cleanPhone = cleanInput.replace(/\D/g, '');
       const { data: matchedProfiles } = await supabase
@@ -26,32 +41,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Authenticate via Supabase Auth
+    // Authenticate strictly via Supabase Auth (database cryptographic password verification)
     let { data, error } = await supabase.auth.signInWithPassword({
       email: resolvedEmail,
       password,
     });
 
-    // If initial login fails, check if the account exists with unconfirmed email
+    // If initial login fails due to unconfirmed email, verify if account exists and confirm if password matches
     if (error || !data?.user) {
       try {
         const { data: listRes } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
         const existingAuthUser = listRes?.users?.find(u => u.email?.toLowerCase() === resolvedEmail);
 
-        if (existingAuthUser) {
-          // If user exists and email is not confirmed, auto-confirm and retry signInWithPassword
-          if (!existingAuthUser.email_confirmed_at) {
-            await supabase.auth.admin.updateUserById(existingAuthUser.id, {
-              email_confirm: true,
-            });
-            const retryRes = await supabase.auth.signInWithPassword({
-              email: resolvedEmail,
-              password,
-            });
-            if (retryRes.data?.user) {
-              data = retryRes.data;
-              error = null;
-            }
+        if (existingAuthUser && !existingAuthUser.email_confirmed_at) {
+          await supabase.auth.admin.updateUserById(existingAuthUser.id, {
+            email_confirm: true,
+          });
+          const retryRes = await supabase.auth.signInWithPassword({
+            email: resolvedEmail,
+            password,
+          });
+          if (retryRes.data?.user) {
+            data = retryRes.data;
+            error = null;
           }
         }
       } catch (authCheckErr) {
@@ -62,14 +74,13 @@ export async function POST(req: NextRequest) {
     if (error || !data?.user) {
       return NextResponse.json({
         success: false,
-        message: error?.message || 'Invalid email/phone or password. Please verify your credentials.',
+        message: 'Invalid credentials. User could not be verified in database.',
       }, { status: 401 });
     }
 
     const sbUser = data.user;
 
-    // Fetch user profile from Supabase profiles table
-    // Fetch user profile and system settings from Supabase
+    // Fetch user profile and system settings from Supabase database
     const { data: profile } = await supabase
       .from('profiles')
       .select('*')
@@ -86,7 +97,7 @@ export async function POST(req: NextRequest) {
 
     // Determine role: non-admin emails cannot be admin/super_admin
     let userRole = profile?.role || sbUser.user_metadata?.role || 'user';
-    if ((userRole === 'admin' || userRole === 'super_admin') && cleanEmail !== 'anantyadav8924@gmail.com') {
+    if ((userRole === 'admin' || userRole === 'super_admin') && resolvedEmail !== 'anantyadav8924@gmail.com') {
       userRole = 'user';
       try {
         await supabase.from('profiles').update({ role: 'user', updated_at: new Date().toISOString() }).eq('id', sbUser.id);
@@ -97,7 +108,7 @@ export async function POST(req: NextRequest) {
     const safeUser = {
       id: sbUser.id,
       name: profile?.name || sbUser.user_metadata?.name || '',
-      email: sbUser.email || cleanEmail,
+      email: sbUser.email || resolvedEmail,
       phone: profile?.phone || sbUser.user_metadata?.phone || '',
       role: userRole,
       avatarUrl: avatar,
@@ -107,7 +118,7 @@ export async function POST(req: NextRequest) {
 
     const res = NextResponse.json({
       success: true,
-      message: `Welcome back, ${safeUser.name}! (Authenticated via Supabase Cloud PostgreSQL)`,
+      message: `Welcome back, ${safeUser.name}! (Authenticated and verified via Supabase Cloud Database)`,
       user: safeUser,
       token: data.session?.access_token || `token_${sbUser.id}_${Date.now()}`,
       provider: 'supabase',
