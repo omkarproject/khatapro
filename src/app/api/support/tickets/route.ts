@@ -53,14 +53,31 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
-    const isAdmin = searchParams.get('isAdmin') === 'true';
+
+    const cookie = req.cookies.get('skp_auth_session')?.value;
+    const header = req.headers.get('x-auth-session') || req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+    const callerId = cookie || header;
+
+    let isRealAdmin = false;
+    const supabase = getSupabaseAdmin();
+    if (callerId && supabase) {
+      const { data: prof } = await supabase.from('profiles').select('email, role').eq('id', callerId).maybeSingle();
+      if (prof?.email === 'anantyadav8924@gmail.com' || prof?.role === 'super_admin' || prof?.role === 'admin') {
+        isRealAdmin = true;
+      }
+    }
+
+    const effectiveUserId = isRealAdmin && userId ? userId : (callerId || userId);
+    if (!isRealAdmin && !effectiveUserId) {
+      return NextResponse.json({ success: false, message: 'Authentication session required' }, { status: 401 });
+    }
 
     const allTickets = await getTicketsFromDb();
 
-    // If merchant, only show their own tickets
-    const filtered = (isAdmin || !userId)
+    // Only genuine admins can view all tickets; merchants only see their own tickets
+    const filtered = (isRealAdmin && !userId)
       ? allTickets
-      : allTickets.filter(t => t.userId === userId);
+      : allTickets.filter(t => t.userId === effectiveUserId);
 
     return NextResponse.json({
       success: true,

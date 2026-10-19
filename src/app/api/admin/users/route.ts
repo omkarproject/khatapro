@@ -1,6 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 
+async function verifyAdminCaller(req: NextRequest, supabase: any): Promise<boolean> {
+  const cookie = req.cookies.get('skp_auth_session')?.value;
+  const header = req.headers.get('x-auth-session') || req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+  const callerId = cookie || header;
+  if (!callerId) return false;
+
+  const { data: profile } = await supabase.from('profiles').select('email, role').eq('id', callerId).maybeSingle();
+  if (!profile) return false;
+
+  return (
+    profile.email === 'anantyadav8924@gmail.com' ||
+    profile.role === 'super_admin' ||
+    profile.role === 'admin'
+  );
+}
+
 // GET /api/admin/users - List all users for CRM
 export async function GET(req: NextRequest) {
   try {
@@ -11,6 +27,11 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabaseAdmin();
     if (!supabase) {
       return NextResponse.json({ success: false, message: 'Could not connect to Supabase' }, { status: 500 });
+    }
+
+    const isAdmin = await verifyAdminCaller(req, supabase);
+    if (!isAdmin) {
+      return NextResponse.json({ success: false, message: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
     const { data: users, error } = await supabase
@@ -45,6 +66,11 @@ export async function PATCH(req: NextRequest) {
     const supabase = getSupabaseAdmin();
     if (!supabase) {
       return NextResponse.json({ success: false, message: 'Could not connect to Supabase' }, { status: 500 });
+    }
+
+    const isAdmin = await verifyAdminCaller(req, supabase);
+    if (!isAdmin) {
+      return NextResponse.json({ success: false, message: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
     // 1. Password change by Admin

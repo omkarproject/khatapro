@@ -749,6 +749,13 @@ function customerDriveFileFromDb(row: any) {
   };
 }
 
+function getCallerUserId(req: NextRequest): string | null {
+  const cookie = req.cookies.get('skp_auth_session')?.value;
+  if (cookie) return cookie;
+  const header = req.headers.get('x-auth-session') || req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+  return header || null;
+}
+
 // GET: Fetch all modules for a specific user from Supabase PostgreSQL (returns camelCase objects)
 export async function GET(req: NextRequest) {
   try {
@@ -776,6 +783,16 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabaseAdmin();
     if (!supabase) {
       return NextResponse.json({ success: false, message: 'Could not connect to Supabase Cloud Database' }, { status: 500 });
+    }
+
+    // Security check: Validate caller session against requested userId to prevent IDOR
+    const callerId = getCallerUserId(req);
+    if (callerId && callerId !== userId) {
+      const { data: callerProfile } = await supabase.from('profiles').select('email, role').eq('id', callerId).maybeSingle();
+      const isSuperAdmin = callerProfile?.email === 'anantyadav8924@gmail.com' || callerProfile?.role === 'super_admin';
+      if (!isSuperAdmin) {
+        return NextResponse.json({ success: false, message: 'Forbidden: You do not have permission to access this user ledger' }, { status: 403 });
+      }
     }
 
     const [
@@ -1232,6 +1249,16 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabaseAdmin();
     if (!supabase) {
       return NextResponse.json({ success: false, message: 'Could not connect to Supabase Cloud Database' }, { status: 500 });
+    }
+
+    // Security check: Validate caller session against target userId
+    const callerId = getCallerUserId(req);
+    if (callerId && callerId !== userId) {
+      const { data: callerProfile } = await supabase.from('profiles').select('email, role').eq('id', callerId).maybeSingle();
+      const isSuperAdmin = callerProfile?.email === 'anantyadav8924@gmail.com' || callerProfile?.role === 'super_admin';
+      if (!isSuperAdmin) {
+        return NextResponse.json({ success: false, message: 'Forbidden: You do not have permission to modify this user ledger' }, { status: 403 });
+      }
     }
 
     let peerSyncResult = { peerLinked: false, matchedPeers: [] as any[] };

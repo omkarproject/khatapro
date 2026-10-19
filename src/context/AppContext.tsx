@@ -447,7 +447,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
       const res = await fetch('/api/db/sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Auth-Session': userId,
+        },
         body: JSON.stringify(payload),
       });
 
@@ -496,7 +499,11 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const loadUserDataFromCloud = async (userId: string, silent: boolean = false) => {
     try {
       if (!silent) setCloudSyncStatus('syncing');
-      const res = await fetch(`/api/db/sync?userId=${userId}`);
+      const res = await fetch(`/api/db/sync?userId=${userId}`, {
+        headers: {
+          'X-Auth-Session': userId,
+        },
+      });
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
@@ -735,9 +742,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
                       txnMap.set(gt.id, gt);
                     });
                     const mergedTxns = Array.from(txnMap.values());
-                    try {
-                      localStorage.setItem('skp_transactions', JSON.stringify(mergedTxns));
-                    } catch {}
+                    StorageService.setTransactions(mergedTxns);
                     setTransactions(mergedTxns);
                   }
                 }
@@ -989,8 +994,21 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       document.cookie = `skp_auth_session=${user.id || (user as any)._id}; Path=/; Max-Age=2592000; SameSite=Lax;`;
     }
 
-    // Refresh profile in memory
+    // Clean slate: reset all in-memory records so no prior user data lingers
     isInitialCloudLoadedRef.current = false;
+    setCustomers([]);
+    setTransactions([]);
+    setProducts([]);
+    setInvoices([]);
+    setExpenses([]);
+    setSavingsGoals([]);
+    setReminders([]);
+    setDocuments([]);
+    setNotes([]);
+    setTasks([]);
+    setPasswords([]);
+    setGroups([]);
+    setGroupNotifications([]);
     setProfileState(user);
     setActiveRole(user.role || (user.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user'));
 
@@ -1035,6 +1053,19 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     }
 
     isInitialCloudLoadedRef.current = false;
+    setCustomers([]);
+    setTransactions([]);
+    setProducts([]);
+    setInvoices([]);
+    setExpenses([]);
+    setSavingsGoals([]);
+    setReminders([]);
+    setDocuments([]);
+    setNotes([]);
+    setTasks([]);
+    setPasswords([]);
+    setGroups([]);
+    setGroupNotifications([]);
     setProfileState(user);
     setActiveRole(user.role || (user.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user'));
 
@@ -1053,6 +1084,19 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       document.cookie = `skp_auth_session=${user.id || (user as any)._id}; Path=/; Max-Age=2592000; SameSite=Lax;`;
     }
     isInitialCloudLoadedRef.current = false;
+    setCustomers([]);
+    setTransactions([]);
+    setProducts([]);
+    setInvoices([]);
+    setExpenses([]);
+    setSavingsGoals([]);
+    setReminders([]);
+    setDocuments([]);
+    setNotes([]);
+    setTasks([]);
+    setPasswords([]);
+    setGroups([]);
+    setGroupNotifications([]);
     setProfileState(user);
     setActiveRole(user.role || (user.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user'));
     await loadUserDataFromCloud(user.id);
