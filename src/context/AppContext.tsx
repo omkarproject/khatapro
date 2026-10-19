@@ -1068,6 +1068,12 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     if (typeof document !== 'undefined') {
       document.cookie = 'skp_auth_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
     }
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('skp_live_backup_progress');
+        localStorage.removeItem('skp_customer_drive_upload_progress');
+      } catch {}
+    }
     setActiveRole('user');
     setProfileState(defaultEmptyProfile);
     setCustomers([]);

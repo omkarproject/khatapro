@@ -170,25 +170,28 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     };
   }, []);
 
-  // Dismissed alerts tracking
+  // User-scoped dismissed alerts tracking
+  const dismissedAlertsKey = currentUser?.id ? `khatapro_dismissed_alerts_${currentUser.id}` : 'khatapro_dismissed_alerts';
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('khatapro_dismissed_alerts');
+      const saved = localStorage.getItem(dismissedAlertsKey);
       if (saved) {
         setDismissedAlerts(JSON.parse(saved));
+      } else {
+        setDismissedAlerts([]);
       }
     } catch (e) {
-      // Ignore
+      setDismissedAlerts([]);
     }
-  }, []);
+  }, [dismissedAlertsKey]);
 
   const handleDismissAlert = (alertKey: string) => {
     setDismissedAlerts((prev) => {
       const next = [...prev, alertKey];
       try {
-        localStorage.setItem('khatapro_dismissed_alerts', JSON.stringify(next));
+        localStorage.setItem(dismissedAlertsKey, JSON.stringify(next));
       } catch (e) {}
       return next;
     });
@@ -443,9 +446,11 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     return targetDate! <= todayStr;
   });
 
-  const isBackupRunning = autoBackupProgress?.status === 'running';
+  const isBackupRunning = autoBackupProgress?.status === 'running' && (!autoBackupProgress?.userId || autoBackupProgress.userId === currentUser?.id);
   const isBackupCompletedAlert =
     autoBackupProgress?.status === 'completed' &&
+    autoBackupProgress?.date === todayStr &&
+    (!autoBackupProgress?.userId || autoBackupProgress.userId === currentUser?.id) &&
     !dismissedAlerts.includes(`backup_${autoBackupProgress.date || todayStr}`);
 
   const isDriveUploadRunning =
@@ -496,10 +501,24 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     if (customerDriveProgress?.batchId) {
       allIds.push(`drive_upload_${customerDriveProgress.batchId}`);
     }
+
+    // Dismiss all unread group notifications in StorageService so they never return on reload/login
+    unreadGroupAlerts.forEach((n) => {
+      dismissGroupNotification(n.id);
+    });
+
+    // Clear stale completed backup progress
+    if (autoBackupProgress?.status === 'completed') {
+      try {
+        localStorage.removeItem('skp_live_backup_progress');
+        setAutoBackupProgress(null);
+      } catch {}
+    }
+
     setDismissedAlerts((prev) => {
       const next = Array.from(new Set([...prev, ...allIds]));
       try {
-        localStorage.setItem('khatapro_dismissed_alerts', JSON.stringify(next));
+        localStorage.setItem(dismissedAlertsKey, JSON.stringify(next));
       } catch (e) {}
       return next;
     });
@@ -587,36 +606,42 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
               </button>
 
               {isNotificationsOpen && (
-                <div className="absolute right-0 mt-2 w-84 sm:w-96 p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 z-50 animate-in fade-in zoom-in-95 duration-100">
-                  <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900 dark:text-white">
-                        Notifications & Alerts
-                      </span>
-                      {totalAlerts > 0 ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400">
-                          {totalAlerts} New
+                <>
+                  {/* Mobile backdrop to dismiss when clicking outside */}
+                  <div
+                    className="sm:hidden fixed inset-0 z-40 bg-black/25 backdrop-blur-[1px]"
+                    onClick={() => setIsNotificationsOpen(false)}
+                  />
+                  <div className="fixed left-3 right-3 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-96 max-w-sm sm:max-w-none mx-auto sm:mx-0 p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 z-50 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">
+                          Notifications & Alerts
                         </span>
-                      ) : (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
-                          0 New
-                        </span>
+                        {totalAlerts > 0 ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400">
+                            {totalAlerts} New
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+                            0 New
+                          </span>
+                        )}
+                      </div>
+                      {totalAlerts > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleClearAllAlerts}
+                          className="text-[11px] font-semibold text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Dismiss all notifications"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Clear All</span>
+                        </button>
                       )}
                     </div>
-                    {totalAlerts > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleClearAllAlerts}
-                        className="text-[11px] font-semibold text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors flex items-center gap-1 cursor-pointer"
-                        title="Dismiss all notifications"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        <span>Clear All</span>
-                      </button>
-                    )}
-                  </div>
 
-                  <div className="space-y-2.5 max-h-80 overflow-y-auto pr-0.5">
+                    <div className="space-y-2.5 max-h-[70vh] sm:max-h-80 overflow-y-auto pr-0.5">
                     {/* Customer Cloud Drive Background Upload in Progress / Paused */}
                     {isDriveUploadRunning && (
                       <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50/70 dark:from-amber-950/40 dark:to-orange-950/30 border border-amber-200/90 dark:border-amber-800/60 space-y-2.5 relative group shadow-sm">
@@ -1379,7 +1404,8 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                     )}
                   </div>
                 </div>
-              )}
+              </>
+            )}
             </div>
 
             {/* Dark / Light Toggle */}

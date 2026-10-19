@@ -323,7 +323,7 @@ export default function SupportChatWidget() {
 
   return (
     <>
-      {/* 1. FLOATING ACTION BUTTON (Restricted to Dashboard Only) */}
+      {/* 1. FLOATING ACTION BUTTON (Restricted to Dashboard Only - elevated on mobile to clear bottom navbar) */}
       {!isOpen && isDashboard && (
         <button
           type="button"
@@ -331,7 +331,7 @@ export default function SupportChatWidget() {
             setIsOpen(true);
             setIsMinimized(false);
           }}
-          className="fixed bottom-6 right-6 z-40 group flex items-center gap-3 px-4 py-3.5 rounded-full bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 text-white shadow-xl shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+          className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-40 group flex items-center gap-2.5 sm:gap-3 px-3.5 py-3 sm:px-4 sm:py-3.5 rounded-full bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 text-white shadow-xl shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:scale-105 active:scale-95 transition-all cursor-pointer"
           title={t('supportDesk', '24/7 Live Support & Helpdesk')}
         >
           <div className="relative">
@@ -356,8 +356,8 @@ export default function SupportChatWidget() {
         <div
           className={`fixed z-50 transition-all duration-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col ${
             isMinimized
-              ? 'bottom-6 right-6 w-72 rounded-2xl h-14'
-              : 'bottom-4 right-4 sm:bottom-6 sm:right-6 w-[94vw] sm:w-[420px] max-w-[440px] h-[86vh] sm:h-[580px] max-h-[620px] rounded-3xl'
+              ? 'bottom-20 right-4 sm:bottom-6 sm:right-6 w-72 rounded-2xl h-14'
+              : 'bottom-16 sm:bottom-6 right-2 sm:right-6 w-[calc(100vw-1rem)] sm:w-[420px] max-w-[440px] h-[78vh] sm:h-[580px] max-h-[620px] rounded-3xl'
           }`}
         >
           {/* Header */}

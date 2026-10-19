@@ -131,16 +131,34 @@ export async function GET(req: NextRequest) {
         });
       });
 
-      // User notifications (exclude actor so the user who performed the action does not get alerted)
+      // User notifications: strictly enforce group membership and non-actor delivery
+      const userGroupIds = new Set(userGroups.map(g => g.id));
+      const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+
       const userNotifs = groupNotifications.filter(n => {
+        // Notification must belong to one of this user's joined/created groups
+        if (n.groupId && !userGroupIds.has(n.groupId)) return false;
+
+        // Ignore notifications older than 14 days
+        if (n.createdAt && !isNaN(new Date(n.createdAt).getTime()) && new Date(n.createdAt).getTime() < fourteenDaysAgo) {
+          return false;
+        }
+
+        // Never notify the actor who performed the action
         if (n.actorUserId && n.actorUserId === userId) return false;
         if (n.details && (n.details.actorUserId === userId || n.details.actorId === userId || n.details.applicantId === userId)) return false;
 
-        if (!Array.isArray(n.memberIds) && !Array.isArray(n.targetCustomerIds)) return true;
-        return (
-          (n.memberIds && n.memberIds.includes(userId)) ||
-          (n.targetCustomerIds && n.targetCustomerIds.includes(userId))
-        );
+        // If specific targets are defined, user must be included
+        const hasMemberTargets = Array.isArray(n.memberIds) && n.memberIds.length > 0;
+        const hasCustomerTargets = Array.isArray(n.targetCustomerIds) && n.targetCustomerIds.length > 0;
+        if (hasMemberTargets || hasCustomerTargets) {
+          const isTargeted =
+            (hasMemberTargets && n.memberIds!.includes(userId)) ||
+            (hasCustomerTargets && n.targetCustomerIds!.includes(userId));
+          if (!isTargeted) return false;
+        }
+
+        return true;
       });
 
       // Relevant transactions should ONLY be provided to groups where the user is an active member or creator, NOT pending!
