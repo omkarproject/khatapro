@@ -11,7 +11,7 @@ interface InvoiceTemplatesModalProps {
 }
 
 export const InvoiceTemplatesModal: React.FC<InvoiceTemplatesModalProps> = ({ isOpen, onClose }) => {
-  const { currentUser, profile, settings, updateSettings, showToast } = useApp();
+  const { currentUser, profile, settings, updateSettings, addToast } = useApp();
 
   const currentActiveTemplate = settings?.selectedInvoiceTemplate || 'template_minimal';
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(currentActiveTemplate);
@@ -65,9 +65,9 @@ export const InvoiceTemplatesModal: React.FC<InvoiceTemplatesModalProps> = ({ is
         localStorage.setItem('skp_invoice_template', templateId);
       } catch {}
     }
-    if (showToast) {
+    if (addToast) {
       const tmpl = INVOICE_TEMPLATES.find((x) => x.id === templateId);
-      showToast(`Active Invoice Template set to "${tmpl?.name || templateId}"!`, 'success');
+      addToast('Template Selected', `Active Invoice Template set to "${tmpl?.name || templateId}"!`, 'success');
     }
   };
 
