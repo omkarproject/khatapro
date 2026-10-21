@@ -223,6 +223,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
     },
     monthlyBudgetCap: 150000,
     darkMode: false,
+    selectedInvoiceTemplate: 'template_minimal',
     maintenanceMode: {
       enabled: false,
       durationMinutes: 15,

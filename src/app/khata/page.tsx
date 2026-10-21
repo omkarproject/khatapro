@@ -9,6 +9,7 @@ import { getActiveCurrency, t } from '@/lib/i18n';
 import { convertCurrency, getExcelNumFmt, formatMoney } from '@/lib/currencyService';
 import { Customer, Transaction, TransactionType, PaymentReminder, KhataGroup, KhataGroupNotification, TransactionSplitMember, TransactionEditAudit, KhataGroupJoinRequest, KhataGroupBlockedMerchant } from '@/types';
 import { uploadToDriveFiles, deleteFromDriveFiles } from '@/lib/driveUploadClient';
+import { generateInvoiceHtml } from '@/lib/invoiceTemplates';
 import { StorageService } from '@/services/storage';
 import QRCode from 'qrcode';
 import {
@@ -2095,7 +2096,7 @@ function KhataPageInner() {
     return (words ? words : 'Zero') + ' Rupees Only';
   };
 
-  // Generate & Print Single Transaction PDF Bill
+  // Generate & Print Single Transaction PDF Bill (Dynamic 10-Template Engine)
   const printSingleTxnBill = (txn: Transaction) => {
     if (!activeCustomer) return;
     const isGot = txn.type === 'debit' || txn.type === 'collection';
@@ -2103,14 +2104,14 @@ function KhataPageInner() {
     const billDocNo = isGot
       ? `REC-${txn.id.slice(-6).toUpperCase()}`
       : `INV-${txn.id.slice(-6).toUpperCase()}`;
-    const amountStr = txn.amount.toLocaleString('en-IN');
     const wordsStr = amountToWords(txn.amount);
-    const dateFormatted = new Date(txn.date).toLocaleDateString('en-IN', {
+    const d = new Date(txn.date);
+    const dateFormatted = d.toLocaleDateString('en-IN', {
       day: '2-digit',
       month: 'long',
       year: 'numeric',
     });
-    const timeFormatted = new Date(txn.date).toLocaleTimeString('en-IN', {
+    const timeFormatted = d.toLocaleTimeString('en-IN', {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
@@ -2151,268 +2152,50 @@ function KhataPageInner() {
       return;
     }
 
+    const invoiceData = {
+      merchant: {
+        name: currentUser?.name || 'Store Owner',
+        businessName: settings.businessName || profile.businessName || currentUser?.businessName || 'SmartKhata Store',
+        address: profile.businessAddress || settings.businessAddress || 'Official Merchant Store',
+        phone: profile.phone || currentUser?.phone || '',
+        email: currentUser?.email || '',
+        gst: profile.businessGst || settings.paymentSettings?.businessGst || '',
+      },
+      customer: {
+        name: activeCustomer.name,
+        phone: activeCustomer.phone,
+        address: activeCustomer.address,
+        businessName: activeCustomer.businessName,
+      },
+      txn: {
+        id: txn.id,
+        docNo: billDocNo,
+        title: billTitle,
+        date: txn.date,
+        time: timeFormatted,
+        amount: txn.amount,
+        amountWords: wordsStr,
+        note: txn.note,
+        isGot,
+        type: txn.type,
+        status: txn.status,
+        currencySymbol: '₹',
+      },
+      payment: {
+        upiId: settings.paymentSettings?.upiId || '',
+        payeeName: settings.paymentSettings?.payeeName || settings.businessName || profile.businessName || 'SmartKhata Merchant',
+        qrUrl,
+      },
+    };
+
+    const selectedTmpl = settings?.selectedInvoiceTemplate || 
+      (typeof window !== 'undefined' ? localStorage.getItem('skp_invoice_template') : null) || 
+      'template_minimal';
+
+    const invoiceHtml = generateInvoiceHtml(selectedTmpl, invoiceData);
+
     doc.open();
-    doc.write(`<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>${billDocNo}_${activeCustomer.name.replace(/[^a-zA-Z0-9]/g, '_')}</title>
-  <style>
-    @page {
-      size: A4 portrait;
-      margin: 12mm 15mm;
-    }
-    * {
-      box-sizing: border-box;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: #ffffff !important;
-      color: #0f172a !important;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      font-size: 12px;
-      line-height: 1.4;
-    }
-    .bill-card {
-      max-width: 750px;
-      margin: 0 auto;
-      border: 1.5px solid #cbd5e1;
-      border-radius: 14px;
-      padding: 24px;
-    }
-    .header-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      border-bottom: 2px solid #e2e8f0;
-      padding-bottom: 16px;
-    }
-    .biz-name {
-      font-size: 22px;
-      font-weight: 900;
-      color: #0f172a;
-      letter-spacing: -0.02em;
-    }
-    .badge {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 8px;
-      font-weight: 800;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      background: ${isGot ? '#ecfdf5' : '#eef2ff'};
-      color: ${isGot ? '#047857' : '#4338ca'};
-      border: 1px solid ${isGot ? '#a7f3d0' : '#c7d2fe'};
-    }
-    .parties-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-top: 16px;
-      margin-bottom: 16px;
-    }
-    .party-box {
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      padding: 12px 14px;
-    }
-    .party-label {
-      font-size: 10px;
-      font-weight: 800;
-      text-transform: uppercase;
-      color: #64748b;
-      letter-spacing: 0.05em;
-      margin-bottom: 4px;
-    }
-    .items-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 16px;
-    }
-    .items-table th {
-      background: #f1f5f9;
-      color: #334155;
-      font-weight: 800;
-      font-size: 11px;
-      text-transform: uppercase;
-      padding: 8px 12px;
-      border: 1px solid #cbd5e1;
-      text-align: left;
-    }
-    .items-table td {
-      padding: 10px 12px;
-      border: 1px solid #e2e8f0;
-      font-size: 12px;
-    }
-    .total-banner {
-      margin-top: 18px;
-      padding: 14px 16px;
-      border-radius: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: ${isGot ? '#ecfdf5' : '#fff1f2'};
-      border: 1.5px solid ${isGot ? '#a7f3d0' : '#fecdd3'};
-    }
-    .qr-section {
-      margin-top: 18px;
-      padding: 12px 16px;
-      border-radius: 10px;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-    }
-    .footer-section {
-      margin-top: 24px;
-      padding-top: 16px;
-      border-top: 1px solid #e2e8f0;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      font-size: 11px;
-      color: #64748b;
-    }
-  </style>
-</head>
-<body>
-  <div class="bill-card">
-    <!-- Header -->
-    <div class="header-row">
-      <div>
-        <div class="biz-name">${settings.businessName || profile.businessName || 'SmartKhata Store'}</div>
-        <div style="font-size: 11px; color: #64748b; margin-top: 3px;">${profile.businessAddress || 'Official Merchant Store'}</div>
-        <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
-          Phone: <strong>${profile.phone || '+91 98000 00000'}</strong>
-          ${profile.businessGst ? ` • GSTIN: <span style="font-family: monospace; font-weight: bold; color: #4338ca;">${profile.businessGst}</span>` : ''}
-        </div>
-      </div>
-      <div style="text-align: right;">
-        <span class="badge">${billTitle}</span>
-        <div style="font-family: monospace; font-weight: 800; font-size: 13px; color: #0f172a; margin-top: 6px;">
-          ${billDocNo}
-        </div>
-        <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
-          Date: <strong style="color: #334155;">${dateFormatted}</strong>
-        </div>
-        <div style="font-size: 10px; color: #94a3b8; margin-top: 1px;">
-          Time: ${timeFormatted}
-        </div>
-      </div>
-    </div>
-
-    <!-- Parties Info -->
-    <div class="parties-grid">
-      <div class="party-box">
-        <div class="party-label">Billed By (Merchant)</div>
-        <div style="font-weight: 800; font-size: 13px; color: #0f172a;">${settings.businessName || profile.businessName}</div>
-        <div style="font-size: 11px; color: #475569; margin-top: 2px;">Phone: ${profile.phone || 'N/A'}</div>
-        <div style="font-size: 11px; color: #64748b; margin-top: 1px;">SmartKhata Verified Store</div>
-      </div>
-      <div class="party-box">
-        <div class="party-label">Billed To (Customer)</div>
-        <div style="font-weight: 800; font-size: 13px; color: #0f172a;">${activeCustomer.name}</div>
-        <div style="font-size: 11px; color: #475569; margin-top: 2px;">Phone: <strong>${activeCustomer.phone}</strong></div>
-        ${activeCustomer.address ? `<div style="font-size: 11px; color: #64748b; margin-top: 1px;">Address: ${activeCustomer.address}</div>` : ''}
-        ${activeCustomer.businessName ? `<div style="font-size: 11px; color: #4338ca; font-weight: 600; margin-top: 1px;">Business: ${activeCustomer.businessName}</div>` : ''}
-      </div>
-    </div>
-
-    <!-- Particulars Table -->
-    <table class="items-table">
-      <thead>
-        <tr>
-          <th style="width: 8%; text-align: center;">S.No.</th>
-          <th style="width: 52%;">Particulars / Item Description</th>
-          <th style="width: 20%; text-align: center;">Transaction Type</th>
-          <th style="width: 20%; text-align: right;">Amount (₹)</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td style="text-align: center; color: #64748b; font-weight: bold;">1</td>
-          <td>
-            <strong style="color: #0f172a; font-size: 13px;">${txn.note || (isGot ? 'Payment Received' : 'Goods / Service on Credit')}</strong>
-            <div style="font-size: 10.5px; color: #64748b; margin-top: 2px;">
-              Date: ${dateFormatted} • Status: ${txn.status || 'Completed'}
-            </div>
-          </td>
-          <td style="text-align: center; font-weight: bold; color: ${isGot ? '#047857' : '#be123c'};">
-            ${isGot ? '↓ You Got (Debit)' : '↑ You Gave (Credit)'}
-          </td>
-          <td style="text-align: right; font-family: monospace; font-size: 14px; font-weight: 900; color: ${isGot ? '#047857' : '#be123c'};">
-            ₹${amountStr}
-          </td>
-        </tr>
-      </tbody>
-    </table>
-
-    <!-- Total Banner -->
-    <div class="total-banner">
-      <div>
-        <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: ${isGot ? '#065f46' : '#9f1239'};">
-          ${isGot ? 'Total Amount Received' : 'Total Bill Amount (Credit Given)'}
-        </div>
-        <div style="font-size: 11px; color: #475569; margin-top: 2px; font-style: italic;">
-          (${wordsStr})
-        </div>
-      </div>
-      <div style="text-align: right;">
-        <span style="font-size: 22px; font-weight: 900; font-family: monospace; color: ${isGot ? '#047857' : '#be123c'};">
-          ₹${amountStr}
-        </span>
-        <div style="font-size: 10px; font-weight: 800; color: ${isGot ? '#059669' : '#e11d48'};">
-          ${isGot ? '✓ PAYMENT COMPLETED' : '⚠️ OUTSTANDING CREDIT'}
-        </div>
-      </div>
-    </div>
-
-    <!-- QR Code if Given (Credit) and UPI configured -->
-    ${!isGot && settings.paymentSettings?.upiId ? `
-      <div class="qr-section">
-        <div>
-          <div style="font-size: 12px; font-weight: 800; color: #312e81; text-transform: uppercase;">
-            ⚡ Pay Bill Instantly via UPI
-          </div>
-          <div style="font-size: 11px; color: #475569; margin-top: 2px;">
-            Pay To: <strong>${settings.paymentSettings.payeeName}</strong>
-          </div>
-          <div style="font-size: 11px; font-family: monospace; font-weight: bold; color: #4338ca; margin-top: 2px;">
-            UPI ID: ${settings.paymentSettings.upiId}
-          </div>
-          <div style="font-size: 10px; color: #64748b; margin-top: 3px;">
-            Scan using Google Pay, PhonePe, Paytm, BHIM or any UPI app.
-          </div>
-        </div>
-        <div style="background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px; text-align: center;">
-          <img src="${qrUrl}" alt="UPI QR" style="width: 76px; height: 76px; object-fit: contain; display: block;" />
-          <span style="font-size: 8.5px; font-weight: bold; color: #64748b; margin-top: 2px; display: block;">Scan to Pay</span>
-        </div>
-      </div>
-    ` : ''}
-
-    <!-- Footer Notice & Sign -->
-    <div class="footer-section">
-      <div>
-        <strong style="color: #334155;">Terms & Conditions:</strong>
-        <div>1. This is a computer-generated digital bill from ${settings?.websiteName || 'SmartKhata'}.</div>
-        <div>2. Certified record of account transaction for ${activeCustomer.name}.</div>
-      </div>
-      <div style="text-align: right;">
-        <div style="font-weight: 800; color: #0f172a; text-transform: uppercase;">${settings.businessName || profile.businessName}</div>
-        <div style="font-size: 10px; color: #94a3b8; margin-top: 3px;">Authorized Signatory</div>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`);
+    doc.write(invoiceHtml);
     doc.close();
 
     setTimeout(() => {

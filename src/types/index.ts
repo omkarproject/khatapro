@@ -507,6 +507,7 @@ export interface SystemSettings {
   paymentSettings: PaymentSettings;
   monthlyBudgetCap?: number;
   darkMode: boolean;
+  selectedInvoiceTemplate?: string;
   telegramBackup?: TelegramBackupSettings;
   maintenanceMode?: MaintenanceModeConfig;
   betaTestingEnabled?: boolean;

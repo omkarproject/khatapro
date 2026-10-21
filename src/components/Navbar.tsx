@@ -34,6 +34,7 @@ import {
   ClipboardList,
   CheckSquare,
   Coins,
+  CreditCard,
   Globe,
   Headphones,
   MessageSquare,
@@ -48,6 +49,8 @@ import { formatINR, formatDate } from '@/lib/utils';
 import { SavingsGoal, SavingsDeposit, SupportTicket } from '@/types';
 import GlobalSearchModal from './GlobalSearchModal';
 import CurrencyLanguageModal from './CurrencyLanguageModal';
+import { BusinessCardModal } from './BusinessCardModal';
+import { InvoiceTemplatesModal } from './InvoiceTemplatesModal';
 import { getActiveCurrency, getActiveLanguage, t } from '@/lib/i18n';
 import { getLiveRateDisplay } from '@/lib/currencyService';
 
@@ -123,6 +126,8 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
 
   // Currency & Language Selector Modal State
   const [isCurrencyLanguageOpen, setIsCurrencyLanguageOpen] = useState(false);
+  const [isBusinessCardOpen, setIsBusinessCardOpen] = useState(false);
+  const [isInvoiceTemplatesOpen, setIsInvoiceTemplatesOpen] = useState(false);
   const [currencyLanguageTab, setCurrencyLanguageTab] = useState<'language' | 'currency'>('language');
   const [activeCurrency, setActiveCurrencyState] = useState(() => getActiveCurrency());
   const [activeLanguage, setActiveLanguageState] = useState(() => getActiveLanguage());
@@ -1571,6 +1576,30 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
 
                       {/* Menu Actions */}
                       <div className="space-y-1 pt-2 border-t border-slate-100 dark:border-slate-800 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            setIsBusinessCardOpen(true);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer text-left"
+                        >
+                          <CreditCard className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>Business Card (विजिटिंग कार्ड)</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            setIsInvoiceTemplatesOpen(true);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer text-left"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-emerald-500" />
+                          <span>Invoice Templates (10 Styles)</span>
+                        </button>
+
                         <Link
                           href="/settings"
                           prefetch={true}
@@ -1777,6 +1806,8 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
           </div>
         </div>
       )}
+      <BusinessCardModal isOpen={isBusinessCardOpen} onClose={() => setIsBusinessCardOpen(false)} />
+      <InvoiceTemplatesModal isOpen={isInvoiceTemplatesOpen} onClose={() => setIsInvoiceTemplatesOpen(false)} />
     </>
   );
 }
