@@ -270,7 +270,10 @@ export default function CustomersPage() {
 
         let finalAvatar = base64;
         let driveAvatarId: string | undefined = undefined;
-        if (driveRes.success && driveRes.fileId) {
+        if (driveRes.success && (driveRes.publicUrl || driveRes.url)) {
+          finalAvatar = driveRes.publicUrl || driveRes.url || base64;
+          driveAvatarId = driveRes.fileId;
+        } else if (driveRes.success && driveRes.fileId) {
           driveAvatarId = driveRes.fileId;
           finalAvatar = `/api/backup/google-drive/view-file?fileId=${driveRes.fileId}`;
         }
@@ -491,7 +494,10 @@ export default function CustomersPage() {
             uploadedAt: new Date().toISOString(),
           }
         );
-        if (driveRes.success && driveRes.fileId) {
+        if (driveRes.success && (driveRes.publicUrl || driveRes.url)) {
+          finalAvatar = driveRes.publicUrl || driveRes.url || formAvatar;
+          finalDriveAvatarId = driveRes.fileId;
+        } else if (driveRes.success && driveRes.fileId) {
           finalDriveAvatarId = driveRes.fileId;
           finalAvatar = `/api/backup/google-drive/view-file?fileId=${driveRes.fileId}`;
         }
@@ -1432,18 +1438,17 @@ export default function CustomersPage() {
                         e.stopPropagation();
                         handleOpenAvatarReview(cust);
                       }}
-                      className="w-12 h-12 rounded-2xl fintech-gradient-primary text-white font-extrabold flex items-center justify-center text-sm shadow-md overflow-hidden relative shrink-0 aspect-square border border-slate-200/60 dark:border-slate-700/60 cursor-pointer hover:ring-2 hover:ring-indigo-500 hover:scale-105 transition-all group"
+                      className="w-12 h-12 rounded-2xl fintech-gradient-primary text-white font-extrabold flex items-center justify-center text-base shadow-md overflow-hidden relative shrink-0 aspect-square border border-slate-200/60 dark:border-slate-700/60 cursor-pointer hover:ring-2 hover:ring-indigo-500 hover:scale-105 transition-all group"
                       title="Click to view full photo / change / delete"
                     >
-                      {(cust.avatar || cust.avatarUrl) ? (
+                      <span className="font-extrabold text-base select-none">{cust.name?.charAt(0)?.toUpperCase() || 'C'}</span>
+                      {(cust.avatar || cust.avatarUrl) && (
                         <img
                           src={cust.avatar || cust.avatarUrl}
                           alt={cust.name}
-                          className="w-full h-full object-cover object-center rounded-2xl"
+                          className="w-full h-full object-cover object-center rounded-2xl absolute inset-0"
                           onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                         />
-                      ) : (
-                        cust.name.charAt(0)
                       )}
                     </div>
                     <div>
@@ -1675,15 +1680,14 @@ export default function CustomersPage() {
                   className="w-12 h-12 rounded-2xl fintech-gradient-primary text-white font-black flex items-center justify-center text-lg overflow-hidden relative shrink-0 shadow-md cursor-pointer hover:ring-2 hover:ring-emerald-500/50 transition-all group"
                   title="Click to view, change, or remove profile picture"
                 >
-                  {(activeCustomer.avatar || activeCustomer.avatarUrl) ? (
+                  <span className="font-black select-none text-lg">{activeCustomer.name?.charAt(0)?.toUpperCase() || 'C'}</span>
+                  {(activeCustomer.avatar || activeCustomer.avatarUrl) && (
                     <img
                       src={activeCustomer.avatar || activeCustomer.avatarUrl}
                       alt={activeCustomer.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform absolute inset-0 rounded-2xl"
                       onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                     />
-                  ) : (
-                    activeCustomer.name.charAt(0)
                   )}
                 </div>
                 <div>
@@ -3849,19 +3853,19 @@ export default function CustomersPage() {
 
             {/* Photo View Box */}
             <div className="relative mx-auto w-56 h-56 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-inner group">
-              {(reviewAvatarCustomer.avatar || reviewAvatarCustomer.avatarUrl) ? (
+              <div className="text-center p-4">
+                <div className="w-20 h-20 mx-auto rounded-full fintech-gradient-primary text-white font-black text-3xl flex items-center justify-center shadow-lg mb-2">
+                  {reviewAvatarCustomer.name?.charAt(0)?.toUpperCase() || 'C'}
+                </div>
+                <p className="text-xs text-slate-400 font-semibold">{reviewAvatarCustomer.name}</p>
+              </div>
+              {(reviewAvatarCustomer.avatar || reviewAvatarCustomer.avatarUrl) && (
                 <img
                   src={reviewAvatarCustomer.avatar || reviewAvatarCustomer.avatarUrl}
                   alt={reviewAvatarCustomer.name}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover absolute inset-0 rounded-2xl"
+                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                 />
-              ) : (
-                <div className="text-center p-4">
-                  <div className="w-20 h-20 mx-auto rounded-full fintech-gradient-primary text-white font-black text-3xl flex items-center justify-center shadow-lg mb-2">
-                    {reviewAvatarCustomer.name.charAt(0)}
-                  </div>
-                  <p className="text-xs text-slate-400">No profile photo uploaded</p>
-                </div>
               )}
 
               {isUpdatingAvatarInReview && (

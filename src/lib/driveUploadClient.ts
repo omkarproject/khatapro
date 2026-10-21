@@ -1,6 +1,6 @@
 /**
  * Helper to upload user attachments (invoices, bills, receipts, documents, customer drive files)
- * directly into the user's private Google Drive "SmartKhata Pro/Files/" folder.
+ * directly into Supabase Storage public CDN and user's Google Drive.
  */
 export async function uploadToDriveFiles(
   fileName: string,
@@ -26,6 +26,8 @@ export async function uploadToDriveFiles(
   success: boolean;
   uploadedToDrive?: boolean;
   fileId?: string;
+  publicUrl?: string;
+  url?: string;
   webViewLink?: string;
   webContentLink?: string;
   folder?: string;

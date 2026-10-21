@@ -843,7 +843,9 @@ function KhataPageInner() {
             uploadedAt: new Date().toISOString(),
           }
         );
-        if (uploadRes.success && uploadRes.fileId) {
+        if (uploadRes.success && (uploadRes.publicUrl || uploadRes.url)) {
+          setNewGroupPic(uploadRes.publicUrl || uploadRes.url || base64);
+        } else if (uploadRes.success && uploadRes.fileId) {
           setNewGroupPic(`/api/backup/google-drive/view-file?fileId=${uploadRes.fileId}`);
         } else {
           setNewGroupPic(base64);
@@ -1742,7 +1744,14 @@ function KhataPageInner() {
             }
           );
 
-          if (uploadRes.success && uploadRes.fileId) {
+          if (uploadRes.success && (uploadRes.publicUrl || uploadRes.url)) {
+            updated.push({
+              ...item,
+              driveFileId: uploadRes.fileId,
+              url: uploadRes.publicUrl || uploadRes.url || item.url,
+            });
+            continue;
+          } else if (uploadRes.success && uploadRes.fileId) {
             updated.push({
               ...item,
               driveFileId: uploadRes.fileId,
@@ -2599,7 +2608,10 @@ function KhataPageInner() {
 
       let finalAvatar = base64;
       let driveAvatarId: string | undefined = undefined;
-      if (uploadRes.success && uploadRes.fileId) {
+      if (uploadRes.success && (uploadRes.publicUrl || uploadRes.url)) {
+        finalAvatar = uploadRes.publicUrl || uploadRes.url || base64;
+        driveAvatarId = uploadRes.fileId;
+      } else if (uploadRes.success && uploadRes.fileId) {
         driveAvatarId = uploadRes.fileId;
         finalAvatar = `/api/backup/google-drive/view-file?fileId=${uploadRes.fileId}`;
       }
@@ -4228,19 +4240,18 @@ function KhataPageInner() {
                               e.stopPropagation();
                               handleOpenAvatarReview(cust);
                             }}
-                            className={`w-11 h-11 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-sm shrink-0 aspect-square overflow-hidden cursor-pointer hover:ring-2 hover:ring-emerald-500/50 transition-all ${getCustomerRatingBorder(cust.rating)}`}
+                            className={`w-11 h-11 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-sm shrink-0 aspect-square overflow-hidden cursor-pointer hover:ring-2 hover:ring-emerald-500/50 transition-all relative ${getCustomerRatingBorder(cust.rating)}`}
                             title="Click to view/change profile photo"
                           >
-                            {(cust.avatar || cust.avatarUrl) ? (
+                            <span className="font-black text-sm select-none">{cust.name?.charAt(0)?.toUpperCase() || 'C'}</span>
+                            {(cust.avatar || cust.avatarUrl) && (
                               <img
                                 src={cust.avatar || cust.avatarUrl}
                                 alt={cust.name}
-                                className="w-full h-full object-cover object-center rounded-full"
+                                className="w-full h-full object-cover object-center rounded-full absolute inset-0"
                                 style={{ imageRendering: 'auto' }}
                                 onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                               />
-                            ) : (
-                              <span className="font-black text-sm">{cust.name.charAt(0)}</span>
                             )}
                           </div>
                           <div className="min-w-0">
@@ -4711,18 +4722,17 @@ function KhataPageInner() {
                           <div className="relative group shrink-0">
                             <div
                               onClick={() => handleOpenAvatarReview(activeCustomer)}
-                              className={`w-10 h-10 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-base shadow-xs shrink-0 select-none cursor-pointer hover:opacity-90 active:scale-95 transition-all overflow-hidden ${getCustomerRatingBorder(activeCustomer.rating)}`}
+                              className={`w-10 h-10 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-base shadow-xs shrink-0 select-none cursor-pointer hover:opacity-90 active:scale-95 transition-all overflow-hidden relative ${getCustomerRatingBorder(activeCustomer.rating)}`}
                               title="Click to view full photo, change, or delete"
                             >
-                              {(activeCustomer.avatar || activeCustomer.avatarUrl) ? (
+                              <span className="font-extrabold select-none">{activeCustomer.name?.charAt(0)?.toUpperCase() || 'C'}</span>
+                              {(activeCustomer.avatar || activeCustomer.avatarUrl) && (
                                 <img
                                   src={activeCustomer.avatar || activeCustomer.avatarUrl}
                                   alt={activeCustomer.name}
-                                  className="w-full h-full object-cover"
+                                  className="w-full h-full object-cover absolute inset-0 rounded-full"
                                   onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                                 />
-                              ) : (
-                                activeCustomer.name.charAt(0).toUpperCase()
                               )}
                             </div>
                             <button
@@ -4864,11 +4874,15 @@ function KhataPageInner() {
                             }`}
                             title="Click to view this member's divided history in group"
                           >
-                            <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden shrink-0 flex items-center justify-center text-[10px] font-bold">
-                              {member.avatar ? (
-                                <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
-                              ) : (
-                                <span>{member.name.charAt(0)}</span>
+                            <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 overflow-hidden shrink-0 flex items-center justify-center text-[10px] font-bold relative">
+                              <span>{member.name?.charAt(0)?.toUpperCase() || 'M'}</span>
+                              {member.avatar && (
+                                <img 
+                                  src={member.avatar} 
+                                  alt={member.name} 
+                                  className="w-full h-full object-cover absolute inset-0 rounded-full" 
+                                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                                />
                               )}
                             </div>
                             <div className="text-left">
@@ -5197,23 +5211,35 @@ function KhataPageInner() {
                                             {firstItem.type === 'image' ? (
                                               <div
                                                 onClick={() => setPreviewGallery({ items: parsedList, currentIndex: 0, transactionId: t.id })}
-                                                className="relative group cursor-pointer rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 max-h-52 flex items-center justify-center shadow-xs"
+                                                className="relative group cursor-pointer rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 min-h-[90px] max-h-52 flex items-center justify-center shadow-xs"
                                               >
+                                                {/* Clean fallback card with icon and name */}
+                                                <div className="flex flex-col items-center justify-center p-3 text-center space-y-1">
+                                                  <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-xs">
+                                                    <FileText className="w-5 h-5" />
+                                                  </div>
+                                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[180px]">
+                                                    {firstItem.name}
+                                                  </span>
+                                                  <span className="text-[9px] text-slate-400 font-medium">Click to view bill</span>
+                                                </div>
+
                                                 <img
                                                   src={firstItem.url}
                                                   alt={firstItem.name}
-                                                  className="w-full h-full max-h-52 object-cover group-hover:scale-102 transition-transform duration-200"
+                                                  className="w-full h-full max-h-52 object-cover absolute inset-0 group-hover:scale-102 transition-transform duration-200"
+                                                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                                                 />
 
                                                 {/* Multiple Images Counter Tag (e.g. +1 or +4) */}
                                                 {additionalCount > 0 && (
-                                                  <div className="absolute top-2 right-2 px-2.5 py-0.5 rounded-md bg-black/80 text-white font-extrabold text-xs shadow-md border border-white/20 backdrop-blur-xs flex items-center gap-1">
+                                                  <div className="absolute top-2 right-2 px-2.5 py-0.5 rounded-md bg-black/80 text-white font-extrabold text-xs shadow-md border border-white/20 backdrop-blur-xs flex items-center gap-1 z-10">
                                                     <span>+{additionalCount}</span>
                                                   </div>
                                                 )}
 
-                                                <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/60 text-white text-[10px] font-medium backdrop-blur-xs flex items-center gap-1 opacity-90">
-                                                  <span>{firstItem.name}</span>
+                                                <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/60 text-white text-[10px] font-medium backdrop-blur-xs flex items-center gap-1 opacity-90 z-10">
+                                                  <span className="truncate max-w-[140px]">{firstItem.name}</span>
                                                 </div>
                                               </div>
                                             ) : (
@@ -5457,16 +5483,17 @@ function KhataPageInner() {
                             <Users className="w-4 h-4 text-white" />
                           </div>
                         )
-                      ) : activeCustomer?.avatar || activeCustomer?.avatarUrl ? (
-                        <img
-                          src={activeCustomer.avatar || activeCustomer.avatarUrl}
-                          alt={activeCustomer.name}
-                          className="w-9 h-9 rounded-full object-cover object-center border border-slate-200 dark:border-slate-700 shrink-0 aspect-square shadow-xs"
-                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                        />
                       ) : (
-                        <div className="w-9 h-9 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-xs shrink-0 aspect-square">
-                          {activeCustomer?.name ? activeCustomer.name.charAt(0) : 'C'}
+                        <div className="w-9 h-9 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-xs shrink-0 aspect-square relative overflow-hidden shadow-xs">
+                          <span className="select-none font-bold">{activeCustomer?.name ? activeCustomer.name.charAt(0).toUpperCase() : 'C'}</span>
+                          {(activeCustomer?.avatar || activeCustomer?.avatarUrl) && (
+                            <img
+                              src={activeCustomer.avatar || activeCustomer.avatarUrl}
+                              alt={activeCustomer.name}
+                              className="w-full h-full object-cover object-center absolute inset-0 rounded-full"
+                              onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                            />
+                          )}
                         </div>
                       )}
                       <div>
@@ -6243,11 +6270,27 @@ function KhataPageInner() {
                     {/* Current Item Content */}
                     <div className="w-full h-full flex items-center justify-center p-2">
                       {currentItem.type === 'image' ? (
-                        <img
-                          src={currentItem.url}
-                          alt={currentItem.name}
-                          className="max-h-[58vh] w-auto max-w-full object-contain rounded-xl shadow-2xl"
-                        />
+                        <div className="relative flex items-center justify-center min-h-[220px] w-full">
+                          <img
+                            src={currentItem.url}
+                            alt={currentItem.name}
+                            className="max-h-[58vh] w-auto max-w-full object-contain rounded-xl shadow-2xl"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                              const fallback = document.getElementById('gallery-fallback-box');
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
+                          />
+                          <div id="gallery-fallback-box" style={{ display: 'none' }} className="flex flex-col items-center justify-center p-8 text-center space-y-3 bg-slate-900/80 rounded-2xl border border-slate-800">
+                            <div className="w-16 h-16 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
+                              <FileText className="w-8 h-8" />
+                            </div>
+                            <div>
+                              <h4 className="text-base font-bold text-white">{currentItem.name}</h4>
+                              <p className="text-xs text-slate-400 mt-1">Image file preview is not available or file is stored offline</p>
+                            </div>
+                          </div>
+                        </div>
                       ) : (
                         /* PDF Preview: Embedded Iframe + View/Download Footer */
                         <div className="w-full h-[58vh] flex flex-col rounded-xl overflow-hidden bg-slate-950 border border-slate-800">
@@ -6319,11 +6362,15 @@ function KhataPageInner() {
                               }`}
                             >
                               {item.type === 'image' ? (
-                                <img
-                                  src={item.url}
-                                  alt={item.name}
-                                  className="w-full h-full object-cover"
-                                />
+                                <div className="w-full h-full relative bg-slate-900 flex items-center justify-center">
+                                  <FileText className="w-5 h-5 text-indigo-400" />
+                                  <img
+                                    src={item.url}
+                                    alt={item.name}
+                                    className="w-full h-full object-cover absolute inset-0"
+                                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                                  />
+                                </div>
                               ) : (
                                 <div className="w-full h-full bg-slate-950 flex flex-col items-center justify-center p-1 text-rose-400">
                                   <FileText className="w-5 h-5" />
@@ -7864,11 +7911,15 @@ function KhataPageInner() {
                         className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-black text-slate-700 dark:text-slate-200 shrink-0 overflow-hidden">
-                            {member.avatar ? (
-                              <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
-                            ) : (
-                              member.name.charAt(0).toUpperCase()
+                          <div className="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-xs font-black shrink-0 overflow-hidden relative">
+                            <span>{member.name?.charAt(0)?.toUpperCase() || 'M'}</span>
+                            {member.avatar && (
+                              <img 
+                                src={member.avatar} 
+                                alt={member.name} 
+                                className="w-full h-full object-cover absolute inset-0 rounded-full" 
+                                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                              />
                             )}
                           </div>
                           <div className="min-w-0">

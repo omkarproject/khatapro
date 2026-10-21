@@ -14,18 +14,11 @@ function normalizePhone(p?: string | null): string {
 // --- MAPPERS: Frontend camelCase -> Supabase snake_case ---
 
 function customerToDb(c: any, userId: string) {
-  // Store only URL/link or stream proxy or compact photo, avoid multi-MB strings
+  // Store permanent URL or compact photo, avoid multi-MB strings
   let safeAvatar = c.avatar || c.avatarUrl || null;
-  if (safeAvatar) {
-    if (safeAvatar.startsWith('data:')) {
-      if (c.driveAvatarId) {
-        safeAvatar = `/api/backup/google-drive/view-file?fileId=${c.driveAvatarId}`;
-      } else if (safeAvatar.length < 500000) {
-        // Retain compact base64 avatar (under 500KB) if Drive upload not yet performed
-        safeAvatar = safeAvatar;
-      } else {
-        safeAvatar = null;
-      }
+  if (safeAvatar && typeof safeAvatar === 'string' && safeAvatar.startsWith('data:')) {
+    if (safeAvatar.length > 500000) {
+      safeAvatar = c.driveAvatarId ? `/api/backup/google-drive/view-file?fileId=${c.driveAvatarId}` : null;
     }
   }
 
@@ -74,7 +67,9 @@ function transactionToDb(t: any, userId: string) {
     if (obj) {
       let safeUrl = obj.url || '';
       if (safeUrl.startsWith('data:')) {
-        safeUrl = obj.driveFileId ? `https://drive.google.com/file/d/${obj.driveFileId}/view` : '';
+        if (safeUrl.length > 500000) {
+          safeUrl = obj.driveFileId ? `https://drive.google.com/file/d/${obj.driveFileId}/view` : '';
+        }
       }
       return JSON.stringify({
         ...obj,
@@ -413,6 +408,9 @@ function transactionFromDb(row: any) {
         }
       }
 
+      if (obj.url && (obj.url.startsWith('https://') || obj.url.startsWith('http://') || obj.url.startsWith('data:'))) {
+        return JSON.stringify(obj);
+      }
       if (driveId) {
         return JSON.stringify({
           ...obj,
