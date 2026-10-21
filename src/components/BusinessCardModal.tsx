@@ -1,9 +1,29 @@
 'use client';
 
-import React, { useState } from 'react';
-import { X, Printer, Sparkles, RefreshCw, Layers, Check, Phone, Mail, MapPin, Building, CreditCard, ShieldCheck } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import {
+  X,
+  Printer,
+  Sparkles,
+  RefreshCw,
+  Layers,
+  Check,
+  Phone,
+  Mail,
+  MapPin,
+  Building,
+  CreditCard,
+  ShieldCheck,
+  Upload,
+  Trash2,
+  Image as ImageIcon,
+} from 'lucide-react';
 import { useApp } from '@/context/AppContext';
-import { BUSINESS_CARD_TEMPLATES, BusinessCardData, generateBusinessCardPrintHtml } from '@/lib/businessCardTemplates';
+import {
+  BUSINESS_CARD_TEMPLATES,
+  BusinessCardData,
+  generateBusinessCardPrintHtml,
+} from '@/lib/businessCardTemplates';
 
 interface BusinessCardModalProps {
   isOpen: boolean;
@@ -17,6 +37,16 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
   const [activeSide, setActiveSide] = useState<'front' | 'back'>('front');
   const [printMode, setPrintMode] = useState<'single' | 'sheet'>('single');
 
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // Default logo from user avatar, profile or settings
+  const defaultLogo =
+    currentUser?.avatarUrl ||
+    profile?.avatarUrl ||
+    settings?.businessLogo ||
+    profile?.logo ||
+    '';
+
   // Form details prefilled from current user / profile / settings
   const [formData, setFormData] = useState<BusinessCardData>(() => ({
     businessName: profile?.businessName || settings?.businessName || currentUser?.businessName || 'My Business',
@@ -29,11 +59,28 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
     gstin: profile?.businessGst || settings?.paymentSettings?.businessGst || '',
     upiId: settings?.paymentSettings?.upiId || '',
     qrUrl: settings?.paymentSettings?.customQrUrl || '',
+    logoUrl: defaultLogo,
   }));
 
   if (!isOpen) return null;
 
-  const currentTemplate = BUSINESS_CARD_TEMPLATES.find((t) => t.id === selectedTemplate) || BUSINESS_CARD_TEMPLATES[0];
+  const currentTemplate =
+    BUSINESS_CARD_TEMPLATES.find((t) => t.id === selectedTemplate) ||
+    BUSINESS_CARD_TEMPLATES[0];
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const b64 = ev.target?.result as string;
+      if (b64) {
+        setFormData((prev) => ({ ...prev, logoUrl: b64 }));
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   const handlePrint = () => {
     // Generate UPI QR code if missing
@@ -147,28 +194,44 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
             </div>
 
             {/* 3D Realistic Business Card View */}
-            <div className="w-full max-w-sm aspect-[1.75/1] rounded-2xl p-5 shadow-2xl relative overflow-hidden transition-all duration-300 border border-slate-200/40 dark:border-white/10 flex flex-col justify-between select-none"
+            <div
+              className="w-full max-w-sm aspect-[1.75/1] rounded-2xl p-5 shadow-2xl relative overflow-hidden transition-all duration-300 border border-slate-200/40 dark:border-white/10 flex flex-col justify-between select-none"
               style={{ background: currentTemplate.bgGradient }}
             >
               {activeSide === 'front' ? (
                 <>
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-0.5">
-                      <h3
-                        className="text-lg font-black tracking-tight leading-tight"
-                        style={{ color: currentTemplate.textColor }}
-                      >
-                        {formData.businessName}
-                      </h3>
-                      <p
-                        className="text-[10px] font-bold uppercase tracking-wider"
-                        style={{ color: currentTemplate.accentColor }}
-                      >
-                        {formData.tagline}
-                      </p>
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {formData.logoUrl && (
+                        <div
+                          className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border-2 shadow-md bg-white p-0.5"
+                          style={{ borderColor: currentTemplate.accentColor }}
+                        >
+                          <img
+                            src={formData.logoUrl}
+                            alt="Logo"
+                            className="w-full h-full object-cover rounded-lg"
+                          />
+                        </div>
+                      )}
+                      <div className="space-y-0.5 min-w-0">
+                        <h3
+                          className="text-base font-black tracking-tight leading-tight truncate"
+                          style={{ color: currentTemplate.textColor }}
+                        >
+                          {formData.businessName}
+                        </h3>
+                        <p
+                          className="text-[9.5px] font-bold uppercase tracking-wider truncate"
+                          style={{ color: currentTemplate.accentColor }}
+                        >
+                          {formData.tagline}
+                        </p>
+                      </div>
                     </div>
+
                     <span
-                      className="px-2 py-0.5 rounded-md text-[9px] font-black tracking-widest uppercase shadow-xs"
+                      className="px-2 py-0.5 rounded-md text-[8.5px] font-black tracking-widest uppercase shadow-xs shrink-0"
                       style={{
                         background: currentTemplate.accentColor,
                         color: isDark ? '#000000' : '#ffffff',
@@ -220,6 +283,18 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
               ) : (
                 <div className="h-full flex flex-col justify-between items-center text-center">
                   <div>
+                    {formData.logoUrl && (
+                      <div
+                        className="w-7 h-7 rounded-lg overflow-hidden mx-auto mb-1 border shadow-xs bg-white p-0.5"
+                        style={{ borderColor: currentTemplate.accentColor }}
+                      >
+                        <img
+                          src={formData.logoUrl}
+                          alt="Logo"
+                          className="w-full h-full object-cover rounded-md"
+                        />
+                      </div>
+                    )}
                     <div
                       className="text-[10px] font-black tracking-widest uppercase"
                       style={{ color: currentTemplate.accentColor }}
@@ -227,7 +302,7 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
                       SCAN TO PAY VIA UPI
                     </div>
                     <div
-                      className="text-xs font-black mt-0.5"
+                      className="text-xs font-black mt-0.5 truncate max-w-[240px]"
                       style={{ color: currentTemplate.textColor }}
                     >
                       {formData.businessName}
@@ -301,6 +376,71 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
                 <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
                 Customize Card Details
               </h4>
+
+              {/* Profile / Business Logo Selector */}
+              <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 flex items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="relative w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-indigo-400 dark:border-indigo-600 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
+                    {formData.logoUrl ? (
+                      <img
+                        src={formData.logoUrl}
+                        alt="Logo"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Building className="w-5 h-5 text-slate-400" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block truncate">
+                      Profile / Business Logo
+                    </span>
+                    <span className="text-[10px] text-slate-400 block truncate">
+                      {formData.logoUrl ? '✓ Logo active on card' : 'Visiting card par photo/logo jodein'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleLogoUpload}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => logoInputRef.current?.click()}
+                    className="px-2.5 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-extrabold text-[11px] hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    <Upload className="w-3 h-3" />
+                    <span>Upload</span>
+                  </button>
+
+                  {defaultLogo && formData.logoUrl !== defaultLogo && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, logoUrl: defaultLogo })}
+                      className="px-2 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10.5px] hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                      title="Use Account Profile Avatar"
+                    >
+                      Use Profile
+                    </button>
+                  )}
+
+                  {formData.logoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, logoUrl: '' })}
+                      className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                      title="Remove Logo"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div>

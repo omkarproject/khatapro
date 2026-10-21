@@ -78,6 +78,7 @@ export interface BusinessCardData {
   gstin?: string;
   upiId?: string;
   qrUrl?: string;
+  logoUrl?: string;
 }
 
 export function generateBusinessCardPrintHtml(
@@ -98,9 +99,14 @@ export function generateBusinessCardPrintHtml(
       <div class="biz-card" style="background: ${t.bgGradient}; color: ${textColor}; border: 1px solid ${borderStyle};">
         <div class="card-inner">
           <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-            <div>
-              <div class="b-name">${data.businessName || 'SmartKhata Merchant'}</div>
-              <div class="b-tagline" style="color: ${t.accentColor};">${data.tagline || 'Commercial Merchant & Trader'}</div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              ${data.logoUrl ? `
+                <img src="${data.logoUrl}" alt="Logo" style="width: 36px; height: 36px; border-radius: 7px; object-fit: cover; border: 1.5px solid ${t.accentColor}; background: #ffffff; padding: 1px; shrink: 0;" />
+              ` : ''}
+              <div>
+                <div class="b-name">${data.businessName || 'SmartKhata Merchant'}</div>
+                <div class="b-tagline" style="color: ${t.accentColor};">${data.tagline || 'Commercial Merchant & Trader'}</div>
+              </div>
             </div>
             <div class="b-badge" style="background: ${t.accentColor}; color: ${isDark ? '#000000' : '#ffffff'};">
               VERIFIED
@@ -130,6 +136,9 @@ export function generateBusinessCardPrintHtml(
       <div class="biz-card" style="background: ${t.bgGradient}; color: ${textColor}; border: 1px solid ${borderStyle};">
         <div class="card-inner" style="display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center;">
           <div>
+            ${data.logoUrl ? `
+              <img src="${data.logoUrl}" alt="Logo" style="width: 24px; height: 24px; border-radius: 5px; object-fit: cover; margin-bottom: 2px; border: 1px solid ${t.accentColor}; background: #ffffff; padding: 1px; display: inline-block;" />
+            ` : ''}
             <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.1em; color: ${t.accentColor}; text-transform: uppercase;">
               SCAN TO PAY VIA UPI
             </div>
