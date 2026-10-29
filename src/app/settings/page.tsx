@@ -634,6 +634,7 @@ export default function SettingsPage() {
 
 
   // UPI & Payment Collection Modes (Direct UPI, Cashfree Gateway, UPI Gateway)
+  const isPaymentDirtyRef = useRef(false);
   const [collectionMode, setCollectionMode] = useState<PaymentCollectionMode>(() => {
     if (typeof window !== 'undefined') {
       const s = StorageService.getSettings();
@@ -750,7 +751,7 @@ export default function SettingsPage() {
 
   // Sync settings when AppContext updates
   useEffect(() => {
-    if (settings && settings.paymentSettings) {
+    if (!isPaymentDirtyRef.current && settings && settings.paymentSettings) {
       if (settings.paymentSettings.collectionMode) setCollectionMode(settings.paymentSettings.collectionMode);
       if (settings.paymentSettings.upiId) setUpiId(settings.paymentSettings.upiId);
       if (settings.paymentSettings.payeeName) setPayeeName(settings.paymentSettings.payeeName);
@@ -783,7 +784,7 @@ export default function SettingsPage() {
     fetch('/api/cashfree/config')
       .then((res) => res.json())
       .then((data) => {
-        if (data && data.isConfigured) {
+        if (data && data.isConfigured && !isPaymentDirtyRef.current) {
           if (!cashfreeAppId && data.appId) setCashfreeAppId(data.appId);
           if (data.env) setCashfreeEnv(data.env);
         }
@@ -1406,35 +1407,42 @@ export default function SettingsPage() {
   };
 
   // Handle Payment Collection Settings Save
-  const handleSaveUpi = (e: React.FormEvent) => {
+  const handleSaveUpi = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (collectionMode === 'direct_upi' && (!upiId.trim() || !upiId.includes('@'))) {
+    if (collectionMode === 'direct_upi' && (!upiId?.trim() || !upiId.includes('@'))) {
       addToast('Invalid UPI ID', 'Please enter a valid VPA format (e.g. yourstore@okhdfcbank)', 'error');
       return;
     }
     const updatedPaymentSettings: PaymentSettings = {
       ...settings.paymentSettings,
       collectionMode,
-      upiId: upiId.trim(),
-      payeeName: payeeName.trim(),
+      upiId: (upiId || '').trim(),
+      payeeName: (payeeName || '').trim(),
       customQrUrl,
       isDefaultQrSaved: true,
-      cashfreeAppId: cashfreeAppId.trim(),
-      cashfreeSecretKey: cashfreeSecretKey.trim(),
+      cashfreeAppId: (cashfreeAppId || '').trim(),
+      cashfreeSecretKey: (cashfreeSecretKey || '').trim(),
       cashfreeEnv,
-      razorpayKeyId: razorpayKeyId.trim(),
-      razorpayKeySecret: razorpayKeySecret.trim(),
-      razorpayWebhookSecret: razorpayWebhookSecret.trim(),
+      razorpayKeyId: (razorpayKeyId || '').trim(),
+      razorpayKeySecret: (razorpayKeySecret || '').trim(),
+      razorpayWebhookSecret: (razorpayWebhookSecret || '').trim(),
       razorpayEnv,
       upiGatewayProvider,
-      upiGatewayKey: upiGatewayKey.trim(),
-      upiGatewaySecret: upiGatewaySecret.trim(),
-      upiGatewayWebhookUrl: upiGatewayWebhookUrl.trim(),
+      upiGatewayKey: (upiGatewayKey || '').trim(),
+      upiGatewaySecret: (upiGatewaySecret || '').trim(),
+      upiGatewayWebhookUrl: (upiGatewayWebhookUrl || '').trim(),
     };
+    isPaymentDirtyRef.current = false;
     updateSettings({
       ...settings,
       paymentSettings: updatedPaymentSettings,
     });
+
+    try {
+      await syncWithDatabase();
+    } catch (syncErr) {
+      console.warn('Background sync error after payment settings update:', syncErr);
+    }
 
     if (cashfreeAppId.trim() && cashfreeSecretKey.trim()) {
       fetch('/api/cashfree/config', {
@@ -1517,6 +1525,7 @@ export default function SettingsPage() {
   const handleUploadQr = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      isPaymentDirtyRef.current = true;
       const reader = new FileReader();
       reader.onload = (event) => {
         setCustomQrUrl(event.target?.result as string);
@@ -2103,6 +2112,7 @@ export default function SettingsPage() {
               {/* Option 1: Direct UPI */}
               <div
                 onClick={() => {
+                  isPaymentDirtyRef.current = true;
                   setCollectionMode('direct_upi');
                   setPgTestResult(null);
                 }}
@@ -2136,6 +2146,7 @@ export default function SettingsPage() {
               {/* Option 2: Cashfree Payment Gateway */}
               <div
                 onClick={() => {
+                  isPaymentDirtyRef.current = true;
                   setCollectionMode('cashfree');
                   setPgTestResult(null);
                 }}
@@ -2169,6 +2180,7 @@ export default function SettingsPage() {
               {/* Option 3: Razorpay Payment Gateway */}
               <div
                 onClick={() => {
+                  isPaymentDirtyRef.current = true;
                   setCollectionMode('razorpay');
                   setPgTestResult(null);
                 }}
@@ -2202,6 +2214,7 @@ export default function SettingsPage() {
               {/* Option 4: UPI Payment Gateway (Dynamic QR) */}
               <div
                 onClick={() => {
+                  isPaymentDirtyRef.current = true;
                   setCollectionMode('upi_gateway');
                   setPgTestResult(null);
                 }}
@@ -2267,7 +2280,10 @@ export default function SettingsPage() {
                     type="text"
                     required={collectionMode === 'direct_upi'}
                     value={upiId}
-                    onChange={(e) => setUpiId(e.target.value)}
+                    onChange={(e) => {
+                      isPaymentDirtyRef.current = true;
+                      setUpiId(e.target.value);
+                    }}
                     placeholder="e.g. yourstore@okhdfcbank"
                     className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
                   />
@@ -2282,7 +2298,10 @@ export default function SettingsPage() {
                     type="text"
                     required={collectionMode === 'direct_upi'}
                     value={payeeName}
-                    onChange={(e) => setPayeeName(e.target.value)}
+                    onChange={(e) => {
+                      isPaymentDirtyRef.current = true;
+                      setPayeeName(e.target.value);
+                    }}
                     placeholder="e.g. My Business / Store Name"
                     className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
                   />
@@ -2333,7 +2352,10 @@ export default function SettingsPage() {
                   {customQrUrl && (
                     <button
                       type="button"
-                      onClick={() => setCustomQrUrl(undefined)}
+                      onClick={() => {
+                        isPaymentDirtyRef.current = true;
+                        setCustomQrUrl(undefined);
+                      }}
                       className="text-xs text-rose-500 hover:underline px-2 cursor-pointer"
                     >
                       Clear
@@ -2365,7 +2387,10 @@ export default function SettingsPage() {
                   <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
                     <button
                       type="button"
-                      onClick={() => setCashfreeEnv('sandbox')}
+                      onClick={() => {
+                        isPaymentDirtyRef.current = true;
+                        setCashfreeEnv('sandbox');
+                      }}
                       className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
                         cashfreeEnv === 'sandbox'
                           ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
@@ -2376,7 +2401,10 @@ export default function SettingsPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setCashfreeEnv('production')}
+                      onClick={() => {
+                        isPaymentDirtyRef.current = true;
+                        setCashfreeEnv('production');
+                      }}
                       className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
                         cashfreeEnv === 'production'
                           ? 'bg-emerald-600 text-white shadow-sm'
@@ -2397,7 +2425,10 @@ export default function SettingsPage() {
                   <input
                     type="text"
                     value={cashfreeAppId}
-                    onChange={(e) => setCashfreeAppId(e.target.value)}
+                    onChange={(e) => {
+                      isPaymentDirtyRef.current = true;
+                      setCashfreeAppId(e.target.value);
+                    }}
                     placeholder="e.g. CF_TEST_12345678"
                     className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white"
                   />
@@ -2411,7 +2442,10 @@ export default function SettingsPage() {
                   <input
                     type="password"
                     value={cashfreeSecretKey}
-                    onChange={(e) => setCashfreeSecretKey(e.target.value)}
+                    onChange={(e) => {
+                      isPaymentDirtyRef.current = true;
+                      setCashfreeSecretKey(e.target.value);
+                    }}
                     placeholder="cfsk_ma_test_..."
                     className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white"
                   />
@@ -2459,7 +2493,10 @@ export default function SettingsPage() {
                   <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
                     <button
                       type="button"
-                      onClick={() => setRazorpayEnv('test')}
+                      onClick={() => {
+                        isPaymentDirtyRef.current = true;
+                        setRazorpayEnv('test');
+                      }}
                       className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
                         razorpayEnv === 'test'
                           ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
@@ -2470,7 +2507,10 @@ export default function SettingsPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setRazorpayEnv('live')}
+                      onClick={() => {
+                        isPaymentDirtyRef.current = true;
+                        setRazorpayEnv('live');
+                      }}
                       className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
                         razorpayEnv === 'live'
                           ? 'bg-blue-600 text-white shadow-sm'
@@ -2491,7 +2531,10 @@ export default function SettingsPage() {
                   <input
                     type="text"
                     value={razorpayKeyId}
-                    onChange={(e) => setRazorpayKeyId(e.target.value)}
+                    onChange={(e) => {
+                      isPaymentDirtyRef.current = true;
+                      setRazorpayKeyId(e.target.value);
+                    }}
                     placeholder={razorpayEnv === 'test' ? 'rzp_test_xxxxxx' : 'rzp_live_xxxxxx'}
                     className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white"
                   />
@@ -2505,7 +2548,10 @@ export default function SettingsPage() {
                   <input
                     type="password"
                     value={razorpayKeySecret}
-                    onChange={(e) => setRazorpayKeySecret(e.target.value)}
+                    onChange={(e) => {
+                      isPaymentDirtyRef.current = true;
+                      setRazorpayKeySecret(e.target.value);
+                    }}
                     placeholder="Generated Key Secret"
                     className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white"
                   />
@@ -2520,7 +2566,10 @@ export default function SettingsPage() {
                 <input
                   type="password"
                   value={razorpayWebhookSecret}
-                  onChange={(e) => setRazorpayWebhookSecret(e.target.value)}
+                  onChange={(e) => {
+                    isPaymentDirtyRef.current = true;
+                    setRazorpayWebhookSecret(e.target.value);
+                  }}
                   placeholder="Optional Webhook Secret for signature validation"
                   className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white"
                 />
@@ -2577,7 +2626,10 @@ export default function SettingsPage() {
                   </label>
                   <select
                     value={upiGatewayProvider}
-                    onChange={(e) => setUpiGatewayProvider(e.target.value)}
+                    onChange={(e) => {
+                      isPaymentDirtyRef.current = true;
+                      setUpiGatewayProvider(e.target.value);
+                    }}
                     className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
                   >
                     <option value="Cashfree UPI Gateway">Cashfree UPI Autopay / PG</option>
@@ -2594,7 +2646,10 @@ export default function SettingsPage() {
                   <input
                     type="text"
                     value={upiGatewayKey}
-                    onChange={(e) => setUpiGatewayKey(e.target.value)}
+                    onChange={(e) => {
+                      isPaymentDirtyRef.current = true;
+                      setUpiGatewayKey(e.target.value);
+                    }}
                     placeholder="e.g. UPI_MID_884920"
                     className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white"
                   />
@@ -2607,7 +2662,10 @@ export default function SettingsPage() {
                   <input
                     type="password"
                     value={upiGatewaySecret}
-                    onChange={(e) => setUpiGatewaySecret(e.target.value)}
+                    onChange={(e) => {
+                      isPaymentDirtyRef.current = true;
+                      setUpiGatewaySecret(e.target.value);
+                    }}
                     placeholder="e.g. sec_salt_82937402"
                     className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white"
                   />
