@@ -110,31 +110,14 @@ async function backupSingleUser(
   const filename = `SmartKhata-Backup-${safeFilenamePrefix}-${dateStr}.zip`;
   const { zipBuffer, manifest } = await createBackupArchive(fullData, filename);
 
-  let driveFileId: string = 'supabase_cloud_snapshot';
+  let driveFileId: string | null = null;
   let uploadSize: number = zipBuffer.length;
-  let destination = 'cloud_snapshot';
+  let destination = 'none';
   let googleEmail: string | undefined = undefined;
+  let backupSucceeded = false;
+  let failureReason = '';
 
-  // 1. If a shared Admin/Master Drive is active (e.g. from "Backup All Merchants Now" or multi-tenant cron)
-  if (sharedDrive && sharedBackupsFolderId) {
-    try {
-      const merchantFolderId = await getOrCreateMerchantBackupFolder(
-        sharedDrive,
-        sharedBackupsFolderId,
-        cleanMerchantName,
-        userId
-      );
-      const uploadRes = await uploadBackupZip(sharedDrive, merchantFolderId, filename, zipBuffer);
-      await uploadBackupManifest(sharedDrive, merchantFolderId, 'manifest.json', manifest);
-      driveFileId = uploadRes.fileId;
-      uploadSize = uploadRes.size;
-      destination = 'admin_google_drive';
-    } catch (sharedErr) {
-      console.warn(`Admin/Master Drive upload error for merchant ${userId} (${cleanMerchantName}):`, sharedErr);
-    }
-  }
-
-  // 2. Also check if this user has their own personal Google Drive connected
+  // 1. Personal Google Drive check & upload (Primary)
   const personalTokenRecord = await getUserDriveTokens(userId);
   if (personalTokenRecord && personalTokenRecord.is_connected && personalTokenRecord.encrypted_tokens) {
     try {
@@ -149,43 +132,126 @@ async function backupSingleUser(
       );
       const personalUploadRes = await uploadBackupZip(personalDrive, personalMerchantFolderId, filename, zipBuffer);
       await uploadBackupManifest(personalDrive, personalMerchantFolderId, 'manifest.json', manifest);
-      if (destination === 'cloud_snapshot') {
-        driveFileId = personalUploadRes.fileId;
-        uploadSize = personalUploadRes.size;
-        destination = 'personal_google_drive';
-      } else {
-        destination = 'admin_and_personal_google_drive';
+
+      // =========================================================================
+      // MANDATORY POST-UPLOAD RECHECK: Verify file physically exists in Google Drive
+      // =========================================================================
+      const verifyRes = await personalDrive.files.get({
+        fileId: personalUploadRes.fileId,
+        fields: 'id, name, size, trashed',
+      });
+
+      if (!verifyRes?.data?.id || verifyRes?.data?.trashed) {
+        throw new Error('Google Drive post-upload recheck failed: File was not found in Drive storage.');
       }
+
+      driveFileId = verifyRes.data.id;
+      uploadSize = Number(verifyRes.data.size) || personalUploadRes.size;
+      destination = 'personal_google_drive';
       googleEmail = personalTokenRecord.google_email;
-    } catch (personalErr) {
-      console.warn(`User personal Drive upload error for ${userId}, trying fallback:`, personalErr);
+      backupSucceeded = true;
+    } catch (personalErr: any) {
+      console.warn(`User personal Drive backup/verify error for ${userId}:`, personalErr);
+      const errMsg = personalErr?.message || String(personalErr);
+      const isTokenExpired =
+        errMsg.includes('invalid_grant') ||
+        errMsg.includes('expired') ||
+        errMsg.includes('revoked') ||
+        personalErr?.code === 400 ||
+        personalErr?.code === 401 ||
+        personalErr?.status === 400 ||
+        personalErr?.status === 401;
+
+      if (isTokenExpired) {
+        failureReason = 'Google Drive OAuth token expired or revoked (invalid_grant). Please reconnect your Google Drive in Settings.';
+        try {
+          await supabase
+            .from('google_drive_tokens')
+            .update({ is_connected: false, updated_at: new Date().toISOString() })
+            .eq('user_id', userId);
+        } catch (dbErr) {
+          console.warn('Could not mark disconnected in google_drive_tokens:', dbErr);
+        }
+      } else {
+        failureReason = `Google Drive backup failed: ${errMsg}`;
+      }
     }
+  } else if (!sharedDrive) {
+    failureReason = 'Google Drive is not connected. Please connect your Google account in Settings to enable automatic cloud backups.';
   }
 
-  // 3. Fallback: If neither shared drive nor personal drive was used, try Master Drive fallback
-  if (destination === 'cloud_snapshot') {
+  // 2. If personal drive was not connected or failed, try shared Admin/Master Drive (if active)
+  if (!backupSucceeded && sharedDrive && sharedBackupsFolderId) {
     try {
-      const { drive: masterDrive, tokenRecord: masterToken } = await getMasterDriveClient();
-      const masterFolders = await ensureSmartKhataFolders(masterDrive);
       const merchantFolderId = await getOrCreateMerchantBackupFolder(
-        masterDrive,
-        masterFolders.backupsId,
+        sharedDrive,
+        sharedBackupsFolderId,
         cleanMerchantName,
         userId
       );
-      const uploadRes = await uploadBackupZip(masterDrive, merchantFolderId, filename, zipBuffer);
-      await uploadBackupManifest(masterDrive, merchantFolderId, 'manifest.json', manifest);
-      driveFileId = uploadRes.fileId;
-      uploadSize = uploadRes.size;
-      destination = 'master_google_drive';
-      googleEmail = masterToken.google_email;
-    } catch (masterErr) {
-      // No Google Drive connected, destination remains cloud_snapshot
-      destination = 'supabase_cloud_snapshot';
+      const uploadRes = await uploadBackupZip(sharedDrive, merchantFolderId, filename, zipBuffer);
+      await uploadBackupManifest(sharedDrive, merchantFolderId, 'manifest.json', manifest);
+
+      // Recheck verification in Master Drive
+      const verifyRes = await sharedDrive.files.get({
+        fileId: uploadRes.fileId,
+        fields: 'id, name, size, trashed',
+      });
+
+      if (!verifyRes?.data?.id || verifyRes?.data?.trashed) {
+        throw new Error('Master Drive post-upload verification failed: File was not confirmed.');
+      }
+
+      driveFileId = verifyRes.data.id;
+      uploadSize = Number(verifyRes.data.size) || uploadRes.size;
+      destination = 'admin_google_drive';
+      backupSucceeded = true;
+      failureReason = '';
+    } catch (sharedErr: any) {
+      console.warn(`Admin/Master Drive upload error for merchant ${userId} (${cleanMerchantName}):`, sharedErr);
+      if (!failureReason) {
+        failureReason = `Master Google Drive upload failed: ${sharedErr?.message || 'Drive error'}`;
+      }
     }
   }
 
-  // 4. Record history entry in Supabase google_drive_backups table
+  // 3. Fallback: If neither was verified in Google Drive, the backup FAILED.
+  if (!backupSucceeded) {
+    const historyItem = {
+      id: `bk_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      user_id: userId,
+      drive_file_id: null,
+      filename,
+      size_bytes: uploadSize,
+      record_counts: manifest?.recordCounts || {},
+      manifest_version: manifest?.formatVersion || '1.0',
+      status: 'failed',
+      error_message: failureReason || 'Google Drive backup failed or could not be verified.',
+      created_at: new Date().toISOString(),
+    };
+
+    try {
+      await supabase.from('google_drive_backups').insert(historyItem);
+    } catch (dbErr) {
+      console.warn('Could not insert failed backup record in google_drive_backups:', dbErr);
+    }
+
+    return {
+      userId,
+      name: displayName,
+      email: userEmail,
+      googleEmail,
+      destination: 'none',
+      status: 'failed' as const,
+      verified: false,
+      error: failureReason || 'Google Drive backup failed. File was not updated in Drive.',
+      filename,
+      size: uploadSize,
+      recordCounts: manifest?.recordCounts || {},
+    };
+  }
+
+  // 4. Record successful & verified history entry in Supabase
   const historyItem = {
     id: `bk_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     user_id: userId,
@@ -195,6 +261,7 @@ async function backupSingleUser(
     record_counts: manifest.recordCounts,
     manifest_version: manifest.formatVersion,
     status: 'success',
+    error_message: null,
     created_at: new Date().toISOString(),
   };
 
@@ -207,6 +274,8 @@ async function backupSingleUser(
     googleEmail,
     destination,
     status: 'success' as const,
+    verified: true,
+    fileId: driveFileId,
     filename,
     size: uploadSize,
     recordCounts: manifest.recordCounts,
@@ -283,10 +352,19 @@ async function handleCron(req: NextRequest) {
     if (targetUserId) {
       try {
         const result = await backupSingleUser(supabase, targetUserId, dateStr);
+        if (result.status === 'failed') {
+          return NextResponse.json({
+            success: false,
+            message: result.error || 'Google Drive backup failed or token expired',
+            backup: result,
+            timestamp: new Date().toISOString(),
+          }, { status: 400 });
+        }
+
         return NextResponse.json({
           success: true,
           trigger: trigger || 'login_or_direct',
-          message: `User data backup snapshot generated successfully for ${result.name} (${result.destination}).`,
+          message: `User data backup snapshot generated and verified in Google Drive for ${result.name} (${result.destination}).`,
           backup: result,
           timestamp: new Date().toISOString(),
         });

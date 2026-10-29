@@ -13,6 +13,7 @@ export interface AutoBackupStatus {
   processedMb: number;
   totalMb: number;
   stepText: string;
+  error?: string;
   durationSeconds?: number;
   finalSizeMb?: number;
   filename?: string;
@@ -35,7 +36,14 @@ export default function AutoBackupGuardian() {
   const progressIntervalRef = useRef<any>(null);
   const isRunningRef = useRef(false);
 
-  const startDayFirstBackup = (userId: string) => {
+  const broadcastStatus = (statusObj: AutoBackupStatus) => {
+    try {
+      localStorage.setItem('skp_live_backup_progress', JSON.stringify(statusObj));
+    } catch {}
+    window.dispatchEvent(new CustomEvent('khatapro_backup_progress', { detail: statusObj }));
+  };
+
+  const startDayFirstBackup = async (userId: string) => {
     if (isRunningRef.current) return;
 
     const todayStr = new Date().toISOString().split('T')[0];
@@ -43,8 +51,8 @@ export default function AutoBackupGuardian() {
     const cancelledKey = `skp_daily_backup_cancelled_${userId}`;
     const postponedKey = `skp_daily_backup_postponed_${userId}`;
 
-    // 1. Check if already completed today
-    if (localStorage.getItem(completedKey) === todayStr) {
+    // 1. Check if user selected "Later" in this current browser session (will run on next open)
+    if (sessionStorage.getItem(postponedKey) === 'true') {
       return;
     }
 
@@ -53,8 +61,39 @@ export default function AutoBackupGuardian() {
       return;
     }
 
-    // 3. Check if user selected "Later" in this current browser session (will run on next open)
-    if (sessionStorage.getItem(postponedKey) === 'true') {
+    // 3. Pre-flight check: Verify Google Drive token validity with status API
+    try {
+      const statusRes = await fetch(`/api/backup/google-drive/status?userId=${encodeURIComponent(userId)}`);
+      if (statusRes.ok) {
+        const statusData = await statusRes.json();
+        if (!statusData.isConnected || statusData.isExpired) {
+          // Google Drive disconnected or token expired!
+          localStorage.removeItem(completedKey);
+          const errorMsg = statusData.error || (statusData.isExpired
+            ? 'Google Drive OAuth token expired (invalid_grant). Reconnection required in Settings.'
+            : 'Google Drive is not connected. Connect your Google account in Settings.');
+
+          broadcastStatus({
+            id: `bk_failed_${Date.now()}`,
+            userId,
+            status: 'failed',
+            date: todayStr,
+            progressPercent: 0,
+            processedMb: 0,
+            totalMb: 0,
+            stepText: errorMsg,
+            error: errorMsg,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+      }
+    } catch (checkErr) {
+      console.warn('Could not verify Drive status before auto backup:', checkErr);
+    }
+
+    // 4. Check if already completed and verified today
+    if (localStorage.getItem(completedKey) === todayStr) {
       return;
     }
 
@@ -85,13 +124,6 @@ export default function AutoBackupGuardian() {
       totalMb: estimatedTotalMb,
       stepText: 'Reading ledger data & preparing snapshot...',
       timestamp: new Date().toISOString(),
-    };
-
-    const broadcastStatus = (statusObj: AutoBackupStatus) => {
-      try {
-        localStorage.setItem('skp_live_backup_progress', JSON.stringify(statusObj));
-      } catch {}
-      window.dispatchEvent(new CustomEvent('khatapro_backup_progress', { detail: statusObj }));
     };
 
     broadcastStatus(initialStatus);
@@ -129,7 +161,7 @@ export default function AutoBackupGuardian() {
 
     progressIntervalRef.current = progressInterval;
 
-    // Trigger backup API
+    // Trigger backup API with strict post-upload recheck
     fetch(`/api/backup/google-drive/cron?force=true&auto=true&trigger=day_first_open&userId=${encodeURIComponent(userId)}`, {
       method: 'POST',
       headers: {
@@ -149,8 +181,8 @@ export default function AutoBackupGuardian() {
         const finalSizeMb = Number((finalSizeBytes / (1024 * 1024)).toFixed(2));
         const filename = data.backup?.filename || `SmartKhata-Backup-${todayStr}.zip`;
 
-        if (data.success) {
-          // Mark completed for today
+        // Only mark completed IF backup actually succeeded and was physically verified in Google Drive!
+        if (data.success && data.backup?.status === 'success' && data.backup?.verified) {
           localStorage.setItem(completedKey, todayStr);
 
           const completedStatus: AutoBackupStatus = {
@@ -169,9 +201,13 @@ export default function AutoBackupGuardian() {
           };
 
           broadcastStatus(completedStatus);
-          console.log(`🛡️ Day 1st Open Auto Backup Completed for ${userId} in ${durationSeconds}s (${finalSizeMb} MB).`);
+          console.log(`🛡️ Day 1st Open Auto Backup Verified & Completed for ${userId} in ${durationSeconds}s (${finalSizeMb} MB).`);
         } else {
-          broadcastStatus({
+          // Backup failed or could not be verified in Google Drive
+          localStorage.removeItem(completedKey);
+
+          const errorMsg = data.message || data.backup?.error || 'Auto backup to Google Drive failed or could not be verified';
+          const failedStatus: AutoBackupStatus = {
             id: initialStatus.id,
             userId,
             status: 'failed',
@@ -180,9 +216,17 @@ export default function AutoBackupGuardian() {
             processedMb: 0,
             totalMb: estimatedTotalMb,
             durationSeconds,
-            stepText: data.message || 'Auto backup could not be completed',
+            stepText: errorMsg,
+            error: errorMsg,
             timestamp: new Date().toISOString(),
-          });
+          };
+
+          broadcastStatus(failedStatus);
+          addToast(
+            'Auto Backup Failed',
+            errorMsg,
+            'error'
+          );
         }
       })
       .catch((err) => {
@@ -195,7 +239,9 @@ export default function AutoBackupGuardian() {
           return;
         }
 
+        localStorage.removeItem(completedKey);
         const durationSeconds = Number(((Date.now() - startTime) / 1000).toFixed(1));
+        const errorMsg = err.message || 'Network error during auto backup';
         broadcastStatus({
           id: initialStatus.id,
           userId,
@@ -205,13 +251,15 @@ export default function AutoBackupGuardian() {
           processedMb: 0,
           totalMb: estimatedTotalMb,
           durationSeconds,
-          stepText: err.message || 'Network error during auto backup',
+          stepText: errorMsg,
+          error: errorMsg,
           timestamp: new Date().toISOString(),
         });
+        addToast('Auto Backup Failed', errorMsg, 'error');
       });
   };
 
-  // 1. Listen for user session or Day 1st Open triggers
+  // 1. Listen for user session, Day 1st Open triggers, and Retry Backup events
   useEffect(() => {
     if (!currentUser?.id) return;
 
@@ -225,10 +273,23 @@ export default function AutoBackupGuardian() {
       if (uId) startDayFirstBackup(uId);
     };
 
+    const handleRetryDaily = (e: any) => {
+      const uId = e.detail?.userId || currentUser?.id;
+      if (uId) {
+        localStorage.removeItem(`skp_daily_backup_completed_${uId}`);
+        sessionStorage.removeItem(`skp_daily_backup_postponed_${uId}`);
+        localStorage.removeItem(`skp_daily_backup_cancelled_${uId}`);
+        isRunningRef.current = false;
+        startDayFirstBackup(uId);
+      }
+    };
+
     window.addEventListener('khatapro_check_daily_backup', handleCheckDaily);
+    window.addEventListener('khatapro_retry_daily_backup', handleRetryDaily);
     return () => {
       clearTimeout(timer);
       window.removeEventListener('khatapro_check_daily_backup', handleCheckDaily);
+      window.removeEventListener('khatapro_retry_daily_backup', handleRetryDaily);
     };
   }, [currentUser?.id]);
 

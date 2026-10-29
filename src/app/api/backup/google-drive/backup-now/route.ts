@@ -96,16 +96,26 @@ export async function POST(req: NextRequest) {
     // 4. Upload / replace manifest.json in SmartKhata Pro/Backups/<Merchant Name> (<Merchant ID>)/
     await uploadBackupManifest(drive, merchantFolderId, 'manifest.json', manifest);
 
-    // 4. Record history entry in Supabase
+    // 5. Post-upload verification recheck: verify file physically exists and was written
+    const verifyRes = await drive.files.get({
+      fileId: uploadResult.fileId,
+      fields: 'id, name, size, trashed',
+    });
+    if (!verifyRes?.data?.id || verifyRes?.data?.trashed) {
+      throw new Error('Google Drive post-upload recheck failed: File was not found in Drive storage.');
+    }
+
+    // 6. Record history entry in Supabase
     const historyItem = {
       id: `bk_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       user_id: userId,
-      drive_file_id: uploadResult.fileId,
+      drive_file_id: verifyRes.data.id,
       filename,
-      size_bytes: uploadResult.size,
+      size_bytes: Number(verifyRes.data.size) || uploadResult.size,
       record_counts: manifest.recordCounts,
       manifest_version: manifest.formatVersion,
       status: 'success',
+      error_message: null,
       created_at: new Date().toISOString(),
     };
 
@@ -120,18 +130,50 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Backup snapshot saved & updated in your private SmartKhata Pro/Backups folder in Google Drive!',
-      fileId: uploadResult.fileId,
+      message: 'Backup snapshot verified and saved in your private Google Drive!',
+      fileId: verifyRes.data.id,
       filename,
-      sizeBytes: uploadResult.size,
+      sizeBytes: Number(verifyRes.data.size) || uploadResult.size,
       recordCounts: manifest.recordCounts,
       timestamp: historyItem.created_at,
     });
   } catch (error: any) {
     console.error('Backup Now error:', error);
+    const errMsg = error?.message || String(error);
+    const isTokenExpired =
+      errMsg.includes('invalid_grant') ||
+      errMsg.includes('expired') ||
+      errMsg.includes('revoked') ||
+      error?.code === 400 ||
+      error?.code === 401 ||
+      error?.status === 400 ||
+      error?.status === 401;
+
+    // Auto-mark disconnected in database if token expired
+    if (isTokenExpired) {
+      const supabase = getSupabaseAdmin();
+      if (supabase) {
+        try {
+          const body = await req.json().catch(() => ({}));
+          const uId = body?.userId || req.cookies.get('skp_auth_session')?.value;
+          if (uId) {
+            await supabase
+              .from('google_drive_tokens')
+              .update({ is_connected: false, updated_at: new Date().toISOString() })
+              .eq('user_id', uId);
+          }
+        } catch {}
+      }
+    }
+
     return NextResponse.json(
-      { success: false, message: error.message || 'Backup failed' },
-      { status: 500 }
+      {
+        success: false,
+        message: isTokenExpired
+          ? 'Google Drive OAuth token expired or revoked (invalid_grant). Please reconnect in Settings.'
+          : (error.message || 'Backup failed')
+      },
+      { status: isTokenExpired ? 401 : 500 }
     );
   }
 }

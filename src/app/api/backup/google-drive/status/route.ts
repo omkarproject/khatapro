@@ -51,16 +51,56 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Fetch storage quota from Google Drive API
+    // Fetch storage quota from Google Drive API to verify token validity
     let storageQuota: any = null;
+    let isTokenInvalid = false;
+    let tokenErrorMessage = '';
     try {
       const driveObj = await getAuthenticatedDriveForUser(userId);
       storageQuota = await getDriveStorageQuota(driveObj.drive);
-    } catch (quotaErr) {
-      console.warn('Could not retrieve Drive storage quota:', quotaErr);
+    } catch (quotaErr: any) {
+      console.warn('Could not retrieve Drive storage quota / test token:', quotaErr);
+      const errMsg = quotaErr?.message || String(quotaErr);
+      if (
+        errMsg.includes('invalid_grant') ||
+        errMsg.includes('expired') ||
+        errMsg.includes('revoked') ||
+        quotaErr?.code === 400 ||
+        quotaErr?.code === 401 ||
+        quotaErr?.status === 400 ||
+        quotaErr?.status === 401
+      ) {
+        isTokenInvalid = true;
+        tokenErrorMessage = 'Google Drive OAuth token expired or revoked (invalid_grant). Reconnection required.';
+        if (supabase) {
+          try {
+            await supabase
+              .from('google_drive_tokens')
+              .update({ is_connected: false, updated_at: new Date().toISOString() })
+              .eq('user_id', userId);
+          } catch {}
+        }
+      }
     }
 
-    // Fetch backup history for this user
+    if (isTokenInvalid) {
+      return NextResponse.json({
+        success: true,
+        isConfigured,
+        isConnected: false,
+        isExpired: true,
+        error: tokenErrorMessage,
+        googleEmail: tokenRecord.google_email,
+        lastConnectedAt: tokenRecord.last_connected_at,
+        lastBackupAt: null,
+        lastSystemBackupAt,
+        totalMerchantsProtected,
+        storageQuota: null,
+        history: [],
+      });
+    }
+
+    // Fetch backup history for this user (verified Google Drive backups only)
     let history: any[] = [];
     if (supabase) {
       try {
@@ -68,6 +108,8 @@ export async function GET(req: NextRequest) {
           .from('google_drive_backups')
           .select('*')
           .eq('user_id', userId)
+          .eq('status', 'success')
+          .neq('drive_file_id', 'supabase_cloud_snapshot')
           .order('created_at', { ascending: false })
           .limit(1);
         if (data && data.length > 0) {
@@ -77,6 +119,8 @@ export async function GET(req: NextRequest) {
           const { data: sysData } = await supabase
             .from('google_drive_backups')
             .select('*')
+            .eq('status', 'success')
+            .neq('drive_file_id', 'supabase_cloud_snapshot')
             .order('created_at', { ascending: false })
             .limit(1);
           if (sysData) history = sysData;
