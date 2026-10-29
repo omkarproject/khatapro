@@ -54,8 +54,10 @@ export default function QuickUPICollectModal() {
 
   const paymentSettings = settings.paymentSettings;
 
-  // Active gateway tab
-  const [activeTab, setActiveTab] = useState<'direct_upi' | 'cashfree' | 'razorpay' | 'upi_gateway' | 'history'>('direct_upi');
+  // Active gateway tab - defaults directly to merchant's configured active payment mode
+  const [activeTab, setActiveTab] = useState<'direct_upi' | 'cashfree' | 'razorpay' | 'upi_gateway' | 'history'>(() => {
+    return ((collectModalData as any)?.method) || paymentSettings.collectionMode || 'direct_upi';
+  });
   const [serverCfConfigured, setServerCfConfigured] = useState(false);
 
   // Form State
@@ -186,6 +188,8 @@ export default function QuickUPICollectModal() {
   // Sync state when modal opens or settings change
   useEffect(() => {
     if (isCollectModalOpen) {
+      const preferredMode = ((collectModalData as any)?.method) || paymentSettings.collectionMode || 'direct_upi';
+      setActiveTab(preferredMode);
       setUpiId(paymentSettings.upiId || '');
       setPayeeName(paymentSettings.payeeName || settings.businessName || profile.businessName || currentUser?.businessName || '');
       setCustomQrUrl(paymentSettings.customQrUrl);
@@ -595,7 +599,7 @@ export default function QuickUPICollectModal() {
         {/* Dynamic Active Gateways Tab Bar */}
         <div className="px-4 sm:px-6 pt-3 pb-1 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/30 dark:bg-slate-900/30 flex items-center gap-2 overflow-x-auto scrollbar-none">
           
-          {/* 1. Default UPI & Shop QR (Always Active) */}
+          {/* 1. Default UPI & Shop QR */}
           <button
             type="button"
             onClick={() => setActiveTab('direct_upi')}
@@ -607,17 +611,23 @@ export default function QuickUPICollectModal() {
           >
             <QrCode className="w-3.5 h-3.5" />
             <span>Default UPI &amp; QR</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
-              activeTab === 'direct_upi'
-                ? 'bg-white/20 text-white'
-                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
-            }`}>
-              0% Fee
-            </span>
+            {(!paymentSettings.collectionMode || paymentSettings.collectionMode === 'direct_upi') ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-400/20 text-emerald-300 flex items-center gap-1 border border-emerald-400/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active Mode
+              </span>
+            ) : (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+                activeTab === 'direct_upi'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
+              }`}>
+                0% Fee
+              </span>
+            )}
           </button>
 
-          {/* 2. Cashfree Payment Gateway (Shows when API keys active) */}
-          {isCashfreeConfigured && (
+          {/* 2. Cashfree Payment Gateway */}
+          {(isCashfreeConfigured || paymentSettings.collectionMode === 'cashfree') && (
             <button
               type="button"
               onClick={() => setActiveTab('cashfree')}
@@ -629,18 +639,22 @@ export default function QuickUPICollectModal() {
             >
               <CreditCard className="w-3.5 h-3.5 text-purple-300" />
               <span>Cashfree PG</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold flex items-center gap-1 ${
-                activeTab === 'cashfree'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
-              }`}>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active
-              </span>
+              {paymentSettings.collectionMode === 'cashfree' ? (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-400/20 text-emerald-300 flex items-center gap-1 border border-emerald-400/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active Mode
+                </span>
+              ) : (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+                  activeTab === 'cashfree' ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
+                }`}>
+                  Gateway
+                </span>
+              )}
             </button>
           )}
 
-          {/* 3. Razorpay Gateway (Shows when API keys active) */}
-          {isRazorpayConfigured && (
+          {/* 3. Razorpay Gateway */}
+          {(isRazorpayConfigured || paymentSettings.collectionMode === 'razorpay') && (
             <button
               type="button"
               onClick={() => setActiveTab('razorpay')}
@@ -652,18 +666,22 @@ export default function QuickUPICollectModal() {
             >
               <ShieldCheck className="w-3.5 h-3.5 text-blue-300" />
               <span>Razorpay PG</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
-                activeTab === 'razorpay'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-              }`}>
-                Active
-              </span>
+              {paymentSettings.collectionMode === 'razorpay' ? (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-400/20 text-emerald-300 flex items-center gap-1 border border-emerald-400/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active Mode
+                </span>
+              ) : (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+                  activeTab === 'razorpay' ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                }`}>
+                  Razorpay
+                </span>
+              )}
             </button>
           )}
 
-          {/* 4. Custom UPI Gateway (Shows when keys active) */}
-          {isUpiGatewayConfigured && (
+          {/* 4. Custom UPI Gateway */}
+          {(isUpiGatewayConfigured || paymentSettings.collectionMode === 'upi_gateway') && (
             <button
               type="button"
               onClick={() => setActiveTab('upi_gateway')}
@@ -675,13 +693,17 @@ export default function QuickUPICollectModal() {
             >
               <Smartphone className="w-3.5 h-3.5 text-cyan-300" />
               <span>UPI Gateway</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
-                activeTab === 'upi_gateway'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300'
-              }`}>
-                Active
-              </span>
+              {paymentSettings.collectionMode === 'upi_gateway' ? (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-400/20 text-emerald-300 flex items-center gap-1 border border-emerald-400/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active Mode
+                </span>
+              ) : (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+                  activeTab === 'upi_gateway' ? 'bg-white/20 text-white' : 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300'
+                }`}>
+                  Webhooks
+                </span>
+              )}
             </button>
           )}
 

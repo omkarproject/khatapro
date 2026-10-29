@@ -348,14 +348,27 @@ export const StorageService = {
         try { localStorage.removeItem('khatapro_business_logo'); } catch {}
       }
 
+      const cloudPS = data.settings.paymentSettings || {};
+      const localPS = existingSettings?.paymentSettings || {};
       const mergedPaymentSettings = {
-        ...(existingSettings?.paymentSettings || {}),
-        ...(data.settings.paymentSettings || {}),
-        // Preserve saved UPI ID and QR if cloud returns empty
-        upiId: (data.settings.paymentSettings?.upiId || '').trim() || existingSettings?.paymentSettings?.upiId || '',
-        payeeName: (data.settings.paymentSettings?.payeeName || '').trim() || existingSettings?.paymentSettings?.payeeName || existingSettings?.businessName || '',
-        customQrUrl: data.settings.paymentSettings?.customQrUrl || existingSettings?.paymentSettings?.customQrUrl || '',
-        isDefaultQrSaved: data.settings.paymentSettings?.isDefaultQrSaved ?? existingSettings?.paymentSettings?.isDefaultQrSaved ?? false,
+        ...localPS,
+        ...cloudPS,
+        collectionMode: cloudPS.collectionMode || localPS.collectionMode || 'direct_upi',
+        upiId: (cloudPS.upiId || '').trim() || localPS.upiId || '',
+        payeeName: (cloudPS.payeeName || '').trim() || localPS.payeeName || existingSettings?.businessName || '',
+        customQrUrl: cloudPS.customQrUrl || localPS.customQrUrl || '',
+        isDefaultQrSaved: cloudPS.isDefaultQrSaved ?? localPS.isDefaultQrSaved ?? false,
+        cashfreeAppId: (cloudPS.cashfreeAppId || '').trim() || localPS.cashfreeAppId || '',
+        cashfreeSecretKey: (cloudPS.cashfreeSecretKey || '').trim() || localPS.cashfreeSecretKey || '',
+        cashfreeEnv: cloudPS.cashfreeEnv || localPS.cashfreeEnv || 'production',
+        razorpayKeyId: (cloudPS.razorpayKeyId || '').trim() || localPS.razorpayKeyId || '',
+        razorpayKeySecret: (cloudPS.razorpayKeySecret || '').trim() || localPS.razorpayKeySecret || '',
+        razorpayWebhookSecret: (cloudPS.razorpayWebhookSecret || '').trim() || localPS.razorpayWebhookSecret || '',
+        razorpayEnv: cloudPS.razorpayEnv || localPS.razorpayEnv || 'live',
+        upiGatewayProvider: cloudPS.upiGatewayProvider || localPS.upiGatewayProvider || 'Cashfree UPI Gateway',
+        upiGatewayKey: (cloudPS.upiGatewayKey || '').trim() || localPS.upiGatewayKey || '',
+        upiGatewaySecret: (cloudPS.upiGatewaySecret || '').trim() || localPS.upiGatewaySecret || '',
+        upiGatewayWebhookUrl: (cloudPS.upiGatewayWebhookUrl || '').trim() || localPS.upiGatewayWebhookUrl || 'https://api.smartkhatapro.in/webhook/upi-payment',
       };
       const mergedSettings = {
         ...existingSettings,

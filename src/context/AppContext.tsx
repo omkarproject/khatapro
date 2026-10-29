@@ -727,14 +727,30 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
                 websiteSupportPhone: brandStored.websiteSupportPhone !== undefined ? brandStored.websiteSupportPhone : (d.settings.websiteSupportPhone ?? prev.websiteSupportPhone ?? ''),
                 websiteSupportEmail: brandStored.websiteSupportEmail !== undefined ? brandStored.websiteSupportEmail : (d.settings.websiteSupportEmail ?? prev.websiteSupportEmail ?? ''),
                 businessLogo: preservedLogo,
-                paymentSettings: {
-                  ...(prev.paymentSettings || {}),
-                  ...(d.settings.paymentSettings || {}),
-                  upiId: (d.settings.paymentSettings?.upiId || '').trim() || prev.paymentSettings?.upiId || '',
-                  payeeName: (d.settings.paymentSettings?.payeeName || '').trim() || prev.paymentSettings?.payeeName || prev.businessName || '',
-                  customQrUrl: d.settings.paymentSettings?.customQrUrl || prev.paymentSettings?.customQrUrl || '',
-                  isDefaultQrSaved: d.settings.paymentSettings?.isDefaultQrSaved ?? prev.paymentSettings?.isDefaultQrSaved ?? false,
-                },
+                paymentSettings: (() => {
+                  const cloudPS = d.settings.paymentSettings || {};
+                  const localPS = prev.paymentSettings || {};
+                  return {
+                    ...localPS,
+                    ...cloudPS,
+                    collectionMode: cloudPS.collectionMode || localPS.collectionMode || 'direct_upi',
+                    upiId: (cloudPS.upiId || '').trim() || localPS.upiId || '',
+                    payeeName: (cloudPS.payeeName || '').trim() || localPS.payeeName || prev.businessName || '',
+                    customQrUrl: cloudPS.customQrUrl || localPS.customQrUrl || '',
+                    isDefaultQrSaved: cloudPS.isDefaultQrSaved ?? localPS.isDefaultQrSaved ?? false,
+                    cashfreeAppId: (cloudPS.cashfreeAppId || '').trim() || localPS.cashfreeAppId || '',
+                    cashfreeSecretKey: (cloudPS.cashfreeSecretKey || '').trim() || localPS.cashfreeSecretKey || '',
+                    cashfreeEnv: cloudPS.cashfreeEnv || localPS.cashfreeEnv || 'production',
+                    razorpayKeyId: (cloudPS.razorpayKeyId || '').trim() || localPS.razorpayKeyId || '',
+                    razorpayKeySecret: (cloudPS.razorpayKeySecret || '').trim() || localPS.razorpayKeySecret || '',
+                    razorpayWebhookSecret: (cloudPS.razorpayWebhookSecret || '').trim() || localPS.razorpayWebhookSecret || '',
+                    razorpayEnv: cloudPS.razorpayEnv || localPS.razorpayEnv || 'live',
+                    upiGatewayProvider: cloudPS.upiGatewayProvider || localPS.upiGatewayProvider || 'Cashfree UPI Gateway',
+                    upiGatewayKey: (cloudPS.upiGatewayKey || '').trim() || localPS.upiGatewayKey || '',
+                    upiGatewaySecret: (cloudPS.upiGatewaySecret || '').trim() || localPS.upiGatewaySecret || '',
+                    upiGatewayWebhookUrl: (cloudPS.upiGatewayWebhookUrl || '').trim() || localPS.upiGatewayWebhookUrl || 'https://api.smartkhatapro.in/webhook/upi-payment',
+                  };
+                })(),
               };
             });
 

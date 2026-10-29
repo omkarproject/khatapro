@@ -46,15 +46,17 @@ function CustomerPayInvoiceContent() {
 
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedMethod, setSelectedMethod] = useState<PaymentCollectionMode>(
-    gwParam || 'direct_upi'
-  );
+  const [selectedMethod, setSelectedMethod] = useState<PaymentCollectionMode>(() => {
+    return gwParam || settings.paymentSettings?.collectionMode || 'direct_upi';
+  });
 
   useEffect(() => {
     if (gwParam && ['direct_upi', 'cashfree', 'razorpay', 'upi_gateway'].includes(gwParam)) {
       setSelectedMethod(gwParam);
+    } else if (settings.paymentSettings?.collectionMode) {
+      setSelectedMethod(settings.paymentSettings.collectionMode);
     }
-  }, [gwParam]);
+  }, [gwParam, settings.paymentSettings?.collectionMode]);
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRazorpayLoading, setIsRazorpayLoading] = useState(false);
