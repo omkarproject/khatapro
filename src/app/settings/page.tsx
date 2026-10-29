@@ -77,6 +77,7 @@ import {
   Headphones,
   Trash,
   Code,
+  Folder,
 } from 'lucide-react';
 import GoogleDriveBackupPanel from '@/components/GoogleDriveBackupPanel';
 import CurrencyLanguageModal from '@/components/CurrencyLanguageModal';
@@ -1325,7 +1326,7 @@ export default function SettingsPage() {
       });
     } catch (e) {}
 
-    addToast('Website Branding Updated! 🎨', 'Website Name, Subtitle, Logo, Favicon & Badge database me live update ho gaye hain!', 'success');
+    addToast('Website Branding Updated! 🎨', `Website Name, Subtitle & Google Drive backup folder (${finalName || 'SmartKhata'}/) live update ho gaye hain!`, 'success');
     setIsSavingBranding(false);
   };
 
@@ -3123,6 +3124,10 @@ export default function SettingsPage() {
                   placeholder="e.g. MyBrand, ApnaKhata, VyaparPro"
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-all font-semibold"
                 />
+                <p className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-1.5 flex items-center gap-1.5 font-medium">
+                  <Folder className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <span>Google Drive me auto backups folder isi name (<strong className="font-mono text-emerald-600 dark:text-emerald-400">{webName.trim() || 'SmartKhata'}/</strong>) se banega aur name change hone par auto-update hoga.</span>
+                </p>
               </div>
 
               <div>

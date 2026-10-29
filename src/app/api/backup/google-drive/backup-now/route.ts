@@ -16,11 +16,26 @@ export async function POST(req: NextRequest) {
 
     const { drive, tokenRecord } = await getAuthenticatedDriveForUser(userId);
 
-    // Ensure folder IDs are valid (SmartKhata Pro / Backups & Files)
-    let backupsFolderId = tokenRecord.backups_folder_id;
-    if (!backupsFolderId) {
-      const folders = await ensureHisabKitabFolders(drive);
-      backupsFolderId = folders.backupsId;
+    // Ensure folder IDs are valid using the active Brand Display Name
+    const folders = await ensureHisabKitabFolders(drive, undefined, tokenRecord.folder_id || undefined);
+    const backupsFolderId = folders.backupsId;
+
+    // Update folder_id in tokens table if newly synced
+    if (folders.rootId && folders.rootId !== tokenRecord.folder_id) {
+      const supabaseAdmin = getSupabaseAdmin();
+      if (supabaseAdmin) {
+        try {
+          await supabaseAdmin
+            .from('google_drive_tokens')
+            .update({
+              folder_id: folders.rootId,
+              backups_folder_id: folders.backupsId,
+              docs_folder_id: folders.filesId,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('user_id', userId);
+        } catch {}
+      }
     }
 
     // Gather user data (from request payload if sent, or query Supabase)

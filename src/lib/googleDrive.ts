@@ -1,5 +1,8 @@
 import { google } from 'googleapis';
 import { Readable } from 'stream';
+import { getGlobalBrandingFromDb } from '@/lib/globalBranding';
+import { getSupabaseAdmin } from '@/lib/supabase';
+import { decryptToken } from '@/lib/encryption';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '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';
@@ -53,23 +56,51 @@ export async function getUserEmailFromTokens(tokens: any): Promise<string> {
 }
 
 /**
- * Creates or locates the private folder structure in user's Google Drive:
- * SmartKhata Pro/
- * ├── Backups/  (Contains latest daily backup ZIP & manifest.json)
- * └── Files/    (Contains user attachments: bills, invoices, receipts, CRM drive documents)
+ * Resolves the active Brand Display Name for Google Drive folders.
+ * Prioritizes customName if provided, otherwise reads live websiteName from global_config in Supabase,
+ * falling back to 'SmartKhata'.
  */
-export async function ensureSmartKhataFolders(drive: any): Promise<{
+export async function getEffectiveBrandName(customName?: string): Promise<string> {
+  if (customName && customName.trim()) {
+    return customName.trim();
+  }
+  try {
+    const branding = await getGlobalBrandingFromDb();
+    if (branding?.websiteName && branding.websiteName.trim()) {
+      return branding.websiteName.trim();
+    }
+  } catch (err) {
+    console.warn('Error reading global branding for drive folder name:', err);
+  }
+  return 'SmartKhata';
+}
+
+/**
+ * Creates or locates the private folder structure in user's Google Drive:
+ * <Brand Display Name>/  (e.g., SmartKhata/ or custom Brand Display Name)
+ * ├── Backups/           (Contains latest daily backup ZIP & manifest.json)
+ * └── Files/             (Contains user attachments: bills, invoices, receipts, CRM drive documents)
+ *
+ * If the Brand Display Name changes in Website Identity & Branding, this automatically
+ * renames any existing root folder (e.g. "SmartKhata Pro" or previous brand name) to the new Brand Display Name!
+ */
+export async function ensureSmartKhataFolders(
+  drive: any,
+  customRootName?: string,
+  existingRootFolderId?: string
+): Promise<{
   rootId: string;
   backupsId: string;
   filesId: string;
   docsId: string;
   manifestId: string;
+  rootName: string;
 }> {
-  const findOrCreateFolder = async (name: string, parentId?: string): Promise<string> => {
-    let query = `name = '${name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
-    if (parentId) {
-      query += ` and '${parentId}' in parents`;
-    }
+  const targetBrandName = await getEffectiveBrandName(customRootName);
+
+  const findOrCreateSubfolder = async (name: string, parentId: string): Promise<string> => {
+    const safeName = name.replace(/'/g, "\\'");
+    const query = `name = '${safeName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false and '${parentId}' in parents`;
     const res = await drive.files.list({
       q: query,
       fields: 'files(id, name)',
@@ -83,10 +114,8 @@ export async function ensureSmartKhataFolders(drive: any): Promise<{
     const folderMetadata: any = {
       name,
       mimeType: 'application/vnd.google-apps.folder',
+      parents: [parentId],
     };
-    if (parentId) {
-      folderMetadata.parents = [parentId];
-    }
     const createRes = await drive.files.create({
       requestBody: folderMetadata,
       fields: 'id',
@@ -94,24 +123,169 @@ export async function ensureSmartKhataFolders(drive: any): Promise<{
     return createRes.data.id;
   };
 
-  // 1. Root folder: "SmartKhata Pro"
-  const rootId = await findOrCreateFolder('SmartKhata Pro');
+  let rootId: string | null = null;
 
-  // 2. Exactly two sub-folders: "Backups" and "Files"
-  const backupsId = await findOrCreateFolder('Backups', rootId);
-  const filesId = await findOrCreateFolder('Files', rootId);
+  // 1. If an existing root folder ID is known, verify and rename if brand name updated
+  if (existingRootFolderId) {
+    try {
+      const existingRes = await drive.files.get({
+        fileId: existingRootFolderId,
+        fields: 'id, name, trashed',
+      });
+      if (existingRes?.data && !existingRes.data.trashed) {
+        rootId = existingRootFolderId;
+        if (existingRes.data.name !== targetBrandName) {
+          console.log(`[Google Drive] Renaming root folder from "${existingRes.data.name}" to "${targetBrandName}"`);
+          await drive.files.update({
+            fileId: existingRootFolderId,
+            requestBody: { name: targetBrandName },
+            fields: 'id, name',
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Could not inspect existing root folder by ID:', e);
+    }
+  }
+
+  // 2. Search for existing root folder with targetBrandName
+  if (!rootId) {
+    const safeTarget = targetBrandName.replace(/'/g, "\\'");
+    try {
+      const resTarget = await drive.files.list({
+        q: `name = '${safeTarget}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        fields: 'files(id, name)',
+        spaces: 'drive',
+      });
+      if (resTarget.data.files && resTarget.data.files.length > 0) {
+        rootId = resTarget.data.files[0].id;
+      }
+    } catch (e) {
+      console.warn('Could not search for target brand folder in Drive:', e);
+    }
+  }
+
+  // 3. If not found by target name, check for legacy or previous brand folder names and rename to targetBrandName!
+  if (!rootId) {
+    const legacyNames = ['SmartKhata Pro', 'SmartKhata', 'HisabKitab', 'Hisab Kitab Pro', 'ApnaKhata', 'VyaparPro'];
+    for (const leg of legacyNames) {
+      if (leg.toLowerCase() === targetBrandName.toLowerCase()) continue;
+      const safeLeg = leg.replace(/'/g, "\\'");
+      try {
+        const resLegacy = await drive.files.list({
+          q: `name = '${safeLeg}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+          fields: 'files(id, name)',
+          spaces: 'drive',
+        });
+        if (resLegacy.data.files && resLegacy.data.files.length > 0) {
+          const legacyFolder = resLegacy.data.files[0];
+          console.log(`[Google Drive] Migrating legacy root folder "${legacyFolder.name}" to "${targetBrandName}"`);
+          await drive.files.update({
+            fileId: legacyFolder.id,
+            requestBody: { name: targetBrandName },
+            fields: 'id, name',
+          });
+          rootId = legacyFolder.id;
+          break;
+        }
+      } catch (legErr) {
+        console.warn('Could not query legacy folder:', legErr);
+      }
+    }
+  }
+
+  // 4. If none exists at all, create brand new root folder with targetBrandName
+  if (!rootId) {
+    const createRes = await drive.files.create({
+      requestBody: {
+        name: targetBrandName,
+        mimeType: 'application/vnd.google-apps.folder',
+      },
+      fields: 'id, name',
+    });
+    rootId = createRes.data.id || '';
+  }
+
+  const finalRootId = rootId || 'root';
+
+  // 5. Ensure "Backups" and "Files" subfolders exist inside rootId
+  const backupsId = await findOrCreateSubfolder('Backups', finalRootId);
+  const filesId = await findOrCreateSubfolder('Files', finalRootId);
 
   return {
-    rootId,
+    rootId: finalRootId,
     backupsId,
     filesId,
-    docsId: filesId,       // Alias pointing to Files folder
-    manifestId: backupsId, // Alias pointing to Backups folder (manifest lives here)
+    docsId: filesId,
+    manifestId: backupsId,
+    rootName: targetBrandName,
   };
 }
 
 // Backward-compatible alias
 export const ensureHisabKitabFolders = ensureSmartKhataFolders;
+
+/**
+ * Automatically renames the root backup folder in all connected Google Drives
+ * whenever the "Brand Display Name *" is updated or changed in Website Identity & Branding.
+ */
+export async function syncGoogleDriveBrandFolderName(newBrandName: string): Promise<{
+  successCount: number;
+  failedCount: number;
+  renamedFolders: string[];
+}> {
+  if (!newBrandName || !newBrandName.trim()) {
+    return { successCount: 0, failedCount: 0, renamedFolders: [] };
+  }
+  const targetName = newBrandName.trim();
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    return { successCount: 0, failedCount: 0, renamedFolders: [] };
+  }
+
+  const { data: tokens, error } = await supabase
+    .from('google_drive_tokens')
+    .select('*')
+    .eq('is_connected', true);
+
+  if (error || !tokens || tokens.length === 0) {
+    return { successCount: 0, failedCount: 0, renamedFolders: [] };
+  }
+
+  let successCount = 0;
+  let failedCount = 0;
+  const renamedFolders: string[] = [];
+
+  for (const tokenRecord of tokens) {
+    if (!tokenRecord.encrypted_tokens) continue;
+    try {
+      const decTokens = JSON.parse(decryptToken(tokenRecord.encrypted_tokens));
+      const drive = await getDriveClient(decTokens);
+
+      const folders = await ensureSmartKhataFolders(drive, targetName, tokenRecord.folder_id || undefined);
+
+      // Update google_drive_tokens with guaranteed up-to-date folder IDs
+      await supabase
+        .from('google_drive_tokens')
+        .update({
+          folder_id: folders.rootId,
+          backups_folder_id: folders.backupsId,
+          docs_folder_id: folders.filesId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', tokenRecord.user_id);
+
+      renamedFolders.push(folders.rootId);
+      successCount++;
+      console.log(`[Google Drive] Successfully synced folder name to "${targetName}" for user ${tokenRecord.user_id}`);
+    } catch (err: any) {
+      console.warn(`Could not sync Google Drive folder name for user ${tokenRecord.user_id}:`, err?.message || err);
+      failedCount++;
+    }
+  }
+
+  return { successCount, failedCount, renamedFolders };
+}
 
 /**
  * Finds or creates a subfolder by name inside a parent Google Drive folder

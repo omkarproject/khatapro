@@ -176,7 +176,7 @@ export default function DriveConnectVIPScreen({ onConnected }: DriveConnectVIPSc
         <div className="p-3.5 rounded-2xl bg-indigo-950/30 border border-indigo-800/40 flex items-start gap-3 mb-8 text-xs text-indigo-200/90 leading-relaxed">
           <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
           <span>
-            Connecting your Google account takes <strong>10 seconds</strong> and only authorizes {websiteName} to create a private <code className="text-emerald-400 font-mono">SmartKhata Pro/</code> folder in your Drive. We never access your personal emails, photos, or documents.
+            Connecting your Google account takes <strong>10 seconds</strong> and only authorizes {websiteName} to create a private <code className="text-emerald-400 font-mono">{websiteName}/</code> folder in your Drive. We never access your personal emails, photos, or documents.
           </span>
         </div>
 

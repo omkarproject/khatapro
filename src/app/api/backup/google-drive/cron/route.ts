@@ -4,6 +4,7 @@ import { decryptToken } from '@/lib/encryption';
 import {
   getDriveClient,
   ensureSmartKhataFolders,
+  getEffectiveBrandName,
   uploadBackupZip,
   uploadBackupManifest,
   getOrCreateMerchantBackupFolder,
@@ -106,8 +107,10 @@ async function backupSingleUser(
     },
   };
 
-  // Package individual ZIP archive
-  const filename = `SmartKhata-Backup-${safeFilenamePrefix}-${dateStr}.zip`;
+  // Package individual ZIP archive using active Brand Display Name
+  const effectiveBrand = await getEffectiveBrandName();
+  const safeBrandPrefix = effectiveBrand.replace(/[^a-zA-Z0-9]/g, '_') || 'SmartKhata';
+  const filename = `${safeBrandPrefix}-Backup-${safeFilenamePrefix}-${dateStr}.zip`;
   const { zipBuffer, manifest } = await createBackupArchive(fullData, filename);
 
   let driveFileId: string | null = null;
@@ -123,7 +126,23 @@ async function backupSingleUser(
     try {
       const decTokens = JSON.parse(decryptToken(personalTokenRecord.encrypted_tokens));
       const personalDrive = await getDriveClient(decTokens);
-      const personalFolders = await ensureSmartKhataFolders(personalDrive);
+      const personalFolders = await ensureSmartKhataFolders(personalDrive, effectiveBrand, personalTokenRecord.folder_id || undefined);
+
+      // Auto-heal / sync folder ID in tokens table if newly assigned
+      if (personalFolders.rootId && personalFolders.rootId !== personalTokenRecord.folder_id) {
+        try {
+          await supabase
+            .from('google_drive_tokens')
+            .update({
+              folder_id: personalFolders.rootId,
+              backups_folder_id: personalFolders.backupsId,
+              docs_folder_id: personalFolders.filesId,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('user_id', userId);
+        } catch {}
+      }
+
       const personalMerchantFolderId = await getOrCreateMerchantBackupFolder(
         personalDrive,
         personalFolders.backupsId,

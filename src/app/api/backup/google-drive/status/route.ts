@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserDriveTokens, getAuthenticatedDriveForUser } from '@/lib/driveTokenHelper';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { isGoogleDriveConfigured, getDriveStorageQuota } from '@/lib/googleDrive';
+import { isGoogleDriveConfigured, getDriveStorageQuota, getEffectiveBrandName } from '@/lib/googleDrive';
 
 export async function GET(req: NextRequest) {
   try {
@@ -37,11 +37,14 @@ export async function GET(req: NextRequest) {
       } catch {}
     }
 
+    const brandFolderName = await getEffectiveBrandName();
+
     if (!tokenRecord || !tokenRecord.is_connected) {
       return NextResponse.json({
         success: true,
         isConfigured,
         isConnected: false,
+        brandFolderName,
         googleEmail: null,
         lastBackupAt: null,
         lastSystemBackupAt,
@@ -89,6 +92,7 @@ export async function GET(req: NextRequest) {
         isConfigured,
         isConnected: false,
         isExpired: true,
+        brandFolderName,
         error: tokenErrorMessage,
         googleEmail: tokenRecord.google_email,
         lastConnectedAt: tokenRecord.last_connected_at,
@@ -136,6 +140,7 @@ export async function GET(req: NextRequest) {
       success: true,
       isConfigured,
       isConnected: true,
+      brandFolderName,
       googleEmail: tokenRecord.google_email || 'Connected Google Account',
       lastConnectedAt: tokenRecord.last_connected_at,
       lastBackupAt,

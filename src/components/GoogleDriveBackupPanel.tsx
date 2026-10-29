@@ -48,7 +48,9 @@ interface DiscoveredBackup {
 }
 
 export default function GoogleDriveBackupPanel() {
-  const { currentUser, profile, addToast, refreshData } = useApp();
+  const { currentUser, profile, settings, addToast, refreshData } = useApp();
+  const [driveBrandName, setDriveBrandName] = useState<string>('SmartKhata');
+  const brandFolderName = settings?.websiteName?.trim() || driveBrandName || 'SmartKhata';
   const isAdmin =
     currentUser?.role === 'admin' ||
     currentUser?.role === 'super_admin' ||
@@ -117,6 +119,7 @@ export default function GoogleDriveBackupPanel() {
         setHistory(json.history ? json.history.slice(0, 1) : []);
         if (json.totalMerchantsProtected) setTotalMerchants(json.totalMerchantsProtected);
         if (json.lastSystemBackupAt) setLastSystemBackupAt(json.lastSystemBackupAt);
+        if (json.brandFolderName) setDriveBrandName(json.brandFolderName);
       }
     } catch (err) {
       console.warn('Failed to load Google Drive status:', err);
@@ -132,7 +135,7 @@ export default function GoogleDriveBackupPanel() {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('gdrive_status') === 'connected') {
-        addToast('Google Drive Connected! 🎉', 'Your private SmartKhata Pro folder is ready for backups & file attachments.', 'success');
+        addToast('Google Drive Connected! 🎉', `Your private ${brandFolderName} folder is ready for backups & file attachments.`, 'success');
         // Clean URL
         window.history.replaceState({}, '', window.location.pathname + '?tab=backup');
         checkStatus();
@@ -192,7 +195,7 @@ export default function GoogleDriveBackupPanel() {
       setLastBackupAt(json.timestamp);
       addToast(
         'Backup Snapshot Saved! ☁️',
-        `${json.filename} (${(json.sizeBytes / 1024).toFixed(1)} KB) updated in SmartKhata Pro/Backups.`,
+        `${json.filename} (${(json.sizeBytes / 1024).toFixed(1)} KB) updated in ${brandFolderName}/Backups.`,
         'success'
       );
       checkStatus();
@@ -231,7 +234,7 @@ export default function GoogleDriveBackupPanel() {
       } else {
         addToast(
           'All Merchants Backed Up! ☁️',
-          `Successfully backed up ${totalProtected} merchant(s) into isolated folders with their name and ID in Google Drive (SmartKhata Pro/Backups).`,
+          `Successfully backed up ${totalProtected} merchant(s) into isolated folders with their name and ID in Google Drive (${brandFolderName}/Backups).`,
           'success'
         );
       }
@@ -335,7 +338,7 @@ export default function GoogleDriveBackupPanel() {
               </button>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Automatic daily backups &amp; 1-click restore from your private Google Drive (<code className="text-emerald-600 dark:text-emerald-400 font-mono">SmartKhata Pro/</code>)
+              Automatic daily backups &amp; 1-click restore from your private Google Drive (<code className="text-emerald-600 dark:text-emerald-400 font-mono">{brandFolderName}/</code>)
             </p>
           </div>
         </div>
@@ -471,7 +474,7 @@ export default function GoogleDriveBackupPanel() {
                 Connect your Google Account
               </h4>
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xl">
-                Authorize SmartKhata Pro to save encrypted daily backups in your private Google Drive (<code className="text-emerald-600 font-mono">SmartKhata Pro/</code>). You can restore all your data anytime, even if you delete your SmartKhata account.
+                Authorize {brandFolderName} to save encrypted daily backups in your private Google Drive (<code className="text-emerald-600 font-mono">{brandFolderName}/</code>). You can restore all your data anytime, even if you delete your {brandFolderName} account.
               </p>
             </div>
 
@@ -545,7 +548,7 @@ export default function GoogleDriveBackupPanel() {
                   Latest Cloud Backup Snapshot
                 </h5>
                 <p className="text-[11px] text-slate-400">
-                  Auto-updated snapshot in <code className="text-emerald-600 font-mono">SmartKhata Pro/Backups/</code>
+                  Auto-updated snapshot in <code className="text-emerald-600 font-mono">{brandFolderName}/Backups/</code>
                 </p>
               </div>
               <button
@@ -614,7 +617,7 @@ export default function GoogleDriveBackupPanel() {
                     Restore from Google Drive
                   </h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Discovered backup files in your private <code className="text-emerald-600 font-mono">SmartKhata Pro/Backups/</code> folder
+                    Discovered backup files in your private <code className="text-emerald-600 font-mono">{brandFolderName}/Backups/</code> folder
                   </p>
                 </div>
               </div>
@@ -799,11 +802,11 @@ export default function GoogleDriveBackupPanel() {
               <div className="space-y-1">
                 <strong className="text-slate-900 dark:text-white block font-bold">2. Private Folder Hierarchy:</strong>
                 <p>
-                  SmartKhata Pro creates exactly 2 folders inside your personal Google Drive (<code className="text-emerald-600 font-mono">SmartKhata Pro/</code>):
+                  {brandFolderName} creates exactly 2 folders inside your personal Google Drive (<code className="text-emerald-600 font-mono">{brandFolderName}/</code>):
                   <br />
-                  <code className="text-emerald-600 font-mono">SmartKhata Pro/Backups/</code> — Latest daily backup ZIP archive &amp; manifest.json (auto-updated in-place)
+                  <code className="text-emerald-600 font-mono">{brandFolderName}/Backups/</code> — Latest daily backup ZIP archive &amp; manifest.json (auto-updated in-place)
                   <br />
-                  <code className="text-emerald-600 font-mono">SmartKhata Pro/Files/</code> — User-attached bills, invoices, receipts, and CRM files
+                  <code className="text-emerald-600 font-mono">{brandFolderName}/Files/</code> — User-attached bills, invoices, receipts, and CRM files
                 </p>
               </div>
 

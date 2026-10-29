@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 import { getGlobalBrandingFromDb, saveGlobalBrandingToDb } from '@/lib/globalBranding';
+import { syncGoogleDriveBrandFolderName } from '@/lib/googleDrive';
 
 const DEFAULT_CONFIG = {
   maintenanceMode: {
@@ -101,12 +102,22 @@ export async function POST(req: NextRequest) {
       ...(maintenanceMode !== undefined ? maintenanceMode : {}),
     };
 
+    let driveFolderSyncResult: any = null;
     if (websiteBranding !== undefined) {
       const savedBrand = await saveGlobalBrandingToDb(websiteBranding).catch((err) => {
         console.error('saveGlobalBrandingToDb error:', err);
         return websiteBranding;
       });
       updatedMaint.websiteBranding = savedBrand;
+
+      // Automatically rename / sync Google Drive root backup folder across connected Google Drive accounts
+      if (savedBrand.websiteName && savedBrand.websiteName.trim()) {
+        try {
+          driveFolderSyncResult = await syncGoogleDriveBrandFolderName(savedBrand.websiteName.trim());
+        } catch (syncErr) {
+          console.warn('Google Drive brand folder rename sync warning:', syncErr);
+        }
+      }
     }
 
     if (broadcasts !== undefined) {
@@ -152,6 +163,7 @@ export async function POST(req: NextRequest) {
       },
       betaTestingEnabled: Boolean(data?.beta_testing_enabled),
       websiteBranding: savedMaint.websiteBranding || null,
+      driveFolderSync: driveFolderSyncResult,
       broadcasts: savedMaint.broadcasts || [],
       supportTickets: savedMaint.supportTickets || [],
     });
