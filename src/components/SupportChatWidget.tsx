@@ -327,7 +327,7 @@ export default function SupportChatWidget() {
 
   return (
     <>
-      {/* 1. FLOATING ACTION BUTTON (Restricted to Dashboard Only - elevated on mobile to clear bottom navbar) */}
+      {/* 1. FLOATING ACTION BUTTON (Icon only; green notification dot only visible when new/unread messages exist) */}
       {!isOpen && isDashboard && (
         <button
           type="button"
@@ -335,23 +335,19 @@ export default function SupportChatWidget() {
             setIsOpen(true);
             setIsMinimized(false);
           }}
-          className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-40 group flex items-center gap-2.5 sm:gap-3 px-3.5 py-3 sm:px-4 sm:py-3.5 rounded-full bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 text-white shadow-xl shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+          className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-40 group flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 text-white shadow-xl shadow-indigo-600/35 hover:shadow-indigo-600/55 hover:scale-110 active:scale-95 transition-all cursor-pointer"
           title={t('supportDesk', '24/7 Live Support & Helpdesk')}
+          aria-label={t('supportDesk', 'Live Support & Help Desk')}
         >
-          <div className="relative">
-            <Headphones className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-indigo-600 animate-pulse" />
+          <div className="relative flex items-center justify-center">
+            <Headphones className="w-5 h-5 sm:w-6 sm:h-6 group-hover:rotate-12 transition-transform" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-400 ring-2 ring-indigo-700 shadow-sm shadow-emerald-400/50"></span>
+              </span>
+            )}
           </div>
-
-          <span className="text-xs font-black tracking-wide hidden sm:inline">
-            {isAdmin ? t('supportDesk', 'Support Desk') : t('liveSupport', 'Live Support')}
-          </span>
-
-          {unreadCount > 0 && (
-            <span className="w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center animate-bounce">
-              {unreadCount}
-            </span>
-          )}
         </button>
       )}
 
