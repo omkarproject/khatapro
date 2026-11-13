@@ -3144,15 +3144,12 @@ export default function SettingsPage() {
       {/* Tab: Email SMTP Configuration (Admin Only) */}
       {mainTab === 'admin' && adminSubTab === 'smtp' && isAdmin && (
         <form onSubmit={handleSaveSmtp} className="glass-card p-6 space-y-5 max-w-2xl">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-200/80 dark:border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-slate-800">
             <div>
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                 <Mail className="w-4 h-4 text-indigo-500" />
                 Email SMTP Configuration &amp; Verification
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Configure your custom Mailbux / SMTP mail server for direct Signup, Login, and Password Reset OTP emails without Supabase email limits.
-              </p>
             </div>
             <span className="self-start sm:self-auto text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-indigo-500" />
@@ -3160,42 +3157,28 @@ export default function SettingsPage() {
             </span>
           </div>
 
-          {/* Master Enable/Disable Switch Card */}
-          <div className={`p-4 rounded-2xl border transition-all ${
+          {/* Master Enable/Disable Switch Card - Slim Strip (Patli Patti) */}
+          <div className={`py-2 px-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
             smtpEnabled
               ? 'bg-emerald-50/70 border-emerald-300 dark:bg-emerald-950/20 dark:border-emerald-700'
               : 'bg-amber-50/70 border-amber-300 dark:bg-amber-950/20 dark:border-amber-700'
           }`}>
-            <div className="flex items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${smtpEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">
-                    Email OTP Verification Switch
-                  </span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    smtpEnabled
-                      ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30'
-                      : 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
-                  }`}>
-                    {smtpEnabled ? 'ENABLED (OTP VERIFICATION ACTIVE)' : 'OFF (DIRECT AUTH MODE)'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                  {smtpEnabled ? (
-                    <>
-                      <strong>Active Mode:</strong> OTP verification is enforced for Signups, Logins, and Password Resets. HTML OTP emails are sent directly via custom SMTP.
-                    </>
-                  ) : (
-                    <>
-                      <strong>Direct Auth Mode:</strong> No OTP is required for Login or Signup. Forgot Password will show a temporary disabled notice with a one-click WhatsApp Admin Support button.
-                    </>
-                  )}
-                </p>
-              </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`w-2 h-2 rounded-full ${smtpEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+              <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">
+                Email OTP Verification Switch
+              </span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                smtpEnabled
+                  ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30'
+                  : 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
+              }`}>
+                {smtpEnabled ? 'ENABLED (OTP VERIFICATION ACTIVE)' : 'OFF (DIRECT AUTH MODE)'}
+              </span>
+            </div>
 
-              {/* iOS style Toggle */}
-              <button
+            {/* iOS style Toggle */}
+            <button
                 type="button"
                 onClick={() => {
                   const nextVal = !smtpEnabled;
@@ -3238,7 +3221,6 @@ export default function SettingsPage() {
                   }`}
                 />
               </button>
-            </div>
           </div>
 
           {/* Automated Email Triggers & Verification Rules (Checkboxes) */}
@@ -3510,15 +3492,12 @@ export default function SettingsPage() {
       {/* Tab: Google Drive API Configuration (Admin Only) */}
       {mainTab === 'admin' && adminSubTab === 'drive' && isAdmin && (
         <form onSubmit={handleSaveDriveApi} className="glass-card p-6 space-y-5 max-w-2xl">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-200/80 dark:border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-slate-800">
             <div>
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                 <CloudUpload className="w-4 h-4 text-indigo-500" />
                 Google Drive API Configuration
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Update your Google Cloud OAuth Client ID, Secret, and Redirect URI directly without editing files.
-              </p>
             </div>
             <span className="self-start sm:self-auto text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-indigo-500" />
@@ -3526,42 +3505,28 @@ export default function SettingsPage() {
             </span>
           </div>
 
-          {/* Master Google Drive Enable/Disable Switch Card */}
-          <div className={`p-4 rounded-2xl border transition-all ${
+          {/* Master Google Drive Enable/Disable Switch Card - Slim Strip (Patli Patti) */}
+          <div className={`py-2 px-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
             driveEnabled
               ? 'bg-emerald-50/70 border-emerald-300 dark:bg-emerald-950/20 dark:border-emerald-700'
               : 'bg-amber-50/70 border-amber-300 dark:bg-amber-950/20 dark:border-amber-700'
           }`}>
-            <div className="flex items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${driveEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">
-                    Google Drive Integration
-                  </span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    driveEnabled 
-                      ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30' 
-                      : 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
-                  }`}>
-                    {driveEnabled ? 'ENABLED (DRIVE VAULT ACTIVE)' : 'OFF (DATABASE ONLY MODE)'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                  {driveEnabled ? (
-                    <>
-                      <strong>Active Mode:</strong> New merchants are prompted to connect Google Drive on signup/login. Backups and ledger records sync directly to user Google Drive folders.
-                    </>
-                  ) : (
-                    <>
-                      <strong>Database-Only Mode:</strong> Google Drive is disabled. New users sign up without any Drive prompt or blocking screen. All user data is saved directly in Supabase Cloud Database isolated per user (<code className="font-mono text-amber-600 dark:text-amber-400 font-bold">user_id</code>) with zero conflicts.
-                    </>
-                  )}
-                </p>
-              </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`w-2 h-2 rounded-full ${driveEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+              <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">
+                Google Drive Integration
+              </span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                driveEnabled 
+                  ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30' 
+                  : 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
+              }`}>
+                {driveEnabled ? 'ENABLED (DRIVE VAULT ACTIVE)' : 'OFF (DATABASE ONLY MODE)'}
+              </span>
+            </div>
 
-              {/* Toggle Switch */}
-              <button
+            {/* Toggle Switch */}
+            <button
                 type="button"
                 onClick={() => {
                   const nextVal = !driveEnabled;
@@ -3596,7 +3561,6 @@ export default function SettingsPage() {
                   }`}
                 />
               </button>
-            </div>
           </div>
 
           <div className="space-y-4 p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
@@ -4390,21 +4354,24 @@ export default function SettingsPage() {
       {mainTab === 'branding' && isAdmin && brandingSubTab === 'broadcast' && (
         <div className="space-y-6 animate-in fade-in">
           
-          {/* Header Banner */}
-          <div className="p-5 rounded-3xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-200/80 dark:border-indigo-900/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Megaphone className="w-4 h-4 text-indigo-500" />
-                <span className="text-xs font-mono font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
-                  Live Merchant Announcements
+          {/* Merchant Broadcast Header - Slim Strip (Patli Patti) */}
+          <div className="py-2.5 px-4 rounded-2xl bg-gradient-to-r from-indigo-950/70 via-purple-950/50 to-slate-900 border border-indigo-500/30 flex items-center justify-between gap-3 shadow-md">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
+                <Megaphone className="w-4 h-4 text-indigo-400" />
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-xs sm:text-sm font-black text-white tracking-wide">
+                  Merchant Broadcast System (Popups, Banners &amp; Alerts)
+                </h3>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold">
+                  {settings.broadcasts?.length || 0} Active
                 </span>
               </div>
-              <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                Merchant Broadcast System (Popups, Banners &amp; Alerts)
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xl">
-                Yahan se aap sabhi registered merchants ya kisi <strong>personal specific merchant</strong> ko notifications, top banner ya modal popup bhej sakte hain. HTML styling, close icon aur Green (Success), Yellow (Warning), Red (Critical) severity alerts supported hain.
-              </p>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-[10px] font-mono text-indigo-300/80 font-bold uppercase">
+              <span>Admin Broadcasts</span>
             </div>
           </div>
 
@@ -4873,19 +4840,29 @@ export default function SettingsPage() {
       {mainTab === 'admin' && adminSubTab === 'maintenance' && isAdmin && (
         <div className="space-y-6 animate-in fade-in max-w-4xl">
           
-          {/* Header Card */}
-          <div className="p-6 rounded-3xl bg-gradient-to-r from-rose-950/40 via-amber-950/30 to-slate-900 border border-rose-500/30 space-y-2">
-            <div className="flex items-center gap-2 text-rose-400 text-xs font-bold uppercase tracking-wider">
-              <Flame className="w-4 h-4 text-rose-500" />
-              <span>System Emergency Controls</span>
+          {/* Maintenance Mode Header - Slim Strip (Patli Patti) */}
+          <div className="py-2.5 px-4 rounded-2xl bg-gradient-to-r from-rose-950/70 via-amber-950/50 to-slate-900 border border-rose-500/30 flex items-center justify-between gap-3 shadow-md">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center shrink-0">
+                <Flame className="w-4 h-4 text-rose-400" />
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-xs sm:text-sm font-black text-white tracking-wide flex items-center gap-1.5">
+                  <span>Maintenance Mode &amp; Beta Testing</span>
+                  <span className="text-sm">⚡💥🔥</span>
+                </h3>
+              </div>
             </div>
-            <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
-              Maintenance Mode &amp; Beta Testing
-              <span className="text-xl">⚡💥🔥</span>
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl">
-              Website ko maintenance mode me daalein ya normal karein. Jab maintenance mode on hoga, to visitors ko funny animated &quot;Transformer me aag lag gai&quot; page aur ticking bomb timer 💣 dikhega jo time pura hote hi auto-off ho jaega.
-            </p>
+
+            <div className="flex items-center gap-2">
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono ${
+                maintEnabled
+                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse'
+                  : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+              }`}>
+                {maintEnabled ? 'Active (In Repair)' : 'Inactive (Live Online)'}
+              </span>
+            </div>
           </div>
 
           {/* Card 1: Maintenance Mode Controller */}
@@ -4905,9 +4882,6 @@ export default function SettingsPage() {
                     {maintEnabled ? 'Active (Site In Repair)' : 'Inactive (Live Online)'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400">
-                  Enable karne par visitors ko animated countdown bomb timer dikhega.
-                </p>
               </div>
 
               {/* Master Maintenance Switch Button */}
@@ -5048,22 +5022,24 @@ export default function SettingsPage() {
       {/* Tab: Danger Zone (Admin Only) */}
       {mainTab === 'admin' && adminSubTab === 'danger' && isAdmin && (
         <div className="space-y-6 animate-in fade-in max-w-3xl">
-          {/* Header Card */}
-          <div className="p-6 rounded-3xl bg-gradient-to-r from-red-950/40 via-rose-950/30 to-slate-900 border border-red-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-red-400 text-xs font-bold uppercase tracking-wider">
-                <AlertTriangle className="w-4 h-4 text-red-500 animate-pulse" />
-                <span>Super Admin &bull; Danger Zone</span>
+          {/* Danger Zone Header - Slim Strip (Patli Patti) */}
+          <div className="py-2.5 px-4 rounded-2xl bg-gradient-to-r from-red-950/70 via-rose-950/50 to-slate-900 border border-red-500/40 flex items-center justify-between gap-3 shadow-md">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-red-500/20 border border-red-500/30 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-4 h-4 text-red-400 animate-pulse" />
               </div>
-              <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
-                <span>Database Factory Reset &amp; Purge</span>
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 font-mono">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-xs sm:text-sm font-black text-white tracking-wide">
+                  Database Factory Reset &amp; Purge
+                </h3>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 font-mono font-bold">
                   IRREVERSIBLE
                 </span>
-              </h2>
-              <p className="text-xs text-slate-400 max-w-xl">
-                Clean and wipe your Supabase Cloud Database. Dropdown se select karein ki kya clean karna hai. Full Reset par sabhi users aur records delete ho jayenge sirf Admin login account bachega.
-              </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-[10px] font-mono text-red-400/80 font-bold uppercase">
+              <span>Super Admin Only</span>
             </div>
           </div>
 
