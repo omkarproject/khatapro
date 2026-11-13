@@ -518,6 +518,7 @@ export interface SystemSettings {
   supabaseServiceRoleKey?: string;
   googleDriveSettings?: GoogleDriveConfig;
   smtpSettings?: SmtpConfig;
+  allowNewRegistrations?: boolean;
   businessName: string;
   businessLogo?: string;
   businessTagline: string;

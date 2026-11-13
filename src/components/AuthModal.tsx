@@ -25,7 +25,8 @@ import {
   ArrowLeft,
   ShieldCheck,
   Check,
-  MessageSquare
+  MessageSquare,
+  UserX
 } from 'lucide-react';
 
 // Math CAPTCHA generator
@@ -56,6 +57,7 @@ export default function AuthModal() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showForgotDisabledModal, setShowForgotDisabledModal] = useState(false);
+  const [showSignupDisabledModal, setShowSignupDisabledModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -103,6 +105,9 @@ export default function AuthModal() {
   const adminWhatsAppUrl = `https://wa.me/${finalWaPhone || '91997421467008'}?text=${encodeURIComponent(
     `Hello Admin, I need help resetting my account password on ${settings.websiteName || 'KhataPro'}. My registered email is: ${email || ''}`
   )}`;
+  const signupWhatsAppUrl = `https://wa.me/${finalWaPhone || '91997421467008'}?text=${encodeURIComponent(
+    `Hello Admin, I would like to create a new merchant account on ${settings.websiteName || 'KhataPro'}. Please grant access or invite me.`
+  )}`;
 
   if (!isAuthModalOpen) return null;
 
@@ -112,6 +117,10 @@ export default function AuthModal() {
   };
 
   const resetFormState = (newMode: 'signin' | 'signup' | 'forgot_password') => {
+    if (newMode === 'signup' && settings.allowNewRegistrations === false) {
+      setShowSignupDisabledModal(true);
+      return;
+    }
     if (newMode === 'forgot_password') {
       const isForgotDisabled = settings.smtpSettings?.enabled === false || settings.smtpSettings?.triggers?.forgotPasswordOtp === false;
       if (isForgotDisabled) {
@@ -209,6 +218,10 @@ export default function AuthModal() {
     }
 
     if (mode === 'signup') {
+      if (settings.allowNewRegistrations === false) {
+        setShowSignupDisabledModal(true);
+        return;
+      }
       if (!name.trim()) {
         setErrorMsg('Please enter your full name.');
         return;
@@ -239,6 +252,10 @@ export default function AuthModal() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
+        if (data.registrationDisabled) {
+          setShowSignupDisabledModal(true);
+          return;
+        }
         if (data.disabled || res.status === 403) {
           setShowForgotDisabledModal(true);
           return;
@@ -892,6 +909,50 @@ export default function AuthModal() {
           )}
         </div>
 
+
+        {/* Temporary Disabled New Registration Modal with WhatsApp Support */}
+        {showSignupDisabledModal && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in">
+            <div className="glass-card max-w-sm w-full p-6 text-center space-y-4 border border-amber-500/30 relative shadow-2xl">
+              <button
+                type="button"
+                onClick={() => setShowSignupDisabledModal(false)}
+                className="absolute top-4 right-4 p-1.5 rounded-full text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto border border-amber-500/20 shadow-lg shadow-amber-500/10">
+                <UserX className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                  New Registration Temporarily Disabled
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  New merchant registrations have been temporarily paused by the administrator. Please contact our support team on WhatsApp to request account activation.
+                </p>
+              </div>
+              <div className="pt-2 flex flex-col gap-2">
+                <a
+                  href={signupWhatsAppUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Contact Admin on WhatsApp</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setShowSignupDisabledModal(false)}
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Temporary Disabled Password Reset Modal with WhatsApp Support */}
         {showForgotDisabledModal && (

@@ -30,6 +30,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Could not connect to Supabase' }, { status: 500 });
     }
 
+    // Check if new registrations are disabled
+    if (purpose === 'signup' && cleanEmail !== 'anantyadav8924@gmail.com') {
+      const { data: configData } = await supabase
+        .from('global_config')
+        .select('maintenance_mode')
+        .eq('id', 'global_config')
+        .maybeSingle();
+
+      const allowReg = configData?.maintenance_mode?.allowNewRegistrations !== false;
+      if (!allowReg) {
+        return NextResponse.json({
+          success: false,
+          registrationDisabled: true,
+          message: 'New merchant registrations are temporarily disabled by the system administrator. Please contact support via WhatsApp.',
+        }, { status: 403 });
+      }
+    }
+
     // Check if SMTP OTP verification is enabled by administrator
     const smtpConfig = await getActiveSmtpConfig();
 

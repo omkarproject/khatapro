@@ -5199,30 +5199,76 @@ export default function SettingsPage() {
       {mainTab === 'admin' && adminSubTab === 'users' && isAdmin && (
         <div className="space-y-6 animate-in fade-in max-w-5xl">
           
-          {/* CRM Header Card */}
-          <div className="p-6 rounded-3xl bg-gradient-to-r from-indigo-950/40 via-violet-950/30 to-slate-900 border border-indigo-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase tracking-wider">
+          {/* CRM Header - Slim Strip (Patli Patti) with New Registration Toggle & Refresh */}
+          <div className="py-2.5 px-4 rounded-2xl bg-gradient-to-r from-indigo-950/70 via-violet-950/50 to-slate-900 border border-indigo-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
                 <Users className="w-4 h-4 text-indigo-400" />
-                <span>Super Admin &bull; Multi-Merchant CRM</span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
-                User Management &amp; Merchant CRM
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl">
-                View all registered merchants, assign administrative privileges, manage user roles, and monitor account registration details in real-time.
-              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-xs sm:text-sm font-black text-white tracking-wide">
+                  User Management &amp; Merchant CRM
+                </h3>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold">
+                  {crmUsers.length} Users
+                </span>
+              </div>
             </div>
 
-            <button
-              type="button"
-              onClick={fetchCrmUsers}
-              disabled={isLoadingUsers}
-              className="px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/30 active:scale-95 transition-all self-start sm:self-auto cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingUsers ? 'animate-spin' : ''}`} />
-              <span>{isLoadingUsers ? 'Refreshing...' : 'Refresh Users'}</span>
-            </button>
+            <div className="flex items-center gap-3 self-stretch sm:self-auto justify-between sm:justify-end">
+              {/* New Registration Toggle Switch */}
+              <div className="flex items-center gap-2 bg-slate-900/80 px-3 py-1.5 rounded-xl border border-slate-700/60 shadow-inner">
+                <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                  <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>New Signups:</span>
+                </span>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextVal = settings.allowNewRegistrations === false ? true : false;
+                    updateSettings({ ...settings, allowNewRegistrations: nextVal });
+                    addToast(
+                      nextVal ? 'New Registrations Enabled! 🚀' : 'New Registrations Disabled! 🔒',
+                      nextVal 
+                        ? 'New users can now register and sign up normally.' 
+                        : 'New user signup is paused. Users trying to register will see WhatsApp support option.',
+                      nextVal ? 'success' : 'warning'
+                    );
+                  }}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    settings.allowNewRegistrations !== false ? 'bg-emerald-600' : 'bg-slate-700'
+                  }`}
+                  aria-label="Toggle New Registrations"
+                  title={settings.allowNewRegistrations !== false ? 'Click to disable new registrations' : 'Click to enable new registrations'}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      settings.allowNewRegistrations !== false ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+
+                <span className={`text-[9.5px] font-black px-1.5 py-0.5 rounded uppercase ${
+                  settings.allowNewRegistrations !== false 
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                }`}>
+                  {settings.allowNewRegistrations !== false ? 'ON' : 'OFF'}
+                </span>
+              </div>
+
+              {/* Refresh Users Button */}
+              <button
+                type="button"
+                onClick={fetchCrmUsers}
+                disabled={isLoadingUsers}
+                className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-indigo-600/25 active:scale-95 transition-all cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingUsers ? 'animate-spin' : ''}`} />
+                <span>{isLoadingUsers ? 'Refreshing...' : 'Refresh Users'}</span>
+              </button>
+            </div>
           </div>
 
           {/* CRM Toolbar: Search & Role Filter */}

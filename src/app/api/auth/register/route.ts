@@ -30,6 +30,24 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
+    // Check if new registrations are disabled by administrator
+    if (cleanEmail !== 'anantyadav8924@gmail.com') {
+      const { data: configData } = await supabase
+        .from('global_config')
+        .select('maintenance_mode')
+        .eq('id', 'global_config')
+        .maybeSingle();
+
+      const allowReg = configData?.maintenance_mode?.allowNewRegistrations !== false;
+      if (!allowReg) {
+        return NextResponse.json({
+          success: false,
+          registrationDisabled: true,
+          message: 'New merchant registrations are temporarily disabled by the system administrator. Please contact support via WhatsApp.',
+        }, { status: 403 });
+      }
+    }
+
     let createdUserId: string | null = null;
 
     // STRICT ROLE RULE: Only system owner (anantyadav8924@gmail.com) gets super_admin.

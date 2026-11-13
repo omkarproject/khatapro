@@ -1375,6 +1375,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
             googleDriveEnabled: driveEnabled,
             googleDriveSettings: json.googleDriveSettings,
             smtpSettings: json.smtpSettings,
+            allowNewRegistrations: json.allowNewRegistrations !== undefined ? Boolean(json.allowNewRegistrations) : true,
             websiteBranding: json.websiteBranding || null,
           };
           if (typeof window !== 'undefined') {
@@ -1464,6 +1465,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
                 enabled: driveEnabled,
               },
               smtpSettings: json.smtpSettings || prev.smtpSettings,
+              allowNewRegistrations: json.allowNewRegistrations !== undefined ? Boolean(json.allowNewRegistrations) : (prev.allowNewRegistrations !== false),
               maintenanceMode: json.maintenanceMode,
               betaTestingEnabled: Boolean(json.betaTestingEnabled),
               websiteName: effName,
@@ -1555,7 +1557,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       newSettings.websiteSupportPhone !== undefined ||
       newSettings.websiteSupportEmail !== undefined;
 
-    if (hasBrandingUpdates || newSettings.maintenanceMode !== undefined || newSettings.betaTestingEnabled !== undefined || newSettings.googleDriveSettings !== undefined || newSettings.smtpSettings !== undefined) {
+    if (hasBrandingUpdates || newSettings.maintenanceMode !== undefined || newSettings.betaTestingEnabled !== undefined || newSettings.googleDriveSettings !== undefined || newSettings.smtpSettings !== undefined || newSettings.allowNewRegistrations !== undefined) {
       if (typeof window !== 'undefined') {
         const brandPayload = {
           websiteName: merged.websiteName || '',
@@ -1574,6 +1576,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           googleDriveEnabled: merged.googleDriveSettings?.enabled !== false,
           googleDriveSettings: merged.googleDriveSettings,
           smtpSettings: merged.smtpSettings,
+          allowNewRegistrations: merged.allowNewRegistrations !== undefined ? Boolean(merged.allowNewRegistrations) : true,
         };
         if (hasBrandingUpdates) {
           globalPayload.websiteBranding = brandPayload;

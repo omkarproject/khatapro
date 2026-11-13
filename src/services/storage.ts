@@ -232,6 +232,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
         welcomeEmail: true,
       },
     },
+    allowNewRegistrations: true,
     businessName: businessName || '',
     businessLogo: '',
     businessTagline: 'Track Money, Manage Business, Grow Faster',
@@ -620,6 +621,9 @@ export const StorageService = {
           }
           if (globalConf.smtpSettings) {
             s.smtpSettings = { ...(s.smtpSettings || {}), ...globalConf.smtpSettings };
+          }
+          if (globalConf.allowNewRegistrations !== undefined) {
+            s.allowNewRegistrations = Boolean(globalConf.allowNewRegistrations);
           }
           if (globalConf.websiteBranding) {
             if (globalConf.websiteBranding.websiteName !== undefined) s.websiteName = globalConf.websiteBranding.websiteName;

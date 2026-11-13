@@ -42,6 +42,7 @@ export async function GET() {
             broadcasts: Array.isArray(maintObj.broadcasts) ? maintObj.broadcasts : [],
             supportTickets: Array.isArray(maintObj.supportTickets) ? maintObj.supportTickets : [],
             smtpSettings: maintObj.smtpSettings || null,
+            allowNewRegistrations: maintObj.allowNewRegistrations !== undefined ? Boolean(maintObj.allowNewRegistrations) : true,
           });
         }
       }
@@ -71,7 +72,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { maintenanceMode, betaTestingEnabled, websiteBranding, broadcasts, supportTickets, googleDriveEnabled, googleDriveSettings, smtpSettings } = body;
+    const { maintenanceMode, betaTestingEnabled, websiteBranding, broadcasts, supportTickets, googleDriveEnabled, googleDriveSettings, smtpSettings, allowNewRegistrations } = body;
 
     if (!isSupabaseConfigured()) {
       return NextResponse.json({
@@ -135,6 +136,10 @@ export async function POST(req: NextRequest) {
       invalidateSmtpCache();
     }
 
+    if (allowNewRegistrations !== undefined) {
+      updatedMaint.allowNewRegistrations = Boolean(allowNewRegistrations);
+    }
+
     const updatePayload: any = {
       id: 'global_config',
       maintenance_mode: updatedMaint,
@@ -174,6 +179,7 @@ export async function POST(req: NextRequest) {
       broadcasts: savedMaint.broadcasts || [],
       supportTickets: savedMaint.supportTickets || [],
       smtpSettings: savedMaint.smtpSettings || null,
+      allowNewRegistrations: savedMaint.allowNewRegistrations !== undefined ? Boolean(savedMaint.allowNewRegistrations) : true,
     });
   } catch (error: any) {
     console.error('System config POST error:', error);
