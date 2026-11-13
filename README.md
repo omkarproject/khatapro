@@ -80,13 +80,9 @@ npm install
 
 ### 2. Configure Environment Variables
 
-Copy the example environment configuration:
+The repository uses a single production `.env` configuration file with pre-configured live database endpoints:
 
-```bash
-cp .env.example .env.local
-```
-
-Open `.env.local` and add your credentials:
+Open `.env` to verify your production credentials:
 
 ```env
 # Supabase Cloud Database (Required)
@@ -125,7 +121,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 1. Push your repository to GitHub.
 2. Import the project into [Vercel](https://vercel.com).
-3. Add the environment variables from `.env.example`.
+3. Add the environment variables from `.env`.
 4. Click **Deploy**. Vercel will build and serve your app globally.
 
 ---
