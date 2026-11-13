@@ -1368,9 +1368,12 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         if (!res.ok) return;
         const json = await res.json();
         if (json.success) {
+          const driveEnabled = json.googleDriveEnabled !== undefined ? Boolean(json.googleDriveEnabled) : (json.googleDriveSettings?.enabled !== false);
           const globalPayload = {
             maintenanceMode: json.maintenanceMode,
             betaTestingEnabled: Boolean(json.betaTestingEnabled),
+            googleDriveEnabled: driveEnabled,
+            googleDriveSettings: json.googleDriveSettings,
             websiteBranding: json.websiteBranding || null,
           };
           if (typeof window !== 'undefined') {
@@ -1454,6 +1457,11 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
             return {
               ...prev,
+              googleDriveSettings: {
+                ...(prev.googleDriveSettings || {}),
+                ...(json.googleDriveSettings || {}),
+                enabled: driveEnabled,
+              },
               maintenanceMode: json.maintenanceMode,
               betaTestingEnabled: Boolean(json.betaTestingEnabled),
               websiteName: effName,
@@ -1545,7 +1553,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       newSettings.websiteSupportPhone !== undefined ||
       newSettings.websiteSupportEmail !== undefined;
 
-    if (hasBrandingUpdates || newSettings.maintenanceMode !== undefined || newSettings.betaTestingEnabled !== undefined) {
+    if (hasBrandingUpdates || newSettings.maintenanceMode !== undefined || newSettings.betaTestingEnabled !== undefined || newSettings.googleDriveSettings !== undefined) {
       if (typeof window !== 'undefined') {
         const brandPayload = {
           websiteName: merged.websiteName || '',
@@ -1561,6 +1569,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         const globalPayload: any = {
           maintenanceMode: merged.maintenanceMode,
           betaTestingEnabled: Boolean(merged.betaTestingEnabled),
+          googleDriveEnabled: merged.googleDriveSettings?.enabled !== false,
+          googleDriveSettings: merged.googleDriveSettings,
         };
         if (hasBrandingUpdates) {
           globalPayload.websiteBranding = brandPayload;

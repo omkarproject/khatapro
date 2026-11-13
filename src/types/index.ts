@@ -487,6 +487,7 @@ export interface MaintenanceModeConfig {
 }
 
 export interface GoogleDriveConfig {
+  enabled?: boolean;
   clientId?: string;
   clientSecret?: string;
   redirectUri?: string;

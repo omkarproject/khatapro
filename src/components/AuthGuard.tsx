@@ -8,6 +8,7 @@ import DriveConnectVIPScreen from './DriveConnectVIPScreen';
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const { currentUser, isMounted, addToast, settings } = useApp();
+  const isDriveGloballyEnabled = settings.googleDriveSettings?.enabled !== false;
   const isAdmin = Boolean(
     currentUser?.email === 'anantyadav8924@gmail.com' ||
     (currentUser?.role === 'super_admin' && currentUser?.email?.toLowerCase().includes('anant'))
@@ -42,8 +43,8 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!currentUser?.id) return;
 
-    // Platform admin is exempt
-    if (isAdmin) {
+    // If Google Drive integration is disabled globally or merchant is admin, exempt immediately
+    if (!isDriveGloballyEnabled || isAdmin) {
       setIsDriveConnected(true);
       return;
     }
@@ -118,7 +119,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
     };
-  }, [currentUser?.id, isAdmin, addToast]);
+  }, [currentUser?.id, isAdmin, addToast, isDriveGloballyEnabled]);
 
   if (!currentUser) {
     return (
@@ -163,6 +164,11 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     );
+  }
+
+  // If Google Drive is disabled globally, do not enforce Drive connection or show VIP screen
+  if (!isDriveGloballyEnabled) {
+    return <>{children}</>;
   }
 
   // Loading Drive status check

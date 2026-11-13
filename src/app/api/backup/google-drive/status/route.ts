@@ -37,6 +37,29 @@ export async function GET(req: NextRequest) {
       } catch {}
     }
 
+    // Check if Google Drive is globally disabled by Admin
+    if (supabase) {
+      try {
+        const { data: gc } = await supabase.from('global_config').select('maintenance_mode').eq('id', 'global_config').maybeSingle();
+        const maint = gc?.maintenance_mode;
+        if (maint?.googleDriveEnabled === false || maint?.googleDriveSettings?.enabled === false) {
+          return NextResponse.json({
+            success: true,
+            isConfigured,
+            isGloballyEnabled: false,
+            isConnected: true,
+            brandFolderName: await getEffectiveBrandName(),
+            googleEmail: null,
+            lastBackupAt: null,
+            lastSystemBackupAt,
+            totalMerchantsProtected,
+            storageQuota: null,
+            history: [],
+          });
+        }
+      } catch {}
+    }
+
     const brandFolderName = await getEffectiveBrandName();
 
     if (!tokenRecord || !tokenRecord.is_connected) {

@@ -363,6 +363,19 @@ async function handleCron(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Supabase admin client unavailable' }, { status: 500 });
     }
 
+    // If Google Drive integration is disabled globally, skip backup
+    try {
+      const { data: gc } = await supabase.from('global_config').select('maintenance_mode').eq('id', 'global_config').maybeSingle();
+      const maint = gc?.maintenance_mode;
+      if (maint?.googleDriveEnabled === false || maint?.googleDriveSettings?.enabled === false) {
+        return NextResponse.json({
+          success: true,
+          skipped: true,
+          message: 'Google Drive integration is globally disabled by Admin. Backup skipped.',
+        });
+      }
+    } catch {}
+
     const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
 
     // =========================================================================

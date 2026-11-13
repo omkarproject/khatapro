@@ -816,9 +816,27 @@ export default function SettingsPage() {
   }, [settings.supabaseUrl, settings.supabaseAnonKey, settings.supabaseServiceRoleKey]);
 
   // Google Drive API Credentials State
+  const [driveEnabled, setDriveEnabled] = useState(() => settings.googleDriveSettings?.enabled !== false);
   const [driveClientId, setDriveClientId] = useState(settings.googleDriveSettings?.clientId || '997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com');
   const [driveClientSecret, setDriveClientSecret] = useState(settings.googleDriveSettings?.clientSecret || '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');
   const [driveRedirectUri, setDriveRedirectUri] = useState(settings.googleDriveSettings?.redirectUri || 'https://khatapro-sandy.vercel.app/api/backup/google-drive/callback');
+
+  useEffect(() => {
+    if (settings.googleDriveSettings) {
+      if (settings.googleDriveSettings.enabled !== undefined) {
+        setDriveEnabled(settings.googleDriveSettings.enabled);
+      }
+      if (settings.googleDriveSettings.clientId) {
+        setDriveClientId(settings.googleDriveSettings.clientId);
+      }
+      if (settings.googleDriveSettings.clientSecret) {
+        setDriveClientSecret(settings.googleDriveSettings.clientSecret);
+      }
+      if (settings.googleDriveSettings.redirectUri) {
+        setDriveRedirectUri(settings.googleDriveSettings.redirectUri);
+      }
+    }
+  }, [settings.googleDriveSettings]);
 
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [isTesting, setIsTesting] = useState(false);
@@ -1559,6 +1577,7 @@ export default function SettingsPage() {
     const updated: SystemSettings = {
       ...settings,
       googleDriveSettings: {
+        enabled: driveEnabled,
         clientId: driveClientId.trim(),
         clientSecret: driveClientSecret.trim(),
         redirectUri: driveRedirectUri.trim(),
@@ -1566,8 +1585,10 @@ export default function SettingsPage() {
     };
     updateSettings(updated);
     addToast(
-      'Google Drive API Saved! ☁️',
-      'Google Client ID aur Client Secret successfully save ho gaye hain!',
+      driveEnabled ? 'Google Drive API Saved & Enabled! ☁️' : 'Google Drive API Settings Saved! ⚡',
+      driveEnabled
+        ? 'Google Drive API credentials saved and active. All merchants must connect Drive on login/signup.'
+        : 'Google Drive integration is OFF. User data will be stored directly in Supabase Cloud Database per merchant without Drive prompts.',
       'success'
     );
   };
@@ -2899,6 +2920,79 @@ export default function SettingsPage() {
             </span>
           </div>
 
+          {/* Master Google Drive Enable/Disable Switch Card */}
+          <div className={`p-4 rounded-2xl border transition-all ${
+            driveEnabled
+              ? 'bg-emerald-50/70 border-emerald-300 dark:bg-emerald-950/20 dark:border-emerald-700'
+              : 'bg-amber-50/70 border-amber-300 dark:bg-amber-950/20 dark:border-amber-700'
+          }`}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${driveEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">
+                    Google Drive Integration
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    driveEnabled 
+                      ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30' 
+                      : 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
+                  }`}>
+                    {driveEnabled ? 'ENABLED (DRIVE VAULT ACTIVE)' : 'OFF (DATABASE ONLY MODE)'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {driveEnabled ? (
+                    <>
+                      <strong>Active Mode:</strong> New merchants are prompted to connect Google Drive on signup/login. Backups and ledger records sync directly to user Google Drive folders.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Database-Only Mode:</strong> Google Drive is disabled. New users sign up without any Drive prompt or blocking screen. All user data is saved directly in Supabase Cloud Database isolated per user (<code className="font-mono text-amber-600 dark:text-amber-400 font-bold">user_id</code>) with zero conflicts.
+                    </>
+                  )}
+                </p>
+              </div>
+
+              {/* Toggle Switch */}
+              <button
+                type="button"
+                onClick={() => {
+                  const nextVal = !driveEnabled;
+                  setDriveEnabled(nextVal);
+                  const updated: SystemSettings = {
+                    ...settings,
+                    googleDriveSettings: {
+                      ...(settings.googleDriveSettings || {}),
+                      enabled: nextVal,
+                      clientId: driveClientId.trim(),
+                      clientSecret: driveClientSecret.trim(),
+                      redirectUri: driveRedirectUri.trim(),
+                    },
+                  };
+                  updateSettings(updated);
+                  addToast(
+                    nextVal ? 'Google Drive API Activated! ☁️' : 'Google Drive API Turned OFF! ⚡',
+                    nextVal
+                      ? 'Drive Vault Mode On. Unconnected users will be prompted to connect Drive.'
+                      : 'Database Only Mode On. New signups will not be asked for Drive. Data saved directly in Supabase DB per user.',
+                    nextVal ? 'success' : 'info'
+                  );
+                }}
+                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  driveEnabled ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+                }`}
+                aria-label="Toggle Google Drive API"
+              >
+                <span
+                  className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                    driveEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
           <div className="space-y-4 p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -2906,7 +3000,7 @@ export default function SettingsPage() {
               </label>
               <input
                 type="text"
-                required
+                required={driveEnabled}
                 value={driveClientId}
                 onChange={(e) => setDriveClientId(e.target.value)}
                 placeholder="997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com"
@@ -2923,7 +3017,7 @@ export default function SettingsPage() {
               </label>
               <input
                 type="password"
-                required
+                required={driveEnabled}
                 value={driveClientSecret}
                 onChange={(e) => setDriveClientSecret(e.target.value)}
                 placeholder="GOCSPX-..."
@@ -2941,7 +3035,7 @@ export default function SettingsPage() {
               <div className="flex gap-2">
                 <input
                   type="url"
-                  required
+                  required={driveEnabled}
                   value={driveRedirectUri}
                   onChange={(e) => setDriveRedirectUri(e.target.value)}
                   placeholder="https://khatapro-sandy.vercel.app/api/backup/google-drive/callback"

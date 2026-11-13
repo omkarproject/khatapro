@@ -69,7 +69,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { maintenanceMode, betaTestingEnabled, websiteBranding, broadcasts, supportTickets } = body;
+    const { maintenanceMode, betaTestingEnabled, websiteBranding, broadcasts, supportTickets, googleDriveEnabled, googleDriveSettings } = body;
 
     if (!isSupabaseConfigured()) {
       return NextResponse.json({

@@ -212,6 +212,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
     supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTIzNTcsImV4cCI6MjEwNzI4ODM1N30.MOkM9DqTFr5nB4mYj-Z3n9FEta1Pi0tSSJ0tTWxsxF0',
     supabaseServiceRoleKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTcxMjM1NywiZXhwIjoyMTA3Mjg4MzU3fQ.oUgYxGo6-WWyioLkhmPuldiCWf4pANvEl7vnPyNyyNs',
     googleDriveSettings: {
+      enabled: true,
       clientId: '997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com',
       clientSecret: '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',
       redirectUri: 'https://khatapro-sandy.vercel.app/api/backup/google-drive/callback',
@@ -597,6 +598,11 @@ export const StorageService = {
           if (globalConf.betaTestingEnabled !== undefined) {
             s.betaTestingEnabled = Boolean(globalConf.betaTestingEnabled);
           }
+          if (globalConf.googleDriveEnabled !== undefined) {
+            s.googleDriveSettings = { ...(s.googleDriveSettings || {}), enabled: Boolean(globalConf.googleDriveEnabled) };
+          } else if (globalConf.googleDriveSettings?.enabled !== undefined) {
+            s.googleDriveSettings = { ...(s.googleDriveSettings || {}), enabled: Boolean(globalConf.googleDriveSettings.enabled) };
+          }
           if (globalConf.websiteBranding) {
             if (globalConf.websiteBranding.websiteName !== undefined) s.websiteName = globalConf.websiteBranding.websiteName;
             if (globalConf.websiteBranding.websiteLogo !== undefined) s.websiteLogo = globalConf.websiteBranding.websiteLogo;
@@ -652,6 +658,14 @@ export const StorageService = {
     const storedProfile = getLocalItem<UserProfile | null>(STORAGE_KEYS.PROFILE, null as any);
     const curUser = StorageService.getCurrentUser();
 
+    if (merged.googleDriveSettings?.enabled !== undefined && typeof window !== 'undefined') {
+      try {
+        const rawG = localStorage.getItem('skp_global_system_config');
+        const conf = rawG ? JSON.parse(rawG) : {};
+        conf.googleDriveEnabled = merged.googleDriveSettings.enabled;
+        localStorage.setItem('skp_global_system_config', JSON.stringify(conf));
+      } catch {}
+    }
     const profileUpdates: Partial<UserProfile> = {};
     if (merged.businessName !== undefined) {
       profileUpdates.businessName = merged.businessName.trim();

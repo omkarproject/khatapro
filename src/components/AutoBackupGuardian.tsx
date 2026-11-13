@@ -31,7 +31,7 @@ export interface AutoBackupStatus {
  * 5. Periodic Automated CronJob guarantee ping.
  */
 export default function AutoBackupGuardian() {
-  const { currentUser, addToast } = useApp();
+  const { currentUser, addToast, settings } = useApp();
   const activeAbortControllerRef = useRef<AbortController | null>(null);
   const progressIntervalRef = useRef<any>(null);
   const isRunningRef = useRef(false);
