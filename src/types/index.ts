@@ -527,6 +527,7 @@ export interface SystemSettings {
   businessAddress: string;
   paymentSettings: PaymentSettings;
   monthlyBudgetCap?: number;
+  expenseCategories?: string[];
   darkMode: boolean;
   selectedInvoiceTemplate?: string;
   telegramBackup?: TelegramBackupSettings;

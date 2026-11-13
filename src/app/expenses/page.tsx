@@ -15,6 +15,7 @@ import {
   Calendar,
   CreditCard,
   Tag,
+  Tags,
   TrendingDown,
   PieChart as PieIcon,
   X,
@@ -25,7 +26,8 @@ import {
   Check,
   Upload,
   Image as ImageIcon,
-  Eye
+  Eye,
+  RotateCcw
 } from 'lucide-react';
 import {
   PieChart,
@@ -66,7 +68,11 @@ export default function ExpensesPage() {
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const categories = [
+  // Category Management State
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [newCategoryInput, setNewCategoryInput] = useState('');
+
+  const DEFAULT_EXPENSE_CATEGORIES = useMemo(() => [
     'Rent',
     'Salaries',
     'Travel & Transport',
@@ -77,7 +83,51 @@ export default function ExpensesPage() {
     'Maintenance',
     'Tax & Legal',
     'Other',
-  ];
+  ], []);
+
+  const categories = useMemo(() => {
+    if (settings.expenseCategories && Array.isArray(settings.expenseCategories) && settings.expenseCategories.length > 0) {
+      return settings.expenseCategories;
+    }
+    return DEFAULT_EXPENSE_CATEGORIES;
+  }, [settings.expenseCategories, DEFAULT_EXPENSE_CATEGORIES]);
+
+  const handleAddCategory = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = newCategoryInput.trim();
+    if (!trimmed) return;
+    if (categories.some(c => c.toLowerCase() === trimmed.toLowerCase())) {
+      addToast('Category Exists', `"${trimmed}" category pehle se mojood hai.`, 'info');
+      return;
+    }
+    const updated = [...categories, trimmed];
+    updateSettings({ ...settings, expenseCategories: updated });
+    setNewCategoryInput('');
+    setFormCategory(trimmed);
+    addToast('Category Added! 🏷️', `"${trimmed}" category safaltapoorvak add ho gayi.`, 'success');
+  };
+
+  const handleRemoveCategory = (catToRemove: string) => {
+    if (categories.length <= 1) {
+      addToast('Cannot Delete', 'Kam se kam ek category hona zaroori hai.', 'warning');
+      return;
+    }
+    const updated = categories.filter(c => c !== catToRemove);
+    updateSettings({ ...settings, expenseCategories: updated });
+    if (formCategory === catToRemove) {
+      setFormCategory(updated[0]);
+    }
+    if (selectedCategory === catToRemove) {
+      setSelectedCategory('all');
+    }
+    addToast('Category Removed', `"${catToRemove}" category remove kar di gayi.`, 'info');
+  };
+
+  const handleResetCategories = () => {
+    updateSettings({ ...settings, expenseCategories: DEFAULT_EXPENSE_CATEGORIES });
+    setFormCategory(DEFAULT_EXPENSE_CATEGORIES[0]);
+    addToast('Categories Reset', 'Default categories restore ho gayi hain.', 'success');
+  };
 
   const colors = ['#4F46E5', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
 
@@ -315,13 +365,26 @@ export default function ExpensesPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          Log Expense
-        </button>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setIsCategoryModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 shadow-sm active:scale-95 transition-all cursor-pointer"
+            title="Manage Expense Categories"
+          >
+            <Tags className="w-4 h-4 text-indigo-500" />
+            <span>Categories</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Log Expense</span>
+          </button>
+        </div>
       </div>
 
       {/* Analytics Overview Cards */}
@@ -842,13 +905,23 @@ export default function ExpensesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    Category
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400">
+                      Category
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryModalOpen(true)}
+                      className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer font-bold"
+                    >
+                      <Plus className="w-2.5 h-2.5" />
+                      <span>Manage</span>
+                    </button>
+                  </div>
                   <select
                     value={formCategory}
                     onChange={(e) => setFormCategory(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-medium"
                   >
                     {categories.map((c) => (
                       <option key={c} value={c}>{c}</option>
@@ -1001,6 +1074,107 @@ export default function ExpensesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Category Management Modal (Add / Remove Categories) */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 text-left">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-500/20 shrink-0">
+                  <Tags className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Manage Expense Categories</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 font-bold">
+                      {categories.length} Total
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Category add ya remove karein, ye Log Expense me turant show hongi.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCategoryModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Add New Category Form */}
+            <form onSubmit={handleAddCategory} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newCategoryInput}
+                onChange={(e) => setNewCategoryInput(e.target.value)}
+                placeholder="New Category (e.g. Fuel, Raw Materials)..."
+                className="flex-1 px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+              />
+              <button
+                type="submit"
+                disabled={!newCategoryInput.trim()}
+                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/20 active:scale-95 transition-all cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add</span>
+              </button>
+            </form>
+
+            {/* Category Tags List */}
+            <div className="space-y-2">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Active Categories ({categories.length})
+              </div>
+              <div className="flex flex-wrap gap-2 max-h-56 overflow-y-auto p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                {categories.map((cat) => (
+                  <div
+                    key={cat}
+                    className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-semibold shadow-sm hover:border-indigo-300 dark:hover:border-indigo-600 transition-all"
+                  >
+                    <Tag className="w-3 h-3 text-indigo-500" />
+                    <span>{cat}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCategory(cat)}
+                      className="ml-1 text-slate-400 hover:text-rose-500 p-0.5 rounded transition-colors cursor-pointer"
+                      title={`Remove "${cat}"`}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="pt-2 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={handleResetCategories}
+                className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 font-medium flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset Defaults</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsCategoryModalOpen(false)}
+                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+
           </div>
         </div>
       )}
