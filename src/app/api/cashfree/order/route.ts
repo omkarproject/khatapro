@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCashfreeConfig } from '@/lib/cashfreeServer';
+import { getBaseUrl } from '@/lib/domain';
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,10 +21,12 @@ export async function POST(req: NextRequest) {
 
     const host = finalEnv === 'production' ? 'https://api.cashfree.com' : 'https://sandbox.cashfree.com';
 
-    // Cashfree API strictly enforces https:// for return_url
-    const origin = req.headers.get('origin') || req.headers.get('referer') || 'https://smartkhatapro.in';
-    const cleanOrigin = origin.startsWith('https://') ? origin.replace(/\/$/, '') : 'https://smartkhatapro.in';
-    const returnUrl = `${cleanOrigin}/pay/${orderId}?order_id={order_id}`;
+    // Dynamic return_url resolution based on current host/runtime
+    const dynamicBase = getBaseUrl(req);
+    const secureOrigin = dynamicBase.startsWith('https://')
+      ? dynamicBase
+      : (dynamicBase.includes('localhost') ? dynamicBase : `https://${dynamicBase.replace(/^https?:\/\//, '')}`);
+    const returnUrl = `${secureOrigin}/pay/${orderId}?order_id={order_id}`;
 
     const payload = {
       order_id: orderId || `order_${Date.now()}`,

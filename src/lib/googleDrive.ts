@@ -3,10 +3,12 @@ import { Readable } from 'stream';
 import { getGlobalBrandingFromDb } from '@/lib/globalBranding';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { decryptToken } from '@/lib/encryption';
+import { getGoogleRedirectUri } from '@/lib/domain';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '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';
-const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'https://khatapro-sandy.vercel.app/api/backup/google-drive/callback';
+// Dynamic redirect URI fallback based on current host/runtime
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || '';
 
 export const DRIVE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
@@ -22,12 +24,12 @@ export function getOAuth2Client(customClientId?: string, customClientSecret?: st
   return new google.auth.OAuth2(
     customClientId || GOOGLE_CLIENT_ID,
     customClientSecret || GOOGLE_CLIENT_SECRET,
-    customRedirectUri || GOOGLE_REDIRECT_URI
+    customRedirectUri || GOOGLE_REDIRECT_URI || getGoogleRedirectUri()
   );
 }
 
-export function getGoogleAuthUrl(state: string): string {
-  const oauth2Client = getOAuth2Client();
+export function getGoogleAuthUrl(state: string, customRedirectUri?: string): string {
+  const oauth2Client = getOAuth2Client(undefined, undefined, customRedirectUri);
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',

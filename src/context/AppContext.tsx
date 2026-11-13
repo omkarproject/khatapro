@@ -748,7 +748,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
                     upiGatewayProvider: cloudPS.upiGatewayProvider || localPS.upiGatewayProvider || 'Cashfree UPI Gateway',
                     upiGatewayKey: (cloudPS.upiGatewayKey || '').trim() || localPS.upiGatewayKey || '',
                     upiGatewaySecret: (cloudPS.upiGatewaySecret || '').trim() || localPS.upiGatewaySecret || '',
-                    upiGatewayWebhookUrl: (cloudPS.upiGatewayWebhookUrl || '').trim() || localPS.upiGatewayWebhookUrl || 'https://api.smartkhatapro.in/webhook/upi-payment',
+                    upiGatewayWebhookUrl: (cloudPS.upiGatewayWebhookUrl || '').trim() || localPS.upiGatewayWebhookUrl || (typeof window !== 'undefined' ? `${window.location.origin}/api/webhook/upi-payment` : '/api/webhook/upi-payment'),
                   };
                 })(),
               };

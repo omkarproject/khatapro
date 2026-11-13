@@ -7,6 +7,7 @@ import {
 } from '@/lib/googleDrive';
 import { encryptToken } from '@/lib/encryption';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { getGoogleRedirectUri } from '@/lib/domain';
 
 function isValidUuid(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
@@ -23,9 +24,13 @@ export async function GET(req: NextRequest) {
   try {
     let userId = '';
     let returnUrl = '/';
+    let dynamicRedirectUri = getGoogleRedirectUri(req);
     if (state) {
       try {
         const stateObj = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
+        if (stateObj.redirectUri) {
+          dynamicRedirectUri = stateObj.redirectUri;
+        }
         if (stateObj.userId && isValidUuid(stateObj.userId)) {
           userId = stateObj.userId;
         }
@@ -63,7 +68,7 @@ export async function GET(req: NextRequest) {
       throw new Error('Authorization code missing from Google callback');
     }
 
-    const oauth2Client = getOAuth2Client();
+    const oauth2Client = getOAuth2Client(undefined, undefined, dynamicRedirectUri);
     const tokenResponse: any = await oauth2Client.getToken(code);
     const tokens = tokenResponse.tokens;
 

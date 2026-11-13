@@ -215,7 +215,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
       enabled: true,
       clientId: '997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com',
       clientSecret: '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',
-      redirectUri: 'https://khatapro-sandy.vercel.app/api/backup/google-drive/callback',
+      redirectUri: typeof window !== 'undefined' ? `${window.location.origin}/api/backup/google-drive/callback` : '/api/backup/google-drive/callback',
     },
     businessName: businessName || '',
     businessLogo: '',
@@ -391,7 +391,7 @@ export const StorageService = {
         upiGatewayProvider: cloudPS.upiGatewayProvider || localPS.upiGatewayProvider || 'Cashfree UPI Gateway',
         upiGatewayKey: (cloudPS.upiGatewayKey || '').trim() || localPS.upiGatewayKey || '',
         upiGatewaySecret: (cloudPS.upiGatewaySecret || '').trim() || localPS.upiGatewaySecret || '',
-        upiGatewayWebhookUrl: (cloudPS.upiGatewayWebhookUrl || '').trim() || localPS.upiGatewayWebhookUrl || 'https://api.smartkhatapro.in/webhook/upi-payment',
+        upiGatewayWebhookUrl: (cloudPS.upiGatewayWebhookUrl || '').trim() || localPS.upiGatewayWebhookUrl || (typeof window !== 'undefined' ? `${window.location.origin}/api/webhook/upi-payment` : '/api/webhook/upi-payment'),
       };
       const mergedSettings = {
         ...existingSettings,

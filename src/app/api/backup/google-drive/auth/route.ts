@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getGoogleAuthUrl, isGoogleDriveConfigured } from '@/lib/googleDrive';
+import { getGoogleRedirectUri } from '@/lib/domain';
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,12 +23,13 @@ export async function GET(req: NextRequest) {
     const returnUrl = searchParams.get('returnUrl') || '/';
 
     // Cryptographic state token with embedded userId, returnUrl, and random bytes
+    const dynamicRedirectUri = getGoogleRedirectUri(req);
     const randomNonce = crypto.randomBytes(16).toString('hex');
     const statePayload = Buffer.from(
-      JSON.stringify({ userId, returnUrl, nonce: randomNonce, timestamp: Date.now() })
+      JSON.stringify({ userId, returnUrl, redirectUri: dynamicRedirectUri, nonce: randomNonce, timestamp: Date.now() })
     ).toString('base64url');
 
-    const authUrl = getGoogleAuthUrl(statePayload);
+    const authUrl = getGoogleAuthUrl(statePayload, dynamicRedirectUri);
 
     const res = NextResponse.redirect(authUrl);
     res.cookies.set('skp_gdrive_state', statePayload, {

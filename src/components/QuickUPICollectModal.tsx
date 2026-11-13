@@ -270,7 +270,7 @@ export default function QuickUPICollectModal() {
 
   // Generate Online Payment Link
   const getPaymentLink = (gatewayName: 'cashfree' | 'razorpay' | 'upi') => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://khatapro-sandy.vercel.app';
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const orderRef = `col_${Date.now()}`;
     const params = new URLSearchParams({
       amount: (numAmount > 0 ? numAmount : 0).toString(),

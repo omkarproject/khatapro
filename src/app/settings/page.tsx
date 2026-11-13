@@ -819,7 +819,15 @@ export default function SettingsPage() {
   const [driveEnabled, setDriveEnabled] = useState(() => settings.googleDriveSettings?.enabled !== false);
   const [driveClientId, setDriveClientId] = useState(settings.googleDriveSettings?.clientId || '997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com');
   const [driveClientSecret, setDriveClientSecret] = useState(settings.googleDriveSettings?.clientSecret || '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');
-  const [driveRedirectUri, setDriveRedirectUri] = useState(settings.googleDriveSettings?.redirectUri || 'https://khatapro-sandy.vercel.app/api/backup/google-drive/callback');
+  const [driveRedirectUri, setDriveRedirectUri] = useState(() => {
+    if (settings.googleDriveSettings?.redirectUri && !settings.googleDriveSettings.redirectUri.includes('khatapro-sandy.vercel.app')) {
+      return settings.googleDriveSettings.redirectUri;
+    }
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}/api/backup/google-drive/callback`;
+    }
+    return '/api/backup/google-drive/callback';
+  });
 
   useEffect(() => {
     if (settings.googleDriveSettings) {
@@ -3038,7 +3046,7 @@ export default function SettingsPage() {
                   required={driveEnabled}
                   value={driveRedirectUri}
                   onChange={(e) => setDriveRedirectUri(e.target.value)}
-                  placeholder="https://khatapro-sandy.vercel.app/api/backup/google-drive/callback"
+                  placeholder={typeof window !== 'undefined' ? `${window.location.origin}/api/backup/google-drive/callback` : 'https://your-domain.com/api/backup/google-drive/callback'}
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 <button
