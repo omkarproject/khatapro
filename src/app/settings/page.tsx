@@ -80,6 +80,7 @@ import {
   Code,
   Folder,
 } from 'lucide-react';
+import { generateSupabaseSetupSql } from '@/lib/supabaseSqlGenerator';
 import GoogleDriveBackupPanel from '@/components/GoogleDriveBackupPanel';
 import CurrencyLanguageModal from '@/components/CurrencyLanguageModal';
 import {
@@ -1006,6 +1007,14 @@ export default function SettingsPage() {
   const [supabaseUrl, setSupabaseUrl] = useState(settings.supabaseUrl || 'https://axpbydzszykqwojamblh.supabase.co');
   const [supabaseAnonKey, setSupabaseAnonKey] = useState(settings.supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTIzNTcsImV4cCI6MjEwNzI4ODM1N30.MOkM9DqTFr5nB4mYj-Z3n9FEta1Pi0tSSJ0tTWxsxF0');
   const [supabaseServiceRoleKey, setSupabaseServiceRoleKey] = useState(settings.supabaseServiceRoleKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTcxMjM1NywiZXhwIjoyMTA3Mjg4MzU3fQ.oUgYxGo6-WWyioLkhmPuldiCWf4pANvEl7vnPyNyyNs');
+
+  // Supabase Database SQL Generator Modal State
+  const [showSqlSetupModal, setShowSqlSetupModal] = useState(false);
+  const [sqlAdminName, setSqlAdminName] = useState(() => currentUser?.name || 'Administrator');
+  const [sqlAdminEmail, setSqlAdminEmail] = useState(() => currentUser?.email || 'anantyadav8924@gmail.com');
+  const [sqlAdminPassword, setSqlAdminPassword] = useState('Admin@2026#');
+  const [showSqlPassword, setShowSqlPassword] = useState(false);
+  const [sqlCopied, setSqlCopied] = useState(false);
 
   useEffect(() => {
     if (settings.supabaseUrl) setSupabaseUrl(settings.supabaseUrl);
@@ -3035,20 +3044,37 @@ export default function SettingsPage() {
       {/* Tab: Database & Cloud Auth Switcher (Admin Only) */}
       {mainTab === 'admin' && adminSubTab === 'supabase' && isAdmin && (
         <form onSubmit={handleSaveBackend} className="glass-card p-6 space-y-5 max-w-2xl">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-200/80 dark:border-slate-800">
-            <div>
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-slate-800">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                 <Database className="w-4 h-4 text-emerald-500" />
                 Supabase PostgreSQL &amp; Cloud Authentication
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Primary cloud database provider for user authentication, ledger transactions, invoices, and cloud sync.
-              </p>
+              <button
+                type="button"
+                onClick={() => setShowSqlSetupModal(true)}
+                className="p-1 rounded-lg hover:bg-emerald-500/10 text-emerald-500 hover:text-emerald-400 transition-colors cursor-pointer"
+                title="Database Setup SQL &amp; Admin Generator (Click to open)"
+                aria-label="Database Setup Information &amp; SQL Generator"
+              >
+                <Info className="w-4 h-4" />
+              </button>
             </div>
-            <span className="self-start sm:self-auto text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Primary Provider
-            </span>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSqlSetupModal(true)}
+                className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+              >
+                <Code className="w-3.5 h-3.5 text-emerald-500" />
+                <span>SQL Tables Setup</span>
+              </button>
+              <span className="self-start sm:self-auto text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Primary Provider
+              </span>
+            </div>
           </div>
 
           {/* Supabase Connection Details */}
@@ -3138,6 +3164,171 @@ export default function SettingsPage() {
               Save Supabase Connection
             </button>
           </div>
+
+          {/* Supabase Database Tables & Super Admin Setup SQL Modal */}
+          {showSqlSetupModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
+              <div className="relative w-full max-w-xl bg-slate-900 border border-emerald-500/30 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col text-left">
+                
+                {/* Modal Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                      <Database className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                        <span>Supabase SQL Tables &amp; Admin Setup</span>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          18 Tables
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-slate-400">
+                        Admin details enter karein aur SQL copy karke Supabase SQL Editor me run karein.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowSqlSetupModal(false)}
+                    className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Form: Name, Email / Username, Password */}
+                <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
+                  <div className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span>Admin User Credentials (Automatic Creation)</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Admin Full Name */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        Admin Full Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={sqlAdminName}
+                        onChange={(e) => setSqlAdminName(e.target.value)}
+                        placeholder="Anant Kumar Yadav"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-emerald-400"
+                      />
+                    </div>
+
+                    {/* Admin Email / Username */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        Admin Username / Email *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={sqlAdminEmail}
+                        onChange={(e) => setSqlAdminEmail(e.target.value)}
+                        placeholder="anantyadav8924@gmail.com"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-emerald-400"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Admin Password */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Admin Password *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showSqlPassword ? 'text' : 'password'}
+                        required
+                        value={sqlAdminPassword}
+                        onChange={(e) => setSqlAdminPassword(e.target.value)}
+                        placeholder="Admin@2026#"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-emerald-400 pr-9 font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSqlPassword(!showSqlPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      >
+                        {showSqlPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Instructions Box */}
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-300 leading-relaxed flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    Ye SQL command Supabase ke sabhi <b>18 tables, RLS security policies, triggers aur indexes</b> banayega, sath me aapke diye hue email aur password se aapko <b>Super Admin</b> bana dega.
+                  </div>
+                </div>
+
+                {/* SQL Code Preview (Scrollable) */}
+                <div className="flex-1 overflow-hidden flex flex-col rounded-2xl bg-slate-950 border border-slate-800">
+                  <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-800 text-[11px] font-mono text-slate-400">
+                    <span className="flex items-center gap-1.5">
+                      <Code className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>schema_and_admin_setup.sql</span>
+                    </span>
+                    <span className="text-[10px] text-slate-500">PostgreSQL</span>
+                  </div>
+                  <pre className="p-3 text-[10.5px] font-mono text-slate-300 overflow-y-auto max-h-44 leading-relaxed whitespace-pre-wrap select-all">
+                    {generateSupabaseSetupSql({
+                      adminName: sqlAdminName,
+                      adminEmail: sqlAdminEmail,
+                      adminPassword: sqlAdminPassword,
+                    })}
+                  </pre>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-between gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowSqlSetupModal(false)}
+                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Close
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sql = generateSupabaseSetupSql({
+                        adminName: sqlAdminName,
+                        adminEmail: sqlAdminEmail,
+                        adminPassword: sqlAdminPassword,
+                      });
+                      navigator.clipboard.writeText(sql);
+                      setSqlCopied(true);
+                      addToast('SQL Query Copied! 📋⚡', 'Supabase SQL Editor me paste karke Run karein. Sabhi tables aur Admin create ho jayenge.', 'success');
+                      setTimeout(() => setSqlCopied(false), 3000);
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white text-xs font-black flex items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all cursor-pointer"
+                  >
+                    {sqlCopied ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-white" />
+                        <span>Copied to Clipboard!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        <span>Copy SQL Query Command</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          )}
         </form>
       )}
 
