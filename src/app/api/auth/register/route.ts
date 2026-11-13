@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           success: false,
           registrationDisabled: true,
-          message: 'New merchant registrations are temporarily disabled by the system administrator. Please contact support via WhatsApp.',
+          message: 'New merchant registrations are temporarily disabled by the system administrator. Please contact support.',
         }, { status: 403 });
       }
     }

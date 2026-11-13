@@ -23,7 +23,8 @@ import {
   Send,
   ShieldCheck,
   Check,
-  X
+  X,
+  Headphones
 } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { GlobalWebsiteBranding } from '@/lib/globalBranding';
@@ -274,6 +275,9 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
     setSuccessMsg('');
     setOtpCode('');
     refreshCaptcha();
+    if (newMode === 'signup' && settings.allowNewRegistrations === false) {
+      setErrorMsg('New merchant registrations are temporarily disabled by the system administrator. Please contact support.');
+    }
   };
 
   // Password Policy Checks (6-10 chars, 1 uppercase, 1 number, 1 special symbol)
@@ -625,7 +629,22 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
           {errorMsg && (
             <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-start gap-3 text-rose-600 dark:text-rose-400 text-xs animate-shake">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <div className="flex-1 font-medium leading-relaxed">{errorMsg}</div>
+              <div className="flex-1 space-y-2">
+                <div className="font-medium leading-relaxed">
+                  {errorMsg.replace(/\s*via\s+WhatsApp\.?/gi, '.')}
+                </div>
+                {errorMsg.toLowerCase().includes('temporarily disabled') && (
+                  <div className="pt-1">
+                    <Link
+                      href="/contact-us"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition-all cursor-pointer"
+                    >
+                      <Headphones className="w-3.5 h-3.5" />
+                      <span>Contact Us &amp; Merchant Helpdesk</span>
+                    </Link>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

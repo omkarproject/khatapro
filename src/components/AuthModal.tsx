@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import Loading from './Loading';
 import {
@@ -26,7 +27,8 @@ import {
   ShieldCheck,
   Check,
   MessageSquare,
-  UserX
+  UserX,
+  Headphones
 } from 'lucide-react';
 
 // Math CAPTCHA generator
@@ -929,19 +931,21 @@ export default function AuthModal() {
                   New Registration Temporarily Disabled
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  New merchant registrations have been temporarily paused by the administrator. Please contact our support team on WhatsApp to request account activation.
+                  New merchant registrations have been temporarily paused by the administrator. Please contact our support team to request account activation.
                 </p>
               </div>
               <div className="pt-2 flex flex-col gap-2">
-                <a
-                  href={signupWhatsAppUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+                <Link
+                  href="/contact-us"
+                  onClick={() => {
+                    setShowSignupDisabledModal(false);
+                    closeAuthModal();
+                  }}
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
                 >
-                  <MessageSquare className="w-4 h-4" />
-                  <span>Contact Admin on WhatsApp</span>
-                </a>
+                  <Headphones className="w-4 h-4" />
+                  <span>Contact Us &amp; Merchant Helpdesk</span>
+                </Link>
                 <button
                   type="button"
                   onClick={() => setShowSignupDisabledModal(false)}
