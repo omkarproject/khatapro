@@ -425,13 +425,22 @@ export default function SettingsPage() {
   const [maintReason, setMaintReason] = useState(() => settings.maintenanceMode?.reason || 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️');
 
 
+  // Helper to extract clean sender display name without email brackets
+  const extractCleanSenderName = (fromRaw?: string, fallbackName?: string) => {
+    if (!fromRaw) return fallbackName || '';
+    const cleaned = fromRaw.replace(/<[^>]+>/g, '').replace(/['"]/g, '').trim();
+    return cleaned || fallbackName || '';
+  };
+
   // Email SMTP Settings State
   const [smtpEnabled, setSmtpEnabled] = useState(() => settings.smtpSettings?.enabled ?? true);
   const [smtpHost, setSmtpHost] = useState(settings.smtpSettings?.host || 'my.mailbux.com');
   const [smtpPort, setSmtpPort] = useState(settings.smtpSettings?.port || 587);
   const [smtpUser, setSmtpUser] = useState(settings.smtpSettings?.user || 'admin@rpmdg.me');
   const [smtpPass, setSmtpPass] = useState(settings.smtpSettings?.pass || 'Rpmdgadmin@2026#');
-  const [smtpFrom, setSmtpFrom] = useState(settings.smtpSettings?.from || 'AutoPrint Xerox Cloud <admin@rpmdg.me>');
+  const [smtpSenderName, setSmtpSenderName] = useState(() =>
+    extractCleanSenderName(settings.smtpSettings?.from, settings.websiteName || 'AutoPrint Xerox Cloud')
+  );
   const [smtpShowPass, setSmtpShowPass] = useState(false);
   const [isTestingSmtp, setIsTestingSmtp] = useState(false);
 
@@ -442,12 +451,16 @@ export default function SettingsPage() {
       if (settings.smtpSettings.port) setSmtpPort(settings.smtpSettings.port);
       if (settings.smtpSettings.user) setSmtpUser(settings.smtpSettings.user);
       if (settings.smtpSettings.pass) setSmtpPass(settings.smtpSettings.pass);
-      if (settings.smtpSettings.from) setSmtpFrom(settings.smtpSettings.from);
+      const cleanFrom = extractCleanSenderName(settings.smtpSettings.from, settings.websiteName);
+      if (cleanFrom) setSmtpSenderName(cleanFrom);
+    } else if (settings.websiteName) {
+      setSmtpSenderName(settings.websiteName);
     }
-  }, [settings.smtpSettings]);
+  }, [settings.smtpSettings, settings.websiteName]);
 
   const handleSaveSmtp = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanSender = (smtpSenderName.trim() || settings.websiteName || 'AutoPrint Xerox Cloud').replace(/<[^>]+>/g, '').trim();
     const updated: SystemSettings = {
       ...settings,
       smtpSettings: {
@@ -456,7 +469,7 @@ export default function SettingsPage() {
         port: Number(smtpPort) || 587,
         user: smtpUser.trim(),
         pass: smtpPass.trim(),
-        from: smtpFrom.trim(),
+        from: cleanSender,
         secure: Number(smtpPort) === 465,
       },
     };
@@ -473,6 +486,7 @@ export default function SettingsPage() {
   const handleTestSmtp = async () => {
     setIsTestingSmtp(true);
     try {
+      const cleanSender = (smtpSenderName.trim() || settings.websiteName || 'AutoPrint Xerox Cloud').replace(/<[^>]+>/g, '').trim();
       const res = await fetch('/api/admin/smtp/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -481,7 +495,7 @@ export default function SettingsPage() {
           port: Number(smtpPort) || 587,
           user: smtpUser.trim(),
           pass: smtpPass.trim(),
-          from: smtpFrom.trim(),
+          from: cleanSender,
           testEmail: currentUser?.email || 'anantyadav8924@gmail.com',
         }),
       });
@@ -509,7 +523,7 @@ export default function SettingsPage() {
     setSmtpPort(587);
     setSmtpUser('admin@rpmdg.me');
     setSmtpPass('Rpmdgadmin@2026#');
-    setSmtpFrom('AutoPrint Xerox Cloud <admin@rpmdg.me>');
+    setSmtpSenderName(settings.websiteName || 'AutoPrint Xerox Cloud');
     setSmtpEnabled(true);
     addToast('Default Restored', 'SMTP settings restored to default Mailbux configuration. Click Save to apply.', 'info');
   };
@@ -3172,7 +3186,7 @@ export default function SettingsPage() {
                       port: Number(smtpPort) || 587,
                       user: smtpUser.trim(),
                       pass: smtpPass.trim(),
-                      from: smtpFrom.trim(),
+                      from: (smtpSenderName.trim() || settings.websiteName || 'AutoPrint Xerox Cloud').replace(/<[^>]+>/g, '').trim(),
                       secure: Number(smtpPort) === 465,
                     },
                   };
@@ -3276,14 +3290,22 @@ export default function SettingsPage() {
               <input
                 type="text"
                 required={smtpEnabled}
-                value={smtpFrom}
-                onChange={(e) => setSmtpFrom(e.target.value)}
-                placeholder='AutoPrint Xerox Cloud <admin@rpmdg.me>'
-                className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={smtpSenderName}
+                onChange={(e) => setSmtpSenderName(e.target.value.replace(/<[^>]+>/g, ''))}
+                placeholder={webName || settings.websiteName || 'AutoPrint Xerox Cloud'}
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
-              <p className="text-[10px] text-slate-400 mt-1">
-                Name and email that recipients see in their inbox header.
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[10.5px] text-slate-400 mt-1.5 gap-1.5">
+                <span>
+                  Inbox Header Preview:{' '}
+                  <strong className="text-indigo-400 font-mono font-medium">
+                    &quot;{smtpSenderName.trim() || webName || settings.websiteName || 'Brand Name'}&quot; &lt;{smtpUser.trim() || 'admin@rpmdg.me'}&gt;
+                  </strong>
+                </span>
+                <span className="text-emerald-500 dark:text-emerald-400 font-medium flex items-center gap-1">
+                  ✓ &lt;{smtpUser.trim() || 'admin@rpmdg.me'}&gt; background me automatically lag jaata hai
+                </span>
+              </div>
             </div>
           </div>
 
@@ -3690,8 +3712,13 @@ export default function SettingsPage() {
                   type="text"
                   value={webName}
                   onChange={(e) => {
+                    const newName = e.target.value;
                     isBrandingDirtyRef.current = true;
-                    setWebName(e.target.value);
+                    // Auto-sync sender display name if it was empty or tracking brand name
+                    if (!smtpSenderName || smtpSenderName === webName || smtpSenderName === settings.websiteName) {
+                      setSmtpSenderName(newName);
+                    }
+                    setWebName(newName);
                   }}
                   placeholder="e.g. MyBrand, ApnaKhata, VyaparPro"
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-pink-500/30 focus:border-pink-500 transition-all font-semibold"

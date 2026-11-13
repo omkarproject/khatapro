@@ -223,7 +223,7 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
       port: 587,
       user: 'admin@rpmdg.me',
       pass: 'Rpmdgadmin@2026#',
-      from: 'AutoPrint Xerox Cloud <admin@rpmdg.me>',
+      from: 'AutoPrint Xerox Cloud',
       secure: false,
     },
     businessName: businessName || '',

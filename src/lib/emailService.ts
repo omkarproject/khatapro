@@ -420,17 +420,15 @@ export async function sendOtpEmailDirect(params: {
 
     const transporter = await createSmtpTransporter();
 
-    // Dynamically format sender 'from' header to always display the live Brand Display Name!
-    let senderEmail = config.user.trim();
-    if (config.from) {
-      const match = config.from.match(/<([^>]+)>/);
-      if (match && match[1]) {
-        senderEmail = match[1].trim();
-      } else if (config.from.includes('@')) {
-        senderEmail = config.from.trim();
-      }
+    // Display name: use custom configured display name (without <email>), or live Brand Display Name
+    let displayName = config.from ? config.from.replace(/<[^>]+>/g, '').replace(/['"]/g, '').trim() : '';
+    if (!displayName || displayName.toLowerCase() === 'khatapro' || displayName.toLowerCase() === 'smartkhata') {
+      displayName = finalBrandName;
     }
-    const formattedFrom = `"${finalBrandName}" <${senderEmail}>`;
+
+    // Auto background attach SMTP Username / Mailbox Email as the sender address:
+    const senderEmail = config.user.trim();
+    const formattedFrom = `"${displayName}" <${senderEmail}>`;
 
     const info = await transporter.sendMail({
       from: formattedFrom,

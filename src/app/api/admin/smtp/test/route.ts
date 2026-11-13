@@ -51,16 +51,15 @@ export async function POST(req: NextRequest) {
       recipientName: 'Administrator',
     });
 
-    let senderEmail = user.trim();
-    if (from) {
-      const match = from.match(/<([^>]+)>/);
-      if (match && match[1]) {
-        senderEmail = match[1].trim();
-      } else if (from.includes('@')) {
-        senderEmail = from.trim();
-      }
+    // Display name: clean of any <email>, auto defaults to live Brand Display Name
+    let displayName = from ? from.replace(/<[^>]+>/g, '').replace(/['"]/g, '').trim() : '';
+    if (!displayName || displayName.toLowerCase() === 'khatapro' || displayName.toLowerCase() === 'smartkhata') {
+      displayName = brandName;
     }
-    const formattedFrom = `"${brandName}" <${senderEmail}>`;
+
+    // Auto background attach SMTP Username email
+    const senderEmail = user.trim();
+    const formattedFrom = `"${displayName}" <${senderEmail}>`;
 
     const info = await transporter.sendMail({
       from: formattedFrom,
