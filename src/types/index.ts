@@ -365,7 +365,7 @@ export interface SavingsGoal {
   title: string;
   targetAmount: number;
   currentAmount: number;
-  category: 'Emergency Fund' | 'Business Expansion' | 'Tax Reserve' | 'Equipment' | 'Personal';
+  category: 'Emergency Fund' | 'Business Expansion' | 'Tax Reserve' | 'Equipment' | 'Personal' | string;
   deadline: string;
   notes?: string;
   icon?: string;
@@ -528,6 +528,7 @@ export interface SystemSettings {
   paymentSettings: PaymentSettings;
   monthlyBudgetCap?: number;
   expenseCategories?: string[];
+  savingsCategories?: string[];
   darkMode: boolean;
   selectedInvoiceTemplate?: string;
   telegramBackup?: TelegramBackupSettings;
