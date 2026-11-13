@@ -319,7 +319,11 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
   useEffect(() => {
     if (currentUser) {
       fetchSupportTickets();
-      const interval = setInterval(fetchSupportTickets, 15000);
+      const interval = setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          fetchSupportTickets();
+        }
+      }, 30000);
       const ticketCreatedHandler = () => {
         fetchSupportTickets();
       };

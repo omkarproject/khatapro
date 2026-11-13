@@ -1474,7 +1474,11 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     };
 
     fetchGlobalSystemConfig();
-    const interval = setInterval(fetchGlobalSystemConfig, 12000);
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchGlobalSystemConfig();
+      }
+    }, 25000);
     return () => clearInterval(interval);
   }, [mounted]);
 

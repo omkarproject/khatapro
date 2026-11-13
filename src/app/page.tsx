@@ -139,7 +139,11 @@ export default function DashboardPage() {
 
   React.useEffect(() => {
     fetchSupportTickets();
-    const interval = setInterval(fetchSupportTickets, 15000);
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchSupportTickets();
+      }
+    }, 30000);
     const handleTicketCreated = () => fetchSupportTickets();
     window.addEventListener('khatapro_ticket_created', handleTicketCreated);
     return () => {

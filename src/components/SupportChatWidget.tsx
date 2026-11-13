@@ -137,7 +137,11 @@ export default function SupportChatWidget() {
   useEffect(() => {
     if (currentUser) {
       fetchTickets();
-      const interval = setInterval(() => fetchTickets(true), 10000);
+      const interval = setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          fetchTickets(true);
+        }
+      }, 25000);
       return () => clearInterval(interval);
     }
   }, [currentUser, isAdmin]);

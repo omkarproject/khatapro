@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   images: {
     domains: ["images.unsplash.com", "api.qrserver.com"],
+    minimumCacheTTL: 86400,
+  },
+  experimental: {
+    optimizePackageImports: ["lucide-react"],
   },
 };
 

@@ -3881,7 +3881,7 @@ function KhataPageInner() {
                         setScreenView('chat');
                         setMobileActivePanel('ledger');
                       }}
-                      className={`p-3 rounded-2xl cursor-pointer transition-all border select-none relative ${
+                      className={`smooth-list-item p-3 rounded-2xl cursor-pointer transition-all border select-none relative ${
                         isSelected
                           ? 'bg-indigo-50/90 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700 shadow-sm'
                           : isPinned
@@ -4008,7 +4008,7 @@ function KhataPageInner() {
                         setScreenView('chat');
                         setMobileActivePanel('ledger');
                       }}
-                      className={`p-3 rounded-2xl cursor-pointer transition-all border select-none relative ${
+                      className={`smooth-list-item p-3 rounded-2xl cursor-pointer transition-all border select-none relative ${
                         isSelected
                           ? 'bg-indigo-50/90 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700 shadow-sm'
                           : isPinned
@@ -4827,7 +4827,7 @@ function KhataPageInner() {
                             return (
                               <div
                                 key={t.id}
-                                className={`flex flex-col ${isReceived ? 'items-start' : 'items-end'}`}
+                                className={`smooth-chat-item flex flex-col ${isReceived ? 'items-start' : 'items-end'}`}
                               >
                                 {/* The Bubble Card */}
                                 <div

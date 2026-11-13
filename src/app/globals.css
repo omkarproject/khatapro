@@ -32,6 +32,7 @@
 
 html {
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -41,11 +42,13 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
-  text-rendering: optimizeLegibility;
+  text-rendering: optimizeSpeed;
 }
 
+/* Enable hardware acceleration on interactive elements */
 a, button, input, select {
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 /* Custom modern scrollbars */
@@ -64,26 +67,52 @@ a, button, input, select {
   background: rgba(148, 163, 184, 0.5);
 }
 
-/* Fintech card utility classes */
+/* Fintech card utility classes - GPU-accelerated & mobile optimized */
 .glass-card {
   background: var(--card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--card-border);
   border-radius: 24px;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .glass-card:hover {
   border-color: rgba(99, 102, 241, 0.3);
-  box-shadow: 0 20px 35px -10px rgba(79, 70, 229, 0.08);
+  box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.08);
 }
 
 .glass-panel {
   background: var(--glass-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--glass-border);
+  transform: translateZ(0);
+}
+
+/* Low-end device & battery saver optimizations: turn expensive blurs off on low-tier screens */
+@media (max-width: 768px) {
+  .glass-card {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--card) !important;
+  }
+  .glass-panel {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--glass-bg) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* CRED / Stripe Glow Gradient */
@@ -122,4 +151,15 @@ a, button, input, select {
   .print\:hidden {
     display: none !important;
   }
+}
+
+/* Ultra-smooth scrolling for long list rendering on low-tier CPUs */
+.smooth-list-item {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 72px;
+}
+
+.smooth-chat-item {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 110px;
 }

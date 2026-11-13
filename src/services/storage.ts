@@ -66,13 +66,33 @@ export function getScopedKey(baseKey: string): string {
   return baseKey;
 }
 
-// Safe localStorage helper for SSR
+// In-memory cache to eliminate repetitive synchronous JSON.parse calls on low-end CPUs
+const memoryCache = new Map<string, { value: any; raw: string | null }>();
+
+// Clear in-memory cache when storage event triggers from another tab
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', () => {
+    memoryCache.clear();
+  });
+}
+
+// Safe localStorage helper for SSR with High-Performance Memory Caching
 function getLocalItem<T>(rawKey: string, defaultValue: T): T {
   const key = getScopedKey(rawKey);
   if (typeof window === 'undefined') return defaultValue;
   try {
-    const item = localStorage.getItem(key);
-    return item ? (JSON.parse(item) as T) : defaultValue;
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      memoryCache.delete(key);
+      return defaultValue;
+    }
+    const cached = memoryCache.get(key);
+    if (cached && cached.raw === raw) {
+      return cached.value as T;
+    }
+    const parsed = JSON.parse(raw) as T;
+    memoryCache.set(key, { value: parsed, raw });
+    return parsed;
   } catch (error) {
     console.error(`Error reading ${key} from localStorage:`, error);
     return defaultValue;
@@ -83,7 +103,9 @@ function setLocalItem<T>(rawKey: string, value: T): void {
   const key = getScopedKey(rawKey);
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    const raw = JSON.stringify(value);
+    memoryCache.set(key, { value, raw });
+    localStorage.setItem(key, raw);
   } catch (error) {
     console.error(`Error writing ${key} to localStorage:`, error);
   }
