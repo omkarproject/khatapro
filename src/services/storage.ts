@@ -1694,5 +1694,42 @@ export const StorageService = {
       console.warn('StorageService.clearOnLogout failed:', e);
     }
   },
+
+  clearAllFinancialData: () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const activeId = getActiveUserId();
+      const keysToClear = [
+        STORAGE_KEYS.CUSTOMERS,
+        STORAGE_KEYS.TRANSACTIONS,
+        STORAGE_KEYS.PRODUCTS,
+        STORAGE_KEYS.INVOICES,
+        STORAGE_KEYS.EXPENSES,
+        STORAGE_KEYS.SAVINGS,
+        STORAGE_KEYS.REMINDERS,
+        STORAGE_KEYS.DOCUMENTS,
+        STORAGE_KEYS.NOTES,
+        STORAGE_KEYS.TASKS,
+        STORAGE_KEYS.PASSWORDS,
+        STORAGE_KEYS.GROUPS,
+        STORAGE_KEYS.GROUP_NOTIFICATIONS,
+        STORAGE_KEYS.PINNED_CHATS,
+      ];
+      keysToClear.forEach((k) => {
+        localStorage.removeItem(k);
+        if (activeId) {
+          localStorage.removeItem(`${k}_${activeId}`);
+        }
+      });
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('skp_cust_drive_') || key.startsWith('skp_daily_backup_') || key.startsWith('skp_live_backup_'))) {
+          localStorage.removeItem(key);
+        }
+      }
+    } catch (e) {
+      console.warn('StorageService.clearAllFinancialData error:', e);
+    }
+  },
 };
 

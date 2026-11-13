@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  AlertTriangle,
   Key,
   Globe,
   Sparkles,
@@ -110,7 +111,7 @@ export default function SettingsPage() {
   const [mainTab, setMainTab] = useState<'business' | 'backup' | 'branding' | 'admin'>('business');
   const [businessSubTab, setBusinessSubTab] = useState<'enterprise' | 'payments' | 'security'>('enterprise');
   const [brandingSubTab, setBrandingSubTab] = useState<'visuals' | 'broadcast'>('visuals');
-  const [adminSubTab, setAdminSubTab] = useState<'supabase' | 'drive' | 'users' | 'maintenance'>('supabase');
+  const [adminSubTab, setAdminSubTab] = useState<'supabase' | 'drive' | 'users' | 'maintenance' | 'danger'>('supabase');
   const [backupSubTab, setBackupSubTab] = useState<'drive' | 'local'>('drive');
   const [isSyncingData, setIsSyncingData] = useState(false);
   const isBusinessDirtyRef = useRef(false);
@@ -422,6 +423,70 @@ export default function SettingsPage() {
   const [maintEnabled, setMaintEnabled] = useState(() => settings.maintenanceMode?.enabled || false);
   const [maintDuration, setMaintDuration] = useState<number>(() => settings.maintenanceMode?.durationMinutes || 15);
   const [maintReason, setMaintReason] = useState(() => settings.maintenanceMode?.reason || 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️');
+
+  // Danger Zone: Database Reset & Wipe State
+  const [dangerResetMode, setDangerResetMode] = useState<'full_reset' | 'ledger_only' | 'non_admin_users'>('full_reset');
+  const [dangerConfirmPhrase, setDangerConfirmPhrase] = useState('');
+  const [isExecutingReset, setIsExecutingReset] = useState(false);
+  const [dangerResetResult, setDangerResetResult] = useState<{
+    success: boolean;
+    message: string;
+    deletedAuthUsersCount?: number;
+    cleanedTables?: string[];
+    timestamp?: string;
+  } | null>(null);
+
+  const handleExecuteDatabaseReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (dangerConfirmPhrase.trim() !== 'RESET') {
+      addToast('Confirmation Mismatch', 'Please type "RESET" in capital letters to confirm.', 'error');
+      return;
+    }
+
+    if (!window.confirm('⚠️ FINAL WARNING: Are you ABSOLUTELY sure you want to execute this database wipe? This action cannot be undone!')) {
+      return;
+    }
+
+    setIsExecutingReset(true);
+    setDangerResetResult(null);
+
+    try {
+      const res = await fetch('/api/admin/database-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          callerUserId: currentUser?.id || profile?.id,
+          resetMode: dangerResetMode,
+          confirmationPhrase: 'RESET',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Database reset failed.');
+      }
+
+      setDangerResetResult(data);
+      setDangerConfirmPhrase('');
+
+      // If full reset or ledger reset, clear local storage financial data
+      if (dangerResetMode === 'full_reset' || dangerResetMode === 'ledger_only') {
+        StorageService.clearAllFinancialData();
+      }
+
+      addToast(
+        'Database Reset Successful! 🧹',
+        data.message || 'Selected records were purged. Database has been cleaned.',
+        'success'
+      );
+    } catch (err: any) {
+      console.error('Database reset error:', err);
+      addToast('Database Reset Error', err.message || 'Failed to wipe database.', 'error');
+    } finally {
+      setIsExecutingReset(false);
+    }
+  };
+
   const [betaTestingActive, setBetaTestingActive] = useState(() => Boolean(settings.betaTestingEnabled));
 
   // Cloud Backup & Restore State
@@ -470,6 +535,9 @@ export default function SettingsPage() {
       } else if (tabParam === 'maintenance') {
         setMainTab('admin');
         setAdminSubTab('maintenance');
+      } else if (tabParam === 'danger') {
+        setMainTab('admin');
+        setAdminSubTab('danger');
       }
     }
   }, []);
@@ -1821,6 +1889,20 @@ export default function SettingsPage() {
             {maintEnabled && (
               <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
             )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAdminSubTab('danger')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              adminSubTab === 'danger'
+                ? 'bg-red-600 text-white shadow-xs'
+                : 'text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300'
+            }`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+            <span>Danger Zone</span>
+            <span className="text-[10px] font-black px-1.5 py-0.2 bg-red-500/20 text-red-700 dark:text-red-300 rounded-md">Admin</span>
           </button>
         </div>
       )}
@@ -4440,6 +4522,157 @@ export default function SettingsPage() {
 
         </div>
       )}
+
+      
+      {/* Tab: Danger Zone (Admin Only) */}
+      {mainTab === 'admin' && adminSubTab === 'danger' && isAdmin && (
+        <div className="space-y-6 animate-in fade-in max-w-3xl">
+          {/* Header Card */}
+          <div className="p-6 rounded-3xl bg-gradient-to-r from-red-950/40 via-rose-950/30 to-slate-900 border border-red-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-red-400 text-xs font-bold uppercase tracking-wider">
+                <AlertTriangle className="w-4 h-4 text-red-500 animate-pulse" />
+                <span>Super Admin &bull; Danger Zone</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
+                <span>Database Factory Reset &amp; Purge</span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 font-mono">
+                  IRREVERSIBLE
+                </span>
+              </h2>
+              <p className="text-xs text-slate-400 max-w-xl">
+                Clean and wipe your Supabase Cloud Database. Dropdown se select karein ki kya clean karna hai. Full Reset par sabhi users aur records delete ho jayenge sirf Admin login account bachega.
+              </p>
+            </div>
+          </div>
+
+          {/* Result Alert if just executed */}
+          {dangerResetResult && (
+            <div className={`p-5 rounded-2xl border ${
+              dangerResetResult.success
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-200'
+                : 'bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-200'
+            }`}>
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+                <div className="space-y-2 text-xs">
+                  <div className="font-extrabold text-sm">{dangerResetResult.message}</div>
+                  {dangerResetResult.deletedAuthUsersCount !== undefined && (
+                    <div>Deleted Non-Admin Auth Accounts: <strong>{dangerResetResult.deletedAuthUsersCount}</strong></div>
+                  )}
+                  {dangerResetResult.cleanedTables && dangerResetResult.cleanedTables.length > 0 && (
+                    <div>
+                      <div className="font-bold mb-1">Cleaned Tables ({dangerResetResult.cleanedTables.length}):</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {dangerResetResult.cleanedTables.map((t, idx) => (
+                          <span key={idx} className="font-mono text-[10px] px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 pt-1">
+                    Database tables have been completely wiped. You can now use the app fresh or invite new merchants.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Reset Configuration Form */}
+          <form onSubmit={handleExecuteDatabaseReset} className="glass-card p-6 space-y-6">
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                Select Database Action (Dropdown) *
+              </label>
+              <select
+                value={dangerResetMode}
+                onChange={(e: any) => setDangerResetMode(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 cursor-pointer"
+              >
+                <option value="full_reset">
+                  Full Database Reset — Factory Clean (Clean ALL Data, Keep Admin Login Only)
+                </option>
+                <option value="ledger_only">
+                  Reset Business &amp; Ledger Data Only (Wipe Ledgers/Bills, Keep All User Logins)
+                </option>
+                <option value="non_admin_users">
+                  Delete All Regular Users (Remove Non-Admin Users, Keep Admin Data)
+                </option>
+              </select>
+            </div>
+
+            {/* Dynamic Explanation Card */}
+            <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs space-y-2">
+              <div className="font-extrabold text-red-600 dark:text-red-400 flex items-center gap-1.5">
+                <ShieldAlert className="w-4 h-4 text-red-500 shrink-0" />
+                <span>Scope of Selected Action:</span>
+              </div>
+              {dangerResetMode === 'full_reset' && (
+                <ul className="list-disc pl-5 space-y-1 text-slate-700 dark:text-slate-300 text-[11px] leading-relaxed">
+                  <li><strong>Complete Database Wipe:</strong> All 14 operational tables (Customers, Transactions, Invoices, Expenses, Products, Notes, Tasks, Reminders, Documents, Drive Backups) will have <strong>0 records</strong>.</li>
+                  <li><strong>All Users Erased:</strong> All regular merchant accounts will be permanently deleted from profiles and Supabase Auth.</li>
+                  <li><strong>🛡️ Admin Account Preserved:</strong> Only your Super Admin login account (<code className="font-mono font-bold text-red-600 dark:text-red-400">anantyadav8924@gmail.com</code>) will remain intact so you can log back in with a fresh database.</li>
+                  <li><strong>New DB Experience:</strong> Exactly like creating a brand new database with all tables ready and zero residual data.</li>
+                </ul>
+              )}
+              {dangerResetMode === 'ledger_only' && (
+                <ul className="list-disc pl-5 space-y-1 text-slate-700 dark:text-slate-300 text-[11px] leading-relaxed">
+                  <li><strong>Ledger &amp; Financial Wipe:</strong> Clears all Customers, Invoices, Expenses, Transactions, and Products for all accounts.</li>
+                  <li><strong>Accounts Preserved:</strong> All user accounts and their login credentials remain active.</li>
+                </ul>
+              )}
+              {dangerResetMode === 'non_admin_users' && (
+                <ul className="list-disc pl-5 space-y-1 text-slate-700 dark:text-slate-300 text-[11px] leading-relaxed">
+                  <li><strong>Remove Merchant Accounts:</strong> All non-admin registered users and their respective records will be removed.</li>
+                  <li><strong>Admin Data Preserved:</strong> Your Admin account and business ledger data will remain untouched.</li>
+                </ul>
+              )}
+            </div>
+
+            {/* Confirmation Phrase Input */}
+            <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                To confirm this action, please type <span className="font-mono text-red-600 dark:text-red-400 font-black">RESET</span> below:
+              </label>
+              <input
+                type="text"
+                value={dangerConfirmPhrase}
+                onChange={(e) => setDangerConfirmPhrase(e.target.value)}
+                placeholder="Type RESET in capital letters"
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-mono font-bold text-red-600 dark:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+            </div>
+
+            {/* Execute Button */}
+            <div className="pt-2 flex justify-end">
+              <button
+                type="submit"
+                disabled={dangerConfirmPhrase.trim() !== 'RESET' || isExecutingReset}
+                className={`px-6 py-3 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-lg ${
+                  dangerConfirmPhrase.trim() === 'RESET' && !isExecutingReset
+                    ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-500/30 active:scale-95'
+                    : 'bg-slate-300 dark:bg-slate-800 text-slate-500 dark:text-slate-500 cursor-not-allowed shadow-none'
+                }`}
+              >
+                {isExecutingReset ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Wiping Database Records...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Execute Database Reset Now</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
 
       {/* Tab: User Management CRM (Admin Only) */}
       {mainTab === 'admin' && adminSubTab === 'users' && isAdmin && (
