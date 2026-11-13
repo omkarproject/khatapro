@@ -3224,25 +3224,20 @@ export default function SettingsPage() {
           </div>
 
           {/* Automated Email Triggers & Verification Rules (Checkboxes) */}
-          <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3.5">
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
             <div className="flex items-center justify-between">
-              <div>
-                <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-indigo-500" />
-                  Email Verification &amp; Automation Triggers
-                </h4>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  Select which actions trigger automated emails. Tick to activate or untick to deactivate.
-                </p>
-              </div>
+              <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                <Mail className="w-4 h-4 text-indigo-500" />
+                Email Verification &amp; Automation Triggers
+              </h4>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 font-semibold border border-indigo-500/20">
                 Active Controls
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {/* Trigger 1: Signup OTP */}
-              <label className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
+              <label className={`p-2.5 px-3 rounded-xl border transition-all cursor-pointer flex items-center gap-2.5 ${
                 smtpTriggerSignup 
                   ? 'bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/30 ring-1 ring-emerald-500/20' 
                   : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700/80 hover:border-slate-300'
@@ -3251,27 +3246,22 @@ export default function SettingsPage() {
                   type="checkbox"
                   checked={smtpTriggerSignup}
                   onChange={(e) => setSmtpTriggerSignup(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                  className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer shrink-0"
                 />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                      Signup Verification (OTP)
-                    </span>
-                    <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded ${
-                      smtpTriggerSignup ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
-                    }`}>
-                      {smtpTriggerSignup ? 'OTP ACTIVE' : 'DIRECT SIGNUP'}
-                    </span>
-                  </div>
-                  <p className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                    New user registration par verification code (OTP) email bhejna. Untick par direct account banega.
-                  </p>
+                <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                    Signup Verification (OTP)
+                  </span>
+                  <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                    smtpTriggerSignup ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                  }`}>
+                    {smtpTriggerSignup ? 'OTP ACTIVE' : 'DIRECT SIGNUP'}
+                  </span>
                 </div>
               </label>
 
               {/* Trigger 2: Login OTP */}
-              <label className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
+              <label className={`p-2.5 px-3 rounded-xl border transition-all cursor-pointer flex items-center gap-2.5 ${
                 smtpTriggerLogin 
                   ? 'bg-indigo-500/5 dark:bg-indigo-500/10 border-indigo-300 dark:border-indigo-500/30 ring-1 ring-indigo-500/20' 
                   : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700/80 hover:border-slate-300'
@@ -3280,27 +3270,22 @@ export default function SettingsPage() {
                   type="checkbox"
                   checked={smtpTriggerLogin}
                   onChange={(e) => setSmtpTriggerLogin(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                  className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer shrink-0"
                 />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                      Login 2FA Security (OTP)
-                    </span>
-                    <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded ${
-                      smtpTriggerLogin ? 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
-                    }`}>
-                      {smtpTriggerLogin ? '2FA ACTIVE' : 'DIRECT LOGIN'}
-                    </span>
-                  </div>
-                  <p className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                    Login karte waqt email par 2-Step OTP bhejna. Untick par user direct password daalkar turant login karega.
-                  </p>
+                <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                    Login 2FA Security (OTP)
+                  </span>
+                  <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                    smtpTriggerLogin ? 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                  }`}>
+                    {smtpTriggerLogin ? '2FA ACTIVE' : 'DIRECT LOGIN'}
+                  </span>
                 </div>
               </label>
 
               {/* Trigger 3: Forgot Password OTP */}
-              <label className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
+              <label className={`p-2.5 px-3 rounded-xl border transition-all cursor-pointer flex items-center gap-2.5 ${
                 smtpTriggerForgot 
                   ? 'bg-rose-500/5 dark:bg-rose-500/10 border-rose-300 dark:border-rose-500/30 ring-1 ring-rose-500/20' 
                   : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700/80 hover:border-slate-300'
@@ -3309,27 +3294,22 @@ export default function SettingsPage() {
                   type="checkbox"
                   checked={smtpTriggerForgot}
                   onChange={(e) => setSmtpTriggerForgot(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 cursor-pointer"
+                  className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 cursor-pointer shrink-0"
                 />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                      Forgot Password Reset (OTP)
-                    </span>
-                    <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded ${
-                      smtpTriggerForgot ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
-                    }`}>
-                      {smtpTriggerForgot ? 'RESET ACTIVE' : 'WHATSAPP ONLY'}
-                    </span>
-                  </div>
-                  <p className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                    Password bhoolne par reset OTP email bhejna. Untick par WhatsApp Admin support dialog aayega.
-                  </p>
+                <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                    Forgot Password Reset (OTP)
+                  </span>
+                  <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                    smtpTriggerForgot ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                  }`}>
+                    {smtpTriggerForgot ? 'RESET ACTIVE' : 'WHATSAPP ONLY'}
+                  </span>
                 </div>
               </label>
 
               {/* Trigger 4: New Signup Welcome Mail */}
-              <label className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
+              <label className={`p-2.5 px-3 rounded-xl border transition-all cursor-pointer flex items-center gap-2.5 ${
                 smtpTriggerWelcome 
                   ? 'bg-amber-500/5 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/30 ring-1 ring-amber-500/20' 
                   : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700/80 hover:border-slate-300'
@@ -3338,22 +3318,17 @@ export default function SettingsPage() {
                   type="checkbox"
                   checked={smtpTriggerWelcome}
                   onChange={(e) => setSmtpTriggerWelcome(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer"
+                  className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer shrink-0"
                 />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                      New Signup Welcome Email
-                    </span>
-                    <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded ${
-                      smtpTriggerWelcome ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
-                    }`}>
-                      {smtpTriggerWelcome ? 'WELCOME ON' : 'DISABLED'}
-                    </span>
-                  </div>
-                  <p className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                    Naye user ke 1st signup / 1st login par stylish onboarding welcome email bhejna features ke sath.
-                  </p>
+                <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                    New Signup Welcome Email
+                  </span>
+                  <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                    smtpTriggerWelcome ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                  }`}>
+                    {smtpTriggerWelcome ? 'WELCOME ON' : 'DISABLED'}
+                  </span>
                 </div>
               </label>
             </div>
