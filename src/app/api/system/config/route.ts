@@ -41,6 +41,7 @@ export async function GET() {
             websiteBranding: branding,
             broadcasts: Array.isArray(maintObj.broadcasts) ? maintObj.broadcasts : [],
             supportTickets: Array.isArray(maintObj.supportTickets) ? maintObj.supportTickets : [],
+            smtpSettings: maintObj.smtpSettings || null,
           });
         }
       }
@@ -129,6 +130,11 @@ export async function POST(req: NextRequest) {
       updatedMaint.supportTickets = supportTickets;
     }
 
+    if (smtpSettings !== undefined) {
+      updatedMaint.smtpSettings = smtpSettings;
+      invalidateSmtpCache();
+    }
+
     const updatePayload: any = {
       id: 'global_config',
       maintenance_mode: updatedMaint,
@@ -167,6 +173,7 @@ export async function POST(req: NextRequest) {
       driveFolderSync: driveFolderSyncResult,
       broadcasts: savedMaint.broadcasts || [],
       supportTickets: savedMaint.supportTickets || [],
+      smtpSettings: savedMaint.smtpSettings || null,
     });
   } catch (error: any) {
     console.error('System config POST error:', error);

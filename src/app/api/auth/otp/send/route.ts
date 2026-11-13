@@ -60,6 +60,33 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Granular trigger check (Active/Deactive checkboxes):
+    const triggers = smtpConfig.triggers;
+
+    if (purpose === 'signup' && triggers?.signupOtp === false) {
+      return NextResponse.json({
+        success: true,
+        skipped: true,
+        message: 'Signup verification OTP is deactivated by administrator. Direct registration enabled.',
+      });
+    }
+
+    if (purpose === 'login' && triggers?.loginOtp === false) {
+      return NextResponse.json({
+        success: true,
+        skipped: true,
+        message: 'Login 2FA verification OTP is deactivated by administrator. Direct password sign-in enabled.',
+      });
+    }
+
+    if (purpose === 'forgot_password' && triggers?.forgotPasswordOtp === false) {
+      return NextResponse.json({
+        success: false,
+        disabled: true,
+        message: 'Password reset via OTP is temporarily disabled by administrator. Please contact support via WhatsApp.',
+      }, { status: 403 });
+    }
+
     // 1. Validation according to purpose
     if (purpose === 'login') {
       if (!password) {

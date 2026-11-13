@@ -112,9 +112,12 @@ export default function AuthModal() {
   };
 
   const resetFormState = (newMode: 'signin' | 'signup' | 'forgot_password') => {
-    if (newMode === 'forgot_password' && settings.smtpSettings?.enabled === false) {
-      setShowForgotDisabledModal(true);
-      return;
+    if (newMode === 'forgot_password') {
+      const isForgotDisabled = settings.smtpSettings?.enabled === false || settings.smtpSettings?.triggers?.forgotPasswordOtp === false;
+      if (isForgotDisabled) {
+        setShowForgotDisabledModal(true);
+        return;
+      }
     }
     setMode(newMode);
     setStep('input');
@@ -132,7 +135,7 @@ export default function AuthModal() {
   const hasSymbol = /[!@#$%^&*(),.?":{}|<>_\-+=~/]/.test(targetPassword);
   const isPasswordPolicyMet = isLengthValid && hasUppercase && hasNumber && hasSymbol;
 
-  // Direct Sign In with Captcha (No OTP required on login)
+  // Sign In Handler: Checks Login 2FA Trigger or Direct Login
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -151,6 +154,39 @@ export default function AuthModal() {
 
     setIsLoading(true);
     try {
+      // Check if Login 2FA OTP is active in SMTP triggers
+      const isLoginOtpActive = settings.smtpSettings?.enabled !== false && settings.smtpSettings?.triggers?.loginOtp === true;
+
+      if (isLoginOtpActive) {
+        // Send login 2FA verification OTP
+        const res = await fetch('/api/auth/otp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email.trim(),
+            purpose: 'login',
+            password,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || 'Login verification failed.');
+        }
+
+        if (data.skipped) {
+          await login(email.trim(), password);
+          closeAuthModal();
+          return;
+        }
+
+        setSuccessMsg(`2FA Login verification code sent to ${email.trim()}.`);
+        setStep('otp');
+        setResendTimer(60);
+        return;
+      }
+
+      // Direct sign in with password
       await login(email.trim(), password);
       closeAuthModal();
     } catch (err: any) {
@@ -193,7 +229,7 @@ export default function AuthModal() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: email.trim(),
-          purpose: mode,
+          purpose: mode === 'signin' ? 'login' : mode,
           password: password,
           name: name.trim(),
           businessName: businessName.trim(),

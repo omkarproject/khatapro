@@ -225,6 +225,12 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
       pass: 'Rpmdgadmin@2026#',
       from: 'AutoPrint Xerox Cloud',
       secure: false,
+      triggers: {
+        signupOtp: true,
+        loginOtp: false,
+        forgotPasswordOtp: true,
+        welcomeEmail: true,
+      },
     },
     businessName: businessName || '',
     businessLogo: '',

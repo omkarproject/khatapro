@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
+import { sendWelcomeEmailDirect } from '@/lib/emailService';
 
 export async function POST(req: NextRequest) {
   try {
@@ -102,6 +103,17 @@ export async function POST(req: NextRequest) {
       try {
         await supabase.from('profiles').update({ role: 'user', updated_at: new Date().toISOString() }).eq('id', sbUser.id);
         await supabase.auth.admin.updateUserById(sbUser.id, { user_metadata: { role: 'user' } });
+      } catch {}
+    }
+
+    // If new user logs in for the first time after signup, ensure welcome email is delivered
+    if (profile && !profile.welcome_email_sent && (sbUser.email || resolvedEmail)) {
+      sendWelcomeEmailDirect({
+        to: sbUser.email || resolvedEmail,
+        recipientName: profile.name || '',
+      }).catch(() => null);
+      try {
+        await supabase.from('profiles').update({ welcome_email_sent: true }).eq('id', sbUser.id);
       } catch {}
     }
 

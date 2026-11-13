@@ -444,6 +444,12 @@ export default function SettingsPage() {
   const [smtpShowPass, setSmtpShowPass] = useState(false);
   const [isTestingSmtp, setIsTestingSmtp] = useState(false);
 
+  // SMTP Trigger Checkboxes
+  const [smtpTriggerSignup, setSmtpTriggerSignup] = useState<boolean>(() => settings.smtpSettings?.triggers?.signupOtp ?? true);
+  const [smtpTriggerLogin, setSmtpTriggerLogin] = useState<boolean>(() => settings.smtpSettings?.triggers?.loginOtp ?? false);
+  const [smtpTriggerForgot, setSmtpTriggerForgot] = useState<boolean>(() => settings.smtpSettings?.triggers?.forgotPasswordOtp ?? true);
+  const [smtpTriggerWelcome, setSmtpTriggerWelcome] = useState<boolean>(() => settings.smtpSettings?.triggers?.welcomeEmail ?? true);
+
   useEffect(() => {
     if (settings.smtpSettings) {
       if (settings.smtpSettings.enabled !== undefined) setSmtpEnabled(settings.smtpSettings.enabled);
@@ -453,6 +459,12 @@ export default function SettingsPage() {
       if (settings.smtpSettings.pass) setSmtpPass(settings.smtpSettings.pass);
       const cleanFrom = extractCleanSenderName(settings.smtpSettings.from, settings.websiteName);
       if (cleanFrom) setSmtpSenderName(cleanFrom);
+      if (settings.smtpSettings.triggers) {
+        if (settings.smtpSettings.triggers.signupOtp !== undefined) setSmtpTriggerSignup(settings.smtpSettings.triggers.signupOtp);
+        if (settings.smtpSettings.triggers.loginOtp !== undefined) setSmtpTriggerLogin(settings.smtpSettings.triggers.loginOtp);
+        if (settings.smtpSettings.triggers.forgotPasswordOtp !== undefined) setSmtpTriggerForgot(settings.smtpSettings.triggers.forgotPasswordOtp);
+        if (settings.smtpSettings.triggers.welcomeEmail !== undefined) setSmtpTriggerWelcome(settings.smtpSettings.triggers.welcomeEmail);
+      }
     } else if (settings.websiteName) {
       setSmtpSenderName(settings.websiteName);
     }
@@ -471,6 +483,12 @@ export default function SettingsPage() {
         pass: smtpPass.trim(),
         from: cleanSender,
         secure: Number(smtpPort) === 465,
+        triggers: {
+          signupOtp: smtpTriggerSignup,
+          loginOtp: smtpTriggerLogin,
+          forgotPasswordOtp: smtpTriggerForgot,
+          welcomeEmail: smtpTriggerWelcome,
+        },
       },
     };
     updateSettings(updated);
@@ -525,6 +543,10 @@ export default function SettingsPage() {
     setSmtpPass('Rpmdgadmin@2026#');
     setSmtpSenderName(settings.websiteName || 'AutoPrint Xerox Cloud');
     setSmtpEnabled(true);
+    setSmtpTriggerSignup(true);
+    setSmtpTriggerLogin(false);
+    setSmtpTriggerForgot(true);
+    setSmtpTriggerWelcome(true);
     addToast('Default Restored', 'SMTP settings restored to default Mailbux configuration. Click Save to apply.', 'info');
   };
 
@@ -3188,6 +3210,12 @@ export default function SettingsPage() {
                       pass: smtpPass.trim(),
                       from: (smtpSenderName.trim() || settings.websiteName || 'AutoPrint Xerox Cloud').replace(/<[^>]+>/g, '').trim(),
                       secure: Number(smtpPort) === 465,
+                      triggers: {
+                        signupOtp: smtpTriggerSignup,
+                        loginOtp: smtpTriggerLogin,
+                        forgotPasswordOtp: smtpTriggerForgot,
+                        welcomeEmail: smtpTriggerWelcome,
+                      },
                     },
                   };
                   updateSettings(updated);
@@ -3210,6 +3238,142 @@ export default function SettingsPage() {
                   }`}
                 />
               </button>
+            </div>
+          </div>
+
+          {/* Automated Email Triggers & Verification Rules (Checkboxes) */}
+          <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-indigo-500" />
+                  Email Verification &amp; Automation Triggers
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Select which actions trigger automated emails. Tick to activate or untick to deactivate.
+                </p>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 font-semibold border border-indigo-500/20">
+                Active Controls
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              {/* Trigger 1: Signup OTP */}
+              <label className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
+                smtpTriggerSignup 
+                  ? 'bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/30 ring-1 ring-emerald-500/20' 
+                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700/80 hover:border-slate-300'
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={smtpTriggerSignup}
+                  onChange={(e) => setSmtpTriggerSignup(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Signup Verification (OTP)
+                    </span>
+                    <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded ${
+                      smtpTriggerSignup ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                    }`}>
+                      {smtpTriggerSignup ? 'OTP ACTIVE' : 'DIRECT SIGNUP'}
+                    </span>
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                    New user registration par verification code (OTP) email bhejna. Untick par direct account banega.
+                  </p>
+                </div>
+              </label>
+
+              {/* Trigger 2: Login OTP */}
+              <label className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
+                smtpTriggerLogin 
+                  ? 'bg-indigo-500/5 dark:bg-indigo-500/10 border-indigo-300 dark:border-indigo-500/30 ring-1 ring-indigo-500/20' 
+                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700/80 hover:border-slate-300'
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={smtpTriggerLogin}
+                  onChange={(e) => setSmtpTriggerLogin(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Login 2FA Security (OTP)
+                    </span>
+                    <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded ${
+                      smtpTriggerLogin ? 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                    }`}>
+                      {smtpTriggerLogin ? '2FA ACTIVE' : 'DIRECT LOGIN'}
+                    </span>
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                    Login karte waqt email par 2-Step OTP bhejna. Untick par user direct password daalkar turant login karega.
+                  </p>
+                </div>
+              </label>
+
+              {/* Trigger 3: Forgot Password OTP */}
+              <label className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
+                smtpTriggerForgot 
+                  ? 'bg-rose-500/5 dark:bg-rose-500/10 border-rose-300 dark:border-rose-500/30 ring-1 ring-rose-500/20' 
+                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700/80 hover:border-slate-300'
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={smtpTriggerForgot}
+                  onChange={(e) => setSmtpTriggerForgot(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 cursor-pointer"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Forgot Password Reset (OTP)
+                    </span>
+                    <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded ${
+                      smtpTriggerForgot ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                    }`}>
+                      {smtpTriggerForgot ? 'RESET ACTIVE' : 'WHATSAPP ONLY'}
+                    </span>
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                    Password bhoolne par reset OTP email bhejna. Untick par WhatsApp Admin support dialog aayega.
+                  </p>
+                </div>
+              </label>
+
+              {/* Trigger 4: New Signup Welcome Mail */}
+              <label className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
+                smtpTriggerWelcome 
+                  ? 'bg-amber-500/5 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/30 ring-1 ring-amber-500/20' 
+                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700/80 hover:border-slate-300'
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={smtpTriggerWelcome}
+                  onChange={(e) => setSmtpTriggerWelcome(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      New Signup Welcome Email
+                    </span>
+                    <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded ${
+                      smtpTriggerWelcome ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                    }`}>
+                      {smtpTriggerWelcome ? 'WELCOME ON' : 'DISABLED'}
+                    </span>
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                    Naye user ke 1st signup / 1st login par stylish onboarding welcome email bhejna features ke sath.
+                  </p>
+                </div>
+              </label>
             </div>
           </div>
 

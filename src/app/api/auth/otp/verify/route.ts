@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 import { verifyOtp as verifyLocalOtp, getOtp, validatePasswordStrength } from '@/lib/otpStore';
+import { sendWelcomeEmailDirect } from '@/lib/emailService';
 
 export async function POST(req: NextRequest) {
   try {
@@ -178,6 +179,12 @@ export async function POST(req: NextRequest) {
         business_email: cleanEmail,
         updated_at: new Date().toISOString(),
       });
+
+      // Dispatch Welcome Email to newly verified merchant
+      sendWelcomeEmailDirect({
+        to: cleanEmail,
+        recipientName: name,
+      }).catch((err) => console.warn('[WelcomeEmail] Verify hook note:', err));
 
       const safeUser = {
         id: createdUserId,

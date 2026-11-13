@@ -493,6 +493,13 @@ export interface GoogleDriveConfig {
   redirectUri?: string;
 }
 
+export interface SmtpTriggersConfig {
+  signupOtp: boolean;
+  loginOtp: boolean;
+  forgotPasswordOtp: boolean;
+  welcomeEmail: boolean;
+}
+
 export interface SmtpConfig {
   enabled: boolean;
   host: string;
@@ -501,6 +508,7 @@ export interface SmtpConfig {
   pass: string;
   from: string;
   secure?: boolean;
+  triggers?: SmtpTriggersConfig;
 }
 
 export interface SystemSettings {
