@@ -13,18 +13,45 @@ import {
   RotateCcw,
   Sparkles,
   CheckCircle2,
-  HardHat
+  HardHat,
+  Lock,
+  Mail,
+  KeyRound,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  ShieldCheck,
+  X,
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 
 export default function MaintenanceOverlay() {
-  const { settings, updateSettings, addToast } = useApp();
+  const { settings, updateSettings, addToast, currentUser, applyAuthenticatedUser } = useApp();
   const maintenance = settings?.maintenanceMode;
 
   const [timeLeftMs, setTimeLeftMs] = useState<number>(0);
   const [isAdminBypassed, setIsAdminBypassed] = useState<boolean>(false);
-  const [showBypassPrompt, setShowBypassPrompt] = useState<boolean>(false);
-  const [passcode, setPasscode] = useState('');
+  const [showBypassModal, setShowBypassModal] = useState<boolean>(false);
+
+  // Admin Bypass Form State
+  const [step, setStep] = useState<'credentials' | 'otp'>('credentials');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [countdown, setCountdown] = useState(0);
+
+  // Pre-fill email if already logged in or default
+  useEffect(() => {
+    if (currentUser?.email) {
+      setAdminEmail(currentUser.email);
+    } else if (!adminEmail) {
+      setAdminEmail('anantyadav8924@gmail.com');
+    }
+  }, [currentUser]);
 
   // Check sessionStorage on mount for existing admin bypass
   useEffect(() => {
@@ -36,7 +63,15 @@ export default function MaintenanceOverlay() {
     }
   }, []);
 
-  // Countdown timer logic
+  // Countdown timer for Resend OTP
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(c => c - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
+
+  // Countdown timer logic for auto-restore
   useEffect(() => {
     if (!maintenance?.enabled) {
       setTimeLeftMs(0);
@@ -45,7 +80,6 @@ export default function MaintenanceOverlay() {
 
     const calculateRemaining = () => {
       if (!maintenance.endTime) {
-        // Fallback default 15 minutes if endTime wasn't stored
         return (maintenance.durationMinutes || 15) * 60 * 1000;
       }
       const end = new Date(maintenance.endTime).getTime();
@@ -59,7 +93,7 @@ export default function MaintenanceOverlay() {
       const remaining = calculateRemaining();
       setTimeLeftMs(remaining);
 
-      // Auto turn OFF maintenance mode when timer reaches 0!
+      // Auto turn OFF maintenance mode when timer reaches 0
       if (remaining <= 0) {
         clearInterval(interval);
         updateSettings({
@@ -86,8 +120,8 @@ export default function MaintenanceOverlay() {
     // Show a small floating admin pill if maintenance is active but bypassed
     if (maintenance?.enabled && isAdminBypassed) {
       return (
-        <div className="fixed top-20 right-4 z-50 bg-rose-600 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-2xl flex items-center gap-2 animate-pulse">
-          <Flame className="w-3.5 h-3.5" />
+        <div className="fixed top-20 right-4 z-[9999] bg-rose-600 text-white px-3.5 py-1.5 rounded-full text-xs font-bold shadow-2xl flex items-center gap-2 border border-rose-400/50 backdrop-blur-md">
+          <Flame className="w-3.5 h-3.5 animate-pulse text-amber-300" />
           <span>Maintenance Active (Admin Bypass ON)</span>
           <button
             type="button"
@@ -95,7 +129,7 @@ export default function MaintenanceOverlay() {
               sessionStorage.removeItem('skp_admin_maintenance_bypass');
               setIsAdminBypassed(false);
             }}
-            className="underline ml-1 cursor-pointer"
+            className="underline ml-1 cursor-pointer hover:text-amber-200 transition-colors"
           >
             Lock View
           </button>
@@ -113,29 +147,99 @@ export default function MaintenanceOverlay() {
 
   const formattedTime = `${hours > 0 ? `${String(hours).padStart(2, '0')}:` : ''}${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
-  const handleAdminBypassSubmit = (e: React.FormEvent) => {
+  // Handle Send OTP (Step 1)
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleaned = passcode.trim().toLowerCase();
-    const validCodes = ['admin', '1234', 'owner', 'superadmin', '9999'];
-    if (validCodes.includes(cleaned)) {
-      sessionStorage.setItem('skp_admin_maintenance_bypass', 'true');
-      setIsAdminBypassed(true);
-      setShowBypassPrompt(false);
-      addToast('Admin Access Granted', 'Maintenance view bypassed for your session.', 'info');
-    } else {
-      setErrorMsg('Galat Passcode! "admin" ya "1234" enter karein.');
+    setErrorMsg('');
+
+    if (!adminEmail.trim()) {
+      setErrorMsg('Kripya apna Admin Email enter karein.');
+      return;
+    }
+    if (!adminPassword) {
+      setErrorMsg('Kripya apna Admin Password enter karein.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/maintenance/bypass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'send_otp',
+          email: adminEmail.trim(),
+          password: adminPassword,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Verification code bhejne me samasya aayi.');
+      }
+
+      setStep('otp');
+      setCountdown(60);
+      addToast('OTP Dispatched! ✉️', data.message || `OTP sent to ${adminEmail}`, 'success');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Admin validation fail ho gaya.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleEmergencyTurnOff = () => {
-    updateSettings({
-      maintenanceMode: {
-        enabled: false,
-        endTime: undefined,
-        durationMinutes: 15,
-      },
-    });
-    addToast('Maintenance Mode Disabled', 'Website is back online for all users.', 'success');
+  // Handle Verify OTP (Step 2)
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+
+    if (!otpCode.trim()) {
+      setErrorMsg('Kripya email par aaya hua OTP code enter karein.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/maintenance/bypass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'verify_otp',
+          email: adminEmail.trim(),
+          code: otpCode.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'OTP verify nahi ho paya.');
+      }
+
+      // Bypass granted for admin session!
+      sessionStorage.setItem('skp_admin_maintenance_bypass', 'true');
+      if (data.user && applyAuthenticatedUser) {
+        await applyAuthenticatedUser(data.user);
+      }
+
+      setIsAdminBypassed(true);
+      setShowBypassModal(false);
+      addToast('Admin Access Granted! 🛡️', 'Dashboard unlocked. Aap Settings me jaake maintenance band ya chaloo rakh sakte hain.', 'success');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Invalid verification OTP.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Quick bypass for already logged in Admin/Super Admin
+  const handleQuickBypassIfAdmin = () => {
+    const isLoggedAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.email === 'anantyadav8924@gmail.com';
+    if (isLoggedAdmin) {
+      sessionStorage.setItem('skp_admin_maintenance_bypass', 'true');
+      setIsAdminBypassed(true);
+      setShowBypassModal(false);
+      addToast('Welcome Admin! 🛡️', 'Existing admin session detected. Dashboard unlocked.', 'info');
+    }
   };
 
   return (
@@ -220,70 +324,241 @@ export default function MaintenanceOverlay() {
           </div>
         </div>
 
-        {/* Footer Actions: Admin Bypass / Immediate Turn Off */}
+        {/* Footer Actions: Secure Admin Bypass Only (Public Turn OFF Now removed!) */}
         <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-          
           <div className="text-[11px] text-slate-500 font-mono">
             {settings.businessName || settings.websiteName || ''}{settings.businessName || settings.websiteName ? ' • ' : ''}Protected Operating System
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
-            {!showBypassPrompt ? (
-              <button
-                type="button"
-                onClick={() => setShowBypassPrompt(true)}
-                className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Unlock className="w-3.5 h-3.5 text-amber-400" />
-                <span>Admin Bypass</span>
-              </button>
-            ) : (
-              <form onSubmit={handleAdminBypassSubmit} className="flex items-center gap-1.5">
-                <input
-                  type="password"
-                  placeholder="Admin pass (e.g. admin)"
-                  value={passcode}
-                  onChange={(e) => {
-                    setPasscode(e.target.value);
-                    setErrorMsg('');
-                  }}
-                  className="px-2.5 py-1 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white w-36 focus:border-amber-400"
-                  autoFocus
-                />
-                <button
-                  type="submit"
-                  className="px-2.5 py-1 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold cursor-pointer"
-                >
-                  Enter
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowBypassPrompt(false)}
-                  className="px-2 py-1 text-slate-400 hover:text-white text-xs cursor-pointer"
-                >
-                  Cancel
-                </button>
-              </form>
-            )}
-
             <button
               type="button"
-              onClick={handleEmergencyTurnOff}
-              className="px-3.5 py-1.5 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-white text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-rose-600/30"
+              onClick={() => {
+                setErrorMsg('');
+                setShowBypassModal(true);
+              }}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-300 hover:text-white border border-amber-500/40 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-lg shadow-amber-500/10"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Turn OFF Now</span>
+              <Unlock className="w-4 h-4 text-amber-400" />
+              <span>Admin Bypass Login</span>
             </button>
           </div>
         </div>
 
-        {errorMsg && (
-          <p className="text-rose-400 text-xs font-mono font-bold animate-bounce text-right">
-            {errorMsg}
-          </p>
-        )}
-
       </div>
+
+      {/* SECURE ADMIN BYPASS MODAL (Credentials + Custom SMTP OTP Verification) */}
+      {showBypassModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-slate-900 border border-slate-700/80 rounded-3xl p-6 sm:p-7 shadow-2xl text-left space-y-5">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Administrator Bypass</h3>
+                  <p className="text-xs text-slate-400">2-Factor Authentication via Custom SMTP</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBypassModal(false);
+                  setStep('credentials');
+                  setErrorMsg('');
+                }}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Quick Bypass Button if already logged in as Admin */}
+            {(currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.email === 'anantyadav8924@gmail.com') && (
+              <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-2">
+                <div className="text-xs">
+                  <div className="font-bold text-emerald-400">Active Admin Session Found</div>
+                  <div className="text-[11px] text-slate-400 truncate max-w-[200px]">{currentUser.email}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleQuickBypassIfAdmin}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Direct Unlock
+                </button>
+              </div>
+            )}
+
+            {/* STEP 1: Admin Credentials */}
+            {step === 'credentials' && (
+              <form onSubmit={handleSendOtp} className="space-y-4">
+                <div className="text-xs text-slate-300 leading-relaxed">
+                  Apna registered <b>Admin Email</b> aur <b>Password</b> dalein. Direct SMTP ke through aapke email par ek secure OTP bheja jayega.
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Admin Email Address *</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    placeholder="anantyadav8924@gmail.com"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-sm text-white focus:outline-none focus:border-amber-400 placeholder:text-slate-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Admin Password *</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      placeholder="••••••••••••"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-sm text-white focus:outline-none focus:border-amber-400 pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {errorMsg && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>{errorMsg}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowBypassModal(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Verifying...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Send Security OTP</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* STEP 2: Custom SMTP OTP Verification */}
+            {step === 'otp' && (
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <div className="text-xs text-slate-300 leading-relaxed">
+                  Ek 6-digit OTP code <b>{adminEmail}</b> par send kiya gaya hai. Kripya niche code enter karein.
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Enter Verification OTP *</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={8}
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                    placeholder="123456"
+                    className="w-full px-3.5 py-3 rounded-xl bg-slate-950 border border-amber-500/50 text-center text-xl font-mono tracking-widest text-amber-300 focus:outline-none focus:border-amber-400"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <button
+                    type="button"
+                    onClick={() => setStep('credentials')}
+                    className="hover:text-white underline cursor-pointer"
+                  >
+                    Change Credentials
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={countdown > 0 || loading}
+                    onClick={handleSendOtp}
+                    className="text-amber-400 hover:text-amber-300 disabled:opacity-40 disabled:hover:text-amber-400 font-mono cursor-pointer flex items-center gap-1"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+                    <span>{countdown > 0 ? `Resend in ${countdown}s` : 'Resend OTP'}</span>
+                  </button>
+                </div>
+
+                {errorMsg && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>{errorMsg}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowBypassModal(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-lg shadow-emerald-500/20"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Verifying OTP...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>Unlock Dashboard</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
