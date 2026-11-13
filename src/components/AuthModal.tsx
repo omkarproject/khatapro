@@ -24,7 +24,8 @@ import {
   Send,
   ArrowLeft,
   ShieldCheck,
-  Check
+  Check,
+  MessageSquare
 } from 'lucide-react';
 
 // Math CAPTCHA generator
@@ -54,6 +55,7 @@ export default function AuthModal() {
   const [step, setStep] = useState<'input' | 'otp'>('input');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showForgotDisabledModal, setShowForgotDisabledModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -94,6 +96,14 @@ export default function AuthModal() {
     return () => clearInterval(interval);
   }, [resendTimer]);
 
+
+  const adminPhoneRaw = settings.websiteSupportPhone || settings.businessPhone || '997421467008';
+  const adminPhoneDigits = adminPhoneRaw.replace(/\D/g, '');
+  const finalWaPhone = adminPhoneDigits.length === 10 ? `91${adminPhoneDigits}` : adminPhoneDigits;
+  const adminWhatsAppUrl = `https://wa.me/${finalWaPhone || '91997421467008'}?text=${encodeURIComponent(
+    `Hello Admin, I need help resetting my account password on ${settings.websiteName || 'KhataPro'}. My registered email is: ${email || ''}`
+  )}`;
+
   if (!isAuthModalOpen) return null;
 
   const refreshCaptcha = () => {
@@ -102,6 +112,10 @@ export default function AuthModal() {
   };
 
   const resetFormState = (newMode: 'signin' | 'signup' | 'forgot_password') => {
+    if (newMode === 'forgot_password' && settings.smtpSettings?.enabled === false) {
+      setShowForgotDisabledModal(true);
+      return;
+    }
     setMode(newMode);
     setStep('input');
     setErrorMsg('');
@@ -189,7 +203,34 @@ export default function AuthModal() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
+        if (data.disabled || res.status === 403) {
+          setShowForgotDisabledModal(true);
+          return;
+        }
         throw new Error(data.message || 'Failed to dispatch verification code.');
+      }
+
+      if (data.skipped && mode === 'signup') {
+        const regRes = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email.trim(),
+            password: password,
+            name: name.trim(),
+            businessName: businessName.trim(),
+            phone: phone.trim(),
+          }),
+        });
+        const regData = await regRes.json();
+        if (!regRes.ok || !regData.success) {
+          throw new Error(regData.message || 'Registration failed.');
+        }
+        if (regData.user) {
+          applyAuthenticatedUser(regData.user);
+          closeAuthModal();
+          return;
+        }
       }
 
       setSuccessMsg(`Verification code sent to ${email.trim()}.`);
@@ -814,6 +855,51 @@ export default function AuthModal() {
             </>
           )}
         </div>
+
+
+        {/* Temporary Disabled Password Reset Modal with WhatsApp Support */}
+        {showForgotDisabledModal && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in">
+            <div className="glass-card max-w-sm w-full p-6 text-center space-y-4 border border-rose-500/30 relative shadow-2xl">
+              <button
+                type="button"
+                onClick={() => setShowForgotDisabledModal(false)}
+                className="absolute top-4 right-4 p-1.5 rounded-full text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="w-14 h-14 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto border border-rose-500/20 shadow-lg shadow-rose-500/10">
+                <Lock className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                  Password Reset Temporarily Disabled
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Automated password reset via email OTP has been temporarily disabled by the system administrator. Please contact our support team on WhatsApp to reset your password.
+                </p>
+              </div>
+              <div className="pt-2 flex flex-col gap-2">
+                <a
+                  href={adminWhatsAppUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Contact Support on WhatsApp</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotDisabledModal(false)}
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

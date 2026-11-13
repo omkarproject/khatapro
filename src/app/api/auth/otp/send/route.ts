@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 import { saveOtp, validatePasswordStrength } from '@/lib/otpStore';
+import { getActiveSmtpConfig, sendOtpEmailDirect } from '@/lib/emailService';
+import { getGlobalBrandingFromDb } from '@/lib/globalBranding';
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,6 +28,36 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabaseAdmin();
     if (!supabase) {
       return NextResponse.json({ success: false, message: 'Could not connect to Supabase' }, { status: 500 });
+    }
+
+    // Check if SMTP OTP verification is enabled by administrator
+    const smtpConfig = await getActiveSmtpConfig();
+
+    if (!smtpConfig.enabled) {
+      // When SMTP switch is OFF:
+      if (purpose === 'forgot_password') {
+        return NextResponse.json({
+          success: false,
+          disabled: true,
+          message: 'Password reset via OTP is temporarily disabled by administrator. Please contact support via WhatsApp.',
+        }, { status: 403 });
+      }
+
+      if (purpose === 'signup') {
+        return NextResponse.json({
+          success: true,
+          skipped: true,
+          message: 'Email verification is turned OFF by administrator. Direct registration enabled.',
+        });
+      }
+
+      if (purpose === 'login') {
+        return NextResponse.json({
+          success: true,
+          skipped: true,
+          message: 'Email verification is turned OFF. Direct password sign-in enabled.',
+        });
+      }
     }
 
     // 1. Validation according to purpose
@@ -95,26 +127,21 @@ export async function POST(req: NextRequest) {
 
     console.log(`[SmartKhata OTP] Purpose: ${purpose.toUpperCase()} | Email: ${cleanEmail} | Code: ${code}`);
 
-    // 3. Attempt to trigger email dispatch via Supabase Auth
-    try {
-      const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://khatapro-sandy.vercel.app';
-      const redirectTo = `${origin}/login?type=recovery`;
+    // 3. Dispatch OTP email directly using custom SMTP (No Supabase email dependency)
+    const brand = await getGlobalBrandingFromDb().catch(() => null);
+    const emailResult = await sendOtpEmailDirect({
+      to: cleanEmail,
+      otp: code,
+      purpose,
+      recipientName: name,
+      brandName: brand?.websiteName || 'KhataPro',
+    });
 
-      if (purpose === 'forgot_password') {
-        await supabase.auth.resetPasswordForEmail(cleanEmail, {
-          redirectTo,
-        });
-      } else {
-        await supabase.auth.signInWithOtp({
-          email: cleanEmail,
-          options: {
-            shouldCreateUser: purpose === 'signup',
-            emailRedirectTo: `${origin}/login`,
-          },
-        });
-      }
-    } catch (emailErr) {
-      console.warn('Supabase email dispatch note:', emailErr);
+    if (!emailResult.success) {
+      return NextResponse.json({
+        success: false,
+        message: emailResult.error || 'Failed to dispatch verification email. Please check SMTP configuration.',
+      }, { status: 500 });
     }
 
     return NextResponse.json({

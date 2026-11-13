@@ -493,12 +493,23 @@ export interface GoogleDriveConfig {
   redirectUri?: string;
 }
 
+export interface SmtpConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  user: string;
+  pass: string;
+  from: string;
+  secure?: boolean;
+}
+
 export interface SystemSettings {
   backendProvider: BackendProvider;
   supabaseUrl?: string;
   supabaseAnonKey?: string;
   supabaseServiceRoleKey?: string;
   googleDriveSettings?: GoogleDriveConfig;
+  smtpSettings?: SmtpConfig;
   businessName: string;
   businessLogo?: string;
   businessTagline: string;

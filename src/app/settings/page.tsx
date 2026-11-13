@@ -111,7 +111,7 @@ export default function SettingsPage() {
   const [mainTab, setMainTab] = useState<'business' | 'backup' | 'branding' | 'admin'>('business');
   const [businessSubTab, setBusinessSubTab] = useState<'enterprise' | 'payments' | 'security'>('enterprise');
   const [brandingSubTab, setBrandingSubTab] = useState<'visuals' | 'broadcast'>('visuals');
-  const [adminSubTab, setAdminSubTab] = useState<'supabase' | 'drive' | 'users' | 'maintenance' | 'danger'>('supabase');
+  const [adminSubTab, setAdminSubTab] = useState<'supabase' | 'smtp' | 'drive' | 'users' | 'maintenance' | 'danger'>('supabase');
   const [backupSubTab, setBackupSubTab] = useState<'drive' | 'local'>('drive');
   const [isSyncingData, setIsSyncingData] = useState(false);
   const isBusinessDirtyRef = useRef(false);
@@ -424,7 +424,98 @@ export default function SettingsPage() {
   const [maintDuration, setMaintDuration] = useState<number>(() => settings.maintenanceMode?.durationMinutes || 15);
   const [maintReason, setMaintReason] = useState(() => settings.maintenanceMode?.reason || 'Transformer me aag lag gai ⚡💥🔥 many people repair kar rahe hain 👨‍🔧🛠️');
 
-  // Danger Zone: Database Reset & Wipe State
+
+  // Email SMTP Settings State
+  const [smtpEnabled, setSmtpEnabled] = useState(() => settings.smtpSettings?.enabled ?? true);
+  const [smtpHost, setSmtpHost] = useState(settings.smtpSettings?.host || 'my.mailbux.com');
+  const [smtpPort, setSmtpPort] = useState(settings.smtpSettings?.port || 587);
+  const [smtpUser, setSmtpUser] = useState(settings.smtpSettings?.user || 'admin@rpmdg.me');
+  const [smtpPass, setSmtpPass] = useState(settings.smtpSettings?.pass || 'Rpmdgadmin@2026#');
+  const [smtpFrom, setSmtpFrom] = useState(settings.smtpSettings?.from || 'AutoPrint Xerox Cloud <admin@rpmdg.me>');
+  const [smtpShowPass, setSmtpShowPass] = useState(false);
+  const [isTestingSmtp, setIsTestingSmtp] = useState(false);
+
+  useEffect(() => {
+    if (settings.smtpSettings) {
+      if (settings.smtpSettings.enabled !== undefined) setSmtpEnabled(settings.smtpSettings.enabled);
+      if (settings.smtpSettings.host) setSmtpHost(settings.smtpSettings.host);
+      if (settings.smtpSettings.port) setSmtpPort(settings.smtpSettings.port);
+      if (settings.smtpSettings.user) setSmtpUser(settings.smtpSettings.user);
+      if (settings.smtpSettings.pass) setSmtpPass(settings.smtpSettings.pass);
+      if (settings.smtpSettings.from) setSmtpFrom(settings.smtpSettings.from);
+    }
+  }, [settings.smtpSettings]);
+
+  const handleSaveSmtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated: SystemSettings = {
+      ...settings,
+      smtpSettings: {
+        enabled: smtpEnabled,
+        host: smtpHost.trim(),
+        port: Number(smtpPort) || 587,
+        user: smtpUser.trim(),
+        pass: smtpPass.trim(),
+        from: smtpFrom.trim(),
+        secure: Number(smtpPort) === 465,
+      },
+    };
+    updateSettings(updated);
+    addToast(
+      smtpEnabled ? 'SMTP Settings Saved & Active! ✉️' : 'SMTP Settings Saved (Disabled)! ⚡',
+      smtpEnabled
+        ? 'Direct SMTP configuration saved. OTP verification is active for login and signup.'
+        : 'SMTP settings saved. OTP verification is turned off.',
+      'success'
+    );
+  };
+
+  const handleTestSmtp = async () => {
+    setIsTestingSmtp(true);
+    try {
+      const res = await fetch('/api/admin/smtp/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          host: smtpHost.trim(),
+          port: Number(smtpPort) || 587,
+          user: smtpUser.trim(),
+          pass: smtpPass.trim(),
+          from: smtpFrom.trim(),
+          testEmail: currentUser?.email || 'anantyadav8924@gmail.com',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'SMTP server connection failed.');
+      }
+
+      addToast(
+        'SMTP Test Successful! 🎉',
+        data.message || 'Test email dispatched successfully.',
+        'success'
+      );
+    } catch (err: any) {
+      console.error('SMTP test error:', err);
+      addToast('SMTP Connection Failed', err.message || 'Could not connect to SMTP server.', 'error');
+    } finally {
+      setIsTestingSmtp(false);
+    }
+  };
+
+  const handleResetSmtp = () => {
+    setSmtpHost('my.mailbux.com');
+    setSmtpPort(587);
+    setSmtpUser('admin@rpmdg.me');
+    setSmtpPass('Rpmdgadmin@2026#');
+    setSmtpFrom('AutoPrint Xerox Cloud <admin@rpmdg.me>');
+    setSmtpEnabled(true);
+    addToast('Default Restored', 'SMTP settings restored to default Mailbux configuration. Click Save to apply.', 'info');
+  };
+
+
+    // Danger Zone: Database Reset & Wipe State
   const [dangerResetMode, setDangerResetMode] = useState<'full_reset' | 'ledger_only' | 'non_admin_users'>('full_reset');
   const [dangerConfirmPhrase, setDangerConfirmPhrase] = useState('');
   const [isExecutingReset, setIsExecutingReset] = useState(false);
@@ -523,6 +614,9 @@ export default function SettingsPage() {
       } else if (tabParam === 'business') {
         setMainTab('business');
         setBusinessSubTab('enterprise');
+      } else if (tabParam === 'smtp') {
+        setMainTab('admin');
+        setAdminSubTab('smtp');
       } else if (tabParam === 'backend' || tabParam === 'supabase') {
         setMainTab('admin');
         setAdminSubTab('supabase');
@@ -1850,6 +1944,26 @@ export default function SettingsPage() {
 
           <button
             type="button"
+            onClick={() => setAdminSubTab('smtp')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              adminSubTab === 'smtp'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Mail className="w-3.5 h-3.5 text-indigo-500" />
+            <span>Email SMTP</span>
+            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md ${
+              smtpEnabled
+                ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                : 'bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+            }`}>
+              {smtpEnabled ? 'ACTIVE' : 'OFF'}
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setAdminSubTab('drive')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
               adminSubTab === 'drive'
@@ -2986,6 +3100,222 @@ export default function SettingsPage() {
             >
               <Save className="w-4 h-4" />
               Save Supabase Connection
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Tab: Email SMTP Configuration (Admin Only) */}
+      {mainTab === 'admin' && adminSubTab === 'smtp' && isAdmin && (
+        <form onSubmit={handleSaveSmtp} className="glass-card p-6 space-y-5 max-w-2xl">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-200/80 dark:border-slate-800">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                <Mail className="w-4 h-4 text-indigo-500" />
+                Email SMTP Configuration &amp; Verification
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Configure your custom Mailbux / SMTP mail server for direct Signup, Login, and Password Reset OTP emails without Supabase email limits.
+              </p>
+            </div>
+            <span className="self-start sm:self-auto text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-indigo-500" />
+              Direct SMTP
+            </span>
+          </div>
+
+          {/* Master Enable/Disable Switch Card */}
+          <div className={`p-4 rounded-2xl border transition-all ${
+            smtpEnabled
+              ? 'bg-emerald-50/70 border-emerald-300 dark:bg-emerald-950/20 dark:border-emerald-700'
+              : 'bg-amber-50/70 border-amber-300 dark:bg-amber-950/20 dark:border-amber-700'
+          }`}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${smtpEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">
+                    Email OTP Verification Switch
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    smtpEnabled
+                      ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30'
+                      : 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
+                  }`}>
+                    {smtpEnabled ? 'ENABLED (OTP VERIFICATION ACTIVE)' : 'OFF (DIRECT AUTH MODE)'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {smtpEnabled ? (
+                    <>
+                      <strong>Active Mode:</strong> OTP verification is enforced for Signups, Logins, and Password Resets. HTML OTP emails are sent directly via custom SMTP.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Direct Auth Mode:</strong> No OTP is required for Login or Signup. Forgot Password will show a temporary disabled notice with a one-click WhatsApp Admin Support button.
+                    </>
+                  )}
+                </p>
+              </div>
+
+              {/* iOS style Toggle */}
+              <button
+                type="button"
+                onClick={() => {
+                  const nextVal = !smtpEnabled;
+                  setSmtpEnabled(nextVal);
+                  const updated: SystemSettings = {
+                    ...settings,
+                    smtpSettings: {
+                      enabled: nextVal,
+                      host: smtpHost.trim(),
+                      port: Number(smtpPort) || 587,
+                      user: smtpUser.trim(),
+                      pass: smtpPass.trim(),
+                      from: smtpFrom.trim(),
+                      secure: Number(smtpPort) === 465,
+                    },
+                  };
+                  updateSettings(updated);
+                  addToast(
+                    nextVal ? 'Email OTP Verification Enabled! ✉️' : 'Email OTP Turned OFF! ⚡',
+                    nextVal
+                      ? 'Users will receive direct SMTP OTP emails on Signup and Forgot Password.'
+                      : 'Direct login & signup active without OTP. Forgot password will prompt WhatsApp contact.',
+                    nextVal ? 'success' : 'info'
+                  );
+                }}
+                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  smtpEnabled ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+                }`}
+                aria-label="Toggle Email OTP"
+              >
+                <span
+                  className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                    smtpEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* SMTP Credentials Inputs */}
+          <div className="space-y-4 p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  SMTP Host *
+                </label>
+                <input
+                  type="text"
+                  required={smtpEnabled}
+                  value={smtpHost}
+                  onChange={(e) => setSmtpHost(e.target.value)}
+                  placeholder="my.mailbux.com"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  SMTP Port *
+                </label>
+                <input
+                  type="number"
+                  required={smtpEnabled}
+                  value={smtpPort}
+                  onChange={(e) => setSmtpPort(Number(e.target.value))}
+                  placeholder="587"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">587 (STARTTLS) or 465 (SSL)</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                SMTP Username / Mailbox Email *
+              </label>
+              <input
+                type="text"
+                required={smtpEnabled}
+                value={smtpUser}
+                onChange={(e) => setSmtpUser(e.target.value)}
+                placeholder="admin@rpmdg.me"
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                SMTP Password *
+              </label>
+              <div className="relative">
+                <input
+                  type={smtpShowPass ? 'text' : 'password'}
+                  required={smtpEnabled}
+                  value={smtpPass}
+                  onChange={(e) => setSmtpPass(e.target.value)}
+                  placeholder="••••••••••••••••"
+                  className="w-full px-3.5 py-2.5 pr-10 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSmtpShowPass(!smtpShowPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  {smtpShowPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Sender From Display Header *
+              </label>
+              <input
+                type="text"
+                required={smtpEnabled}
+                value={smtpFrom}
+                onChange={(e) => setSmtpFrom(e.target.value)}
+                placeholder='AutoPrint Xerox Cloud <admin@rpmdg.me>'
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                Name and email that recipients see in their inbox header.
+              </p>
+            </div>
+          </div>
+
+          {/* Test & Action Buttons */}
+          <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleTestSmtp}
+                disabled={isTestingSmtp}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-2 cursor-pointer transition-colors"
+              >
+                {isTestingSmtp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5 text-indigo-500" />}
+                <span>{isTestingSmtp ? 'Sending Test Email...' : 'Send Test Verification Email'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleResetSmtp}
+                className="px-3 py-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-xs font-semibold text-rose-600 dark:text-rose-400 transition-colors cursor-pointer"
+                title="Reset to default Mailbux settings"
+              >
+                Reset Default
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              className="px-6 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
+            >
+              <Save className="w-4 h-4" />
+              <span>Save SMTP Settings</span>
             </button>
           </div>
         </form>

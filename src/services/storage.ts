@@ -217,6 +217,15 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
       clientSecret: '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',
       redirectUri: typeof window !== 'undefined' ? `${window.location.origin}/api/backup/google-drive/callback` : '/api/backup/google-drive/callback',
     },
+    smtpSettings: {
+      enabled: true,
+      host: 'my.mailbux.com',
+      port: 587,
+      user: 'admin@rpmdg.me',
+      pass: 'Rpmdgadmin@2026#',
+      from: 'AutoPrint Xerox Cloud <admin@rpmdg.me>',
+      secure: false,
+    },
     businessName: businessName || '',
     businessLogo: '',
     businessTagline: 'Track Money, Manage Business, Grow Faster',
@@ -602,6 +611,9 @@ export const StorageService = {
             s.googleDriveSettings = { ...(s.googleDriveSettings || {}), enabled: Boolean(globalConf.googleDriveEnabled) };
           } else if (globalConf.googleDriveSettings?.enabled !== undefined) {
             s.googleDriveSettings = { ...(s.googleDriveSettings || {}), enabled: Boolean(globalConf.googleDriveSettings.enabled) };
+          }
+          if (globalConf.smtpSettings) {
+            s.smtpSettings = { ...(s.smtpSettings || {}), ...globalConf.smtpSettings };
           }
           if (globalConf.websiteBranding) {
             if (globalConf.websiteBranding.websiteName !== undefined) s.websiteName = globalConf.websiteBranding.websiteName;

@@ -1374,6 +1374,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
             betaTestingEnabled: Boolean(json.betaTestingEnabled),
             googleDriveEnabled: driveEnabled,
             googleDriveSettings: json.googleDriveSettings,
+            smtpSettings: json.smtpSettings,
             websiteBranding: json.websiteBranding || null,
           };
           if (typeof window !== 'undefined') {
@@ -1462,6 +1463,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
                 ...(json.googleDriveSettings || {}),
                 enabled: driveEnabled,
               },
+              smtpSettings: json.smtpSettings || prev.smtpSettings,
               maintenanceMode: json.maintenanceMode,
               betaTestingEnabled: Boolean(json.betaTestingEnabled),
               websiteName: effName,
@@ -1553,7 +1555,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       newSettings.websiteSupportPhone !== undefined ||
       newSettings.websiteSupportEmail !== undefined;
 
-    if (hasBrandingUpdates || newSettings.maintenanceMode !== undefined || newSettings.betaTestingEnabled !== undefined || newSettings.googleDriveSettings !== undefined) {
+    if (hasBrandingUpdates || newSettings.maintenanceMode !== undefined || newSettings.betaTestingEnabled !== undefined || newSettings.googleDriveSettings !== undefined || newSettings.smtpSettings !== undefined) {
       if (typeof window !== 'undefined') {
         const brandPayload = {
           websiteName: merged.websiteName || '',
@@ -1571,6 +1573,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           betaTestingEnabled: Boolean(merged.betaTestingEnabled),
           googleDriveEnabled: merged.googleDriveSettings?.enabled !== false,
           googleDriveSettings: merged.googleDriveSettings,
+          smtpSettings: merged.smtpSettings,
         };
         if (hasBrandingUpdates) {
           globalPayload.websiteBranding = brandPayload;

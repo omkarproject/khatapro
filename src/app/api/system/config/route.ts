@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 import { getGlobalBrandingFromDb, saveGlobalBrandingToDb } from '@/lib/globalBranding';
 import { syncGoogleDriveBrandFolderName } from '@/lib/googleDrive';
+import { invalidateSmtpCache, getActiveSmtpConfig } from '@/lib/emailService';
 
 const DEFAULT_CONFIG = {
   maintenanceMode: {
@@ -69,7 +70,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { maintenanceMode, betaTestingEnabled, websiteBranding, broadcasts, supportTickets, googleDriveEnabled, googleDriveSettings } = body;
+    const { maintenanceMode, betaTestingEnabled, websiteBranding, broadcasts, supportTickets, googleDriveEnabled, googleDriveSettings, smtpSettings } = body;
 
     if (!isSupabaseConfigured()) {
       return NextResponse.json({
