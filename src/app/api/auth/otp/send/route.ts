@@ -134,7 +134,9 @@ export async function POST(req: NextRequest) {
       otp: code,
       purpose,
       recipientName: name,
-      brandName: brand?.websiteName || 'KhataPro',
+      brandName: brand?.websiteName?.trim() || 'KhataPro',
+      badgeText: brand?.websiteBadgeText?.trim() || '',
+      brandLogo: brand?.websiteLogo?.trim() || '',
     });
 
     if (!emailResult.success) {

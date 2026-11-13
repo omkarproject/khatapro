@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { generateOtpEmailHtml } from '@/lib/emailService';
+import { getGlobalBrandingFromDb } from '@/lib/globalBranding';
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,17 +34,36 @@ export async function POST(req: NextRequest) {
     // 1. Verify connection
     await transporter.verify();
 
-    // 2. Send test email
+    // 2. Fetch live Brand Display Name & Badge from database
+    const brand = await getGlobalBrandingFromDb().catch(() => null);
+    const brandName = brand?.websiteName?.trim() || 'KhataPro';
+    const badgeText = brand?.websiteBadgeText?.trim() || '';
+    const brandLogo = brand?.websiteLogo?.trim() || '';
+
+    // 3. Send test email
     const { subject, html, text } = generateOtpEmailHtml({
       otp: '984210',
       purpose: 'login',
-      brandName: 'KhataPro SMTP Test',
+      brandName,
+      badgeText,
+      brandLogo,
       recipientEmail: testEmail,
       recipientName: 'Administrator',
     });
 
+    let senderEmail = user.trim();
+    if (from) {
+      const match = from.match(/<([^>]+)>/);
+      if (match && match[1]) {
+        senderEmail = match[1].trim();
+      } else if (from.includes('@')) {
+        senderEmail = from.trim();
+      }
+    }
+    const formattedFrom = `"${brandName}" <${senderEmail}>`;
+
     const info = await transporter.sendMail({
-      from: from ? from.trim() : `KhataPro Admin <${user.trim()}>`,
+      from: formattedFrom,
       to: testEmail,
       subject: `[SMTP Test Successful] ${subject}`,
       text,
@@ -52,7 +72,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `SMTP connection verified successfully! A test email was delivered to ${testEmail}.`,
+      message: `SMTP connection verified successfully! A test email was delivered to ${testEmail} using brand name "${brandName}".`,
       messageId: info.messageId,
     });
   } catch (error: any) {

@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
+import { getGlobalBrandingFromDb } from '@/lib/globalBranding';
 
 export interface SmtpServerConfig {
   enabled: boolean;
@@ -101,48 +102,55 @@ export async function createSmtpTransporter() {
   });
 }
 
-/**
- * Modern, Cool & Responsive HTML Email Templates
- */
-export function generateOtpEmailHtml(params: {
+export interface OtpEmailTemplateParams {
   otp: string;
   purpose: 'signup' | 'login' | 'forgot_password' | 'resend';
   brandName?: string;
+  badgeText?: string;
+  brandLogo?: string;
   recipientEmail: string;
   recipientName?: string;
-}): { subject: string; html: string; text: string } {
-  const { otp, purpose, brandName = 'KhataPro', recipientEmail, recipientName } = params;
+}
+
+/**
+ * Modern, Cool & Responsive HTML Email Templates
+ * Automatically synchronizes with Website Identity & Branding ("Brand Display Name *" and "Badge Text")
+ */
+export function generateOtpEmailHtml(params: OtpEmailTemplateParams): { subject: string; html: string; text: string } {
+  const { otp, purpose, brandName = 'KhataPro', badgeText: customBadgeText, brandLogo, recipientEmail, recipientName } = params;
+  const cleanBrandName = brandName.trim() || 'KhataPro';
+  const cleanBadgeText = customBadgeText?.trim() || '';
 
   let title = 'Your Verification Code';
   let badgeText = 'Verification OTP';
   let badgeColor = '#4f46e5'; // Indigo
   let introMessage = 'Use the 6-digit verification code below to complete your authentication request.';
-  let subject = `[${brandName}] Your Verification Code: ${otp}`;
+  let subject = `[${cleanBrandName}] Your Verification Code: ${otp}`;
 
   if (purpose === 'signup') {
     title = 'Welcome! Verify Your New Account';
     badgeText = 'Account Signup';
     badgeColor = '#059669'; // Emerald
-    introMessage = `Hello${recipientName ? ' ' + recipientName : ''}, welcome to ${brandName}! Please enter this one-time code to verify your email and activate your business ledger vault.`;
-    subject = `🎉 Welcome to ${brandName} — Verify Your Account (${otp})`;
+    introMessage = `Hello${recipientName ? ' ' + recipientName : ''}, welcome to ${cleanBrandName}! Please enter this one-time code to verify your email and activate your business ledger vault.`;
+    subject = `🎉 Welcome to ${cleanBrandName} — Verify Your Account (${otp})`;
   } else if (purpose === 'login') {
     title = 'Login Security Verification';
     badgeText = 'Secure Sign-In';
     badgeColor = '#4f46e5'; // Indigo
     introMessage = `A login attempt was initiated for your account (${recipientEmail}). Enter the code below to complete your sign-in.`;
-    subject = `🔐 [${brandName}] Sign-In OTP: ${otp}`;
+    subject = `🔐 [${cleanBrandName}] Sign-In OTP: ${otp}`;
   } else if (purpose === 'forgot_password') {
     title = 'Password Reset Request';
     badgeText = 'Account Recovery';
     badgeColor = '#e11d48'; // Rose
-    introMessage = `We received a request to reset the password for your ${brandName} account. Enter this code to set up a new password.`;
-    subject = `🔑 [${brandName}] Password Reset Code: ${otp}`;
+    introMessage = `We received a request to reset the password for your ${cleanBrandName} account. Enter this code to set up a new password.`;
+    subject = `🔑 [${cleanBrandName}] Password Reset Code: ${otp}`;
   } else if (purpose === 'resend') {
     title = 'New Verification Code';
     badgeText = 'Resent Code';
     badgeColor = '#d97706'; // Amber
     introMessage = `Here is your requested new verification code. All previous codes have been invalidated.`;
-    subject = `🔄 [${brandName}] New Verification OTP: ${otp}`;
+    subject = `🔄 [${cleanBrandName}] New Verification OTP: ${otp}`;
   }
 
   const html = `
@@ -178,103 +186,111 @@ export function generateOtpEmailHtml(params: {
     }
     .header-bar {
       height: 6px;
-      background: linear-gradient(90deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+      background: linear-gradient(90deg, #4f46e5 0%, #06b6d4 50%, #10b981 100%);
     }
     .content {
-      padding: 40px 32px 32px;
+      padding: 36px 32px 32px;
       text-align: center;
     }
     .brand-logo-area {
       margin-bottom: 24px;
     }
-    .brand-name {
-      font-size: 20px;
-      font-weight: 900;
-      letter-spacing: -0.5px;
-      color: #ffffff;
-      text-transform: uppercase;
-      background: linear-gradient(90deg, #818cf8 0%, #c084fc 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      display: inline-block;
+    .brand-header-row {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px;
     }
-    .badge {
+    .brand-name {
+      font-size: 22px;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.5px;
       display: inline-block;
-      padding: 4px 14px;
-      border-radius: 9999px;
+      vertical-align: middle;
+    }
+    .brand-badge-tag {
+      display: inline-block;
+      vertical-align: middle;
+      padding: 3px 10px;
       font-size: 11px;
       font-weight: 800;
       text-transform: uppercase;
-      letter-spacing: 0.8px;
+      letter-spacing: 0.6px;
+      border-radius: 9999px;
+      background: rgba(99, 102, 241, 0.2);
+      color: #a5b4fc;
+      border: 1px solid rgba(165, 180, 252, 0.35);
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
       background-color: ${badgeColor}22;
       color: ${badgeColor};
       border: 1px solid ${badgeColor}44;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
     }
     .title {
-      font-size: 22px;
-      font-weight: 800;
-      color: #f8fafc;
-      margin: 0 0 12px;
-      letter-spacing: -0.3px;
+      font-size: 24px;
+      font-weight: 700;
+      color: #ffffff;
+      margin: 0 0 12px 0;
+      line-height: 1.3;
     }
     .description {
-      font-size: 13px;
+      font-size: 14px;
       line-height: 1.6;
       color: #94a3b8;
-      margin: 0 0 28px;
+      margin: 0 0 28px 0;
     }
     .otp-box-wrapper {
-      background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%);
-      border: 2px dashed #334155;
-      border-radius: 20px;
-      padding: 24px 16px;
-      margin: 0 auto 28px;
+      background: #090d16;
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      padding: 24px 20px;
+      margin: 0 auto 20px auto;
+      text-align: center;
       max-width: 380px;
     }
     .otp-label {
       font-size: 11px;
-      font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 1.5px;
+      letter-spacing: 1px;
       color: #64748b;
       margin-bottom: 10px;
+      font-weight: 600;
     }
     .otp-code {
-      font-family: 'SF Mono', Monaco, Consolas, 'Courier New', monospace;
-      font-size: 38px;
-      font-weight: 900;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 40px;
+      font-weight: 800;
       letter-spacing: 8px;
       color: #38bdf8;
-      text-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
-      margin: 0;
-      padding-left: 8px; /* Balance letter-spacing */
+      text-indent: 8px;
     }
     .expiry-note {
+      font-size: 12px;
+      color: #eab308;
+      margin-bottom: 28px;
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      font-size: 11px;
-      font-weight: 600;
-      color: #eab308;
-      background: rgba(234, 179, 8, 0.1);
-      padding: 6px 14px;
-      border-radius: 9999px;
-      border: 1px solid rgba(234, 179, 8, 0.2);
-      margin-bottom: 24px;
     }
     .security-notice {
-      background: #0f172a;
-      border: 1px solid #1e293b;
-      border-radius: 14px;
-      padding: 14px 16px;
-      text-align: left;
-      font-size: 11px;
-      color: #64748b;
+      background-color: rgba(30, 41, 59, 0.5);
+      border-radius: 12px;
+      padding: 14px 18px;
+      font-size: 12px;
       line-height: 1.5;
-    }
-    .security-notice strong {
       color: #94a3b8;
+      text-align: left;
+      border-left: 3px solid #6366f1;
     }
     .footer {
       border-top: 1px solid #1e293b;
@@ -297,7 +313,11 @@ export function generateOtpEmailHtml(params: {
       
       <div class="content">
         <div class="brand-logo-area">
-          <div class="brand-name">⚡ ${brandName}</div>
+          ${brandLogo ? `<img src="${brandLogo}" alt="${cleanBrandName}" style="max-height: 44px; max-width: 170px; object-fit: contain; margin-bottom: 12px; display: inline-block; border-radius: 8px;" /><br>` : ''}
+          <div class="brand-header-row">
+            <span class="brand-name">⚡ ${cleanBrandName}</span>
+            ${cleanBadgeText ? `<span class="brand-badge-tag">${cleanBadgeText}</span>` : ''}
+          </div>
         </div>
 
         <div>
@@ -317,12 +337,12 @@ export function generateOtpEmailHtml(params: {
         </div>
 
         <div class="security-notice">
-          🛡️ <strong>Security Tip:</strong> Never share this code with anyone. ${brandName} employees or support agents will never ask for your verification code or password. If you did not make this request, please ignore this email.
+          🛡️ <strong>Security Tip:</strong> Never share this code with anyone. ${cleanBrandName} employees or support agents will never ask for your verification code or password. If you did not make this request, please ignore this email.
         </div>
       </div>
 
       <div class="footer">
-        &copy; ${new Date().getFullYear()} ${brandName}. All rights reserved.<br>
+        &copy; ${new Date().getFullYear()} ${cleanBrandName}${cleanBadgeText ? ' &bull; ' + cleanBadgeText : ''}. All rights reserved.<br>
         Autonomous Financial Operating System &bull; High-Security Authentication
       </div>
     </div>
@@ -331,13 +351,14 @@ export function generateOtpEmailHtml(params: {
 </html>
   `;
 
-  const text = `[${brandName}] ${title}\n\n${introMessage}\n\nYOUR VERIFICATION CODE: ${otp}\n\nThis code will expire in 10 minutes.\n\nSecurity Notice: Never share this OTP with anyone. If you did not request this code, please ignore this email.`;
+  const text = `[${cleanBrandName}] ${title}\n\n${introMessage}\n\nYOUR VERIFICATION CODE: ${otp}\n\nThis code will expire in 10 minutes.\n\nSecurity Notice: Never share this OTP with anyone. If you did not request this code, please ignore this email.`;
 
   return { subject, html, text };
 }
 
 /**
  * Dispatches the OTP email via direct custom SMTP
+ * Automatically reads live "Brand Display Name *" and "Badge Text" from Database
  */
 export async function sendOtpEmailDirect(params: {
   to: string;
@@ -345,6 +366,8 @@ export async function sendOtpEmailDirect(params: {
   purpose: 'signup' | 'login' | 'forgot_password' | 'resend';
   recipientName?: string;
   brandName?: string;
+  badgeText?: string;
+  brandLogo?: string;
 }): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
     const config = await getActiveSmtpConfig();
@@ -363,25 +386,61 @@ export async function sendOtpEmailDirect(params: {
       };
     }
 
+    // Always fetch latest live Brand Display Name & Badge directly from Database
+    let liveBrandName = params.brandName?.trim();
+    let liveBadgeText = params.badgeText?.trim() || '';
+    let liveLogo = params.brandLogo?.trim() || '';
+
+    try {
+      const globalBrand = await getGlobalBrandingFromDb();
+      if (globalBrand.websiteName && globalBrand.websiteName.trim()) {
+        liveBrandName = globalBrand.websiteName.trim();
+      }
+      if (globalBrand.websiteBadgeText && globalBrand.websiteBadgeText.trim()) {
+        liveBadgeText = globalBrand.websiteBadgeText.trim();
+      }
+      if (globalBrand.websiteLogo && globalBrand.websiteLogo.trim()) {
+        liveLogo = globalBrand.websiteLogo.trim();
+      }
+    } catch (err) {
+      console.warn('[emailService] Could not resolve live branding from DB:', err);
+    }
+
+    const finalBrandName = liveBrandName || 'KhataPro';
+
     const { subject, html, text } = generateOtpEmailHtml({
       otp: params.otp,
       purpose: params.purpose,
-      brandName: params.brandName,
+      brandName: finalBrandName,
+      badgeText: liveBadgeText,
+      brandLogo: liveLogo,
       recipientEmail: params.to,
       recipientName: params.recipientName,
     });
 
     const transporter = await createSmtpTransporter();
 
+    // Dynamically format sender 'from' header to always display the live Brand Display Name!
+    let senderEmail = config.user.trim();
+    if (config.from) {
+      const match = config.from.match(/<([^>]+)>/);
+      if (match && match[1]) {
+        senderEmail = match[1].trim();
+      } else if (config.from.includes('@')) {
+        senderEmail = config.from.trim();
+      }
+    }
+    const formattedFrom = `"${finalBrandName}" <${senderEmail}>`;
+
     const info = await transporter.sendMail({
-      from: config.from,
+      from: formattedFrom,
       to: params.to,
       subject,
       text,
       html,
     });
 
-    console.log(`[SMTP Mailer] OTP dispatched to ${params.to} | MessageId: ${info.messageId}`);
+    console.log(`[SMTP Mailer] OTP dispatched to ${params.to} using live brand "${finalBrandName}" | MessageId: ${info.messageId}`);
     return {
       success: true,
       messageId: info.messageId,
