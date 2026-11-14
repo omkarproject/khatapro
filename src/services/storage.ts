@@ -1288,6 +1288,19 @@ export const StorageService = {
     setLocalItem(STORAGE_KEYS.EXPENSES, updated);
     return updated;
   },
+  saveExpense: (expense: Expense): Expense[] => {
+    const list = StorageService.getExpenses();
+    const idx = list.findIndex(e => e.id === expense.id);
+    let updated: Expense[];
+    if (idx >= 0) {
+      updated = [...list];
+      updated[idx] = expense;
+    } else {
+      updated = [expense, ...list];
+    }
+    setLocalItem(STORAGE_KEYS.EXPENSES, updated);
+    return updated;
+  },
   deleteExpense: (id: string): Expense[] => {
     const list = StorageService.getExpenses().filter(e => e.id !== id);
     setLocalItem(STORAGE_KEYS.EXPENSES, list);

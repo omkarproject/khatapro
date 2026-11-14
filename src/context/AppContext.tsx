@@ -84,6 +84,8 @@ interface AppContextType {
   deleteProduct: (id: string) => void;
   adjustStock: (productId: string, delta: number) => void;
   addExpense: (exp: Expense) => void;
+  updateExpense: (exp: Expense) => void;
+  saveExpense: (exp: Expense) => void;
   deleteExpense: (id: string) => void;
   saveSavingsGoal: (goal: SavingsGoal) => void;
   deleteSavingsGoal: (id: string) => void;
@@ -1961,6 +1963,13 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     syncWithDatabase();
   };
 
+  const updateExpense = (exp: Expense) => {
+    const updated = StorageService.saveExpense(exp);
+    setExpenses(updated);
+    addToast('Expense Updated', `₹${exp.amount.toLocaleString('en-IN')} (${exp.title}) updated successfully.`, 'success');
+    syncWithDatabase();
+  };
+
   const deleteExpense = (id: string) => {
     const existing = StorageService.getExpenses().find(e => e.id === id);
     if (existing && existing.title) {
@@ -2243,6 +2252,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         deleteProduct,
         adjustStock,
         addExpense,
+        updateExpense,
+        saveExpense: updateExpense,
         deleteExpense,
         saveSavingsGoal,
         deleteSavingsGoal,
