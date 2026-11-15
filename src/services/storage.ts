@@ -18,6 +18,7 @@ import {
   NoteItem,
   TaskItem,
   PasswordItem,
+  AuthenticatorItem,
   KhataGroup,
   KhataGroupNotification,
 } from '@/types';
@@ -38,6 +39,7 @@ const STORAGE_KEYS = {
   NOTES: 'skp_notes',
   TASKS: 'skp_tasks',
   PASSWORDS: 'skp_passwords',
+  AUTHENTICATOR: 'skp_authenticator',
   GROUPS: 'skp_groups',
   GROUP_NOTIFICATIONS: 'skp_group_notifications',
   PINNED_CHATS: 'skp_pinned_chats',
@@ -322,6 +324,7 @@ export const StorageService = {
     notes?: NoteItem[];
     tasks?: TaskItem[];
     passwords?: PasswordItem[];
+    authenticators?: AuthenticatorItem[];
     settings?: SystemSettings;
     user?: UserProfile;
   }) => {
@@ -370,6 +373,7 @@ export const StorageService = {
     if (data.notes !== undefined) setLocalItem(STORAGE_KEYS.NOTES, mergeEntities(StorageService.getNotes(), data.notes));
     if (data.tasks !== undefined) setLocalItem(STORAGE_KEYS.TASKS, mergeEntities(StorageService.getTasks(), data.tasks));
     if (data.passwords !== undefined) setLocalItem(STORAGE_KEYS.PASSWORDS, mergeEntities(StorageService.getPasswords(), data.passwords));
+    if (data.authenticators !== undefined) setLocalItem(STORAGE_KEYS.AUTHENTICATOR, mergeEntities(StorageService.getAuthenticators(), data.authenticators));
     if (data.settings !== undefined) {
       const existingSettings = StorageService.getSettings();
       const existingProfile = StorageService.getProfile();
@@ -518,6 +522,7 @@ export const StorageService = {
       setLocalItem(STORAGE_KEYS.NOTES, []);
       setLocalItem(STORAGE_KEYS.TASKS, []);
       setLocalItem(STORAGE_KEYS.PASSWORDS, []);
+      setLocalItem(STORAGE_KEYS.AUTHENTICATOR, []);
       localStorage.setItem(getScopedKey(STORAGE_KEYS.INITIALIZED), 'true');
     }
   },
@@ -1529,6 +1534,28 @@ export const StorageService = {
     return updated;
   },
 
+  // Authenticator / 2FA Manager
+  getAuthenticators: (): AuthenticatorItem[] => getLocalItem<AuthenticatorItem[]>(STORAGE_KEYS.AUTHENTICATOR, []),
+  saveAuthenticator: (item: AuthenticatorItem): AuthenticatorItem[] => {
+    const list = StorageService.getAuthenticators();
+    const idx = list.findIndex(a => a.id === item.id);
+    let updated: AuthenticatorItem[];
+    if (idx >= 0) {
+      updated = [...list];
+      updated[idx] = item;
+    } else {
+      updated = [item, ...list];
+    }
+    setLocalItem(STORAGE_KEYS.AUTHENTICATOR, updated);
+    return updated;
+  },
+  deleteAuthenticator: (id: string): AuthenticatorItem[] => {
+    const list = StorageService.getAuthenticators();
+    const updated = list.filter(a => a.id !== id);
+    setLocalItem(STORAGE_KEYS.AUTHENTICATOR, updated);
+    return updated;
+  },
+
   // Khata Groups
   getGroups: (): KhataGroup[] => {
     return getLocalItem<KhataGroup[]>(STORAGE_KEYS.GROUPS, []);
@@ -1665,6 +1692,7 @@ export const StorageService = {
       notes: StorageService.getNotes(),
       tasks: StorageService.getTasks(),
       passwords: StorageService.getPasswords(),
+      authenticators: StorageService.getAuthenticators(),
       groups: StorageService.getGroups(),
     };
     return JSON.stringify(backup, null, 2);
@@ -1686,6 +1714,7 @@ export const StorageService = {
       if (data.notes) setLocalItem(STORAGE_KEYS.NOTES, data.notes);
       if (data.tasks) setLocalItem(STORAGE_KEYS.TASKS, data.tasks);
       if (data.passwords) setLocalItem(STORAGE_KEYS.PASSWORDS, data.passwords);
+      if (data.authenticators) setLocalItem(STORAGE_KEYS.AUTHENTICATOR, data.authenticators);
       if (data.groups) setLocalItem(STORAGE_KEYS.GROUPS, data.groups);
       localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
       return true;
@@ -1765,6 +1794,7 @@ export const StorageService = {
         STORAGE_KEYS.NOTES,
         STORAGE_KEYS.TASKS,
         STORAGE_KEYS.PASSWORDS,
+        STORAGE_KEYS.AUTHENTICATOR,
         STORAGE_KEYS.GROUPS,
         STORAGE_KEYS.GROUP_NOTIFICATIONS,
         STORAGE_KEYS.PINNED_CHATS,

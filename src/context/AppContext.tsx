@@ -17,6 +17,7 @@ import {
   NoteItem,
   TaskItem,
   PasswordItem,
+  AuthenticatorItem,
   KhataGroup,
   KhataGroupNotification,
 } from '@/types';
@@ -61,6 +62,7 @@ interface AppContextType {
   notes: NoteItem[];
   tasks: TaskItem[];
   passwords: PasswordItem[];
+  authenticators: AuthenticatorItem[];
   settings: SystemSettings;
   darkMode: boolean;
   activeRole: UserRole;
@@ -101,6 +103,8 @@ interface AppContextType {
   deleteTask: (id: string) => void;
   savePassword: (item: PasswordItem) => void;
   deletePassword: (id: string) => void;
+  saveAuthenticator: (item: AuthenticatorItem) => void;
+  deleteAuthenticator: (id: string) => void;
   updateSettings: (settings: Partial<SystemSettings>, options?: { silent?: boolean }) => void;
   
   // Khata Groups & Split Notifications
@@ -183,6 +187,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [passwords, setPasswords] = useState<PasswordItem[]>([]);
+  const [authenticators, setAuthenticators] = useState<AuthenticatorItem[]>([]);
   const [groups, setGroups] = useState<KhataGroup[]>([]);
   const [groupNotifications, setGroupNotifications] = useState<KhataGroupNotification[]>([]);
   const [settings, setSettingsState] = useState<SystemSettings>(() => {
@@ -271,6 +276,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       setNotes([]);
       setTasks([]);
       setPasswords([]);
+      setAuthenticators([]);
       setGroups([]);
       setGroupNotifications([]);
       setSettingsState(getCleanDefaultSettings());
@@ -290,6 +296,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setNotes(StorageService.getNotes());
     setTasks(StorageService.getTasks());
     setPasswords(StorageService.getPasswords());
+    setAuthenticators(StorageService.getAuthenticators());
     setGroups(StorageService.getGroups());
     setGroupNotifications(StorageService.getGroupNotifications());
     const s = StorageService.getSettings();
@@ -456,6 +463,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           notes: StorageService.getNotes(),
           tasks: StorageService.getTasks(),
           passwords: StorageService.getPasswords(),
+          authenticators: StorageService.getAuthenticators(),
           customerDriveFolders: allDriveFolders,
           customerDriveFiles: allDriveFiles,
           groups: StorageService.getGroups(),
@@ -651,6 +659,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           if (Array.isArray(d.passwords)) {
             const merged = mergeEntities(StorageService.getPasswords(), d.passwords);
             setPasswords(merged);
+          }
+          if (Array.isArray(d.authenticators)) {
+            const merged = mergeEntities(StorageService.getAuthenticators(), d.authenticators);
+            setAuthenticators(merged);
           }
           if (Array.isArray(d.customerDriveFolders) || Array.isArray(d.customerDriveFiles)) {
             const byCust: Record<string, { folders: any[]; files: any[] }> = {};
@@ -1073,6 +1085,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setNotes([]);
     setTasks([]);
     setPasswords([]);
+    setAuthenticators([]);
     setGroups([]);
     setGroupNotifications([]);
     setProfileState(user);
@@ -1130,6 +1143,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setNotes([]);
     setTasks([]);
     setPasswords([]);
+    setAuthenticators([]);
     setGroups([]);
     setGroupNotifications([]);
     setProfileState(user);
@@ -1161,6 +1175,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setNotes([]);
     setTasks([]);
     setPasswords([]);
+    setAuthenticators([]);
     setGroups([]);
     setGroupNotifications([]);
     setProfileState(user);
@@ -1193,6 +1208,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setNotes([]);
     setTasks([]);
     setPasswords([]);
+    setAuthenticators([]);
     setGroups([]);
     setGroupNotifications([]);
     setSettingsState(getCleanDefaultSettings());
@@ -2140,6 +2156,20 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     syncWithDatabase();
   };
 
+  const saveAuthenticator = (item: AuthenticatorItem) => {
+    const updated = StorageService.saveAuthenticator(item);
+    setAuthenticators(updated);
+    addToast('2FA Account Saved', `2FA Code for ${item.issuer} is active.`, 'success');
+    syncWithDatabase();
+  };
+
+  const deleteAuthenticator = (id: string) => {
+    const updated = StorageService.deleteAuthenticator(id);
+    setAuthenticators(updated);
+    addToast('2FA Deleted', 'Authenticator account removed.', 'info');
+    syncWithDatabase();
+  };
+
   const openCollectModal = (data: {
     customerId?: string;
     customerName?: string;
@@ -2233,6 +2263,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         notes,
         tasks,
         passwords,
+        authenticators,
         groups,
         saveGroup,
         deleteGroup,
@@ -2277,6 +2308,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         deleteTask,
         savePassword,
         deletePassword,
+        saveAuthenticator,
+        deleteAuthenticator,
         updateSettings,
         saveDefaultUpiAndQr,
         isCollectModalOpen,

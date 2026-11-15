@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatDate } from '@/lib/utils';
-import { NoteItem, TaskItem, PasswordItem } from '@/types';
+import { NoteItem, TaskItem, PasswordItem, AuthenticatorItem } from '@/types';
+import { generateTotpToken, formatTotpCode, parseOtpAuthUri } from '@/lib/totp';
 import {
   NotebookPen,
   CheckSquare,
@@ -33,7 +34,12 @@ import {
   ArrowRight,
   Upload,
   Image as ImageIcon,
-  Bell
+  Bell,
+  Smartphone,
+  Shield,
+  RefreshCw,
+  Fingerprint,
+  Timer
 } from 'lucide-react';
 
 const NOTE_COLORS = [
@@ -57,11 +63,47 @@ export default function NotesAndTasksPage() {
     passwords,
     savePassword,
     deletePassword,
+    authenticators = [],
+    saveAuthenticator,
+    deleteAuthenticator,
     addToast
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'notes' | 'tasks' | 'passwords'>('notes');
+  const [activeTab, setActiveTab] = useState<'notes' | 'tasks' | 'passwords' | 'authenticator'>('notes');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // --- Authenticator (2FA) State ---
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [editingAuthId, setEditingAuthId] = useState<string | null>(null);
+  const [authIssuer, setAuthIssuer] = useState('');
+  const [authAccountName, setAuthAccountName] = useState('');
+  const [authSecret, setAuthSecret] = useState('');
+  const [authCategory, setAuthCategory] = useState<AuthenticatorItem['category']>('Cloud & Dev');
+  const [authNotes, setAuthNotes] = useState('');
+  const [authCategoryFilter, setAuthCategoryFilter] = useState<string>('all');
+  const [copiedAuthId, setCopiedAuthId] = useState<string | null>(null);
+  const [revealedSecrets, setRevealedSecrets] = useState<Record<string, boolean>>({});
+
+  // 30-Second Live Clock & Regenerate Animation State
+  const [currentTimeSec, setCurrentTimeSec] = useState<number>(() => Math.floor(Date.now() / 1000));
+  const [justRegenerated, setJustRegenerated] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const nowSec = Math.floor(Date.now() / 1000);
+      setCurrentTimeSec(prev => {
+        if (Math.floor(nowSec / 30) !== Math.floor(prev / 30)) {
+          setJustRegenerated(true);
+          setTimeout(() => setJustRegenerated(false), 900);
+        }
+        return nowSec;
+      });
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
+
+  const remainingSec = 30 - (currentTimeSec % 30);
+  const progressPercent = (remainingSec / 30) * 100;
 
   // Image Preview Modal
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
@@ -329,6 +371,167 @@ export default function NotesAndTasksPage() {
     });
   }, [passwords, searchQuery]);
 
+  // --- Authenticator Actions ---
+  const openCreateAuthModal = () => {
+    setEditingAuthId(null);
+    setAuthIssuer('');
+    setAuthAccountName('');
+    setAuthSecret('');
+    setAuthCategory('Cloud & Dev');
+    setAuthNotes('');
+    setIsAuthModalOpen(true);
+  };
+
+  const openEditAuthModal = (item: AuthenticatorItem) => {
+    setEditingAuthId(item.id);
+    setAuthIssuer(item.issuer);
+    setAuthAccountName(item.accountName);
+    setAuthSecret(item.secret);
+    setAuthCategory(item.category || 'Cloud & Dev');
+    setAuthNotes(item.notes || '');
+    setIsAuthModalOpen(true);
+  };
+
+  const handleSecretInputChange = (val: string) => {
+    if (val.trim().startsWith('otpauth://')) {
+      const parsed = parseOtpAuthUri(val);
+      setAuthSecret(parsed.secret);
+      if (parsed.issuer && !authIssuer) setAuthIssuer(parsed.issuer);
+      if (parsed.accountName && !authAccountName) setAuthAccountName(parsed.accountName);
+      addToast('QR URI Detected', 'Secret key & account details auto-extracted!', 'info');
+    } else {
+      setAuthSecret(val.toUpperCase().replace(/\s+/g, ''));
+    }
+  };
+
+  const handleSaveAuthSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authIssuer.trim()) {
+      addToast('Issuer Required', 'Please enter service or app name (e.g. Google, GitHub).', 'error');
+      return;
+    }
+    if (!authSecret.trim()) {
+      addToast('Secret Key Required', 'Please enter your 2FA Base32 secret key.', 'error');
+      return;
+    }
+
+    const cleanSecret = authSecret.toUpperCase().replace(/[\s\-_]/g, '');
+    const itemToSave: AuthenticatorItem = {
+      id: editingAuthId || `auth_${Date.now()}`,
+      issuer: authIssuer.trim(),
+      accountName: authAccountName.trim() || 'Account',
+      secret: cleanSecret,
+      category: authCategory,
+      notes: authNotes.trim() || undefined,
+      createdAt: editingAuthId
+        ? authenticators.find(a => a.id === editingAuthId)?.createdAt || new Date().toISOString()
+        : new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    saveAuthenticator(itemToSave);
+    setIsAuthModalOpen(false);
+  };
+
+  const copyTotpCode = (item: AuthenticatorItem) => {
+    const code = generateTotpToken(item.secret, currentTimeSec);
+    if (!code || code === '------') {
+      addToast('Invalid Secret', 'Could not generate 2FA token from this secret.', 'error');
+      return;
+    }
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(code);
+    }
+    setCopiedAuthId(item.id);
+    setTimeout(() => setCopiedAuthId(null), 2000);
+    addToast('2FA Code Copied', `${item.issuer} code (${formatTotpCode(code)}) copied to clipboard!`, 'success');
+  };
+
+  const toggleRevealSecret = (id: string) => {
+    setRevealedSecrets(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const getIssuerBrand = (issuer: string) => {
+    const norm = issuer.toLowerCase().trim();
+    if (norm.includes('google') || norm.includes('gmail')) {
+      return {
+        initials: 'G',
+        gradient: 'from-rose-500 to-amber-500',
+        ring: 'border-rose-500/30',
+        tag: 'bg-rose-500/10 text-rose-500 dark:text-rose-400'
+      };
+    }
+    if (norm.includes('github')) {
+      return {
+        initials: 'GH',
+        gradient: 'from-slate-700 to-slate-900',
+        ring: 'border-slate-500/30',
+        tag: 'bg-slate-500/10 text-slate-700 dark:text-slate-300'
+      };
+    }
+    if (norm.includes('microsoft') || norm.includes('outlook') || norm.includes('azure')) {
+      return {
+        initials: 'MS',
+        gradient: 'from-blue-600 to-cyan-500',
+        ring: 'border-blue-500/30',
+        tag: 'bg-blue-500/10 text-blue-500 dark:text-blue-400'
+      };
+    }
+    if (norm.includes('amazon') || norm.includes('aws')) {
+      return {
+        initials: 'AWS',
+        gradient: 'from-amber-500 to-orange-600',
+        ring: 'border-amber-500/30',
+        tag: 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+      };
+    }
+    if (norm.includes('supabase')) {
+      return {
+        initials: 'SB',
+        gradient: 'from-emerald-500 to-teal-700',
+        ring: 'border-emerald-500/30',
+        tag: 'bg-emerald-500/10 text-emerald-500 dark:text-emerald-400'
+      };
+    }
+    if (norm.includes('bank') || norm.includes('hdfc') || norm.includes('sbi') || norm.includes('icici') || norm.includes('axis')) {
+      return {
+        initials: 'BK',
+        gradient: 'from-violet-600 to-indigo-700',
+        ring: 'border-violet-500/30',
+        tag: 'bg-violet-500/10 text-violet-500 dark:text-violet-400'
+      };
+    }
+    if (norm.includes('binance') || norm.includes('crypto')) {
+      return {
+        initials: 'BN',
+        gradient: 'from-yellow-500 to-amber-600',
+        ring: 'border-yellow-500/30',
+        tag: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
+      };
+    }
+    return {
+      initials: (issuer.slice(0, 2) || '2F').toUpperCase(),
+      gradient: 'from-cyan-500 to-blue-600',
+      ring: 'border-cyan-500/30',
+      tag: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400'
+    };
+  };
+
+  const filteredAuthenticators = useMemo(() => {
+    return (authenticators || []).filter(a => {
+      const query = searchQuery.toLowerCase();
+      const matchSearch =
+        a.issuer.toLowerCase().includes(query) ||
+        a.accountName.toLowerCase().includes(query) ||
+        (a.notes && a.notes.toLowerCase().includes(query));
+      if (!matchSearch) return false;
+      if (authCategoryFilter !== 'all') {
+        return (a.category || 'Other') === authCategoryFilter;
+      }
+      return true;
+    });
+  }, [authenticators, searchQuery, authCategoryFilter]);
+
   return (
     <div className="space-y-6">
       
@@ -359,20 +562,24 @@ export default function NotesAndTasksPage() {
             <span className="font-bold">{completedTasksCount}/{tasks.length} Done</span>
           </div>
           <div className="px-2.5 py-1 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center gap-1.5 text-[11px]">
-            <Lock className="w-3.5 h-3.5 text-cyan-400" />
+            <Lock className="w-3.5 h-3.5 text-indigo-400" />
             <span className="font-bold">{passwords.length} Vault Keys</span>
+          </div>
+          <div className="px-2.5 py-1 rounded-xl bg-slate-800/80 border border-cyan-500/40 flex items-center gap-1.5 text-[11px]">
+            <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="font-bold text-cyan-300">{authenticators.length} 2FA Keys</span>
           </div>
         </div>
       </div>
 
-      {/* 3 Main Tabs Switcher & Search Bar */}
+      {/* 4 Main Tabs Switcher & Search Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Navigation Tabs */}
-        <div className="inline-flex p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+        <div className="inline-flex p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex-wrap">
           <button
             type="button"
             onClick={() => { setActiveTab('notes'); setSearchQuery(''); }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'notes'
                 ? 'bg-amber-500 text-white shadow-md shadow-amber-500/25'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -388,7 +595,7 @@ export default function NotesAndTasksPage() {
           <button
             type="button"
             onClick={() => { setActiveTab('tasks'); setSearchQuery(''); }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'tasks'
                 ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/25'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -404,7 +611,7 @@ export default function NotesAndTasksPage() {
           <button
             type="button"
             onClick={() => { setActiveTab('passwords'); setSearchQuery(''); }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'passwords'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -414,6 +621,22 @@ export default function NotesAndTasksPage() {
             <span>Password Manager</span>
             <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${activeTab === 'passwords' ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-700'}`}>
               {passwords.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setActiveTab('authenticator'); setSearchQuery(''); }}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'authenticator'
+                ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/25'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Smartphone className="w-4 h-4" />
+            <span>Authenticator</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${activeTab === 'authenticator' ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-700'}`}>
+              {authenticators.length}
             </span>
           </button>
         </div>
@@ -458,6 +681,16 @@ export default function NotesAndTasksPage() {
             >
               <Plus className="w-4 h-4" />
               <span>Add Password</span>
+            </button>
+          )}
+
+          {activeTab === 'authenticator' && (
+            <button
+              onClick={openCreateAuthModal}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-cyan-600 hover:bg-cyan-500 shadow-md shadow-cyan-600/25 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add 2FA Account</span>
             </button>
           )}
         </div>
@@ -1078,6 +1311,305 @@ export default function NotesAndTasksPage() {
       )}
 
       {/* ============================================================== */}
+      {/* TAB 4: AUTHENTICATOR (2FA) VIEW                                */}
+      {/* ============================================================== */}
+      {activeTab === 'authenticator' && (
+        <div className="space-y-4">
+          {/* Subheader: Category Filter Chips & Master 30s Countdown Clock */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+            {/* Category Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+              {['all', 'Cloud & Dev', 'Banking & Crypto', 'Email & Social', 'Business', 'Other'].map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setAuthCategoryFilter(cat)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                    authCategoryFilter === cat
+                      ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-600/30'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {cat === 'all' ? `All (${authenticators.length})` : cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Master 30-Second Countdown Clock Banner */}
+            <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-white shrink-0 self-start sm:self-auto shadow-inner">
+              <div className="relative w-6 h-6 flex items-center justify-center">
+                <svg className="w-6 h-6 -rotate-90 transform">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" className="text-slate-800" fill="transparent" />
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="9"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeDasharray={56.5}
+                    strokeDashoffset={56.5 - (56.5 * remainingSec) / 30}
+                    className={`transition-all duration-700 ${
+                      remainingSec <= 5 ? 'text-rose-500' : remainingSec <= 10 ? 'text-amber-500' : 'text-cyan-400'
+                    }`}
+                    strokeLinecap="round"
+                    fill="transparent"
+                  />
+                </svg>
+                <span className="absolute text-[8px] font-mono font-black text-white">{remainingSec}</span>
+              </div>
+              <div className="text-[11px] font-mono flex items-center gap-1.5">
+                <span className="text-slate-400">Regenerates in:</span>
+                <span className={`font-black tracking-wider ${remainingSec <= 5 ? 'text-rose-400 animate-pulse' : 'text-cyan-300'}`}>
+                  {remainingSec}s
+                </span>
+                <RefreshCw className={`w-3 h-3 text-slate-500 ${remainingSec <= 3 || justRegenerated ? 'animate-spin text-cyan-400' : ''}`} />
+              </div>
+            </div>
+          </div>
+
+          {/* Cards Grid or Empty State */}
+          {filteredAuthenticators.length === 0 ? (
+            <div className="p-12 text-center rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center mx-auto border border-cyan-500/20">
+                <Smartphone className="w-7 h-7" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                {searchQuery || authCategoryFilter !== 'all'
+                  ? 'Koi 2FA Account Match Nahi Hua'
+                  : 'Abhi tak koi 2FA Authenticator Account nahi joda gaya'}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                Google, GitHub, Supabase, Amazon AWS ya Banking accounts ke 2FA Secret Key yahan surakshit save karein aur Authenticator app ki tarah live 30-second rotating security codes payein.
+              </p>
+              <button
+                type="button"
+                onClick={openCreateAuthModal}
+                className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-cyan-600 hover:bg-cyan-500 shadow-md shadow-cyan-600/25 transition-all cursor-pointer active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Pehla 2FA Account Jodein</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredAuthenticators.map((item) => {
+                const brand = getIssuerBrand(item.issuer);
+                const code = generateTotpToken(item.secret, currentTimeSec);
+                const formattedCode = formatTotpCode(code);
+                const isCopied = copiedAuthId === item.id;
+                const isSecretVisible = revealedSecrets[item.id] || false;
+                const isExpiring = remainingSec <= 5;
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`rounded-3xl p-5 bg-white dark:bg-slate-900 border transition-all duration-300 shadow-md flex flex-col justify-between gap-4 ${
+                      isExpiring
+                        ? 'border-rose-500/40 dark:border-rose-500/40 shadow-rose-500/5'
+                        : justRegenerated
+                        ? 'border-cyan-400/60 dark:border-cyan-400/60 shadow-cyan-500/20 ring-1 ring-cyan-400/30'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    {/* Header Row: Brand Avatar, Issuer & Account, Actions */}
+                    <div className="flex items-start justify-between gap-2.5">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Dynamic Brand Gradient Avatar */}
+                        <div
+                          className={`w-11 h-11 rounded-2xl bg-gradient-to-tr ${brand.gradient} text-white font-black text-sm flex items-center justify-center shrink-0 shadow-md tracking-wider`}
+                        >
+                          {brand.initials}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-black text-slate-900 dark:text-white truncate">
+                            {item.issuer}
+                          </h4>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                            {item.accountName}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Top Right: Category & Edit/Delete Menu */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${brand.tag}`}>
+                          {item.category || 'Other'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openEditAuthModal(item)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                          title="Edit 2FA Account"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Delete 2FA key for ${item.issuer}?`)) {
+                              deleteAuthenticator(item.id);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+                          title="Delete 2FA Key"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Central 2FA Code Box with Interactive Click-to-Copy */}
+                    <div
+                      onClick={() => copyTotpCode(item)}
+                      className={`relative p-4 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 text-center cursor-pointer transition-all active:scale-[0.99] group overflow-hidden ${
+                        isExpiring
+                          ? 'border-rose-500/50 shadow-lg shadow-rose-950/30'
+                          : justRegenerated
+                          ? 'border-cyan-400/60 shadow-lg shadow-cyan-950/40 ring-1 ring-cyan-400/40'
+                          : 'hover:border-slate-700'
+                      }`}
+                      title="Click to copy 6-digit code"
+                    >
+                      {/* Subtle Ambient Pulse Background Glow */}
+                      <div
+                        className={`absolute -right-8 -top-8 w-24 h-24 rounded-full blur-2xl pointer-events-none transition-all duration-700 ${
+                          isExpiring
+                            ? 'bg-rose-500/25'
+                            : justRegenerated
+                            ? 'bg-cyan-400/35'
+                            : 'bg-cyan-500/10'
+                        }`}
+                      />
+
+                      <div className="flex items-center justify-between px-2">
+                        {/* 6-Digit Monospace Code */}
+                        <div className="flex-1 text-left">
+                          <span
+                            className={`font-mono text-3xl sm:text-4xl font-extrabold tracking-widest transition-all duration-300 block select-all ${
+                              isExpiring
+                                ? 'text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.5)]'
+                                : justRegenerated
+                                ? 'text-cyan-200 scale-105 drop-shadow-[0_0_12px_rgba(34,211,238,0.7)]'
+                                : 'text-cyan-400 dark:text-cyan-300'
+                            }`}
+                          >
+                            {formattedCode}
+                          </span>
+                        </div>
+
+                        {/* Circular 30s Countdown Ring Widget */}
+                        <div className="relative w-11 h-11 flex items-center justify-center shrink-0">
+                          <svg className="w-11 h-11 -rotate-90 transform">
+                            <circle
+                              cx="22"
+                              cy="22"
+                              r="17"
+                              stroke="currentColor"
+                              strokeWidth="3.5"
+                              className="text-slate-800"
+                              fill="transparent"
+                            />
+                            <circle
+                              cx="22"
+                              cy="22"
+                              r="17"
+                              stroke="currentColor"
+                              strokeWidth="3.5"
+                              strokeDasharray={106.8}
+                              strokeDashoffset={106.8 - (106.8 * remainingSec) / 30}
+                              className={`transition-all duration-700 ${
+                                isExpiring
+                                  ? 'text-rose-500 drop-shadow-[0_0_6px_rgba(244,63,94,0.6)]'
+                                  : remainingSec <= 10
+                                  ? 'text-amber-400'
+                                  : 'text-cyan-400'
+                              }`}
+                              strokeLinecap="round"
+                              fill="transparent"
+                            />
+                          </svg>
+                          <span
+                            className={`absolute text-[11px] font-mono font-black ${
+                              isExpiring ? 'text-rose-400 animate-pulse' : 'text-white'
+                            }`}
+                          >
+                            {remainingSec}s
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Click-to-copy Status Label */}
+                      <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+                        {isCopied ? (
+                          <span className="flex items-center gap-1.5 text-emerald-400 font-bold animate-in fade-in">
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Copied to Clipboard!</span>
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1.5 text-slate-400 group-hover:text-cyan-300 transition-colors">
+                            <Copy className="w-3 h-3 text-cyan-400" />
+                            <span>Click code to copy</span>
+                          </span>
+                        )}
+
+                        <span className="text-[10px] font-mono text-slate-500">
+                          {isExpiring ? 'Expiring soon...' : '30s TOTP'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Secret Key Row (Masked by default with toggle & copy) */}
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-xs">
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                        <span className="flex items-center gap-1 font-semibold">
+                          <KeyRound className="w-3 h-3 text-cyan-500" />
+                          <span>Secret Key:</span>
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => toggleRevealSecret(item.id)}
+                            className="p-1 hover:text-cyan-500 transition-colors cursor-pointer"
+                            title={isSecretVisible ? 'Hide Secret Key' : 'Reveal Secret Key'}
+                          >
+                            {isSecretVisible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                navigator.clipboard.writeText(item.secret);
+                                addToast('Secret Copied', 'Base32 secret key copied.', 'info');
+                              }
+                            }}
+                            className="p-1 hover:text-cyan-500 transition-colors cursor-pointer"
+                            title="Copy Secret Key"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="font-mono text-[11px] text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-xl border border-slate-200/60 dark:border-slate-800 truncate">
+                        {isSecretVisible ? item.secret : `•••• •••• •••• ${item.secret.slice(-4)}`}
+                      </div>
+
+                      {/* Optional Note */}
+                      {item.notes && (
+                        <p className="text-[11px] text-slate-400 italic truncate pt-0.5">
+                          💡 {item.notes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ============================================================== */}
       {/* MODAL 1: ADD / EDIT NOTE MODAL                                 */}
       {/* ============================================================== */}
       {isNoteModalOpen && (
@@ -1597,6 +2129,201 @@ export default function NotesAndTasksPage() {
                   className="w-full py-2.5 rounded-2xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/25 transition-all cursor-pointer"
                 >
                   {editingPasswordId ? 'Update Credentials' : 'Save to Password Vault'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 4: ADD / EDIT AUTHENTICATOR (2FA) MODAL                 */}
+      {/* ============================================================== */}
+      {isAuthModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center border border-cyan-500/20">
+                  <Smartphone className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                    {editingAuthId ? 'Edit 2FA Authenticator Account' : 'Add New 2FA Account'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Base32 Secret key ya otpauth QR URI daalein
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAuthModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAuthSubmit} className="p-4 sm:p-5 overflow-y-auto space-y-3.5 flex-1">
+              {/* Popular Issuer Quick Chips */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Popular Services (Quick Select)
+                </label>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[
+                    { name: 'Google', cat: 'Email & Social' },
+                    { name: 'GitHub', cat: 'Cloud & Dev' },
+                    { name: 'Microsoft', cat: 'Cloud & Dev' },
+                    { name: 'Supabase', cat: 'Cloud & Dev' },
+                    { name: 'Amazon AWS', cat: 'Cloud & Dev' },
+                    { name: 'Binance', cat: 'Banking & Crypto' },
+                    { name: 'Netbanking', cat: 'Banking & Crypto' }
+                  ].map(srv => (
+                    <button
+                      key={srv.name}
+                      type="button"
+                      onClick={() => {
+                        setAuthIssuer(srv.name);
+                        setAuthCategory(srv.cat as any);
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-cyan-500/10 hover:text-cyan-600 dark:hover:text-cyan-400 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+                    >
+                      +{srv.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Service / Issuer Name */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Service / App Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Google, GitHub, Supabase, Zerodha, HDFC Bank"
+                  value={authIssuer}
+                  onChange={(e) => setAuthIssuer(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold"
+                />
+              </div>
+
+              {/* Account / Email */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Account Identifier / Email (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. user@gmail.com, merchant_admin"
+                  value={authAccountName}
+                  onChange={(e) => setAuthAccountName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-mono"
+                />
+              </div>
+
+              {/* 2FA Secret Key (or URI) */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    2FA Secret Key (Base32) or otpauth:// URI *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                        try {
+                          const text = await navigator.clipboard.readText();
+                          if (text) handleSecretInputChange(text);
+                        } catch {
+                          // Clipboard read failed
+                        }
+                      }
+                    }}
+                    className="text-[11px] font-bold text-cyan-600 dark:text-cyan-400 hover:underline cursor-pointer"
+                  >
+                    Paste from Clipboard
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. JBSWY3DPEHPK3PXP ya otpauth://totp/..."
+                  value={authSecret}
+                  onChange={(e) => handleSecretInputChange(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-mono uppercase tracking-wider"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Tip: Agar aapke paas otpauth QR URI hai to yahan paste karein, secret key aur details auto-extract ho jayengi.
+                </p>
+              </div>
+
+              {/* Live Preview Box inside Modal */}
+              {authSecret.trim() && (
+                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-cyan-500/30 text-white space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="flex items-center gap-1.5 text-cyan-400">
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Live 2FA Code Preview:</span>
+                    </span>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      Window: {remainingSec}s left
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between px-2">
+                    <span className="font-mono text-2xl font-black text-cyan-300 tracking-widest">
+                      {formatTotpCode(generateTotpToken(authSecret, currentTimeSec))}
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold">
+                      Algorithm Active ✓
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Category */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Category
+                </label>
+                <select
+                  value={authCategory}
+                  onChange={(e) => setAuthCategory(e.target.value as any)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold"
+                >
+                  <option value="Cloud & Dev">Cloud &amp; Dev (Google, GitHub, Supabase, AWS)</option>
+                  <option value="Banking & Crypto">Banking &amp; Crypto (Banks, Binance, Zerodha)</option>
+                  <option value="Email & Social">Email &amp; Social (Gmail, Discord, Twitter)</option>
+                  <option value="Business">Business (Shopify, Stripe, Internal CRM)</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              {/* Optional Notes */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Notes (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Registered with primary phone, backup emergency keys stored"
+                  value={authNotes}
+                  onChange={(e) => setAuthNotes(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white resize-none"
+                />
+              </div>
+
+              {/* Submit Button */}
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  className="w-full py-2.5 rounded-2xl text-xs font-bold text-white bg-cyan-600 hover:bg-cyan-500 shadow-md shadow-cyan-600/25 transition-all cursor-pointer active:scale-95"
+                >
+                  {editingAuthId ? 'Update 2FA Account' : 'Save to Authenticator'}
                 </button>
               </div>
             </form>

@@ -592,4 +592,18 @@ export interface PasswordItem {
   updatedAt: string;
 }
 
+export interface AuthenticatorItem {
+  id: string;
+  issuer: string; // e.g. Google, GitHub, Supabase, Bank, AWS
+  accountName: string; // e.g. user@gmail.com, admin_merchant
+  secret: string; // Base32 Secret Key (e.g. JBSWY3DPEHPK3PXP)
+  category?: 'Cloud & Dev' | 'Banking & Crypto' | 'Email & Social' | 'Business' | 'Other';
+  notes?: string;
+  period?: number; // 30 sec standard
+  digits?: number; // 6 digits standard
+  createdAt: string;
+  updatedAt: string;
+}
+
+
 
