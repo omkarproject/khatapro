@@ -22,6 +22,9 @@ import {
   Paperclip,
   Eye,
   Download,
+  FileDown,
+  ChevronDown,
+  Check,
   Bell,
   Clock,
   FileText,
@@ -163,6 +166,31 @@ export default function SavingsPage() {
   // Form State: Create/Edit Goal
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [newCategoryInput, setNewCategoryInput] = useState('');
+
+  // Export Reserve Funds State
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportScope, setExportScope] = useState<'all' | 'selected' | 'single'>('all');
+  const [selectedGoalIds, setSelectedGoalIds] = useState<string[]>([]);
+  const [singleSelectedGoalId, setSingleSelectedGoalId] = useState<string>('');
+  const [isExportingSavings, setIsExportingSavings] = useState(false);
+
+  const toggleGoalSelection = (goalId: string) => {
+    setSelectedGoalIds(prev =>
+      prev.includes(goalId) ? prev.filter(id => id !== goalId) : [...prev, goalId]
+    );
+  };
+
+  const getGoalsToExport = (): SavingsGoal[] => {
+    if (exportScope === 'single') {
+      const g = savingsGoals.find(item => item.id === singleSelectedGoalId);
+      return g ? [g] : (savingsGoals.length > 0 ? [savingsGoals[0]] : []);
+    }
+    if (exportScope === 'selected') {
+      const selected = savingsGoals.filter(item => selectedGoalIds.includes(item.id));
+      return selected.length > 0 ? selected : savingsGoals;
+    }
+    return savingsGoals;
+  };
 
   const DEFAULT_SAVINGS_CATEGORIES = useMemo(() => [
     'Emergency Fund',
@@ -973,6 +1001,477 @@ export default function SavingsPage() {
     }, 450);
   };
 
+  // Export Reserve Funds to Excel
+  const handleExportSavingsExcel = async () => {
+    const goalsToExport = getGoalsToExport();
+    if (goalsToExport.length === 0) {
+      addToast('No Goals Selected', 'Export karne ke liye kam se kam ek fund select karein.', 'warning');
+      return;
+    }
+
+    try {
+      setIsExportingSavings(true);
+      addToast('Preparing Excel', 'Generating styled Reserve Funds spreadsheet...', 'info');
+
+      const ExcelJSModule = await import('exceljs');
+      const ExcelJS = ExcelJSModule.default || ExcelJSModule;
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'SmartKhata ERP';
+      workbook.created = new Date();
+
+      // Sheet 1: Reserve Funds Portfolio Overview
+      const summarySheet = workbook.addWorksheet('Funds Portfolio', {
+        views: [{ showGridLines: true }]
+      });
+
+      summarySheet.columns = [
+        { key: 'sno', width: 8 },
+        { key: 'title', width: 30 },
+        { key: 'category', width: 22 },
+        { key: 'target', width: 20 },
+        { key: 'saved', width: 20 },
+        { key: 'remaining', width: 20 },
+        { key: 'progress', width: 16 },
+        { key: 'targetDate', width: 16 },
+        { key: 'depositsCount', width: 16 },
+        { key: 'status', width: 20 },
+      ];
+
+      const NAVY_HEADER = '1E3A8A';
+      const SUB_NAVY = '2563EB';
+      const WHITE = 'FFFFFF';
+      const LIGHT_BG = 'F8FAFC';
+      const BORDER_COLOR = 'CBD5E1';
+
+      // Title & Branding
+      summarySheet.mergeCells('A1:J1');
+      const tCell = summarySheet.getCell('A1');
+      tCell.value = (settings.businessName || 'Business Enterprise').toUpperCase();
+      tCell.font = { name: 'Calibri', size: 16, bold: true, color: { argb: WHITE } };
+      tCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY_HEADER } };
+      tCell.alignment = { vertical: 'middle', horizontal: 'center' };
+      summarySheet.getRow(1).height = 36;
+
+      summarySheet.mergeCells('A2:J2');
+      const subCell = summarySheet.getCell('A2');
+      subCell.value = `BUSINESS RESERVE FUNDS & CAPITAL BUFFERS • ${goalsToExport.length} FUND(S) EXPORTED`;
+      subCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: WHITE } };
+      subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: SUB_NAVY } };
+      subCell.alignment = { vertical: 'middle', horizontal: 'center' };
+      summarySheet.getRow(2).height = 24;
+
+      summarySheet.mergeCells('A3:E3');
+      summarySheet.getCell('A3').value = `Generated On: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+      summarySheet.getCell('A3').font = { name: 'Calibri', size: 9, italic: true, color: { argb: '64748B' } };
+      summarySheet.getCell('A3').alignment = { vertical: 'middle', indent: 1 };
+
+      summarySheet.mergeCells('F3:J3');
+      summarySheet.getCell('F3').value = `Active Scope: ${exportScope === 'all' ? 'All Funds' : (exportScope === 'single' ? 'Single Fund' : 'Selected Checkboxes')}`;
+      summarySheet.getCell('F3').font = { name: 'Calibri', size: 9, bold: true, color: { argb: '64748B' } };
+      summarySheet.getCell('F3').alignment = { vertical: 'middle', horizontal: 'right' };
+      summarySheet.getRow(3).height = 20;
+
+      summarySheet.getRow(4).height = 8;
+
+      // Table Headers
+      const headers = ['#', 'Reserve Fund Name', 'Category', 'Target (₹)', 'Accumulated (₹)', 'Remaining (₹)', 'Progress %', 'Target Date', 'Deposits', 'Status'];
+      const hRow = summarySheet.getRow(5);
+      headers.forEach((h, idx) => {
+        const c = hRow.getCell(idx + 1);
+        c.value = h;
+        c.font = { name: 'Calibri', size: 10, bold: true, color: { argb: WHITE } };
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '334155' } };
+        c.alignment = { vertical: 'middle', horizontal: idx === 0 || idx >= 6 ? 'center' : (idx >= 3 && idx <= 5 ? 'right' : 'left'), indent: idx >= 3 && idx <= 5 ? 0 : 1 };
+        c.border = {
+          top: { style: 'thin', color: { argb: BORDER_COLOR } },
+          bottom: { style: 'medium', color: { argb: NAVY_HEADER } },
+        };
+      });
+      hRow.height = 24;
+
+      let sumTarget = 0;
+      let sumSaved = 0;
+      let rIdx = 6;
+
+      goalsToExport.forEach((goal, i) => {
+        sumTarget += goal.targetAmount;
+        sumSaved += goal.currentAmount;
+        const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
+        const progress = Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100));
+        const row = summarySheet.getRow(rIdx);
+
+        row.getCell(1).value = i + 1;
+        row.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+        row.getCell(2).value = goal.title;
+        row.getCell(2).font = { name: 'Calibri', size: 10, bold: true };
+        row.getCell(2).alignment = { vertical: 'middle', indent: 1 };
+
+        row.getCell(3).value = goal.category;
+        row.getCell(3).alignment = { vertical: 'middle', indent: 1 };
+
+        row.getCell(4).value = goal.targetAmount;
+        row.getCell(4).numFmt = '₹#,##0.00';
+        row.getCell(4).font = { name: 'Calibri', size: 10, bold: true };
+        row.getCell(4).alignment = { vertical: 'middle', horizontal: 'right' };
+
+        row.getCell(5).value = goal.currentAmount;
+        row.getCell(5).numFmt = '₹#,##0.00';
+        row.getCell(5).font = { name: 'Calibri', size: 10, bold: true, color: { argb: '16A34A' } };
+        row.getCell(5).alignment = { vertical: 'middle', horizontal: 'right' };
+
+        row.getCell(6).value = remaining;
+        row.getCell(6).numFmt = '₹#,##0.00';
+        row.getCell(6).alignment = { vertical: 'middle', horizontal: 'right' };
+
+        row.getCell(7).value = `${progress}%`;
+        row.getCell(7).alignment = { vertical: 'middle', horizontal: 'center' };
+
+        row.getCell(8).value = goal.deadline ? formatDate(goal.deadline) : '-';
+        row.getCell(8).alignment = { vertical: 'middle', horizontal: 'center' };
+
+        row.getCell(9).value = (goal.deposits || []).length;
+        row.getCell(9).alignment = { vertical: 'middle', horizontal: 'center' };
+
+        row.getCell(10).value = progress >= 100 ? 'Goal Achieved 🎯' : 'Active Accumulating';
+        row.getCell(10).font = { name: 'Calibri', size: 9, bold: true, color: { argb: progress >= 100 ? '16A34A' : '2563EB' } };
+        row.getCell(10).alignment = { vertical: 'middle', horizontal: 'center' };
+
+        if (i % 2 === 1) {
+          for (let c = 1; c <= 10; c++) {
+            row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_BG } };
+          }
+        }
+        for (let c = 1; c <= 10; c++) {
+          row.getCell(c).border = { bottom: { style: 'thin', color: { argb: 'E2E8F0' } } };
+        }
+        row.height = 20;
+        rIdx++;
+      });
+
+      // Total Row
+      const totRow = summarySheet.getRow(rIdx);
+      summarySheet.mergeCells(`A${rIdx}:C${rIdx}`);
+      totRow.getCell(1).value = 'TOTAL ACCUMULATED RESERVES';
+      totRow.getCell(1).font = { name: 'Calibri', size: 11, bold: true, color: { argb: WHITE } };
+      totRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+      totRow.getCell(4).value = sumTarget;
+      totRow.getCell(4).numFmt = '₹#,##0.00';
+      totRow.getCell(4).font = { name: 'Calibri', size: 11, bold: true, color: { argb: WHITE } };
+      totRow.getCell(4).alignment = { vertical: 'middle', horizontal: 'right' };
+
+      totRow.getCell(5).value = sumSaved;
+      totRow.getCell(5).numFmt = '₹#,##0.00';
+      totRow.getCell(5).font = { name: 'Calibri', size: 12, bold: true, color: { argb: WHITE } };
+      totRow.getCell(5).alignment = { vertical: 'middle', horizontal: 'right' };
+
+      const remTotal = Math.max(0, sumTarget - sumSaved);
+      totRow.getCell(6).value = remTotal;
+      totRow.getCell(6).numFmt = '₹#,##0.00';
+      totRow.getCell(6).font = { name: 'Calibri', size: 11, bold: true, color: { argb: WHITE } };
+      totRow.getCell(6).alignment = { vertical: 'middle', horizontal: 'right' };
+
+      const overallProg = sumTarget > 0 ? Math.round((sumSaved / sumTarget) * 100) : 0;
+      totRow.getCell(7).value = `${overallProg}%`;
+      totRow.getCell(7).font = { name: 'Calibri', size: 11, bold: true, color: { argb: WHITE } };
+      totRow.getCell(7).alignment = { vertical: 'middle', horizontal: 'center' };
+
+      summarySheet.mergeCells(`H${rIdx}:J${rIdx}`);
+      totRow.getCell(8).value = `Buffer Achieved: ${overallProg}%`;
+      totRow.getCell(8).font = { name: 'Calibri', size: 10, bold: true, color: { argb: WHITE } };
+      totRow.getCell(8).alignment = { vertical: 'middle', horizontal: 'center' };
+
+      for (let c = 1; c <= 10; c++) {
+        totRow.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY_HEADER } };
+        totRow.getCell(c).border = {
+          top: { style: 'medium', color: { argb: NAVY_HEADER } },
+          bottom: { style: 'double', color: { argb: NAVY_HEADER } }
+        };
+      }
+      totRow.height = 26;
+
+      // Sheet 2: All Deposits Ledger
+      const hasDeposits = goalsToExport.some(g => (g.deposits || []).length > 0);
+      if (hasDeposits) {
+        const depSheet = workbook.addWorksheet('Deposits Ledger', {
+          views: [{ showGridLines: true }]
+        });
+
+        depSheet.columns = [
+          { key: 'dno', width: 8 },
+          { key: 'date', width: 16 },
+          { key: 'fund', width: 28 },
+          { key: 'category', width: 20 },
+          { key: 'amount', width: 20 },
+          { key: 'notes', width: 35 },
+          { key: 'receipt', width: 16 },
+        ];
+
+        depSheet.mergeCells('A1:G1');
+        const dt = depSheet.getCell('A1');
+        dt.value = 'RESERVE FUNDS DEPOSIT TRANSACTION LEDGER';
+        dt.font = { name: 'Calibri', size: 13, bold: true, color: { argb: WHITE } };
+        dt.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY_HEADER } };
+        dt.alignment = { vertical: 'middle', horizontal: 'center' };
+        depSheet.getRow(1).height = 30;
+
+        const depHeaders = ['#', 'Date', 'Reserve Fund', 'Category', 'Deposit Amount (₹)', 'Notes / Remarks', 'Receipt File'];
+        const dhRow = depSheet.getRow(2);
+        depHeaders.forEach((dh, idx) => {
+          const c = dhRow.getCell(idx + 1);
+          c.value = dh;
+          c.font = { name: 'Calibri', size: 10, bold: true, color: { argb: WHITE } };
+          c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '334155' } };
+          c.alignment = { vertical: 'middle', horizontal: idx === 0 || idx === 6 ? 'center' : (idx === 4 ? 'right' : 'left'), indent: idx === 4 ? 0 : 1 };
+        });
+        dhRow.height = 22;
+
+        let dIdx = 3;
+        let dCount = 1;
+        let sumDeposits = 0;
+
+        goalsToExport.forEach(goal => {
+          (goal.deposits || []).forEach(dep => {
+            sumDeposits += dep.amount;
+            const r = depSheet.getRow(dIdx);
+            r.getCell(1).value = dCount++;
+            r.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+            r.getCell(2).value = formatDate(dep.date);
+            r.getCell(2).alignment = { vertical: 'middle', indent: 1 };
+            r.getCell(3).value = goal.title;
+            r.getCell(3).font = { name: 'Calibri', size: 10, bold: true };
+            r.getCell(3).alignment = { vertical: 'middle', indent: 1 };
+            r.getCell(4).value = goal.category;
+            r.getCell(4).alignment = { vertical: 'middle', indent: 1 };
+            r.getCell(5).value = dep.amount;
+            r.getCell(5).numFmt = '₹#,##0.00';
+            r.getCell(5).font = { name: 'Calibri', size: 10, bold: true, color: { argb: '16A34A' } };
+            r.getCell(5).alignment = { vertical: 'middle', horizontal: 'right' };
+            r.getCell(6).value = dep.notes || '-';
+            r.getCell(6).alignment = { vertical: 'middle', indent: 1 };
+            r.getCell(7).value = dep.receiptUrl ? 'Attached' : '-';
+            r.getCell(7).alignment = { vertical: 'middle', horizontal: 'center' };
+
+            for (let c = 1; c <= 7; c++) {
+              r.getCell(c).border = { bottom: { style: 'thin', color: { argb: 'E2E8F0' } } };
+            }
+            r.height = 19;
+            dIdx++;
+          });
+        });
+
+        const dTotRow = depSheet.getRow(dIdx);
+        depSheet.mergeCells(`A${dIdx}:D${dIdx}`);
+        dTotRow.getCell(1).value = 'TOTAL DEPOSITS LOGGED';
+        dTotRow.getCell(1).font = { name: 'Calibri', size: 10, bold: true, color: { argb: WHITE } };
+        dTotRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'right', indent: 1 };
+        dTotRow.getCell(5).value = sumDeposits;
+        dTotRow.getCell(5).numFmt = '₹#,##0.00';
+        dTotRow.getCell(5).font = { name: 'Calibri', size: 11, bold: true, color: { argb: WHITE } };
+        dTotRow.getCell(5).alignment = { vertical: 'middle', horizontal: 'right' };
+        for (let c = 1; c <= 7; c++) {
+          dTotRow.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY_HEADER } };
+        }
+        dTotRow.height = 24;
+      }
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Reserve_Funds_${exportScope}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      setIsExportModalOpen(false);
+      addToast('Excel Exported', 'Reserve funds spreadsheet downloaded successfully.', 'success');
+    } catch (err) {
+      console.error('Excel Export error:', err);
+      addToast('Export Error', 'Failed to generate Excel file.', 'error');
+    } finally {
+      setIsExportingSavings(false);
+    }
+  };
+
+  // Export Reserve Funds to PDF
+  const handleExportSavingsPdf = () => {
+    const goalsToExport = getGoalsToExport();
+    if (goalsToExport.length === 0) {
+      addToast('No Goals Selected', 'Export karne ke liye kam se kam ek fund select karein.', 'warning');
+      return;
+    }
+
+    const existingFrame = document.getElementById('smartkhata-savings-export-frame');
+    if (existingFrame) existingFrame.remove();
+
+    const printFrame = document.createElement('iframe');
+    printFrame.id = 'smartkhata-savings-export-frame';
+    printFrame.style.position = 'fixed';
+    printFrame.style.right = '0';
+    printFrame.style.bottom = '0';
+    printFrame.style.width = '0';
+    printFrame.style.height = '0';
+    printFrame.style.border = '0';
+    printFrame.style.visibility = 'hidden';
+    document.body.appendChild(printFrame);
+
+    const doc = printFrame.contentWindow?.document || printFrame.contentDocument;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    const sumTarget = goalsToExport.reduce((s, g) => s + g.targetAmount, 0);
+    const sumSaved = goalsToExport.reduce((s, g) => s + g.currentAmount, 0);
+    const overallProg = sumTarget > 0 ? Math.round((sumSaved / sumTarget) * 100) : 0;
+
+    const rowsHtml = goalsToExport.map((goal, idx) => {
+      const prog = Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100));
+      return `
+        <tr style="${idx % 2 === 1 ? 'background: #f8fafc;' : ''}">
+          <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; text-align: center; color: #64748b; font-size: 11px;">${idx + 1}</td>
+          <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">
+            <div style="font-weight: 700; color: #0f172a; font-size: 12px;">${goal.title}</div>
+            ${goal.notes ? `<div style="font-size: 10px; color: #64748b; margin-top: 2px;">${goal.notes}</div>` : ''}
+          </td>
+          <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0;">
+            <span style="display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; background: #e0e7ff; color: #3730a3;">
+              ${goal.category}
+            </span>
+          </td>
+          <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; text-align: right; font-family: monospace; font-size: 11px; color: #475569;">
+            ${formatINR(goal.targetAmount)}
+          </td>
+          <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 800; color: #16a34a; font-family: monospace; font-size: 12px;">
+            ${formatINR(goal.currentAmount)}
+          </td>
+          <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">
+            <div style="font-weight: 800; font-size: 11px; color: #0f172a;">${prog}%</div>
+            <div style="width: 100%; height: 5px; background: #e2e8f0; border-radius: 999px; overflow: hidden; margin-top: 3px;">
+              <div style="width: ${prog}%; height: 100%; background: #16a34a; border-radius: 999px;"></div>
+            </div>
+          </td>
+          <td style="padding: 8px 10px; border-bottom: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #64748b;">
+            ${goal.deadline ? formatDate(goal.deadline) : '-'}
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    doc.open();
+    doc.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Reserve_Funds_Statement</title>
+  <style>
+    @page { size: A4 portrait; margin: 12mm 15mm; }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { margin: 0; padding: 0; color: #0f172a; background: #fff; }
+    .page { width: 100%; max-width: 800px; margin: 0 auto; }
+    .header-bar { border-bottom: 2px solid #059669; padding-bottom: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .biz-name { font-size: 20px; font-weight: 800; color: #064e3b; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 10px; font-weight: 800; text-transform: uppercase; background: #d1fae5; color: #065f46; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0 16px 0; }
+    .summary-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; text-align: center; }
+    .summary-card .label { font-size: 10px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+    .summary-card .val { font-size: 15px; font-weight: 800; color: #0f172a; margin-top: 3px; }
+    .summary-card .val.green { color: #16a34a; font-family: monospace; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
+    th { background: #1e293b; color: #fff; padding: 8px 10px; text-align: left; font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .total-bar { background: #064e3b; color: #fff; font-weight: 800; }
+    .total-bar td { padding: 9px 10px; border: none; font-size: 12px; }
+    .footer { margin-top: 24px; border-top: 1px solid #cbd5e1; padding-top: 8px; display: flex; justify-content: space-between; font-size: 10px; color: #64748b; }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header-bar">
+      <div>
+        <div class="biz-name">${settings.businessName || 'Business Enterprise'}</div>
+        <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+          ${settings.businessAddress ? `${settings.businessAddress} • ` : ''}Phone: ${settings.businessPhone || 'N/A'}
+        </div>
+      </div>
+      <div style="text-align: right;">
+        <span class="badge">Reserve Funds & Capital Buffer Report</span>
+        <div style="font-size: 10px; color: #64748b; margin-top: 4px;">
+          Date: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+        </div>
+      </div>
+    </div>
+
+    <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 6px 12px; font-size: 11px; color: #065f46; margin-bottom: 10px;">
+      <strong>Report Scope:</strong> ${exportScope === 'all' ? `All (${goalsToExport.length}) Reserve Funds` : (exportScope === 'single' ? `Single Fund (${goalsToExport[0]?.title})` : `Selected Checkbox Funds (${goalsToExport.length} Funds)`)}
+    </div>
+
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="label">Accumulated Reserves</div>
+        <div class="val green">${formatINR(sumSaved)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Target Capital Goal</div>
+        <div class="val">${formatINR(sumTarget)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Buffer Achieved</div>
+        <div class="val green">${overallProg}%</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Active Funds</div>
+        <div class="val">${goalsToExport.length} Goals</div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align: center; width: 35px;">#</th>
+          <th>Reserve Fund Name</th>
+          <th style="width: 110px;">Category</th>
+          <th style="text-align: right; width: 95px;">Target</th>
+          <th style="text-align: right; width: 100px;">Accumulated</th>
+          <th style="text-align: center; width: 80px;">Progress</th>
+          <th style="text-align: center; width: 85px;">Target Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+        <tr class="total-bar">
+          <td colspan="3" style="text-align: right; font-weight: 700;">TOTAL RESERVES PORTFOLIO:</td>
+          <td style="text-align: right; font-family: monospace;">${formatINR(sumTarget)}</td>
+          <td style="text-align: right; font-family: monospace;">${formatINR(sumSaved)}</td>
+          <td style="text-align: center;">${overallProg}%</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="footer">
+      <div>SmartKhata ERP • Verified Capital Buffers Statement</div>
+      <div>Page 1 of 1 • System Generated</div>
+    </div>
+  </div>
+</body>
+</html>`);
+    doc.close();
+
+    setIsExportModalOpen(false);
+
+    setTimeout(() => {
+      printFrame.contentWindow?.focus();
+      printFrame.contentWindow?.print();
+    }, 450);
+  };
+
   return (
     <div className="space-y-6">
       
@@ -989,6 +1488,32 @@ export default function SavingsPage() {
         </div>
 
         <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          {/* Export Button next to Categories */}
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedGoalIds.length > 0) {
+                setExportScope('selected');
+              } else {
+                setExportScope('all');
+              }
+              if (savingsGoals.length > 0 && !singleSelectedGoalId) {
+                setSingleSelectedGoalId(savingsGoals[0].id);
+              }
+              setIsExportModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 shadow-sm active:scale-95 transition-all cursor-pointer"
+            title="Export Reserve Funds to PDF or Excel"
+          >
+            <FileDown className="w-4 h-4 text-indigo-500" />
+            <span>Export</span>
+            {selectedGoalIds.length > 0 && (
+              <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] flex items-center justify-center font-bold">
+                {selectedGoalIds.length}
+              </span>
+            )}
+          </button>
+
           <button
             type="button"
             onClick={() => setIsCategoryModalOpen(true)}
@@ -1070,15 +1595,36 @@ export default function SavingsPage() {
             const reminder = getGoalReminderStatus(goal);
             const motivation = getGoalMotivation(goal.id, idx);
 
+            const isSelected = selectedGoalIds.includes(goal.id);
             return (
               <div
                 key={goal.id}
-                className="glass-card p-6 space-y-4 flex flex-col justify-between hover:border-indigo-300 dark:hover:border-indigo-700 transition-all relative group"
+                className={`glass-card p-6 space-y-4 flex flex-col justify-between transition-all relative group ${
+                  isSelected
+                    ? 'ring-2 ring-indigo-500/60 border-indigo-500/80 bg-indigo-500/[0.03]'
+                    : 'hover:border-indigo-300 dark:hover:border-indigo-700'
+                }`}
               >
                 <div>
-                  {/* Top Bar: Icon, Category Badge & Action Icons */}
+                  {/* Top Bar: Checkbox, Icon, Category Badge & Action Icons */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleGoalSelection(goal.id);
+                        }}
+                        className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all cursor-pointer border shrink-0 ${
+                          isSelected
+                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
+                            : 'bg-white/60 dark:bg-slate-800/60 border-slate-300 dark:border-slate-700 text-transparent hover:text-slate-400'
+                        }`}
+                        title={isSelected ? 'Deselect fund' : 'Select fund for export'}
+                      >
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      </button>
+
                       <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
                         <ShieldCheck className="w-5 h-5" />
                       </div>
@@ -2326,6 +2872,221 @@ export default function SavingsPage() {
               >
                 Done
               </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Export Reserve Funds Modal (All, Single, or Checkboxes) */}
+      {isExportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 text-left">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-500/20 shrink-0">
+                  <FileDown className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Export Reserve Funds</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 font-bold">
+                      {getGoalsToExport().length} Selected
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    PDF statement ya Excel (.xlsx) me download karein.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsExportModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Scope Selection Tabs */}
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                Select Export Scope
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setExportScope('all')}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                    exportScope === 'all'
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-600/30'
+                      : 'bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                  }`}
+                >
+                  All Funds ({savingsGoals.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExportScope('selected')}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                    exportScope === 'selected'
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-600/30'
+                      : 'bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                  }`}
+                >
+                  Checkboxes ({selectedGoalIds.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExportScope('single');
+                    if (!singleSelectedGoalId && savingsGoals.length > 0) {
+                      setSingleSelectedGoalId(savingsGoals[0].id);
+                    }
+                  }}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                    exportScope === 'single'
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-600/30'
+                      : 'bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                  }`}
+                >
+                  Single Fund
+                </button>
+              </div>
+            </div>
+
+            {/* Scope Specific Details */}
+            {exportScope === 'single' && (
+              <div className="space-y-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Choose Fund from Dropdown:
+                </label>
+                <select
+                  value={singleSelectedGoalId}
+                  onChange={(e) => setSingleSelectedGoalId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-medium"
+                >
+                  {savingsGoals.map(g => (
+                    <option key={g.id} value={g.id}>
+                      {g.title} ({g.category}) • {formatINR(g.currentAmount)} of {formatINR(g.targetAmount)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {exportScope === 'selected' && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[11px] font-semibold text-slate-500">
+                    Tick funds to include ({selectedGoalIds.length} of {savingsGoals.length} checked):
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedGoalIds(savingsGoals.map(g => g.id))}
+                      className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-slate-300 dark:text-slate-700">•</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedGoalIds([])}
+                      className="text-[10px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-bold cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                <div className="max-h-48 overflow-y-auto space-y-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800">
+                  {savingsGoals.map(g => {
+                    const isChecked = selectedGoalIds.includes(g.id);
+                    return (
+                      <div
+                        key={g.id}
+                        onClick={() => toggleGoalSelection(g.id)}
+                        className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors text-xs ${
+                          isChecked
+                            ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800/50'
+                            : 'hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 ${isChecked ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-400'}`}>
+                            {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                          <span className="font-semibold truncate">{g.title}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono shrink-0">
+                            {g.category}
+                          </span>
+                        </div>
+                        <span className="font-mono text-emerald-600 font-bold shrink-0 ml-2">
+                          {formatINR(g.currentAmount)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Live KPI Summary Card */}
+            {(() => {
+              const goalsToExport = getGoalsToExport();
+              const sumTarget = goalsToExport.reduce((s, g) => s + g.targetAmount, 0);
+              const sumSaved = goalsToExport.reduce((s, g) => s + g.currentAmount, 0);
+              const prog = sumTarget > 0 ? Math.round((sumSaved / sumTarget) * 100) : 0;
+              return (
+                <div className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-500/10 via-indigo-500/5 to-cyan-500/10 border border-emerald-500/20 flex items-center justify-between text-xs">
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">Exporting Reserves</div>
+                    <div className="text-base font-extrabold font-mono text-emerald-600">{formatINR(sumSaved)}</div>
+                    <div className="text-[10px] text-slate-500">Target: {formatINR(sumTarget)} ({prog}%)</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300/40 font-mono">
+                      {goalsToExport.length} Fund{goalsToExport.length > 1 ? 's' : ''} Included
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Export Format Action Buttons */}
+            <div className="pt-2 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsExportModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportSavingsPdf}
+                  disabled={isExportingSavings || getGoalsToExport().length === 0}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 active:scale-95 transition-all cursor-pointer disabled:opacity-40"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Export PDF</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportSavingsExcel}
+                  disabled={isExportingSavings || getGoalsToExport().length === 0}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-600/30 active:scale-95 transition-all cursor-pointer disabled:opacity-40"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>Export Excel (.xlsx)</span>
+                </button>
+              </div>
             </div>
 
           </div>

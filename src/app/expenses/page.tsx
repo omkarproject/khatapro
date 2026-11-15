@@ -22,6 +22,10 @@ import {
   Sparkles,
   ArrowDownRight,
   Download,
+  FileDown,
+  FileSpreadsheet,
+  Printer,
+  ChevronDown,
   Pencil,
   Check,
   Upload,
@@ -50,6 +54,8 @@ export default function ExpensesPage() {
   const [selectedMode, setSelectedMode] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Monthly Budget Cap Edit State
   const budgetCap = settings?.monthlyBudgetCap || 150000;
@@ -375,6 +381,356 @@ export default function ExpensesPage() {
     }
   };
 
+  const getFilterLabel = () => {
+    const parts: string[] = [];
+    if (selectedMonth !== 'all') {
+      const found = availableMonths.find(m => m.key === selectedMonth);
+      parts.push(found ? found.label : selectedMonth);
+    } else {
+      parts.push('All Months');
+    }
+    if (selectedCategory !== 'all') parts.push(selectedCategory);
+    if (selectedMode !== 'all') parts.push(selectedMode.toUpperCase());
+    if (searchTerm) parts.push(`"${searchTerm}"`);
+    return parts.join(' • ');
+  };
+
+  const handleExportExpensesExcel = async () => {
+    setIsExportMenuOpen(false);
+    if (filteredExpenses.length === 0) {
+      addToast('No Expenses', 'Current filter me koi expense record nahi hai.', 'warning');
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+      addToast('Preparing Excel', 'Generating styled expenses spreadsheet...', 'info');
+
+      const ExcelJSModule = await import('exceljs');
+      const ExcelJS = ExcelJSModule.default || ExcelJSModule;
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'SmartKhata ERP';
+      workbook.created = new Date();
+
+      const worksheet = workbook.addWorksheet('Expense Statement', {
+        views: [{ showGridLines: true }]
+      });
+
+      worksheet.columns = [
+        { key: 'sno', width: 8 },
+        { key: 'date', width: 16 },
+        { key: 'title', width: 32 },
+        { key: 'category', width: 22 },
+        { key: 'mode', width: 16 },
+        { key: 'amount', width: 20 },
+        { key: 'notes', width: 35 },
+        { key: 'recurring', width: 14 },
+        { key: 'receipts', width: 14 },
+      ];
+
+      const NAVY_HEADER = '1E3A8A';
+      const SUB_NAVY = '2563EB';
+      const WHITE = 'FFFFFF';
+      const LIGHT_BG = 'F8FAFC';
+      const BORDER_COLOR = 'CBD5E1';
+
+      // Title & Business Branding Row
+      worksheet.mergeCells('A1:I1');
+      const titleRow = worksheet.getCell('A1');
+      titleRow.value = (settings.businessName || 'Business Enterprise').toUpperCase();
+      titleRow.font = { name: 'Calibri', size: 16, bold: true, color: { argb: WHITE } };
+      titleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY_HEADER } };
+      titleRow.alignment = { vertical: 'middle', horizontal: 'center' };
+      worksheet.getRow(1).height = 36;
+
+      // Subtitle: Expense & Outflow Statement
+      worksheet.mergeCells('A2:I2');
+      const subRow = worksheet.getCell('A2');
+      subRow.value = `EXPENSE & OUTFLOW STATEMENT • Filter: ${getFilterLabel()}`;
+      subRow.font = { name: 'Calibri', size: 11, bold: true, color: { argb: WHITE } };
+      subRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: SUB_NAVY } };
+      subRow.alignment = { vertical: 'middle', horizontal: 'center' };
+      worksheet.getRow(2).height = 24;
+
+      // Meta info row
+      worksheet.mergeCells('A3:E3');
+      worksheet.getCell('A3').value = `Generated On: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
+      worksheet.getCell('A3').font = { name: 'Calibri', size: 9, italic: true, color: { argb: '64748B' } };
+      worksheet.getCell('A3').alignment = { vertical: 'middle', indent: 1 };
+
+      worksheet.mergeCells('F3:I3');
+      worksheet.getCell('F3').value = `Total Records: ${filteredExpenses.length}`;
+      worksheet.getCell('F3').font = { name: 'Calibri', size: 9, bold: true, color: { argb: '64748B' } };
+      worksheet.getCell('F3').alignment = { vertical: 'middle', horizontal: 'right' };
+      worksheet.getRow(3).height = 20;
+
+      worksheet.getRow(4).height = 8;
+
+      // Table Headers
+      const headers = ['#', 'Date', 'Expense Description', 'Category', 'Mode', 'Amount (₹)', 'Notes / Particulars', 'Recurring', 'Receipts'];
+      const headerRow = worksheet.getRow(5);
+      headers.forEach((h, idx) => {
+        const cell = headerRow.getCell(idx + 1);
+        cell.value = h;
+        cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: WHITE } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '334155' } };
+        cell.alignment = { vertical: 'middle', horizontal: idx === 0 || idx === 7 || idx === 8 ? 'center' : (idx === 5 ? 'right' : 'left'), indent: idx === 5 ? 0 : 1 };
+        cell.border = {
+          top: { style: 'thin', color: { argb: BORDER_COLOR } },
+          bottom: { style: 'medium', color: { argb: NAVY_HEADER } },
+        };
+      });
+      headerRow.height = 24;
+
+      let totalSpend = 0;
+      let curRow = 6;
+
+      filteredExpenses.forEach((exp, idx) => {
+        totalSpend += exp.amount;
+        const row = worksheet.getRow(curRow);
+        const receiptCount = (exp.receiptUrls && exp.receiptUrls.length > 0) ? exp.receiptUrls.length : (exp.receiptUrl ? 1 : 0);
+
+        row.getCell(1).value = idx + 1;
+        row.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+        row.getCell(2).value = formatDate(exp.date);
+        row.getCell(2).alignment = { vertical: 'middle', indent: 1 };
+
+        row.getCell(3).value = exp.title;
+        row.getCell(3).font = { name: 'Calibri', size: 10, bold: true };
+        row.getCell(3).alignment = { vertical: 'middle', indent: 1 };
+
+        row.getCell(4).value = exp.category;
+        row.getCell(4).alignment = { vertical: 'middle', indent: 1 };
+
+        row.getCell(5).value = exp.paymentMode.toUpperCase();
+        row.getCell(5).alignment = { vertical: 'middle', indent: 1 };
+
+        row.getCell(6).value = exp.amount;
+        row.getCell(6).numFmt = '₹#,##0.00';
+        row.getCell(6).font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'E11D48' } };
+        row.getCell(6).alignment = { vertical: 'middle', horizontal: 'right' };
+
+        row.getCell(7).value = exp.notes || '-';
+        row.getCell(7).alignment = { vertical: 'middle', indent: 1 };
+
+        row.getCell(8).value = exp.isRecurring ? 'Yes' : 'No';
+        row.getCell(8).alignment = { vertical: 'middle', horizontal: 'center' };
+
+        row.getCell(9).value = receiptCount > 0 ? `${receiptCount} File(s)` : '-';
+        row.getCell(9).alignment = { vertical: 'middle', horizontal: 'center' };
+
+        if (idx % 2 === 1) {
+          for (let c = 1; c <= 9; c++) {
+            row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_BG } };
+          }
+        }
+        for (let c = 1; c <= 9; c++) {
+          row.getCell(c).border = {
+            bottom: { style: 'thin', color: { argb: 'E2E8F0' } }
+          };
+        }
+        row.height = 20;
+        curRow++;
+      });
+
+      // Total Row
+      const totalRow = worksheet.getRow(curRow);
+      worksheet.mergeCells(`A${curRow}:E${curRow}`);
+      const totalLabel = totalRow.getCell(1);
+      totalLabel.value = 'TOTAL EXPENSE OUTFLOW';
+      totalLabel.font = { name: 'Calibri', size: 11, bold: true, color: { argb: WHITE } };
+      totalLabel.alignment = { vertical: 'middle', horizontal: 'right', indent: 1 };
+
+      const totalVal = totalRow.getCell(6);
+      totalVal.value = totalSpend;
+      totalVal.numFmt = '₹#,##0.00';
+      totalVal.font = { name: 'Calibri', size: 12, bold: true, color: { argb: WHITE } };
+      totalVal.alignment = { vertical: 'middle', horizontal: 'right' };
+
+      for (let c = 1; c <= 9; c++) {
+        totalRow.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY_HEADER } };
+        totalRow.getCell(c).border = {
+          top: { style: 'medium', color: { argb: NAVY_HEADER } },
+          bottom: { style: 'double', color: { argb: NAVY_HEADER } },
+        };
+      }
+      totalRow.height = 26;
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const cleanMonth = selectedMonth !== 'all' ? selectedMonth : 'all_time';
+      link.download = `Expense_Statement_${cleanMonth}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      addToast('Excel Exported', 'Expenses spreadsheet downloaded successfully.', 'success');
+    } catch (err) {
+      console.error('Excel Export error:', err);
+      addToast('Export Error', 'Failed to generate Excel file. Please retry.', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportExpensesPdf = () => {
+    setIsExportMenuOpen(false);
+    if (filteredExpenses.length === 0) {
+      addToast('No Expenses', 'Current filter me koi expense record nahi hai.', 'warning');
+      return;
+    }
+
+    const existingFrame = document.getElementById('smartkhata-expense-print-frame');
+    if (existingFrame) existingFrame.remove();
+
+    const printFrame = document.createElement('iframe');
+    printFrame.id = 'smartkhata-expense-print-frame';
+    printFrame.style.position = 'fixed';
+    printFrame.style.right = '0';
+    printFrame.style.bottom = '0';
+    printFrame.style.width = '0';
+    printFrame.style.height = '0';
+    printFrame.style.border = '0';
+    printFrame.style.visibility = 'hidden';
+    document.body.appendChild(printFrame);
+
+    const doc = printFrame.contentWindow?.document || printFrame.contentDocument;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    const totalSpend = filteredExpenses.reduce((s, e) => s + e.amount, 0);
+    const avgSpend = filteredExpenses.length > 0 ? Math.round(totalSpend / filteredExpenses.length) : 0;
+    const filterText = getFilterLabel();
+
+    const rowsHtml = filteredExpenses.map((exp, idx) => `
+      <tr style="${idx % 2 === 1 ? 'background: #f8fafc;' : ''}">
+        <td style="padding: 7px 10px; border-bottom: 1px solid #e2e8f0; text-align: center; color: #64748b; font-size: 11px;">${idx + 1}</td>
+        <td style="padding: 7px 10px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; font-family: monospace; font-size: 11px;">${formatDate(exp.date)}</td>
+        <td style="padding: 7px 10px; border-bottom: 1px solid #e2e8f0;">
+          <div style="font-weight: 700; color: #0f172a;">${exp.title}</div>
+          ${exp.notes ? `<div style="font-size: 10px; color: #64748b; margin-top: 2px;">${exp.notes}</div>` : ''}
+        </td>
+        <td style="padding: 7px 10px; border-bottom: 1px solid #e2e8f0;">
+          <span style="display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; background: #e0e7ff; color: #3730a3;">
+            ${exp.category}
+          </span>
+        </td>
+        <td style="padding: 7px 10px; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; font-size: 10px; font-family: monospace; color: #475569;">
+          ${exp.paymentMode}
+        </td>
+        <td style="padding: 7px 10px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 800; color: #e11d48; font-family: monospace; font-size: 12px;">
+          ${formatINR(exp.amount)}
+        </td>
+      </tr>
+    `).join('');
+
+    doc.open();
+    doc.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Expense_Statement_${selectedMonth !== 'all' ? selectedMonth : 'all_time'}</title>
+  <style>
+    @page { size: A4 portrait; margin: 12mm 15mm; }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { margin: 0; padding: 0; color: #0f172a; background: #fff; }
+    .page { width: 100%; max-width: 800px; margin: 0 auto; }
+    .header-bar { border-bottom: 2px solid #4f46e5; padding-bottom: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .biz-name { font-size: 20px; font-weight: 800; color: #1e1b4b; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 10px; font-weight: 800; text-transform: uppercase; background: #e0e7ff; color: #4338ca; }
+    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 12px 0 16px 0; }
+    .summary-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; text-align: center; }
+    .summary-card .label { font-size: 10px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+    .summary-card .val { font-size: 16px; font-weight: 800; color: #0f172a; margin-top: 3px; }
+    .summary-card .val.red { color: #e11d48; font-family: monospace; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
+    th { background: #1e293b; color: #fff; padding: 8px 10px; text-align: left; font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .total-bar { background: #1e1b4b; color: #fff; font-weight: 800; }
+    .total-bar td { padding: 9px 10px; border: none; font-size: 12px; }
+    .footer { margin-top: 24px; border-top: 1px solid #cbd5e1; padding-top: 8px; display: flex; justify-content: space-between; font-size: 10px; color: #64748b; }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header-bar">
+      <div>
+        <div class="biz-name">${settings.businessName || 'Business Enterprise'}</div>
+        <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+          ${settings.businessAddress ? `${settings.businessAddress} • ` : ''}Phone: ${settings.businessPhone || 'N/A'}
+        </div>
+      </div>
+      <div style="text-align: right;">
+        <span class="badge">Expense & Outflow Report</span>
+        <div style="font-size: 10px; color: #64748b; margin-top: 4px;">
+          Date: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+        </div>
+      </div>
+    </div>
+
+    <div style="background: #f1f5f9; border-radius: 8px; padding: 6px 12px; font-size: 11px; color: #334155; margin-bottom: 10px;">
+      <strong>Applied Filter:</strong> ${filterText}
+    </div>
+
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="label">Total Filtered Spend</div>
+        <div class="val red">${formatINR(totalSpend)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Total Vouchers</div>
+        <div class="val">${filteredExpenses.length} Records</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Average per Expense</div>
+        <div class="val">${formatINR(avgSpend)}</div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align: center; width: 35px;">#</th>
+          <th style="width: 85px;">Date</th>
+          <th>Description & Notes</th>
+          <th style="width: 100px;">Category</th>
+          <th style="width: 70px;">Mode</th>
+          <th style="text-align: right; width: 95px;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+        <tr class="total-bar">
+          <td colspan="5" style="text-align: right; font-weight: 700;">TOTAL FILTERED OUTFLOW:</td>
+          <td style="text-align: right; font-family: monospace;">${formatINR(totalSpend)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="footer">
+      <div>SmartKhata ERP • Verified Expense Statement</div>
+      <div>Page 1 of 1 • System Generated</div>
+    </div>
+  </div>
+</body>
+</html>`);
+    doc.close();
+
+    setTimeout(() => {
+      printFrame.contentWindow?.focus();
+      printFrame.contentWindow?.print();
+    }, 450);
+  };
+
   const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = parseFloat(formAmount);
@@ -611,20 +967,71 @@ export default function ExpensesPage() {
           
           {/* Month Wise Quick Breakdown Strip */}
           <div className="space-y-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-indigo-500" />
                 <span>Month-Wise Spending Summary</span>
               </div>
-              {selectedMonth !== 'all' && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedMonth('all')}
-                  className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
-                >
-                  Show All Months
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {selectedMonth !== 'all' && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMonth('all')}
+                    className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
+                  >
+                    Show All Months
+                  </button>
+                )}
+
+                {/* Export Button with Dropdown */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+                    disabled={isExporting}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 shadow-xs transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                    title="Export filtered expenses (PDF or Excel)"
+                  >
+                    <FileDown className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Export</span>
+                    <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isExportMenuOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {isExportMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsExportMenuOpen(false)} />
+                      <div className="absolute right-0 mt-1.5 w-52 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                        <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800 mb-1 flex items-center justify-between">
+                          <span>Export Summary</span>
+                          <span className="font-mono text-indigo-500 font-bold">{filteredExpenses.length} recs</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleExportExpensesPdf}
+                          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-left cursor-pointer"
+                        >
+                          <Printer className="w-4 h-4 text-indigo-500 shrink-0" />
+                          <div>
+                            <div className="font-bold">Export PDF</div>
+                            <div className="text-[10px] text-slate-400">Print or Save as PDF</div>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleExportExpensesExcel}
+                          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors text-left cursor-pointer"
+                        >
+                          <FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0" />
+                          <div>
+                            <div className="font-bold">Export Excel (.xlsx)</div>
+                            <div className="text-[10px] text-slate-400">Formatted spreadsheet</div>
+                          </div>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
