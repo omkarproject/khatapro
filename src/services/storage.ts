@@ -1259,6 +1259,25 @@ export const StorageService = {
     setLocalItem(STORAGE_KEYS.PRODUCTS, updated);
     return updated;
   },
+  saveProductsBatch: (incoming: Product[]): Product[] => {
+    const list = StorageService.getProducts();
+    const map = new Map<string, Product>();
+    list.forEach(p => map.set(p.id, p));
+    incoming.forEach(newP => {
+      const existing = Array.from(map.values()).find(
+        p => (p.sku && newP.sku && p.sku.toLowerCase() === newP.sku.toLowerCase()) ||
+             (p.name && newP.name && p.name.toLowerCase() === newP.name.toLowerCase())
+      );
+      if (existing) {
+        map.set(existing.id, { ...newP, id: existing.id });
+      } else {
+        map.set(newP.id, newP);
+      }
+    });
+    const updated = Array.from(map.values());
+    setLocalItem(STORAGE_KEYS.PRODUCTS, updated);
+    return updated;
+  },
   deleteProduct: (id: string): Product[] => {
     const list = StorageService.getProducts().filter(p => p.id !== id);
     setLocalItem(STORAGE_KEYS.PRODUCTS, list);

@@ -81,6 +81,7 @@ interface AppContextType {
   saveInvoice: (inv: Invoice) => void;
   deleteInvoice: (id: string) => void;
   saveProduct: (prod: Product) => void;
+  saveProductsBatch: (prods: Product[]) => void;
   deleteProduct: (id: string) => void;
   adjustStock: (productId: string, delta: number) => void;
   addExpense: (exp: Expense) => void;
@@ -1942,6 +1943,13 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     syncWithDatabase();
   };
 
+  const saveProductsBatch = (prods: Product[]) => {
+    const updated = StorageService.saveProductsBatch(prods);
+    setProducts(updated);
+    addToast('Batch Import Complete', `${prods.length} products saved to inventory.`, 'success');
+    syncWithDatabase();
+  };
+
   const deleteProduct = (id: string) => {
     const updated = StorageService.deleteProduct(id);
     setProducts(updated);
@@ -2249,6 +2257,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         saveInvoice,
         deleteInvoice,
         saveProduct,
+        saveProductsBatch,
         deleteProduct,
         adjustStock,
         addExpense,
