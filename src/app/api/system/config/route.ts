@@ -29,6 +29,10 @@ export async function GET() {
 
         if (data && !error) {
           const maintObj = data.maintenance_mode || {};
+          const isDriveGloballyActive = maintObj.googleDriveEnabled !== undefined 
+            ? Boolean(maintObj.googleDriveEnabled) 
+            : (maintObj.googleDriveSettings?.enabled !== undefined ? Boolean(maintObj.googleDriveSettings.enabled) : true);
+
           return NextResponse.json({
             success: true,
             maintenanceMode: {
@@ -42,6 +46,11 @@ export async function GET() {
             broadcasts: Array.isArray(maintObj.broadcasts) ? maintObj.broadcasts : [],
             supportTickets: Array.isArray(maintObj.supportTickets) ? maintObj.supportTickets : [],
             smtpSettings: maintObj.smtpSettings || null,
+            googleDriveEnabled: isDriveGloballyActive,
+            googleDriveSettings: maintObj.googleDriveSettings ? {
+              ...maintObj.googleDriveSettings,
+              enabled: isDriveGloballyActive,
+            } : { enabled: isDriveGloballyActive },
             allowNewRegistrations: maintObj.allowNewRegistrations !== undefined ? Boolean(maintObj.allowNewRegistrations) : true,
           });
         }
@@ -140,6 +149,16 @@ export async function POST(req: NextRequest) {
       updatedMaint.allowNewRegistrations = Boolean(allowNewRegistrations);
     }
 
+    if (googleDriveEnabled !== undefined) {
+      updatedMaint.googleDriveEnabled = Boolean(googleDriveEnabled);
+    }
+    if (googleDriveSettings !== undefined) {
+      updatedMaint.googleDriveSettings = googleDriveSettings;
+      if (googleDriveSettings.enabled !== undefined) {
+        updatedMaint.googleDriveEnabled = Boolean(googleDriveSettings.enabled);
+      }
+    }
+
     const updatePayload: any = {
       id: 'global_config',
       maintenance_mode: updatedMaint,
@@ -164,6 +183,9 @@ export async function POST(req: NextRequest) {
     }
 
     const savedMaint = data?.maintenance_mode || {};
+    const isDriveGloballyActive = savedMaint.googleDriveEnabled !== undefined 
+      ? Boolean(savedMaint.googleDriveEnabled) 
+      : (savedMaint.googleDriveSettings?.enabled !== undefined ? Boolean(savedMaint.googleDriveSettings.enabled) : true);
 
     return NextResponse.json({
       success: true,
@@ -179,6 +201,11 @@ export async function POST(req: NextRequest) {
       broadcasts: savedMaint.broadcasts || [],
       supportTickets: savedMaint.supportTickets || [],
       smtpSettings: savedMaint.smtpSettings || null,
+      googleDriveEnabled: isDriveGloballyActive,
+      googleDriveSettings: savedMaint.googleDriveSettings ? {
+        ...savedMaint.googleDriveSettings,
+        enabled: isDriveGloballyActive,
+      } : { enabled: isDriveGloballyActive },
       allowNewRegistrations: savedMaint.allowNewRegistrations !== undefined ? Boolean(savedMaint.allowNewRegistrations) : true,
     });
   } catch (error: any) {

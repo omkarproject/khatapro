@@ -517,6 +517,7 @@ export interface SystemSettings {
   supabaseAnonKey?: string;
   supabaseServiceRoleKey?: string;
   googleDriveSettings?: GoogleDriveConfig;
+  googleDriveEnabled?: boolean;
   smtpSettings?: SmtpConfig;
   allowNewRegistrations?: boolean;
   businessName: string;

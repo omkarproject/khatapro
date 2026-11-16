@@ -685,11 +685,29 @@ export const StorageService = {
     const storedProfile = getLocalItem<UserProfile | null>(STORAGE_KEYS.PROFILE, null as any);
     const curUser = StorageService.getCurrentUser();
 
-    if (merged.googleDriveSettings?.enabled !== undefined && typeof window !== 'undefined') {
+    if (typeof window !== 'undefined') {
       try {
         const rawG = localStorage.getItem('skp_global_system_config');
         const conf = rawG ? JSON.parse(rawG) : {};
-        conf.googleDriveEnabled = merged.googleDriveSettings.enabled;
+        if (merged.googleDriveSettings?.enabled !== undefined) {
+          conf.googleDriveEnabled = merged.googleDriveSettings.enabled;
+          if (!conf.googleDriveSettings) conf.googleDriveSettings = {};
+          conf.googleDriveSettings.enabled = merged.googleDriveSettings.enabled;
+        } else if ((merged as any).googleDriveEnabled !== undefined) {
+          conf.googleDriveEnabled = (merged as any).googleDriveEnabled;
+        }
+        if (merged.allowNewRegistrations !== undefined) {
+          conf.allowNewRegistrations = Boolean(merged.allowNewRegistrations);
+        }
+        if (merged.betaTestingEnabled !== undefined) {
+          conf.betaTestingEnabled = Boolean(merged.betaTestingEnabled);
+        }
+        if (merged.maintenanceMode !== undefined) {
+          conf.maintenanceMode = merged.maintenanceMode;
+        }
+        if (merged.smtpSettings !== undefined) {
+          conf.smtpSettings = merged.smtpSettings;
+        }
         localStorage.setItem('skp_global_system_config', JSON.stringify(conf));
       } catch {}
     }

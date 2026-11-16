@@ -361,6 +361,21 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     return () => window.removeEventListener('khatapro_backup_progress', handleProgress);
   }, []);
 
+  const isDriveGloballyEnabled = settings?.googleDriveSettings?.enabled !== false && (settings as any)?.googleDriveEnabled !== false;
+
+  // Auto-clean stale or irrelevant "not connected" failed alerts
+  useEffect(() => {
+    if (autoBackupProgress?.status === 'failed') {
+      const errText = (autoBackupProgress.error || autoBackupProgress.stepText || '').toLowerCase();
+      if (!isDriveGloballyEnabled || errText.includes('not connected')) {
+        try {
+          localStorage.removeItem('skp_live_backup_progress');
+          setAutoBackupProgress(null);
+        } catch {}
+      }
+    }
+  }, [autoBackupProgress, isDriveGloballyEnabled]);
+
   const handleCancelAutoBackup = () => {
     window.dispatchEvent(new CustomEvent('khatapro_backup_cancel'));
     addToast('Auto Backup Cancelled', "Today's auto backup has been cancelled.", 'info');
@@ -478,10 +493,13 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     (!autoBackupProgress?.userId || autoBackupProgress.userId === currentUser?.id) &&
     !dismissedAlerts.includes(`backup_${autoBackupProgress.date || todayStr}`);
   const isBackupFailedAlert =
+    isDriveGloballyEnabled &&
     autoBackupProgress?.status === 'failed' &&
     autoBackupProgress?.date === todayStr &&
     (!autoBackupProgress?.userId || autoBackupProgress.userId === currentUser?.id) &&
-    !dismissedAlerts.includes(`backup_failed_${autoBackupProgress.date || todayStr}`);
+    !dismissedAlerts.includes(`backup_failed_${autoBackupProgress.date || todayStr}`) &&
+    !autoBackupProgress?.stepText?.toLowerCase().includes('not connected') &&
+    !autoBackupProgress?.error?.toLowerCase().includes('not connected');
 
   const isDriveUploadRunning =
     customerDriveProgress?.status === 'uploading' || customerDriveProgress?.status === 'paused';

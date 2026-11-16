@@ -59,6 +59,7 @@ export default function GoogleDriveBackupPanel() {
     profile?.role === 'super_admin';
 
   const [isConnected, setIsConnected] = useState(false);
+  const [isGloballyEnabled, setIsGloballyEnabled] = useState(true);
   const [isConfigured, setIsConfigured] = useState(true);
   const [googleEmail, setGoogleEmail] = useState<string | null>(null);
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
@@ -112,6 +113,7 @@ export default function GoogleDriveBackupPanel() {
       const json = await res.json();
       if (json.success) {
         setIsConnected(Boolean(json.isConnected));
+        if (json.isGloballyEnabled !== undefined) setIsGloballyEnabled(Boolean(json.isGloballyEnabled));
         setIsConfigured(json.isConfigured !== false);
         setGoogleEmail(json.googleEmail);
         setLastBackupAt(json.lastBackupAt);
@@ -348,6 +350,11 @@ export default function GoogleDriveBackupPanel() {
           {isLoadingStatus ? (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
               <Loader2 className="w-3.5 h-3.5 animate-spin" /> Checking...
+            </span>
+          ) : !isGloballyEnabled ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60 shadow-sm" title="Google Drive integration is OFF in System Management. Database Only mode active.">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Disabled by Admin (Database Mode)
             </span>
           ) : isConnected ? (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 shadow-sm">

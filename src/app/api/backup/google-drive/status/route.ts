@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
             success: true,
             isConfigured,
             isGloballyEnabled: false,
-            isConnected: true,
+            isConnected: false,
             brandFolderName: await getEffectiveBrandName(),
             googleEmail: null,
             lastBackupAt: null,

@@ -8,7 +8,7 @@ import DriveConnectVIPScreen from './DriveConnectVIPScreen';
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const { currentUser, isMounted, addToast, settings } = useApp();
-  const isDriveGloballyEnabled = settings.googleDriveSettings?.enabled !== false;
+  const isDriveGloballyEnabled = settings.googleDriveSettings?.enabled !== false && (settings as any).googleDriveEnabled !== false;
   const isAdmin = Boolean(
     currentUser?.email === 'anantyadav8924@gmail.com' ||
     (currentUser?.role === 'super_admin' && currentUser?.email?.toLowerCase().includes('anant'))

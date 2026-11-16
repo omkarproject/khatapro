@@ -1387,12 +1387,17 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         if (!res.ok) return;
         const json = await res.json();
         if (json.success) {
-          const driveEnabled = json.googleDriveEnabled !== undefined ? Boolean(json.googleDriveEnabled) : (json.googleDriveSettings?.enabled !== false);
+          const driveEnabled = json.googleDriveEnabled !== undefined 
+            ? Boolean(json.googleDriveEnabled) 
+            : (json.googleDriveSettings?.enabled !== undefined ? Boolean(json.googleDriveSettings.enabled) : true);
           const globalPayload = {
             maintenanceMode: json.maintenanceMode,
             betaTestingEnabled: Boolean(json.betaTestingEnabled),
             googleDriveEnabled: driveEnabled,
-            googleDriveSettings: json.googleDriveSettings,
+            googleDriveSettings: json.googleDriveSettings ? {
+              ...json.googleDriveSettings,
+              enabled: driveEnabled,
+            } : { enabled: driveEnabled },
             smtpSettings: json.smtpSettings,
             allowNewRegistrations: json.allowNewRegistrations !== undefined ? Boolean(json.allowNewRegistrations) : true,
             websiteBranding: json.websiteBranding || null,
@@ -1478,6 +1483,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
             return {
               ...prev,
+              googleDriveEnabled: driveEnabled,
               googleDriveSettings: {
                 ...(prev.googleDriveSettings || {}),
                 ...(json.googleDriveSettings || {}),
@@ -1576,7 +1582,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       newSettings.websiteSupportPhone !== undefined ||
       newSettings.websiteSupportEmail !== undefined;
 
-    if (hasBrandingUpdates || newSettings.maintenanceMode !== undefined || newSettings.betaTestingEnabled !== undefined || newSettings.googleDriveSettings !== undefined || newSettings.smtpSettings !== undefined || newSettings.allowNewRegistrations !== undefined) {
+    if (hasBrandingUpdates || newSettings.maintenanceMode !== undefined || newSettings.betaTestingEnabled !== undefined || newSettings.googleDriveSettings !== undefined || (newSettings as any).googleDriveEnabled !== undefined || newSettings.smtpSettings !== undefined || newSettings.allowNewRegistrations !== undefined) {
       if (typeof window !== 'undefined') {
         const brandPayload = {
           websiteName: merged.websiteName || '',
@@ -1589,11 +1595,18 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           websiteSupportPhone: merged.websiteSupportPhone || '',
           websiteSupportEmail: merged.websiteSupportEmail || '',
         };
+        const isDriveActive = merged.googleDriveSettings?.enabled !== undefined 
+          ? Boolean(merged.googleDriveSettings.enabled) 
+          : ((merged as any).googleDriveEnabled !== undefined ? Boolean((merged as any).googleDriveEnabled) : true);
+
         const globalPayload: any = {
           maintenanceMode: merged.maintenanceMode,
           betaTestingEnabled: Boolean(merged.betaTestingEnabled),
-          googleDriveEnabled: merged.googleDriveSettings?.enabled !== false,
-          googleDriveSettings: merged.googleDriveSettings,
+          googleDriveEnabled: isDriveActive,
+          googleDriveSettings: merged.googleDriveSettings ? {
+            ...merged.googleDriveSettings,
+            enabled: isDriveActive,
+          } : { enabled: isDriveActive },
           smtpSettings: merged.smtpSettings,
           allowNewRegistrations: merged.allowNewRegistrations !== undefined ? Boolean(merged.allowNewRegistrations) : true,
         };

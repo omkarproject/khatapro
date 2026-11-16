@@ -1023,7 +1023,15 @@ export default function SettingsPage() {
   }, [settings.supabaseUrl, settings.supabaseAnonKey, settings.supabaseServiceRoleKey]);
 
   // Google Drive API Credentials State
-  const [driveEnabled, setDriveEnabled] = useState(() => settings.googleDriveSettings?.enabled !== false);
+  const [driveEnabled, setDriveEnabled] = useState(() => {
+    if (settings.googleDriveSettings?.enabled !== undefined) {
+      return Boolean(settings.googleDriveSettings.enabled);
+    }
+    if ((settings as any).googleDriveEnabled !== undefined) {
+      return Boolean((settings as any).googleDriveEnabled);
+    }
+    return true;
+  });
   const [driveClientId, setDriveClientId] = useState(settings.googleDriveSettings?.clientId || '997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com');
   const [driveClientSecret, setDriveClientSecret] = useState(settings.googleDriveSettings?.clientSecret || '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');
   const [driveRedirectUri, setDriveRedirectUri] = useState(() => {
@@ -1039,7 +1047,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings.googleDriveSettings) {
       if (settings.googleDriveSettings.enabled !== undefined) {
-        setDriveEnabled(settings.googleDriveSettings.enabled);
+        setDriveEnabled(Boolean(settings.googleDriveSettings.enabled));
       }
       if (settings.googleDriveSettings.clientId) {
         setDriveClientId(settings.googleDriveSettings.clientId);
@@ -1050,8 +1058,10 @@ export default function SettingsPage() {
       if (settings.googleDriveSettings.redirectUri) {
         setDriveRedirectUri(settings.googleDriveSettings.redirectUri);
       }
+    } else if ((settings as any).googleDriveEnabled !== undefined) {
+      setDriveEnabled(Boolean((settings as any).googleDriveEnabled));
     }
-  }, [settings.googleDriveSettings]);
+  }, [settings.googleDriveSettings, (settings as any).googleDriveEnabled]);
 
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [isTesting, setIsTesting] = useState(false);
@@ -1791,7 +1801,9 @@ export default function SettingsPage() {
     e.preventDefault();
     const updated: SystemSettings = {
       ...settings,
+      googleDriveEnabled: driveEnabled,
       googleDriveSettings: {
+        ...(settings.googleDriveSettings || {}),
         enabled: driveEnabled,
         clientId: driveClientId.trim(),
         clientSecret: driveClientSecret.trim(),
@@ -3699,6 +3711,7 @@ export default function SettingsPage() {
                   setDriveEnabled(nextVal);
                   const updated: SystemSettings = {
                     ...settings,
+                    googleDriveEnabled: nextVal,
                     googleDriveSettings: {
                       ...(settings.googleDriveSettings || {}),
                       enabled: nextVal,

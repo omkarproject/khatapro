@@ -63,15 +63,36 @@ export default function AutoBackupGuardian() {
 
     // 3. Pre-flight check: Verify Google Drive token validity with status API
     try {
+      const isDriveGloballyActive = settings?.googleDriveSettings?.enabled !== false && (settings as any)?.googleDriveEnabled !== false;
+      if (!isDriveGloballyActive) {
+        // Drive is disabled globally! Clear any old failed progress and return silently
+        try {
+          const raw = localStorage.getItem('skp_live_backup_progress');
+          if (raw) {
+            const p = JSON.parse(raw);
+            if (p.status === 'failed') localStorage.removeItem('skp_live_backup_progress');
+          }
+        } catch {}
+        return;
+      }
+
       const statusRes = await fetch(`/api/backup/google-drive/status?userId=${encodeURIComponent(userId)}`);
       if (statusRes.ok) {
         const statusData = await statusRes.json();
-        if (!statusData.isConnected || statusData.isExpired) {
-          // Google Drive disconnected or token expired!
+        
+        // If Google Drive is globally disabled or user is simply not connected, DO NOT broadcast failure!
+        if (statusData.isGloballyEnabled === false || !statusData.isConnected) {
+          try {
+            const raw = localStorage.getItem('skp_live_backup_progress');
+            if (raw && JSON.parse(raw).status === 'failed') localStorage.removeItem('skp_live_backup_progress');
+          } catch {}
+          return;
+        }
+
+        if (statusData.isExpired) {
+          // Token expired or invalid
           localStorage.removeItem(completedKey);
-          const errorMsg = statusData.error || (statusData.isExpired
-            ? 'Google Drive OAuth token expired (invalid_grant). Reconnection required in Settings.'
-            : 'Google Drive is not connected. Connect your Google account in Settings.');
+          const errorMsg = statusData.error || 'Google Drive OAuth token expired (invalid_grant). Reconnection required in Settings.';
 
           broadcastStatus({
             id: `bk_failed_${Date.now()}`,
