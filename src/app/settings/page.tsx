@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { StorageService } from '@/services/storage';
-import { BackendProvider, SystemSettings, PaymentSettings, PaymentCollectionMode, TelegramBackupSettings, BackupFrequency, BackupDayOfWeek, BroadcastMessage, BroadcastType, BroadcastSeverity, UserProfile } from '@/types';
+import { BackendProvider, SystemSettings, PaymentSettings, PaymentCollectionMode, EnabledPaymentGateways, isGatewayActive, TelegramBackupSettings, BackupFrequency, BackupDayOfWeek, BroadcastMessage, BroadcastType, BroadcastSeverity, UserProfile } from '@/types';
 import { SupabaseAdapter } from '@/services/backendManager';
 import {
   Settings,
@@ -841,6 +841,17 @@ export default function SettingsPage() {
     }
     return settings.paymentSettings?.collectionMode || 'direct_upi';
   });
+  const [enabledGateways, setEnabledGateways] = useState<EnabledPaymentGateways>(() => {
+    const s = typeof window !== 'undefined' ? StorageService.getSettings() : settings;
+    const eg = s.paymentSettings?.enabledGateways;
+    const curMode = s.paymentSettings?.collectionMode || 'direct_upi';
+    return {
+      direct_upi: eg?.direct_upi !== undefined ? eg.direct_upi : curMode === 'direct_upi',
+      cashfree: eg?.cashfree !== undefined ? eg.cashfree : curMode === 'cashfree',
+      razorpay: eg?.razorpay !== undefined ? eg.razorpay : curMode === 'razorpay',
+      upi_gateway: eg?.upi_gateway !== undefined ? eg.upi_gateway : curMode === 'upi_gateway',
+    };
+  });
   const [upiId, setUpiId] = useState(() => {
     if (typeof window !== 'undefined') {
       const s = StorageService.getSettings();
@@ -952,6 +963,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!isPaymentDirtyRef.current && settings && settings.paymentSettings) {
       if (settings.paymentSettings.collectionMode) setCollectionMode(settings.paymentSettings.collectionMode);
+      if (settings.paymentSettings.enabledGateways) setEnabledGateways(settings.paymentSettings.enabledGateways);
       if (settings.paymentSettings.upiId) setUpiId(settings.paymentSettings.upiId);
       if (settings.paymentSettings.payeeName) setPayeeName(settings.paymentSettings.payeeName);
       if (settings.paymentSettings.customQrUrl !== undefined) setCustomQrUrl(settings.paymentSettings.customQrUrl);
@@ -1649,6 +1661,69 @@ export default function SettingsPage() {
     }
   };
 
+  // Toggle active / deactive state of individual payment gateway
+  const handleToggleGateway = (mode: PaymentCollectionMode, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    isPaymentDirtyRef.current = true;
+    const currentActive = Boolean(enabledGateways[mode]);
+    const nextActive = !currentActive;
+
+    const nextGateways: EnabledPaymentGateways = {
+      ...enabledGateways,
+      [mode]: nextActive,
+    };
+    setEnabledGateways(nextGateways);
+
+    let nextCollectionMode = collectionMode;
+    if (nextActive) {
+      nextCollectionMode = mode;
+      setCollectionMode(mode);
+    } else if (mode === collectionMode) {
+      const modes: PaymentCollectionMode[] = ['direct_upi', 'cashfree', 'razorpay', 'upi_gateway'];
+      const remaining = modes.find(m => m !== mode && nextGateways[m]);
+      if (remaining) {
+        nextCollectionMode = remaining;
+        setCollectionMode(remaining);
+      }
+    }
+
+    const updatedPaymentSettings: PaymentSettings = {
+      ...settings.paymentSettings,
+      collectionMode: nextCollectionMode,
+      enabledGateways: nextGateways,
+      upiId: (upiId || '').trim(),
+      payeeName: (payeeName || '').trim(),
+      customQrUrl,
+      isDefaultQrSaved: true,
+      cashfreeAppId: (cashfreeAppId || '').trim(),
+      cashfreeSecretKey: (cashfreeSecretKey || '').trim(),
+      cashfreeEnv,
+      razorpayKeyId: (razorpayKeyId || '').trim(),
+      razorpayKeySecret: (razorpayKeySecret || '').trim(),
+      razorpayWebhookSecret: (razorpayWebhookSecret || '').trim(),
+      razorpayEnv,
+      upiGatewayProvider,
+      upiGatewayKey: (upiGatewayKey || '').trim(),
+      upiGatewaySecret: (upiGatewaySecret || '').trim(),
+      upiGatewayWebhookUrl: (upiGatewayWebhookUrl || '').trim(),
+    };
+
+    updateSettings({
+      ...settings,
+      paymentSettings: updatedPaymentSettings,
+    });
+
+    addToast(
+      nextActive ? 'Gateway Activated' : 'Gateway Deactivated',
+      `${
+        mode === 'direct_upi' ? 'Default UPI & QR' :
+        mode === 'cashfree' ? 'Cashfree PG' :
+        mode === 'razorpay' ? 'Razorpay PG' : 'UPI PG (Dynamic)'
+      } is now ${nextActive ? 'ACTIVE (Visible in Payment Hub)' : 'DEACTIVATED (Hidden in Payment Hub)'}.`,
+      nextActive ? 'success' : 'info'
+    );
+  };
+
   // Handle Payment Collection Settings Save
   const handleSaveUpi = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1659,6 +1734,7 @@ export default function SettingsPage() {
     const updatedPaymentSettings: PaymentSettings = {
       ...settings.paymentSettings,
       collectionMode,
+      enabledGateways,
       upiId: (upiId || '').trim(),
       payeeName: (payeeName || '').trim(),
       customQrUrl,
@@ -2398,31 +2474,57 @@ export default function SettingsPage() {
                   setCollectionMode('direct_upi');
                   setPgTestResult(null);
                 }}
-                className={`cursor-pointer rounded-2xl p-4 border transition-all relative ${
+                className={`cursor-pointer rounded-2xl p-4 border transition-all relative flex flex-col justify-between ${
                   collectionMode === 'direct_upi'
                     ? 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 ring-2 ring-indigo-600/30'
                     : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white/50 dark:bg-slate-900/50'
                 }`}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                    <QrCode className="w-4 h-4" />
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                      <QrCode className="w-4 h-4" />
+                    </div>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+                      0% Fee
+                    </span>
                   </div>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
-                    0% Fee
-                  </span>
-                </div>
-                <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
-                  Default UPI & QR
-                </div>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                  Direct VPA ID & shop standee QR. 100% bank settlement.
-                </p>
-                {collectionMode === 'direct_upi' && (
-                  <div className="mt-2 flex items-center gap-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
-                    <CheckCircle2 className="w-3 h-3" /> Active Mode
+                  <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
+                    Default UPI & QR
                   </div>
-                )}
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                    Direct VPA ID & shop standee QR. 100% bank settlement.
+                  </p>
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    {enabledGateways.direct_upi ? (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Active Mode
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
+                        Deactive
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => handleToggleGateway('direct_upi', e)}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      enabledGateways.direct_upi ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                    title={enabledGateways.direct_upi ? 'Click to Deactivate' : 'Click to Activate'}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                        enabledGateways.direct_upi ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
 
               {/* Option 2: Cashfree Payment Gateway */}
@@ -2432,31 +2534,57 @@ export default function SettingsPage() {
                   setCollectionMode('cashfree');
                   setPgTestResult(null);
                 }}
-                className={`cursor-pointer rounded-2xl p-4 border transition-all relative ${
+                className={`cursor-pointer rounded-2xl p-4 border transition-all relative flex flex-col justify-between ${
                   collectionMode === 'cashfree'
                     ? 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 ring-2 ring-indigo-600/30'
                     : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white/50 dark:bg-slate-900/50'
                 }`}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="w-8 h-8 rounded-xl bg-violet-100 dark:bg-violet-900/50 text-violet-600 dark:text-violet-400 flex items-center justify-center">
-                    <CreditCard className="w-4 h-4" />
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-8 h-8 rounded-xl bg-violet-100 dark:bg-violet-900/50 text-violet-600 dark:text-violet-400 flex items-center justify-center">
+                      <CreditCard className="w-4 h-4" />
+                    </div>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400">
+                      Gateway
+                    </span>
                   </div>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400">
-                    Gateway
-                  </span>
-                </div>
-                <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
-                  Cashfree PG
-                </div>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                  Automated links, cards, netbanking & automated UPI.
-                </p>
-                {collectionMode === 'cashfree' && (
-                  <div className="mt-2 flex items-center gap-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
-                    <CheckCircle2 className="w-3 h-3" /> Active Mode
+                  <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
+                    Cashfree PG
                   </div>
-                )}
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                    Automated links, cards, netbanking & automated UPI.
+                  </p>
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    {enabledGateways.cashfree ? (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Active Mode
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
+                        Deactive
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => handleToggleGateway('cashfree', e)}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      enabledGateways.cashfree ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                    title={enabledGateways.cashfree ? 'Click to Deactivate' : 'Click to Activate'}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                        enabledGateways.cashfree ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
 
               {/* Option 3: Razorpay Payment Gateway */}
@@ -2466,31 +2594,57 @@ export default function SettingsPage() {
                   setCollectionMode('razorpay');
                   setPgTestResult(null);
                 }}
-                className={`cursor-pointer rounded-2xl p-4 border transition-all relative ${
+                className={`cursor-pointer rounded-2xl p-4 border transition-all relative flex flex-col justify-between ${
                   collectionMode === 'razorpay'
                     ? 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 ring-2 ring-indigo-600/30'
                     : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white/50 dark:bg-slate-900/50'
                 }`}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                    <Sparkles className="w-4 h-4" />
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
+                      Razorpay
+                    </span>
                   </div>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
-                    Razorpay
-                  </span>
-                </div>
-                <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
-                  Razorpay PG
-                </div>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                  Key ID & Secret, 100+ payment methods & instant checkout.
-                </p>
-                {collectionMode === 'razorpay' && (
-                  <div className="mt-2 flex items-center gap-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
-                    <CheckCircle2 className="w-3 h-3" /> Active Mode
+                  <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
+                    Razorpay PG
                   </div>
-                )}
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                    Key ID & Secret, 100+ payment methods & instant checkout.
+                  </p>
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    {enabledGateways.razorpay ? (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Active Mode
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
+                        Deactive
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => handleToggleGateway('razorpay', e)}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      enabledGateways.razorpay ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                    title={enabledGateways.razorpay ? 'Click to Deactivate' : 'Click to Activate'}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                        enabledGateways.razorpay ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
 
               {/* Option 4: UPI Payment Gateway (Dynamic QR) */}
@@ -2500,31 +2654,57 @@ export default function SettingsPage() {
                   setCollectionMode('upi_gateway');
                   setPgTestResult(null);
                 }}
-                className={`cursor-pointer rounded-2xl p-4 border transition-all relative ${
+                className={`cursor-pointer rounded-2xl p-4 border transition-all relative flex flex-col justify-between ${
                   collectionMode === 'upi_gateway'
                     ? 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 ring-2 ring-indigo-600/30'
                     : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white/50 dark:bg-slate-900/50'
                 }`}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                    <Wallet className="w-4 h-4" />
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                      <Wallet className="w-4 h-4" />
+                    </div>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
+                      Webhooks
+                    </span>
                   </div>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
-                    Webhooks
-                  </span>
-                </div>
-                <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
-                  UPI PG (Dynamic)
-                </div>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                  Dynamic QR generation with real-time webhook callback.
-                </p>
-                {collectionMode === 'upi_gateway' && (
-                  <div className="mt-2 flex items-center gap-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
-                    <CheckCircle2 className="w-3 h-3" /> Active Mode
+                  <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
+                    UPI PG (Dynamic)
                   </div>
-                )}
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                    Dynamic QR generation with real-time webhook callback.
+                  </p>
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    {enabledGateways.upi_gateway ? (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Active Mode
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
+                        Deactive
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => handleToggleGateway('upi_gateway', e)}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      enabledGateways.upi_gateway ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                    title={enabledGateways.upi_gateway ? 'Click to Deactivate' : 'Click to Activate'}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                        enabledGateways.upi_gateway ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
             </div>
           </div>

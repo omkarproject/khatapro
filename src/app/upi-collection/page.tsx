@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
 import { getActiveCurrency, t } from '@/lib/i18n';
+import { isGatewayActive } from '@/types';
 import {
   QrCode,
   Upload,
@@ -50,17 +51,46 @@ export default function UpiCollectionPage() {
   const paymentSettings = settings.paymentSettings || {};
   const activeMode = paymentSettings.collectionMode || 'direct_upi';
 
+  const isDirectUpiActive = isGatewayActive('direct_upi', paymentSettings);
+  const isCashfreeActive = isGatewayActive('cashfree', paymentSettings);
+  const isRazorpayActive = isGatewayActive('razorpay', paymentSettings);
+  const isUpiGatewayActive = isGatewayActive('upi_gateway', paymentSettings);
+
   // Active collection mode tab - defaults directly to the configured Active Mode from settings
   const [activeTab, setActiveTab] = useState<'direct_upi' | 'cashfree' | 'razorpay' | 'upi_gateway' | 'history'>(() => {
-    return activeMode;
+    if (isGatewayActive(activeMode, paymentSettings)) return activeMode;
+    if (isDirectUpiActive) return 'direct_upi';
+    if (isCashfreeActive) return 'cashfree';
+    if (isRazorpayActive) return 'razorpay';
+    if (isUpiGatewayActive) return 'upi_gateway';
+    return 'history';
   });
 
-  // Keep activeTab in sync if activeMode updates from cloud/settings
+  // Keep activeTab in sync if activeMode or active gateways update from cloud/settings
   useEffect(() => {
-    if (paymentSettings.collectionMode) {
-      setActiveTab(paymentSettings.collectionMode);
+    if (activeTab === 'history') return;
+    const currentTabActive =
+      (activeTab === 'direct_upi' && isDirectUpiActive) ||
+      (activeTab === 'cashfree' && isCashfreeActive) ||
+      (activeTab === 'razorpay' && isRazorpayActive) ||
+      (activeTab === 'upi_gateway' && isUpiGatewayActive);
+
+    if (!currentTabActive) {
+      if (isGatewayActive(activeMode, paymentSettings)) {
+        setActiveTab(activeMode);
+      } else if (isDirectUpiActive) {
+        setActiveTab('direct_upi');
+      } else if (isCashfreeActive) {
+        setActiveTab('cashfree');
+      } else if (isRazorpayActive) {
+        setActiveTab('razorpay');
+      } else if (isUpiGatewayActive) {
+        setActiveTab('upi_gateway');
+      } else {
+        setActiveTab('history');
+      }
     }
-  }, [paymentSettings.collectionMode]);
+  }, [paymentSettings, activeMode, activeTab, isDirectUpiActive, isCashfreeActive, isRazorpayActive, isUpiGatewayActive]);
 
   // Merchant Default Configuration State
   const [upiId, setUpiId] = useState(paymentSettings.upiId || '');
@@ -431,10 +461,11 @@ export default function UpiCollectionPage() {
               <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 shadow-xs">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 Active Mode: {
-                  activeMode === 'cashfree' ? 'Cashfree PG' :
-                  activeMode === 'razorpay' ? 'Razorpay PG' :
-                  activeMode === 'upi_gateway' ? 'UPI PG (Dynamic)' :
-                  'Default UPI & QR'
+                  isCashfreeActive && activeMode === 'cashfree' ? 'Cashfree PG' :
+                  isRazorpayActive && activeMode === 'razorpay' ? 'Razorpay PG' :
+                  isUpiGatewayActive && activeMode === 'upi_gateway' ? 'UPI PG (Dynamic)' :
+                  isDirectUpiActive && activeMode === 'direct_upi' ? 'Default UPI & QR' :
+                  (isDirectUpiActive ? 'Default UPI & QR' : isCashfreeActive ? 'Cashfree PG' : isRazorpayActive ? 'Razorpay PG' : isUpiGatewayActive ? 'UPI PG (Dynamic)' : 'None')
                 }
               </span>
             </div>
@@ -465,104 +496,112 @@ export default function UpiCollectionPage() {
         {/* Gateway Navigation Tabs */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none border-b border-slate-200 dark:border-slate-800">
           {/* Tab 1: Default UPI & QR */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('direct_upi')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'direct_upi'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-            }`}
-          >
-            <QrCode className="w-4 h-4" />
-            <span>Default UPI &amp; QR</span>
-            {activeMode === 'direct_upi' ? (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-400/20 text-emerald-300 flex items-center gap-1 border border-emerald-400/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active
-              </span>
-            ) : (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
-                activeTab === 'direct_upi' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
-              }`}>
-                0% Fee
-              </span>
-            )}
-          </button>
+          {isDirectUpiActive && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('direct_upi')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === 'direct_upi'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <QrCode className="w-4 h-4" />
+              <span>Default UPI &amp; QR</span>
+              {activeMode === 'direct_upi' ? (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-400/20 text-emerald-300 flex items-center gap-1 border border-emerald-400/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active
+                </span>
+              ) : (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+                  activeTab === 'direct_upi' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
+                }`}>
+                  0% Fee
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Tab 2: Cashfree PG */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('cashfree')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'cashfree'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-            }`}
-          >
-            <CreditCard className="w-4 h-4" />
-            <span>Cashfree PG</span>
-            {activeMode === 'cashfree' ? (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-400/20 text-emerald-300 flex items-center gap-1 border border-emerald-400/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active
-              </span>
-            ) : (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
-                activeTab === 'cashfree' ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
-              }`}>
-                Gateway
-              </span>
-            )}
-          </button>
+          {isCashfreeActive && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('cashfree')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === 'cashfree'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <CreditCard className="w-4 h-4" />
+              <span>Cashfree PG</span>
+              {activeMode === 'cashfree' ? (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-400/20 text-emerald-300 flex items-center gap-1 border border-emerald-400/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active
+                </span>
+              ) : (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+                  activeTab === 'cashfree' ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
+                }`}>
+                  Gateway
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Tab 3: Razorpay PG */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('razorpay')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'razorpay'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-            }`}
-          >
-            <ShieldCheck className="w-4 h-4" />
-            <span>Razorpay PG</span>
-            {activeMode === 'razorpay' ? (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-400/20 text-emerald-300 flex items-center gap-1 border border-emerald-400/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active
-              </span>
-            ) : (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
-                activeTab === 'razorpay' ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-              }`}>
-                Razorpay
-              </span>
-            )}
-          </button>
+          {isRazorpayActive && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('razorpay')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === 'razorpay'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Razorpay PG</span>
+              {activeMode === 'razorpay' ? (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-400/20 text-emerald-300 flex items-center gap-1 border border-emerald-400/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active
+                </span>
+              ) : (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+                  activeTab === 'razorpay' ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                }`}>
+                  Razorpay
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Tab 4: UPI PG (Dynamic) */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('upi_gateway')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'upi_gateway'
-                ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/20'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-            }`}
-          >
-            <Smartphone className="w-4 h-4" />
-            <span>UPI PG (Dynamic)</span>
-            {activeMode === 'upi_gateway' ? (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-400/20 text-emerald-300 flex items-center gap-1 border border-emerald-400/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active
-              </span>
-            ) : (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
-                activeTab === 'upi_gateway' ? 'bg-white/20 text-white' : 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300'
-              }`}>
-                Webhooks
-              </span>
-            )}
-          </button>
+          {isUpiGatewayActive && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('upi_gateway')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === 'upi_gateway'
+                  ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/20'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <Smartphone className="w-4 h-4" />
+              <span>UPI PG (Dynamic)</span>
+              {activeMode === 'upi_gateway' ? (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-400/20 text-emerald-300 flex items-center gap-1 border border-emerald-400/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active
+                </span>
+              ) : (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+                  activeTab === 'upi_gateway' ? 'bg-white/20 text-white' : 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300'
+                }`}>
+                  Webhooks
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Tab 5: Ledger / History */}
           <button
@@ -570,7 +609,7 @@ export default function UpiCollectionPage() {
             onClick={() => setActiveTab('history')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'history'
-                ? 'bg-slate-800 text-white shadow-md'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                 : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
             }`}
           >
@@ -581,6 +620,26 @@ export default function UpiCollectionPage() {
             </span>
           </button>
         </div>
+
+        {/* Notice if All Gateways are Deactivated */}
+        {!isDirectUpiActive && !isCashfreeActive && !isRazorpayActive && !isUpiGatewayActive && activeTab !== 'history' && (
+          <div className="p-8 rounded-3xl bg-amber-500/10 border border-amber-500/20 text-center space-y-3">
+            <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
+              No Payment Collection Gateway Active
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+              All payment collection modes are currently deactivated in Settings. Turn on Default UPI &amp; QR or another Gateway in Settings to accept payments.
+            </p>
+            <Link
+              href="/settings"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors shadow-md shadow-indigo-600/20"
+            >
+              <SettingsIcon className="w-4 h-4" />
+              <span>Configure Gateways in Settings</span>
+            </Link>
+          </div>
+        )}
 
         {/* TAB 1: DEFAULT UPI & QR */}
         {activeTab === 'direct_upi' && (

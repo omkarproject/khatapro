@@ -431,8 +431,29 @@ export interface CustomerDriveFolder {
 
 export type PaymentCollectionMode = 'direct_upi' | 'cashfree' | 'razorpay' | 'upi_gateway';
 
+export interface EnabledPaymentGateways {
+  direct_upi?: boolean;
+  cashfree?: boolean;
+  razorpay?: boolean;
+  upi_gateway?: boolean;
+}
+
+export function isGatewayActive(
+  mode: PaymentCollectionMode,
+  paymentSettings?: PaymentSettings | null
+): boolean {
+  if (!paymentSettings) return mode === 'direct_upi';
+  const eg = paymentSettings.enabledGateways;
+  if (eg && typeof eg[mode] === 'boolean') {
+    return eg[mode] === true;
+  }
+  const currentMode = paymentSettings.collectionMode || 'direct_upi';
+  return mode === currentMode;
+}
+
 export interface PaymentSettings {
   collectionMode?: PaymentCollectionMode;
+  enabledGateways?: EnabledPaymentGateways;
   upiId: string;
   payeeName: string;
   customQrUrl?: string; // Uploaded custom QR code image

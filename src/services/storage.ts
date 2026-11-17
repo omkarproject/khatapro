@@ -243,6 +243,12 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
     businessAddress: '',
     paymentSettings: {
       collectionMode: 'direct_upi',
+      enabledGateways: {
+        direct_upi: true,
+        cashfree: false,
+        razorpay: false,
+        upi_gateway: false,
+      },
       upiId: '', // Clean blank: user sets their own UPI ID
       payeeName: businessName || '',
       customQrUrl: '', // Clean blank: user sets/uploads their own QR
@@ -397,6 +403,12 @@ export const StorageService = {
         ...localPS,
         ...cloudPS,
         collectionMode: cloudPS.collectionMode || localPS.collectionMode || 'direct_upi',
+        enabledGateways: cloudPS.enabledGateways || localPS.enabledGateways || {
+          direct_upi: (cloudPS.collectionMode || localPS.collectionMode || 'direct_upi') === 'direct_upi',
+          cashfree: (cloudPS.collectionMode || localPS.collectionMode) === 'cashfree',
+          razorpay: (cloudPS.collectionMode || localPS.collectionMode) === 'razorpay',
+          upi_gateway: (cloudPS.collectionMode || localPS.collectionMode) === 'upi_gateway',
+        },
         upiId: (cloudPS.upiId || '').trim() || localPS.upiId || '',
         payeeName: (cloudPS.payeeName || '').trim() || localPS.payeeName || existingSettings?.businessName || '',
         customQrUrl: cloudPS.customQrUrl || localPS.customQrUrl || '',

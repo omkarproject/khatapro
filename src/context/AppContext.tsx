@@ -750,6 +750,12 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
                     ...localPS,
                     ...cloudPS,
                     collectionMode: cloudPS.collectionMode || localPS.collectionMode || 'direct_upi',
+                    enabledGateways: cloudPS.enabledGateways || localPS.enabledGateways || {
+                      direct_upi: (cloudPS.collectionMode || localPS.collectionMode || 'direct_upi') === 'direct_upi',
+                      cashfree: (cloudPS.collectionMode || localPS.collectionMode) === 'cashfree',
+                      razorpay: (cloudPS.collectionMode || localPS.collectionMode) === 'razorpay',
+                      upi_gateway: (cloudPS.collectionMode || localPS.collectionMode) === 'upi_gateway',
+                    },
                     upiId: (cloudPS.upiId || '').trim() || localPS.upiId || '',
                     payeeName: (cloudPS.payeeName || '').trim() || localPS.payeeName || prev.businessName || '',
                     customQrUrl: cloudPS.customQrUrl || localPS.customQrUrl || '',
