@@ -204,6 +204,16 @@ export default function AuthModal() {
       await login(email.trim(), password);
       closeAuthModal();
     } catch (err: any) {
+      if (err.require2FA || err.message?.includes('Two-Factor Authentication is enabled')) {
+        const type = err.twoFactorType === 'email' ? 'email' : 'authenticator';
+        setTwoFactorType(type);
+        setStep('otp');
+        setOtpCode('');
+        setSuccessMsg(type === 'authenticator'
+          ? 'Enter the 6-digit code from your Authenticator app.'
+          : `2FA Login verification code sent to ${email.trim()}.`);
+        return;
+      }
       setErrorMsg(err.message || 'Invalid email or password.');
       refreshCaptcha();
     } finally {

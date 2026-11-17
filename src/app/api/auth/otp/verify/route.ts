@@ -19,7 +19,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Valid purpose is required' }, { status: 400 });
     }
 
-    const cleanEmail = email.toLowerCase().trim();
     const cleanCode = code.trim();
 
     if (!isSupabaseConfigured()) {
@@ -29,6 +28,23 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabaseAdmin();
     if (!supabase) {
       return NextResponse.json({ success: false, message: 'Could not connect to Supabase' }, { status: 500 });
+    }
+
+    const cleanInput = String(email).trim();
+    let cleanEmail = cleanInput.toLowerCase();
+
+    // If input does not contain @, try resolving via registered phone or username
+    if (!cleanInput.includes('@')) {
+      const cleanPhone = cleanInput.replace(/\D/g, '');
+      const { data: matchedProfiles } = await supabase
+        .from('profiles')
+        .select('email, id')
+        .or(`phone.eq.${cleanInput}${cleanPhone ? `,phone.eq.${cleanPhone}` : ''},name.ilike.${cleanInput}`)
+        .limit(1);
+
+      if (matchedProfiles && matchedProfiles.length > 0 && matchedProfiles[0].email) {
+        cleanEmail = matchedProfiles[0].email.toLowerCase().trim();
+      }
     }
 
     // 1. Verify code: Check local store first, then check Supabase verifyOtp

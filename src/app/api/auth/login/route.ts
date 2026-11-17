@@ -94,6 +94,19 @@ export async function POST(req: NextRequest) {
       .eq('user_id', sbUser.id)
       .single();
 
+    // Strict 2FA Safeguard: If user has Two-Factor Authentication enabled, direct login without 2FA verification is forbidden
+    const twoFa = userSettings?.payment_settings?.twoFactorAuth;
+    if (twoFa && twoFa.enabled) {
+      return NextResponse.json({
+        success: false,
+        require2FA: true,
+        twoFactorType: twoFa.mode || 'authenticator',
+        message: twoFa.mode === 'authenticator'
+          ? 'Two-Factor Authentication is enabled on this account. Please enter your 6-digit Authenticator code.'
+          : 'Two-Factor Authentication is enabled on this account. Please enter the verification code sent to your email.',
+      }, { status: 403 });
+    }
+
     const avatar = profile?.avatar_url || userSettings?.business_logo || userSettings?.payment_settings?.businessLogo || sbUser.user_metadata?.avatar_url || '';
 
     // Determine role: non-admin emails cannot be admin/super_admin
