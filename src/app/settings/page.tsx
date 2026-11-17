@@ -4015,7 +4015,7 @@ export default function SettingsPage() {
             </div>
             <span className="self-start sm:self-auto text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Supabase Auth
+              Auth
             </span>
           </div>
 
