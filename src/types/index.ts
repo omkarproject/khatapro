@@ -451,9 +451,17 @@ export function isGatewayActive(
   return mode === currentMode;
 }
 
+export interface TwoFactorAuthConfig {
+  enabled: boolean;
+  mode: 'email' | 'authenticator';
+  secret?: string; // Base32 TOTP secret key
+  verifiedAt?: string;
+}
+
 export interface PaymentSettings {
   collectionMode?: PaymentCollectionMode;
   enabledGateways?: EnabledPaymentGateways;
+  twoFactorAuth?: TwoFactorAuthConfig;
   upiId: string;
   payeeName: string;
   customQrUrl?: string; // Uploaded custom QR code image

@@ -28,8 +28,11 @@ import {
   Check,
   MessageSquare,
   UserX,
-  Headphones
+  Headphones,
+  Smartphone,
+  Shield
 } from 'lucide-react';
+import SixDigitTotpInput from './SixDigitTotpInput';
 
 // Math CAPTCHA generator
 function generateCaptcha() {
@@ -56,6 +59,7 @@ export default function AuthModal() {
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot_password'>('signin');
   const [step, setStep] = useState<'input' | 'otp'>('input');
+  const [twoFactorType, setTwoFactorType] = useState<'email' | 'authenticator'>('email');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showForgotDisabledModal, setShowForgotDisabledModal] = useState(false);
@@ -132,6 +136,7 @@ export default function AuthModal() {
     }
     setMode(newMode);
     setStep('input');
+    setTwoFactorType('email');
     setErrorMsg('');
     setSuccessMsg('');
     setOtpCode('');
@@ -165,35 +170,33 @@ export default function AuthModal() {
 
     setIsLoading(true);
     try {
-      // Check if Login 2FA OTP is active in SMTP triggers
-      const isLoginOtpActive = settings.smtpSettings?.enabled !== false && settings.smtpSettings?.triggers?.loginOtp === true;
+      // Dispatch 2FA check to backend (checks Authenticator 6-digit TOTP, Email OTP, or Direct)
+      const res = await fetch('/api/auth/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim(),
+          purpose: 'login',
+          password,
+        }),
+      });
 
-      if (isLoginOtpActive) {
-        // Send login 2FA verification OTP
-        const res = await fetch('/api/auth/otp/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: email.trim(),
-            purpose: 'login',
-            password,
-          }),
-        });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Login verification failed.');
+      }
 
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.message || 'Login verification failed.');
-        }
-
-        if (data.skipped) {
-          await login(email.trim(), password);
-          closeAuthModal();
-          return;
-        }
-
-        setSuccessMsg(`2FA Login verification code sent to ${email.trim()}.`);
+      if (data.require2FA) {
+        const type = data.twoFactorType === 'authenticator' ? 'authenticator' : 'email';
+        setTwoFactorType(type);
         setStep('otp');
-        setResendTimer(60);
+        setOtpCode('');
+        if (type === 'authenticator') {
+          setSuccessMsg('Enter the 6-digit code from your Authenticator app.');
+        } else {
+          setSuccessMsg(`2FA Login verification code sent to ${email.trim()}.`);
+          setResendTimer(60);
+        }
         return;
       }
 
@@ -298,30 +301,60 @@ export default function AuthModal() {
     }
   };
 
-  // Sign Up / Forgot Password: Step 2 (Verify OTP)
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-    setSuccessMsg('');
-
-    if (!otpCode.trim() || otpCode.trim().length < 6 || otpCode.trim().length > 8) {
-      setErrorMsg('Please enter the complete 6 to 8-digit verification code.');
+  // Execute OTP or TOTP Verification (auto-submits on 6th digit)
+  const executeVerifyOtp = async (codeToVerify?: string) => {
+    const clean = (codeToVerify !== undefined ? codeToVerify : otpCode).replace(/\s+/g, '').trim();
+    if (!clean || clean.length < 6) {
+      setErrorMsg('Please enter the complete 6-digit code.');
       return;
     }
 
-    if (mode === 'forgot_password') {
-      if (!isPasswordPolicyMet) {
-        setErrorMsg('New password must be 6-10 digits, with at least 1 capital letter, 1 number, and 1 symbol.');
-        return;
-      }
-      if (newPassword !== confirmPassword) {
-        setErrorMsg('New password and confirmation do not match.');
-        return;
-      }
-    }
-
     setIsLoading(true);
+    setErrorMsg('');
+
     try {
+      if (mode === 'signin') {
+        const res = await fetch('/api/auth/otp/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email.trim(),
+            code: clean,
+            purpose: 'login',
+            password,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(
+            data.message ||
+              (twoFactorType === 'authenticator'
+                ? 'Invalid Authenticator code. Please check your app.'
+                : 'Invalid verification code.')
+          );
+        }
+
+        if (data.user) {
+          await applyAuthenticatedUser(data.user);
+          closeAuthModal();
+        } else {
+          closeAuthModal();
+        }
+        return;
+      }
+
+      if (mode === 'forgot_password') {
+        if (!isPasswordPolicyMet) {
+          setErrorMsg('New password must be 6-10 digits, with at least 1 capital letter, 1 number, and 1 symbol.');
+          return;
+        }
+        if (newPassword !== confirmPassword) {
+          setErrorMsg('New password and confirmation do not match.');
+          return;
+        }
+      }
+
       const storedSignupPwd = typeof window !== 'undefined' ? sessionStorage.getItem('skp_pending_signup_pwd') || '' : '';
       const finalPassword = password || storedSignupPwd;
       const res = await fetch('/api/auth/otp/verify', {
@@ -329,7 +362,7 @@ export default function AuthModal() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: email.trim(),
-          code: otpCode.trim(),
+          code: clean,
           purpose: mode,
           name: name.trim(),
           businessName: businessName.trim(),
@@ -364,6 +397,11 @@ export default function AuthModal() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await executeVerifyOtp();
   };
 
   return (
@@ -515,7 +553,7 @@ export default function AuthModal() {
               )}
 
               {/* 1. SIGN IN (Direct Login + Captcha) */}
-              {mode === 'signin' && (
+              {mode === 'signin' && step === 'input' && (
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div>
                     <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
@@ -615,6 +653,106 @@ export default function AuthModal() {
                     )}
                   </button>
                 </form>
+              )}
+
+              {/* 1.5 SIGN IN 2FA SECURITY (Authenticator TOTP or Email OTP with Instant 6-digit Auto-Submit) */}
+              {mode === 'signin' && step === 'otp' && (
+                <div className="space-y-5 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="flex flex-col items-center text-center space-y-2.5">
+                    <div className="relative">
+                      <div className="absolute -inset-2.5 rounded-3xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-pink-500 opacity-60 blur-xl animate-pulse" />
+                      <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/20">
+                        {twoFactorType === 'authenticator' ? (
+                          <Smartphone className="w-7 h-7 text-indigo-400" />
+                        ) : (
+                          <Mail className="w-7 h-7 text-indigo-400" />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                        <Shield className="w-3 h-3 text-indigo-400" />
+                        <span>{twoFactorType === 'authenticator' ? 'Authenticator 2FA Active' : 'Email 2FA Active'}</span>
+                      </div>
+                      <h3 className="text-base font-black text-slate-900 dark:text-white">
+                        {twoFactorType === 'authenticator' ? 'Enter 6-Digit Authenticator Code' : 'Enter 6-Digit Email Code'}
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
+                        {twoFactorType === 'authenticator'
+                          ? 'Open Google Authenticator, Microsoft Authenticator, or Authy on your phone.'
+                          : `Enter the 6-digit code sent to ${email}.`}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 6 Digit Input Boxes with auto-submit */}
+                  <div className="space-y-1.5">
+                    <SixDigitTotpInput
+                      value={otpCode}
+                      onChange={(val) => {
+                        setOtpCode(val);
+                        setErrorMsg('');
+                      }}
+                      onComplete={(fullCode) => {
+                        executeVerifyOtp(fullCode);
+                      }}
+                      disabled={isLoading}
+                    />
+
+                    <p className="text-[11px] text-center text-slate-400 flex items-center justify-center gap-1 pt-1">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>Auto-submits on 6th digit &amp; unlocks dashboard</span>
+                    </p>
+                  </div>
+
+                  {twoFactorType === 'email' && (
+                    <div className="text-center">
+                      <button
+                        type="button"
+                        disabled={resendTimer > 0 || isLoading}
+                        onClick={(e) => handleSendOtp(e)}
+                        className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold disabled:opacity-50 cursor-pointer"
+                      >
+                        {resendTimer > 0 ? `Resend Code in ${resendTimer}s` : 'Resend Verification Code'}
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep('input');
+                        setOtpCode('');
+                        setErrorMsg('');
+                      }}
+                      className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-white font-medium cursor-pointer transition-colors"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Back to Sign In</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isLoading || otpCode.replace(/\D/g, '').length !== 6}
+                      onClick={() => executeVerifyOtp(otpCode)}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-md shadow-indigo-600/25 flex items-center gap-1.5 cursor-pointer transition-all disabled:opacity-50"
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Verifying...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Verify</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
               )}
 
               {/* 2. SIGN UP / FORGOT PASSWORD - STEP 1 (INPUT) */}

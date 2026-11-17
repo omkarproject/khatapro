@@ -24,10 +24,13 @@ import {
   ShieldCheck,
   Check,
   X,
-  Headphones
+  Headphones,
+  Smartphone,
+  Shield
 } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { GlobalWebsiteBranding } from '@/lib/globalBranding';
+import SixDigitTotpInput from '@/components/SixDigitTotpInput';
 
 // Math CAPTCHA generator
 function generateCaptcha() {
@@ -189,6 +192,7 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot_password'>('signin');
   const [step, setStep] = useState<'input' | 'otp' | 'reset_direct'>('input');
+  const [twoFactorType, setTwoFactorType] = useState<'email' | 'authenticator'>('email');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -271,6 +275,7 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
   const resetFormState = (newMode: 'signin' | 'signup' | 'forgot_password') => {
     setMode(newMode);
     setStep('input');
+    setTwoFactorType('email');
     setErrorMsg('');
     setSuccessMsg('');
     setOtpCode('');
@@ -288,7 +293,7 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
   const hasSymbol = /[!@#$%^&*(),.?":{}|<>_\-+=~/]/.test(targetPassword);
   const isPasswordPolicyMet = isLengthValid && hasUppercase && hasNumber && hasSymbol;
 
-  // Sign In Handler with Captcha (Direct password login, no OTP required)
+  // Sign In Handler with 2FA check (supports Authenticator 6-digit TOTP / Email OTP / Direct)
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -308,6 +313,38 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
 
     setIsLoading(true);
     try {
+      // 1. Dispatch 2FA check to backend
+      const res = await fetch('/api/auth/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          purpose: 'login',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Invalid email or password.');
+      }
+
+      // If user has 2FA enabled (Authenticator TOTP or Email OTP)
+      if (data.require2FA) {
+        const type = data.twoFactorType === 'authenticator' ? 'authenticator' : 'email';
+        setTwoFactorType(type);
+        setStep('otp');
+        setOtpCode('');
+        if (type === 'authenticator') {
+          setSuccessMsg('Open Google Authenticator or your 2FA app to get your 6-digit code.');
+        } else {
+          setSuccessMsg(`A 2FA login verification code has been sent to ${email.trim()}.`);
+          setResendTimer(60);
+        }
+        return;
+      }
+
+      // If 2FA is skipped/disabled, sign in directly
       await login(email.trim(), password);
       router.replace('/');
     } catch (err: any) {
@@ -373,30 +410,61 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
     }
   };
 
-  // Sign Up / Forgot Password: Step 2 (Verify OTP & Complete Action)
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-    setSuccessMsg('');
-
-    if (!otpCode.trim() || otpCode.trim().length < 6 || otpCode.trim().length > 8) {
-      setErrorMsg('Please enter the complete 6 to 8-digit verification code.');
+  // Execute OTP or TOTP Verification (auto-triggered on 6th digit)
+  const executeVerifyOtp = async (codeToVerify?: string) => {
+    const clean = (codeToVerify !== undefined ? codeToVerify : otpCode).replace(/\s+/g, '').trim();
+    if (!clean || clean.length < 6) {
+      setErrorMsg('Please enter the complete 6-digit code.');
       return;
     }
 
-    if (mode === 'forgot_password') {
-      if (!isPasswordPolicyMet) {
-        setErrorMsg('New password must satisfy all rules: 6-10 chars, 1 uppercase letter, 1 number, and 1 special symbol.');
-        return;
-      }
-      if (newPassword !== confirmPassword) {
-        setErrorMsg('New password and confirmation do not match.');
-        return;
-      }
-    }
-
     setIsLoading(true);
+    setErrorMsg('');
+
     try {
+      if (mode === 'signin') {
+        const res = await fetch('/api/auth/otp/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email.trim(),
+            code: clean,
+            purpose: 'login',
+            password,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(
+            data.message ||
+              (twoFactorType === 'authenticator'
+                ? 'Invalid Authenticator code. Please check your authenticator app.'
+                : 'Invalid or expired verification code.')
+          );
+        }
+
+        if (data.user) {
+          await applyAuthenticatedUser(data.user);
+          router.replace('/');
+        } else {
+          router.replace('/');
+        }
+        return;
+      }
+
+      // If in Forgot Password Mode, also validate new password
+      if (mode === 'forgot_password') {
+        if (!isPasswordPolicyMet) {
+          setErrorMsg('New password must satisfy all rules: 6-10 chars, 1 uppercase letter, 1 number, and 1 special symbol.');
+          return;
+        }
+        if (newPassword !== confirmPassword) {
+          setErrorMsg('New password and confirmation do not match.');
+          return;
+        }
+      }
+
       const storedSignupPwd = typeof window !== 'undefined' ? sessionStorage.getItem('skp_pending_signup_pwd') || '' : '';
       const finalPassword = password || storedSignupPwd;
       const res = await fetch('/api/auth/otp/verify', {
@@ -404,7 +472,7 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: email.trim(),
-          code: otpCode.trim(),
+          code: clean,
           purpose: mode,
           name: name.trim(),
           businessName: businessName.trim(),
@@ -440,6 +508,11 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await executeVerifyOtp();
   };
 
   // Direct Password Reset (Via verified link from email)
@@ -582,6 +655,8 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
             <h1 id="login-card-title" className="text-2xl font-black text-slate-900 dark:text-white">
               {currentUser
                 ? 'Active Account Session'
+                : mode === 'signin' && step === 'otp'
+                ? (twoFactorType === 'authenticator' ? 'Two-Factor Authentication' : 'Email 2FA Verification')
                 : mode === 'forgot_password'
                 ? 'Reset Password'
                 : mode === 'signin'
@@ -589,7 +664,11 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
                 : (brandState.name ? `Create your ${brandState.name} account` : 'Create Account')}
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              {mode === 'forgot_password'
+              {mode === 'signin' && step === 'otp'
+                ? (twoFactorType === 'authenticator'
+                    ? 'Enter the 6-digit TOTP code generated by your Authenticator app'
+                    : `Enter the 6-digit verification code sent to ${email}`)
+                : mode === 'forgot_password'
                 ? 'Verify your email to create a new password'
                 : mode === 'signin'
                 ? 'Enter your credentials to access your business ledger'
@@ -597,8 +676,8 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
             </p>
           </div>
 
-          {/* Mode Switcher Tabs (Sign In / Register) */}
-          {!currentUser && mode !== 'forgot_password' && (
+          {/* Mode Switcher Tabs (Sign In / Register) - Hidden in OTP mode */}
+          {!currentUser && mode !== 'forgot_password' && step !== 'otp' && (
             <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
               <button
                 type="button"
@@ -816,6 +895,106 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
                 </form>
               )}
 
+              {/* MODE 1.5: 2FA SECURITY VERIFICATION (TOTP Authenticator or Email OTP with Instant 6-digit Auto-Submit) */}
+              {mode === 'signin' && step === 'otp' && (
+                <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="flex flex-col items-center text-center space-y-3">
+                    <div className="relative">
+                      <div className="absolute -inset-3 rounded-3xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-pink-500 opacity-60 blur-xl animate-pulse" />
+                      <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/20">
+                        {twoFactorType === 'authenticator' ? (
+                          <Smartphone className="w-8 h-8 text-indigo-400" />
+                        ) : (
+                          <Mail className="w-8 h-8 text-indigo-400" />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                        <Shield className="w-3 h-3 text-indigo-400" />
+                        <span>{twoFactorType === 'authenticator' ? 'Authenticator 2FA Active' : 'Email 2FA Active'}</span>
+                      </div>
+                      <h2 className="text-xl font-black text-slate-900 dark:text-white">
+                        {twoFactorType === 'authenticator' ? 'Enter 6-Digit Authenticator Code' : 'Enter 6-Digit Email Code'}
+                      </h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
+                        {twoFactorType === 'authenticator'
+                          ? 'Open Google Authenticator, Microsoft Authenticator, or Authy on your mobile device.'
+                          : `Enter the 6-digit login verification code sent to ${email}.`}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 6 Digit Input Boxes */}
+                  <div className="space-y-2">
+                    <SixDigitTotpInput
+                      value={otpCode}
+                      onChange={(val) => {
+                        setOtpCode(val);
+                        setErrorMsg('');
+                      }}
+                      onComplete={(fullCode) => {
+                        executeVerifyOtp(fullCode);
+                      }}
+                      disabled={isLoading}
+                    />
+
+                    <p className="text-[11px] text-center text-slate-400 flex items-center justify-center gap-1 pt-1">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>Auto-verifying on 6th digit &amp; opening dashboard</span>
+                    </p>
+                  </div>
+
+                  {twoFactorType === 'email' && (
+                    <div className="text-center">
+                      <button
+                        type="button"
+                        disabled={resendTimer > 0 || isLoading}
+                        onClick={handleSendOtp}
+                        className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold disabled:opacity-50 cursor-pointer"
+                      >
+                        {resendTimer > 0 ? `Resend Code in ${resendTimer}s` : 'Resend Verification Code'}
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep('input');
+                        setOtpCode('');
+                        setErrorMsg('');
+                      }}
+                      className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-white font-medium cursor-pointer transition-colors"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Back to Sign In</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isLoading || otpCode.replace(/\D/g, '').length !== 6}
+                      onClick={() => executeVerifyOtp(otpCode)}
+                      className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/25 flex items-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Verifying...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Verify &amp; Open</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* MODE 2: REGISTER (Step 1 Input Details -> Step 2 Verify OTP) */}
               {mode === 'signup' && step === 'input' && (
                 <form onSubmit={handleSendOtp} className="space-y-3.5">
@@ -1001,7 +1180,7 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
               )}
 
               {/* STEP 2: VERIFY OTP (For both Signup and Forgot Password) */}
-              {step === 'otp' && (
+              {mode !== 'signin' && step === 'otp' && (
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
                   <div className="p-3 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 text-xs text-indigo-700 dark:text-indigo-300">
                     Enter the 6 to 8-digit verification code sent to <strong>{email}</strong>.

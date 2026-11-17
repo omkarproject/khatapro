@@ -3,8 +3,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { StorageService } from '@/services/storage';
-import { BackendProvider, SystemSettings, PaymentSettings, PaymentCollectionMode, EnabledPaymentGateways, isGatewayActive, TelegramBackupSettings, BackupFrequency, BackupDayOfWeek, BroadcastMessage, BroadcastType, BroadcastSeverity, UserProfile } from '@/types';
+import { BackendProvider, SystemSettings, PaymentSettings, PaymentCollectionMode, EnabledPaymentGateways, isGatewayActive, TwoFactorAuthConfig, TelegramBackupSettings, BackupFrequency, BackupDayOfWeek, BroadcastMessage, BroadcastType, BroadcastSeverity, UserProfile } from '@/types';
 import { SupabaseAdapter } from '@/services/backendManager';
+import { TwoFactorSetupModal } from '@/components/TwoFactorSetupModal';
 import {
   Settings,
   Building,
@@ -852,6 +853,14 @@ export default function SettingsPage() {
       upi_gateway: eg?.upi_gateway !== undefined ? eg.upi_gateway : curMode === 'upi_gateway',
     };
   });
+  const [twoFactorAuth, setTwoFactorAuth] = useState<TwoFactorAuthConfig>(() => {
+    const s = typeof window !== 'undefined' ? StorageService.getSettings() : settings;
+    return s.paymentSettings?.twoFactorAuth || {
+      enabled: false,
+      mode: 'email',
+    };
+  });
+  const [isTwoFactorModalOpen, setIsTwoFactorModalOpen] = useState(false);
   const [upiId, setUpiId] = useState(() => {
     if (typeof window !== 'undefined') {
       const s = StorageService.getSettings();
@@ -964,6 +973,7 @@ export default function SettingsPage() {
     if (!isPaymentDirtyRef.current && settings && settings.paymentSettings) {
       if (settings.paymentSettings.collectionMode) setCollectionMode(settings.paymentSettings.collectionMode);
       if (settings.paymentSettings.enabledGateways) setEnabledGateways(settings.paymentSettings.enabledGateways);
+      if (settings.paymentSettings.twoFactorAuth) setTwoFactorAuth(settings.paymentSettings.twoFactorAuth);
       if (settings.paymentSettings.upiId) setUpiId(settings.paymentSettings.upiId);
       if (settings.paymentSettings.payeeName) setPayeeName(settings.paymentSettings.payeeName);
       if (settings.paymentSettings.customQrUrl !== undefined) setCustomQrUrl(settings.paymentSettings.customQrUrl);
@@ -1611,6 +1621,7 @@ export default function SettingsPage() {
           businessGst: cleanBGst,
           payeeName: cleanBName || settings.paymentSettings?.payeeName || '',
           currency: activeSettingsCurrency.code,
+          twoFactorAuth,
         },
       };
 
@@ -1659,6 +1670,63 @@ export default function SettingsPage() {
     } finally {
       setIsSavingBusiness(false);
     }
+  };
+
+  // 2FA Authentication Mode Toggle & Handlers (Email OTP vs Authenticator TOTP)
+  const handleToggleTwoFactorMode = () => {
+    isBusinessDirtyRef.current = true;
+    if (twoFactorAuth.mode === 'email') {
+      // User is switching from Email to Authenticator
+      if (!twoFactorAuth.secret) {
+        setIsTwoFactorModalOpen(true);
+        return;
+      }
+      const updated: TwoFactorAuthConfig = {
+        ...twoFactorAuth,
+        enabled: true,
+        mode: 'authenticator',
+      };
+      setTwoFactorAuth(updated);
+      saveTwoFactorConfig(updated);
+    } else {
+      // Switching from Authenticator back to Email OTP
+      const updated: TwoFactorAuthConfig = {
+        ...twoFactorAuth,
+        enabled: true,
+        mode: 'email',
+      };
+      setTwoFactorAuth(updated);
+      saveTwoFactorConfig(updated);
+    }
+  };
+
+  const saveTwoFactorConfig = (config: TwoFactorAuthConfig) => {
+    const updatedPaymentSettings: PaymentSettings = {
+      ...settings.paymentSettings,
+      twoFactorAuth: config,
+    };
+    updateSettings({
+      ...settings,
+      paymentSettings: updatedPaymentSettings,
+    });
+    addToast(
+      '2FA Security Updated',
+      config.mode === 'authenticator'
+        ? 'Authenticator 2FA (TOTP) is now ACTIVE for login verification.'
+        : 'Email OTP is now ACTIVE for login verification.',
+      'success'
+    );
+  };
+
+  const handleTwoFactorSetupSuccess = (newSecret: string) => {
+    const updated: TwoFactorAuthConfig = {
+      enabled: true,
+      mode: 'authenticator',
+      secret: newSecret,
+      verifiedAt: new Date().toISOString(),
+    };
+    setTwoFactorAuth(updated);
+    saveTwoFactorConfig(updated);
   };
 
   // Toggle active / deactive state of individual payment gateway
@@ -2385,12 +2453,99 @@ export default function SettingsPage() {
               </select>
             </div>
 
-            <div className="flex items-center p-3 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 mt-1 sm:mt-0">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-                <p className="text-[11px] text-indigo-950 dark:text-indigo-300 leading-snug">
-                  Active Currency <strong>({activeSettingsCurrency.symbol} {activeSettingsCurrency.code})</strong> and Language <strong>({activeSettingsLanguage.nativeName})</strong> will format all invoices &amp; ledgers.
-                </p>
+            {/* Login 2FA Security Toggle: Email OTP vs Authenticator TOTP */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/90 dark:border-slate-800 flex flex-col justify-between mt-1 sm:mt-0">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-2">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
+                    twoFactorAuth.mode === 'authenticator'
+                      ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
+                      : 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'
+                  }`}>
+                    {twoFactorAuth.mode === 'authenticator' ? (
+                      <Smartphone className="w-4 h-4" />
+                    ) : (
+                      <Mail className="w-4 h-4" />
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-900 dark:text-white block">
+                      Login 2FA Security
+                    </label>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
+                      Choose authentication mode
+                    </span>
+                  </div>
+                </div>
+
+                {/* Email (switch) 2FA */}
+                <div className="flex items-center gap-2">
+                  <span
+                    onClick={() => {
+                      if (twoFactorAuth.mode !== 'email') handleToggleTwoFactorMode();
+                    }}
+                    className={`text-[11px] font-bold cursor-pointer transition-colors ${
+                      twoFactorAuth.mode === 'email'
+                        ? 'text-indigo-600 dark:text-indigo-400'
+                        : 'text-slate-400 hover:text-slate-300'
+                    }`}
+                  >
+                    Email OTP
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={handleToggleTwoFactorMode}
+                    className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      twoFactorAuth.mode === 'authenticator' ? 'bg-cyan-500' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                    title={
+                      twoFactorAuth.mode === 'authenticator'
+                        ? 'Active: Authenticator App (Click to switch to Email OTP)'
+                        : 'Active: Email OTP (Click to switch to Authenticator 2FA)'
+                    }
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                        twoFactorAuth.mode === 'authenticator' ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+
+                  <span
+                    onClick={() => {
+                      if (twoFactorAuth.mode !== 'authenticator') handleToggleTwoFactorMode();
+                    }}
+                    className={`text-[11px] font-bold cursor-pointer transition-colors ${
+                      twoFactorAuth.mode === 'authenticator'
+                        ? 'text-cyan-500 font-extrabold'
+                        : 'text-slate-400 hover:text-slate-300'
+                    }`}
+                  >
+                    Authenticator 2FA
+                  </span>
+                </div>
+              </div>
+
+              {/* Status Indicator Bar */}
+              <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-slate-200/80 dark:border-slate-800/80">
+                <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-[10px]">
+                  <span className={`w-1.5 h-1.5 rounded-full ${twoFactorAuth.mode === 'authenticator' ? 'bg-cyan-400 animate-pulse' : 'bg-emerald-400'}`} />
+                  Active Mode:{' '}
+                  <strong className={twoFactorAuth.mode === 'authenticator' ? 'text-cyan-400' : 'text-emerald-400'}>
+                    {twoFactorAuth.mode === 'authenticator' ? 'Authenticator App (TOTP)' : 'Email OTP Verification'}
+                  </strong>
+                </span>
+
+                {twoFactorAuth.mode === 'authenticator' && (
+                  <button
+                    type="button"
+                    onClick={() => setIsTwoFactorModalOpen(true)}
+                    className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 underline cursor-pointer"
+                  >
+                    View QR / Key
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -7027,6 +7182,15 @@ export default function SettingsPage() {
         isOpen={isSettingsCurrencyModalOpen}
         onClose={() => setIsSettingsCurrencyModalOpen(false)}
         defaultTab={settingsCurrencyLanguageTab}
+      />
+
+      {/* Authenticator 2FA Setup Modal */}
+      <TwoFactorSetupModal
+        isOpen={isTwoFactorModalOpen}
+        onClose={() => setIsTwoFactorModalOpen(false)}
+        userEmail={bEmail || currentUser?.email || ''}
+        existingSecret={twoFactorAuth.secret}
+        onSuccess={handleTwoFactorSetupSuccess}
       />
 
     </div>

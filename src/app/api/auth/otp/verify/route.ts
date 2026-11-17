@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 import { verifyOtp as verifyLocalOtp, getOtp, validatePasswordStrength } from '@/lib/otpStore';
 import { sendWelcomeEmailDirect } from '@/lib/emailService';
+import { verifyTotpToken } from '@/lib/totp';
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,36 +36,68 @@ export async function POST(req: NextRequest) {
     let storedRecord: any = null;
     let sbVerifiedUser: any = null;
 
-    const localCheck = verifyLocalOtp(cleanEmail, purpose as any, cleanCode);
-    if (localCheck.valid) {
-      isCodeValid = true;
-      storedRecord = localCheck.record;
-    } else {
-      // Try verifying with Supabase verifyOtp (supports 6 to 8 digit email tokens)
-      try {
-        const otpType = purpose === 'forgot_password' ? 'recovery' : 'email';
-        const { data: sbVerifyData, error: sbVerifyErr } = await supabase.auth.verifyOtp({
-          email: cleanEmail,
-          token: cleanCode,
-          type: otpType as any,
-        });
+    // Check if user has Authenticator 2FA configured for login
+    if (purpose === 'login') {
+      const { data: profileRow } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', cleanEmail)
+        .maybeSingle();
 
-        if (!sbVerifyErr && sbVerifyData?.user) {
-          isCodeValid = true;
-          sbVerifiedUser = sbVerifyData.user;
-          // Retrieve metadata from local in-memory OTP store if available
-          storedRecord = getOtp(cleanEmail, purpose as any);
+      if (profileRow?.id) {
+        const { data: userSet } = await supabase
+          .from('system_settings')
+          .select('payment_settings')
+          .eq('user_id', profileRow.id)
+          .maybeSingle();
+
+        const twoFa = userSet?.payment_settings?.twoFactorAuth;
+        if (twoFa && twoFa.enabled && twoFa.mode === 'authenticator' && twoFa.secret) {
+          const isTotpValid = verifyTotpToken(twoFa.secret, cleanCode, 1);
+          if (isTotpValid) {
+            isCodeValid = true;
+          } else {
+            return NextResponse.json({
+              success: false,
+              message: 'Invalid 6-digit Authenticator code. Please check your authenticator app and try again.',
+            }, { status: 400 });
+          }
         }
-      } catch (err) {
-        console.warn('Supabase verifyOtp check error:', err);
       }
     }
 
     if (!isCodeValid) {
-      return NextResponse.json({
-        success: false,
-        message: localCheck.message || 'Invalid or expired verification code. Please check your email and try again.',
-      }, { status: 400 });
+      const localCheck = verifyLocalOtp(cleanEmail, purpose as any, cleanCode);
+      if (localCheck.valid) {
+        isCodeValid = true;
+        storedRecord = localCheck.record;
+      } else {
+        // Try verifying with Supabase verifyOtp (supports 6 to 8 digit email tokens)
+        try {
+          const otpType = purpose === 'forgot_password' ? 'recovery' : 'email';
+          const { data: sbVerifyData, error: sbVerifyErr } = await supabase.auth.verifyOtp({
+            email: cleanEmail,
+            token: cleanCode,
+            type: otpType as any,
+          });
+
+          if (!sbVerifyErr && sbVerifyData?.user) {
+            isCodeValid = true;
+            sbVerifiedUser = sbVerifyData.user;
+            // Retrieve metadata from local in-memory OTP store if available
+            storedRecord = getOtp(cleanEmail, purpose as any);
+          }
+        } catch (err) {
+          console.warn('Supabase verifyOtp check error:', err);
+        }
+      }
+
+      if (!isCodeValid) {
+        return NextResponse.json({
+          success: false,
+          message: localCheck.message || 'Invalid or expired verification code. Please check your email and try again.',
+        }, { status: 400 });
+      }
     }
 
     // ==========================================

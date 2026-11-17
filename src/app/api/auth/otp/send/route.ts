@@ -123,6 +123,24 @@ export async function POST(req: NextRequest) {
           message: authErr?.message || 'Invalid email or password. Please verify your credentials.',
         }, { status: 401 });
       }
+
+      // Check user's two-factor authentication configuration
+      const { data: userSettings } = await supabase
+        .from('system_settings')
+        .select('payment_settings')
+        .eq('user_id', authData.user.id)
+        .maybeSingle();
+
+      const twoFa = userSettings?.payment_settings?.twoFactorAuth;
+      if (twoFa && twoFa.enabled && twoFa.mode === 'authenticator' && twoFa.secret) {
+        return NextResponse.json({
+          success: true,
+          require2FA: true,
+          twoFactorType: 'authenticator',
+          message: 'Please enter the 6-digit code from your Authenticator app.',
+          email: cleanEmail,
+        });
+      }
     } else if (purpose === 'signup') {
       if (!name) {
         return NextResponse.json({ success: false, message: 'Full name is required for signup' }, { status: 400 });
@@ -193,6 +211,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      require2FA: true,
+      twoFactorType: 'email',
       message: `A verification code (OTP) has been dispatched to ${cleanEmail}. Please enter it below.`,
       email: cleanEmail,
       purpose,

@@ -249,3 +249,56 @@ export function formatTotpCode(code: string): string {
   if (!code || code.length !== 6) return code;
   return `${code.slice(0, 3)} ${code.slice(3)}`;
 }
+
+/**
+ * Verify a user-provided 6-digit TOTP token against a Base32 secret.
+ * Allows a clock-skew window of ±1 step (±30s) by default.
+ */
+export function verifyTotpToken(
+  secretBase32: string,
+  userToken: string,
+  windowSteps: number = 1,
+  period: number = 30,
+  digits: number = 6
+): boolean {
+  if (!secretBase32 || !userToken) return false;
+  const cleanToken = userToken.replace(/\s+/g, '').trim();
+  if (cleanToken.length !== digits) return false;
+
+  const currentSec = Math.floor(Date.now() / 1000);
+  for (let offset = -windowSteps; offset <= windowSteps; offset++) {
+    const t = currentSec + (offset * period);
+    const expected = generateTotpToken(secretBase32, t, period, digits);
+    if (expected === cleanToken) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Generates a cryptographically random Base32 secret (16-32 characters).
+ */
+export function generateBase32Secret(length: number = 16): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let secret = '';
+  for (let i = 0; i < length; i++) {
+    secret += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+  }
+  return secret;
+}
+
+/**
+ * Builds an otpauth://totp/ standard URI for QR code generation.
+ */
+export function buildOtpAuthUri(
+  secret: string,
+  accountEmail: string,
+  issuer: string = 'SmartKhata'
+): string {
+  const encIssuer = encodeURIComponent(issuer);
+  const encAccount = encodeURIComponent(accountEmail || 'Merchant');
+  const cleanSecret = secret.toUpperCase().replace(/\s+/g, '');
+  return `otpauth://totp/${encIssuer}:${encAccount}?secret=${cleanSecret}&issuer=${encIssuer}&algorithm=SHA1&digits=6&period=30`;
+}
+
