@@ -715,7 +715,7 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
           )}
 
           {/* Alerts */}
-          {errorMsg && (
+          {errorMsg && step !== 'otp' && (
             <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-start gap-3 text-rose-600 dark:text-rose-400 text-xs animate-shake">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <div className="flex-1 space-y-2">
@@ -737,7 +737,7 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
             </div>
           )}
 
-          {successMsg && (
+          {successMsg && step !== 'otp' && (
             <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 flex items-start gap-3 text-emerald-600 dark:text-emerald-400 text-xs">
               <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
               <div className="flex-1 font-medium leading-relaxed">{successMsg}</div>
@@ -905,71 +905,12 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
                 </form>
               )}
 
-              {/* MODE 1.5: 2FA SECURITY VERIFICATION (TOTP Authenticator or Email OTP with Instant 6-digit Auto-Submit) */}
+              {/* MODE 1.5: 2FA SECURITY VERIFICATION POPUP MODAL */}
               {mode === 'signin' && step === 'otp' && (
-                <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
-                  <div className="flex flex-col items-center text-center space-y-3">
-                    <div className="relative">
-                      <div className="absolute -inset-3 rounded-3xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-pink-500 opacity-60 blur-xl animate-pulse" />
-                      <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/20">
-                        {twoFactorType === 'authenticator' ? (
-                          <Smartphone className="w-8 h-8 text-indigo-400" />
-                        ) : (
-                          <Mail className="w-8 h-8 text-indigo-400" />
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                        <Shield className="w-3 h-3 text-indigo-400" />
-                        <span>{twoFactorType === 'authenticator' ? 'Authenticator 2FA Active' : 'Email 2FA Active'}</span>
-                      </div>
-                      <h2 className="text-xl font-black text-slate-900 dark:text-white">
-                        {twoFactorType === 'authenticator' ? 'Enter 6-Digit Authenticator Code' : 'Enter 6-Digit Email Code'}
-                      </h2>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
-                        {twoFactorType === 'authenticator'
-                          ? 'Open Google Authenticator, Microsoft Authenticator, or Authy on your mobile device.'
-                          : `Enter the 6-digit login verification code sent to ${email}.`}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* 6 Digit Input Boxes */}
-                  <div className="space-y-2">
-                    <SixDigitTotpInput
-                      value={otpCode}
-                      onChange={(val) => {
-                        setOtpCode(val);
-                        setErrorMsg('');
-                      }}
-                      onComplete={(fullCode) => {
-                        executeVerifyOtp(fullCode);
-                      }}
-                      disabled={isLoading}
-                    />
-
-                    <p className="text-[11px] text-center text-slate-400 flex items-center justify-center gap-1 pt-1">
-                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <span>Auto-verifying on 6th digit &amp; opening dashboard</span>
-                    </p>
-                  </div>
-
-                  {twoFactorType === 'email' && (
-                    <div className="text-center">
-                      <button
-                        type="button"
-                        disabled={resendTimer > 0 || isLoading}
-                        onClick={handleSendOtp}
-                        className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold disabled:opacity-50 cursor-pointer"
-                      >
-                        {resendTimer > 0 ? `Resend Code in ${resendTimer}s` : 'Resend Verification Code'}
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+                  <div className="relative w-full max-w-md p-6 sm:p-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
+                    
+                    {/* Close Button */}
                     <button
                       type="button"
                       onClick={() => {
@@ -977,30 +918,115 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
                         setOtpCode('');
                         setErrorMsg('');
                       }}
-                      className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-white font-medium cursor-pointer transition-colors"
+                      className="absolute right-4 top-4 p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                      title="Back to Sign In"
                     >
-                      <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Back to Sign In</span>
+                      <X className="w-5 h-5" />
                     </button>
 
-                    <button
-                      type="button"
-                      disabled={isLoading || otpCode.replace(/\D/g, '').length !== 6}
-                      onClick={() => executeVerifyOtp(otpCode)}
-                      className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/25 flex items-center gap-2 cursor-pointer transition-all disabled:opacity-50"
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Verifying...</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>Verify &amp; Open</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </>
-                      )}
-                    </button>
+                    <div className="flex flex-col items-center text-center space-y-3 pt-2">
+                      <div className="relative">
+                        <div className="absolute -inset-3 rounded-3xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-pink-500 opacity-60 blur-xl animate-pulse" />
+                        <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/20">
+                          {twoFactorType === 'authenticator' ? (
+                            <Smartphone className="w-8 h-8 text-indigo-400" />
+                          ) : (
+                            <Mail className="w-8 h-8 text-indigo-400" />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                          <Shield className="w-3 h-3 text-indigo-400" />
+                          <span>{twoFactorType === 'authenticator' ? 'Authenticator 2FA Active' : 'Email 2FA Active'}</span>
+                        </div>
+                        <h2 className="text-xl font-black text-slate-900 dark:text-white">
+                          {twoFactorType === 'authenticator' ? 'Enter 6-Digit Authenticator Code' : 'Enter 6-Digit Email Code'}
+                        </h2>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
+                          {twoFactorType === 'authenticator'
+                            ? 'Open Google Authenticator, Microsoft Authenticator, or Authy on your mobile device.'
+                            : `Enter the 6-digit login verification code sent to ${email}.`}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Error Banner inside Modal */}
+                    {errorMsg && (
+                      <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 flex items-center justify-center gap-2 text-rose-600 dark:text-rose-400 text-xs font-semibold animate-shake">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{errorMsg}</span>
+                      </div>
+                    )}
+
+                    {/* 6 Digit Input Boxes */}
+                    <div className="space-y-2 pt-1">
+                      <SixDigitTotpInput
+                        value={otpCode}
+                        onChange={(val) => {
+                          setOtpCode(val);
+                          setErrorMsg('');
+                        }}
+                        onComplete={(fullCode) => {
+                          executeVerifyOtp(fullCode);
+                        }}
+                        disabled={isLoading}
+                        autoFocus
+                      />
+
+                      <p className="text-[11px] text-center text-slate-400 flex items-center justify-center gap-1.5 pt-1">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>Auto-verifying on 6th digit &amp; opening dashboard</span>
+                      </p>
+                    </div>
+
+                    {twoFactorType === 'email' && (
+                      <div className="text-center">
+                        <button
+                          type="button"
+                          disabled={resendTimer > 0 || isLoading}
+                          onClick={handleSendOtp}
+                          className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold disabled:opacity-50 cursor-pointer"
+                        >
+                          {resendTimer > 0 ? `Resend Code in ${resendTimer}s` : 'Resend Verification Code'}
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStep('input');
+                          setOtpCode('');
+                          setErrorMsg('');
+                        }}
+                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold cursor-pointer transition-colors"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Back to Sign In</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isLoading || otpCode.replace(/\D/g, '').length !== 6}
+                        onClick={() => executeVerifyOtp(otpCode)}
+                        className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/25 flex items-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                      >
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Verifying...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Verify &amp; Open</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
