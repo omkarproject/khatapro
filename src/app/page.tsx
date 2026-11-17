@@ -355,9 +355,9 @@ export default function DashboardPage() {
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <div className="space-y-0.5 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1 shrink-0">
+              <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold tracking-wide bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1 shrink-0">
                 <Sparkles className="w-3 h-3 text-indigo-400" />
-                {t('livePulse', 'Live Business Pulse')}
+                {t('business', 'Business')}
               </span>
               <span className="text-xs font-bold text-amber-300/90 tracking-wide truncate max-w-[200px] sm:max-w-md" suppressHydrationWarning>
                 {activeBusinessName}
@@ -366,7 +366,7 @@ export default function DashboardPage() {
             <h1 className="text-base sm:text-lg lg:text-xl font-black tracking-tight" suppressHydrationWarning>
               {t('goodDay', 'Good day')}, {activeOwnerName} 👋
             </h1>
-            <p className="text-[11px] sm:text-xs text-slate-300 truncate italic max-w-2xl pt-0.5" title={dailyMotivation}>
+            <p className="text-[11px] sm:text-xs text-slate-300 italic max-w-2xl pt-0.5 leading-relaxed break-words" title={dailyMotivation}>
               {dailyMotivation}
             </p>
           </div>
@@ -392,44 +392,51 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         
         {/* Total Credit - Money In / Received */}
-        <div className="glass-card p-3 sm:p-3.5 rounded-2xl relative overflow-hidden group">
+        <div className="glass-card p-2.5 sm:p-3.5 rounded-2xl relative overflow-hidden group">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
               {t('credit', 'CREDIT')}
             </span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-              <ArrowDownLeft className="w-3.5 h-3.5" />
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <ArrowDownLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
+          <div className="text-lg sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 truncate">
             {formatINR(metrics.totalCredit)}
           </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            <span>{t('moneyIn', 'Money In & Received')}</span>
-            <Link href="/khata" className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold">
-              {t('viewKhata', 'View Khata →')}
+          <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 gap-1">
+            <span className="truncate">
+              <span className="hidden sm:inline">{t('moneyIn', 'Money In & Received')}</span>
+              <span className="sm:hidden">{t('moneyInShort', 'Money In')}</span>
+            </span>
+            <Link href="/khata" className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold shrink-0">
+              <span className="hidden sm:inline">{t('viewKhata', 'View Khata →')}</span>
+              <span className="sm:hidden">{t('viewKhataShort', 'Khata →')}</span>
             </Link>
           </div>
         </div>
 
         {/* Total Debit - Money Out / Pending Receivables */}
-        <div className="glass-card p-3 sm:p-3.5 rounded-2xl relative overflow-hidden group">
+        <div className="glass-card p-2.5 sm:p-3.5 rounded-2xl relative overflow-hidden group">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
               {t('debit', 'DEBIT')}
             </span>
-            <div className="w-7 h-7 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center">
-              <ArrowUpRight className="w-3.5 h-3.5" />
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+              <ArrowUpRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400">
+          <div className="text-lg sm:text-2xl font-black text-rose-600 dark:text-rose-400 truncate">
             {formatINR(metrics.totalDebit)}
           </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            <span className="truncate mr-1">Khata: {formatINR(metrics.khataDue)} + Inv: {formatINR(metrics.invoiceDue)}</span>
+          <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 gap-1">
+            <span className="truncate mr-1">
+              <span className="hidden sm:inline">Khata: {formatINR(metrics.khataDue)} + Inv: {formatINR(metrics.invoiceDue)}</span>
+              <span className="sm:hidden">Due: {formatINR(metrics.khataDue + metrics.invoiceDue)}</span>
+            </span>
             <span className={`font-semibold shrink-0 ${metrics.totalDebit === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {metrics.totalDebit === 0 ? t('clear', 'Clear') : t('pending', 'Pending')}
             </span>
@@ -437,21 +444,25 @@ export default function DashboardPage() {
         </div>
 
         {/* Net Business Profit */}
-        <div className="glass-card p-3 sm:p-3.5 rounded-2xl relative overflow-hidden group">
+        <div className="glass-card p-2.5 sm:p-3.5 rounded-2xl relative overflow-hidden group">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               {t('netProfit', 'NET PROFIT')}
             </span>
-            <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
               <TrendingUp className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className={`text-xl sm:text-2xl font-black ${metrics.netProfit > 0 ? 'text-emerald-600 dark:text-emerald-400' : metrics.netProfit < 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>
+          <div className={`text-lg sm:text-2xl font-black truncate ${metrics.netProfit > 0 ? 'text-emerald-600 dark:text-emerald-400' : metrics.netProfit < 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>
             {formatINR(metrics.netProfit)}
           </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            <span>{t('revenue', 'Revenue')}: {formatINR(metrics.totalIncome)}</span>
-            <span className={`text-[11px] font-bold ${
+          <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 gap-1">
+            <span className="truncate">
+              <span className="hidden sm:inline">{t('revenue', 'Revenue')}: </span>
+              <span className="sm:hidden">{t('revShort', 'Rev')}: </span>
+              {formatINR(metrics.totalIncome)}
+            </span>
+            <span className={`text-[10px] sm:text-[11px] font-bold shrink-0 ${
               metrics.totalIncome > 0 && metrics.netProfit > 0
                 ? 'text-emerald-500'
                 : metrics.netProfit < 0
@@ -466,22 +477,30 @@ export default function DashboardPage() {
         </div>
 
         {/* UPI Direct Collections */}
-        <div className="glass-card p-3 sm:p-3.5 rounded-2xl relative overflow-hidden group">
+        <div className="glass-card p-2.5 sm:p-3.5 rounded-2xl relative overflow-hidden group">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               {t('upiCollections', 'UPI COLLECTIONS')}
             </span>
-            <div className="w-7 h-7 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0">
               <QrCode className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+          <div className="text-lg sm:text-2xl font-black text-slate-900 dark:text-white truncate">
             {formatINR(metrics.totalUPICollections)}
           </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            <span>{t('directMerchantQr', 'Direct Merchant QR')}</span>
-            <span className="text-cyan-600 dark:text-cyan-400 font-semibold">
-              {metrics.totalUPICollections > 0 ? t('received', 'Received') : t('instantBankCredit', 'Instant Bank Credit')}
+          <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 gap-1">
+            <span className="truncate">
+              <span className="hidden sm:inline">{t('directMerchantQr', 'Direct Merchant QR')}</span>
+              <span className="sm:hidden">{t('directMerchantQrShort', 'Direct QR')}</span>
+            </span>
+            <span className="text-cyan-600 dark:text-cyan-400 font-semibold shrink-0">
+              {metrics.totalUPICollections > 0 ? t('received', 'Received') : (
+                <>
+                  <span className="hidden sm:inline">{t('instantBankCredit', 'Instant Bank Credit')}</span>
+                  <span className="sm:hidden">{t('instantBankCreditShort', 'Instant')}</span>
+                </>
+              )}
             </span>
           </div>
         </div>
