@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
-import { generateOtpEmailHtml } from '@/lib/emailService';
+import { generateOtpEmailHtml, resolveEmailLogo } from '@/lib/emailService';
 import { getGlobalBrandingFromDb } from '@/lib/globalBranding';
 
 export async function POST(req: NextRequest) {
@@ -41,12 +41,15 @@ export async function POST(req: NextRequest) {
     const brandLogo = brand?.websiteLogo?.trim() || '';
 
     // 3. Send test email
+    const { imgTag: logoImgTag, attachments: logoAttachments } = resolveEmailLogo(brandLogo, brandName);
+
     const { subject, html, text } = generateOtpEmailHtml({
       otp: '984210',
       purpose: 'login',
       brandName,
       badgeText,
       brandLogo,
+      logoImgTag,
       recipientEmail: testEmail,
       recipientName: 'Administrator',
     });
@@ -67,6 +70,7 @@ export async function POST(req: NextRequest) {
       subject: `[SMTP Test Successful] ${subject}`,
       text,
       html,
+      attachments: logoAttachments.length > 0 ? logoAttachments : undefined,
     });
 
     return NextResponse.json({

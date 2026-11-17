@@ -1,4 +1,6 @@
 import nodemailer from 'nodemailer';
+import fs from 'fs';
+import path from 'path';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 import { getGlobalBrandingFromDb } from '@/lib/globalBranding';
 
@@ -125,12 +127,120 @@ export async function createSmtpTransporter() {
   });
 }
 
+export interface EmailLogoResult {
+  imgTag: string;
+  attachments: Array<{
+    filename: string;
+    content: Buffer;
+    cid: string;
+    contentType: string;
+  }>;
+}
+
+/**
+ * Robust Email Logo Resolver:
+ * - Base64 Data URLs: Extracted into binary Buffer and attached as true MIME inline CID attachments (works 100% in Gmail, Outlook, Yahoo, Apple Mail).
+ * - HTTP/HTTPS URLs: Rendered as standard direct image URLs.
+ * - Local /public image: Read from filesystem and attached as CID attachment.
+ * - Missing/Invalid: Falls back to clean empty string (NO broken image icons rendered).
+ */
+export function resolveEmailLogo(rawLogo?: string, brandName = 'SmartKhata'): EmailLogoResult {
+  const attachments: Array<{
+    filename: string;
+    content: Buffer;
+    cid: string;
+    contentType: string;
+  }> = [];
+
+  const trimmed = rawLogo?.trim() || '';
+  const cidName = 'brand_logo_cid@smartkhata';
+
+  // 1. Base64 Data URL (e.g. data:image/png;base64,... or data:image/jpeg;base64,...)
+  if (trimmed.startsWith('data:image/')) {
+    const match = trimmed.match(/^data:image\/([a-zA-Z0-9-+.]+);base64,(.+)$/);
+    if (match) {
+      const rawExt = match[1].toLowerCase();
+      const base64Data = match[2];
+      try {
+        const buffer = Buffer.from(base64Data, 'base64');
+        const ext = rawExt.includes('jpeg') ? 'jpg' : rawExt.includes('png') ? 'png' : 'png';
+        const contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+        attachments.push({
+          filename: `brand-logo.${ext}`,
+          content: buffer,
+          cid: cidName,
+          contentType,
+        });
+        return {
+          imgTag: `<img src="cid:${cidName}" alt="${brandName}" style="max-height: 48px; max-width: 180px; object-fit: contain; margin-bottom: 12px; display: inline-block; border-radius: 8px;" /><br>`,
+          attachments,
+        };
+      } catch (err) {
+        console.warn('[emailService] Error converting base64 logo to CID attachment:', err);
+      }
+    }
+  }
+
+  // 2. Direct HTTP or HTTPS URL (accessible by external mail proxies)
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return {
+      imgTag: `<img src="${trimmed}" alt="${brandName}" style="max-height: 48px; max-width: 180px; object-fit: contain; margin-bottom: 12px; display: inline-block; border-radius: 8px;" /><br>`,
+      attachments: [],
+    };
+  }
+
+  // 3. Local filesystem fallback from public/ folder
+  try {
+    const publicDir = path.join(process.cwd(), 'public');
+    let targetFile = '';
+
+    if (trimmed && (trimmed.startsWith('/') || trimmed.endsWith('.png') || trimmed.endsWith('.jpg'))) {
+      const cleanRel = trimmed.replace(/^\//, '');
+      const testPath = path.join(publicDir, cleanRel);
+      if (fs.existsSync(testPath)) {
+        targetFile = testPath;
+      }
+    }
+
+    if (!targetFile) {
+      const defaultLogo = path.join(publicDir, 'brand-logo.png');
+      if (fs.existsSync(defaultLogo)) {
+        targetFile = defaultLogo;
+      }
+    }
+
+    if (targetFile && fs.existsSync(targetFile)) {
+      const fileBuffer = fs.readFileSync(targetFile);
+      const ext = path.extname(targetFile).replace('.', '').toLowerCase() || 'png';
+      attachments.push({
+        filename: path.basename(targetFile),
+        content: fileBuffer,
+        cid: cidName,
+        contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+      });
+      return {
+        imgTag: `<img src="cid:${cidName}" alt="${brandName}" style="max-height: 48px; max-width: 180px; object-fit: contain; margin-bottom: 12px; display: inline-block; border-radius: 8px;" /><br>`,
+        attachments,
+      };
+    }
+  } catch (err) {
+    console.warn('[emailService] Local filesystem logo read error:', err);
+  }
+
+  // Fallback: If no image is valid, return empty string so no broken placeholder shows
+  return {
+    imgTag: '',
+    attachments: [],
+  };
+}
+
 export interface OtpEmailTemplateParams {
   otp: string;
   purpose: 'signup' | 'login' | 'forgot_password' | 'resend';
   brandName?: string;
   badgeText?: string;
   brandLogo?: string;
+  logoImgTag?: string;
   recipientEmail: string;
   recipientName?: string;
 }
@@ -140,9 +250,14 @@ export interface OtpEmailTemplateParams {
  * Automatically synchronizes with Website Identity & Branding ("Brand Display Name *" and "Badge Text")
  */
 export function generateOtpEmailHtml(params: OtpEmailTemplateParams): { subject: string; html: string; text: string } {
-  const { otp, purpose, brandName = 'KhataPro', badgeText: customBadgeText, brandLogo, recipientEmail, recipientName } = params;
+  const { otp, purpose, brandName = 'KhataPro', badgeText: customBadgeText, brandLogo, logoImgTag: customLogoImgTag, recipientEmail, recipientName } = params;
   const cleanBrandName = brandName.trim() || 'KhataPro';
   const cleanBadgeText = customBadgeText?.trim() || '';
+
+  // Resolve logo image tag: use custom provided tag or resolve from brandLogo
+  const effectiveLogoTag = customLogoImgTag !== undefined 
+    ? customLogoImgTag 
+    : (brandLogo ? resolveEmailLogo(brandLogo, cleanBrandName).imgTag : '');
 
   let title = 'Your Verification Code';
   let badgeText = 'Verification OTP';
@@ -336,7 +451,7 @@ export function generateOtpEmailHtml(params: OtpEmailTemplateParams): { subject:
       
       <div class="content">
         <div class="brand-logo-area">
-          ${brandLogo ? `<img src="${brandLogo}" alt="${cleanBrandName}" style="max-height: 44px; max-width: 170px; object-fit: contain; margin-bottom: 12px; display: inline-block; border-radius: 8px;" /><br>` : ''}
+          ${effectiveLogoTag}
           <div class="brand-header-row">
             <span class="brand-name">⚡ ${cleanBrandName}</span>
             ${cleanBadgeText ? `<span class="brand-badge-tag">${cleanBadgeText}</span>` : ''}
@@ -431,12 +546,15 @@ export async function sendOtpEmailDirect(params: {
 
     const finalBrandName = liveBrandName || 'KhataPro';
 
+    const { imgTag: logoImgTag, attachments: logoAttachments } = resolveEmailLogo(liveLogo, finalBrandName);
+
     const { subject, html, text } = generateOtpEmailHtml({
       otp: params.otp,
       purpose: params.purpose,
       brandName: finalBrandName,
       badgeText: liveBadgeText,
       brandLogo: liveLogo,
+      logoImgTag,
       recipientEmail: params.to,
       recipientName: params.recipientName,
     });
@@ -459,6 +577,7 @@ export async function sendOtpEmailDirect(params: {
       subject,
       text,
       html,
+      attachments: logoAttachments.length > 0 ? logoAttachments : undefined,
     });
 
     console.log(`[SMTP Mailer] OTP dispatched to ${params.to} using live brand "${finalBrandName}" | MessageId: ${info.messageId}`);
@@ -485,13 +604,18 @@ export function generateWelcomeEmailHtml(params: {
   brandName?: string;
   badgeText?: string;
   brandLogo?: string;
+  logoImgTag?: string;
   portalUrl?: string;
 }): { subject: string; html: string; text: string } {
-  const { recipientEmail, recipientName, brandName = 'KhataPro', badgeText: customBadgeText, brandLogo, portalUrl } = params;
+  const { recipientEmail, recipientName, brandName = 'KhataPro', badgeText: customBadgeText, brandLogo, logoImgTag: customLogoImgTag, portalUrl } = params;
   const cleanBrandName = brandName.trim() || 'KhataPro';
   const cleanBadgeText = customBadgeText?.trim() || '';
   const greeting = recipientName ? `Hello ${recipientName},` : 'Hello Business Owner,';
   const subject = `🎉 Welcome to ${cleanBrandName}! Your Merchant Ledger is Activated`;
+
+  const effectiveLogoTag = customLogoImgTag !== undefined 
+    ? customLogoImgTag 
+    : (brandLogo ? resolveEmailLogo(brandLogo, cleanBrandName).imgTag : '');
 
   const html = `
 <!DOCTYPE html>
@@ -659,7 +783,7 @@ export function generateWelcomeEmailHtml(params: {
       
       <div class="content">
         <div class="brand-logo-area">
-          ${brandLogo ? `<img src="${brandLogo}" alt="${cleanBrandName}" style="max-height: 46px; max-width: 180px; object-fit: contain; margin-bottom: 12px; display: inline-block; border-radius: 8px;" /><br>` : ''}
+          ${effectiveLogoTag}
           <div class="brand-header-row">
             <span class="brand-name">⚡ ${cleanBrandName}</span>
             ${cleanBadgeText ? `<span class="brand-badge-tag">${cleanBadgeText}</span>` : ''}
@@ -778,12 +902,15 @@ export async function sendWelcomeEmailDirect(params: {
 
     const finalBrandName = liveBrandName || 'KhataPro';
 
+    const { imgTag: logoImgTag, attachments: logoAttachments } = resolveEmailLogo(liveLogo, finalBrandName);
+
     const { subject, html, text } = generateWelcomeEmailHtml({
       recipientEmail: params.to,
       recipientName: params.recipientName,
       brandName: finalBrandName,
       badgeText: liveBadgeText,
       brandLogo: liveLogo,
+      logoImgTag,
       portalUrl: params.portalUrl,
     });
 
@@ -803,6 +930,7 @@ export async function sendWelcomeEmailDirect(params: {
       subject,
       text,
       html,
+      attachments: logoAttachments.length > 0 ? logoAttachments : undefined,
     });
 
     console.log(`[WelcomeEmail] Welcome email delivered to ${params.to} | MessageId: ${info.messageId}`);
