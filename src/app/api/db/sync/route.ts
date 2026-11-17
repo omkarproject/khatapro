@@ -907,6 +907,16 @@ export async function GET(req: NextRequest) {
         if (matchedGrpTxns.length > 0) {
           const txnMap = new Map((finalData.transactions || []).map((t: any) => [t.id, t]));
           matchedGrpTxns.forEach((gt: any) => {
+            const existing = txnMap.get(gt.id);
+            if (existing) {
+              const isExistingDeleted = (existing as any).isDeleted || (existing as any).status === 'deleted';
+              const isIncomingDeleted = (gt as any).isDeleted || (gt as any).status === 'deleted';
+              const cloudTime = new Date((gt as any).updatedAt || (gt as any).updated_at || (gt as any).createdAt || 0).getTime();
+              const localTime = new Date((existing as any).updatedAt || (existing as any).updated_at || (existing as any).deletedAt || (existing as any).createdAt || 0).getTime();
+              if (isExistingDeleted && !isIncomingDeleted && cloudTime <= localTime) {
+                return;
+              }
+            }
             txnMap.set(gt.id, gt);
           });
           finalData.transactions = Array.from(txnMap.values());

@@ -43,6 +43,7 @@ export default function UpiCollectionPage() {
     customers,
     addTransaction,
     deleteTransaction,
+    hardDeleteTransaction,
     addToast,
     activeCurrency,
     activeLanguage,
@@ -1519,9 +1520,9 @@ export default function UpiCollectionPage() {
                         <td className="py-3 px-3 text-right">
                           <button
                             type="button"
-                            onClick={() => {
+                            onClick={async () => {
                               if (confirm(`Delete collection record of ${formatINR(t.amount)}?`)) {
-                                deleteTransaction(t.id);
+                                await hardDeleteTransaction(t.id);
                               }
                             }}
                             title="Delete Record"

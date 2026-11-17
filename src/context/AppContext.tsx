@@ -564,8 +564,16 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
               if (item && item.id) {
                 const existing = map.get(item.id);
                 if (existing) {
+                  const isExistingDeleted = (existing as any).isDeleted || (existing as any).status === 'deleted';
+                  const isIncomingDeleted = (item as any).isDeleted || (item as any).status === 'deleted';
                   const cloudTime = new Date((item as any).updatedAt || (item as any).updated_at || (item as any).createdAt || 0).getTime();
-                  const localTime = new Date((existing as any).updatedAt || (existing as any).updated_at || (existing as any).createdAt || 0).getTime();
+                  const localTime = new Date((existing as any).updatedAt || (existing as any).updated_at || (existing as any).deletedAt || (existing as any).createdAt || 0).getTime();
+
+                  // If locally deleted and incoming cloud snapshot is not deleted, preserve local deletion unless cloud is strictly newer
+                  if (isExistingDeleted && !isIncomingDeleted && cloudTime <= localTime) {
+                    return;
+                  }
+
                   if (cloudTime >= localTime) {
                     map.set(item.id, item);
                   }
@@ -824,6 +832,16 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
                     });
                     // Merge authoritative group transactions from cloud
                     gData.transactions.forEach((gt: any) => {
+                      const existing = txnMap.get(gt.id);
+                      if (existing) {
+                        const isExistingDeleted = existing.isDeleted || existing.status === 'deleted';
+                        const isIncomingDeleted = gt.isDeleted || gt.status === 'deleted';
+                        const cloudTime = new Date(gt.updatedAt || gt.updated_at || gt.createdAt || 0).getTime();
+                        const localTime = new Date(existing.updatedAt || existing.updated_at || existing.deletedAt || existing.createdAt || 0).getTime();
+                        if (isExistingDeleted && !isIncomingDeleted && cloudTime <= localTime) {
+                          return;
+                        }
+                      }
                       txnMap.set(gt.id, gt);
                     });
                     const mergedTxns = Array.from(txnMap.values());
@@ -1849,6 +1867,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
             isDeleted: true,
             deletedAt: new Date().toISOString(),
             deletedBy: actorName,
+            updatedAt: new Date().toISOString(),
           },
           userId: currentUser?.id,
         }),

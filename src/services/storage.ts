@@ -355,8 +355,16 @@ export const StorageService = {
         if (item && item.id) {
           const existing = map.get(item.id);
           if (existing) {
+            const isExistingDeleted = (existing as any).isDeleted || (existing as any).status === 'deleted';
+            const isIncomingDeleted = (item as any).isDeleted || (item as any).status === 'deleted';
             const incomingTime = new Date((item as any).updatedAt || (item as any).updated_at || (item as any).createdAt || 0).getTime();
-            const localTime = new Date((existing as any).updatedAt || (existing as any).updated_at || (existing as any).createdAt || 0).getTime();
+            const localTime = new Date((existing as any).updatedAt || (existing as any).updated_at || (existing as any).deletedAt || (existing as any).createdAt || 0).getTime();
+
+            // If locally deleted and incoming cloud snapshot is not deleted, preserve local deletion unless incoming is strictly newer
+            if (isExistingDeleted && !isIncomingDeleted && incomingTime <= localTime) {
+              return;
+            }
+
             if (incomingTime >= localTime) {
               map.set(item.id, item);
             }
@@ -1017,6 +1025,7 @@ export const StorageService = {
           isDeleted: true,
           deletedAt: new Date().toISOString(),
           deletedBy: deletedBy || t.createdBy || 'User',
+          updatedAt: new Date().toISOString(),
         };
       }
       return t;
@@ -1082,6 +1091,21 @@ export const StorageService = {
 
   hardDeleteTransaction: (transactionId: string): Transaction[] => {
     const list = StorageService.getTransactions();
+    const txnToDelete = list.find(t => t.id === transactionId);
+    if (txnToDelete && txnToDelete.customerId && txnToDelete.status !== 'deleted' && !txnToDelete.isDeleted) {
+      const customers = StorageService.getCustomers();
+      const custIdx = customers.findIndex(c => c.id === txnToDelete.customerId);
+      if (custIdx >= 0) {
+        const cust = { ...customers[custIdx] };
+        if (txnToDelete.type === 'credit') {
+          cust.outstandingBalance -= txnToDelete.amount;
+        } else if (txnToDelete.type === 'debit' || txnToDelete.type === 'collection') {
+          cust.outstandingBalance += txnToDelete.amount;
+        }
+        customers[custIdx] = cust;
+        setLocalItem(STORAGE_KEYS.CUSTOMERS, customers);
+      }
+    }
     const updatedList = list.filter(t => t.id !== transactionId);
     setLocalItem(STORAGE_KEYS.TRANSACTIONS, updatedList);
     return updatedList;
