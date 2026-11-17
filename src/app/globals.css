@@ -140,7 +140,7 @@ a, button, input, select {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 10mm;
+    margin: 6mm;
   }
   body {
     background-color: #ffffff !important;
@@ -150,6 +150,10 @@ a, button, input, select {
   }
   .print\:hidden {
     display: none !important;
+  }
+  .standee-print-card {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 }
 

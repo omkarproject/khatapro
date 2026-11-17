@@ -75,36 +75,48 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0B0F19]">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0B0F19] print:bg-white print:min-h-0 print:block">
       <AuthGuard>
-        {currentUser && <Navbar onToggleSidebar={() => setMobileSidebarOpen(prev => !prev)} />}
+        {currentUser && (
+          <div className="print:hidden">
+            <Navbar onToggleSidebar={() => setMobileSidebarOpen(prev => !prev)} />
+          </div>
+        )}
 
-        <div className="flex-1 flex w-full">
+        <div className="flex-1 flex w-full print:block">
           {currentUser && (
-            <Sidebar
-              isOpenMobile={mobileSidebarOpen}
-              onCloseMobile={() => setMobileSidebarOpen(false)}
-            />
+            <div className="print:hidden">
+              <Sidebar
+                isOpenMobile={mobileSidebarOpen}
+                onCloseMobile={() => setMobileSidebarOpen(false)}
+              />
+            </div>
           )}
 
-          <main className="flex-1 min-w-0 px-3 sm:px-6 lg:px-8 2xl:px-10 py-4 sm:py-6 pb-24 md:pb-12 overflow-x-hidden">
-            <BroadcastBanner />
+          <main className="flex-1 min-w-0 px-3 sm:px-6 lg:px-8 2xl:px-10 py-4 sm:py-6 pb-24 md:pb-12 overflow-x-hidden print:p-0 print:m-0 print:overflow-visible">
+            <div className="print:hidden">
+              <BroadcastBanner />
+            </div>
             {children}
           </main>
         </div>
 
-        <Footer />
-        {currentUser && <MobileNav />}
-        <QuickUPICollectModal />
-        <PaymentDetailsModal />
-        <MaintenanceNoticeModal />
-        <MaintenanceOverlay />
-        <AuthModal />
-        <SupportChatWidget />
-        <AutoBackupGuardian />
-        <CustomerDriveUploadGuardian />
+        <div className="print:hidden">
+          <Footer />
+          {currentUser && <MobileNav />}
+          <QuickUPICollectModal />
+          <PaymentDetailsModal />
+          <MaintenanceNoticeModal />
+          <MaintenanceOverlay />
+          <AuthModal />
+          <SupportChatWidget />
+          <AutoBackupGuardian />
+          <CustomerDriveUploadGuardian />
+        </div>
       </AuthGuard>
-      <ToastContainer />
+      <div className="print:hidden">
+        <ToastContainer />
+      </div>
     </div>
   );
 }

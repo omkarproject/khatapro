@@ -32,8 +32,298 @@ import {
   Settings as SettingsIcon,
   Search,
   Filter,
-  Zap
+  Zap,
+  X,
+  Store,
+  Phone,
+  MapPin,
+  Sliders,
+  Palette,
+  Eye,
+  CheckCircle2
 } from 'lucide-react';
+
+interface ShopStandeeContentProps {
+  theme: 'indigo' | 'bharat' | 'emerald' | 'minimal';
+  title: string;
+  subtitle: string;
+  upiId: string;
+  qrUrl: string;
+  showLogo?: boolean;
+  logoUrl?: string;
+  showPhone?: boolean;
+  phone?: string;
+  showAddress?: boolean;
+  address?: string;
+  amount?: number;
+  isCustomQr?: boolean;
+  isCompactPreview?: boolean;
+}
+
+function ShopStandeeContent({
+  theme,
+  title,
+  subtitle,
+  upiId,
+  qrUrl,
+  showLogo = true,
+  logoUrl,
+  showPhone = true,
+  phone,
+  showAddress = false,
+  address,
+  amount,
+  isCustomQr = false,
+  isCompactPreview = false,
+}: ShopStandeeContentProps) {
+  const themeConfig = {
+    indigo: {
+      border: 'border-indigo-600',
+      headerBg: 'bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900',
+      topStripe: 'bg-gradient-to-r from-cyan-400 via-indigo-500 to-pink-500',
+      badgeBg: 'bg-indigo-500/20 text-cyan-300 border-cyan-400/30',
+      badgeText: 'BHARAT INTERFACE FOR MONEY • UPI 2.0',
+      logoBorder: 'border-indigo-400/50',
+      crosshairColor: '#4f46e5',
+      targetBadgeBg: 'bg-indigo-600',
+      idBg: 'bg-indigo-50/90',
+      idBorder: 'border-indigo-200',
+      idText: 'text-indigo-950',
+      verifiedBg: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+      footerBg: 'bg-slate-950 text-indigo-200',
+    },
+    bharat: {
+      border: 'border-amber-600',
+      headerBg: 'bg-gradient-to-br from-amber-600 via-orange-600 to-slate-950',
+      topStripe: 'bg-gradient-to-r from-orange-500 via-amber-100 to-emerald-600',
+      badgeBg: 'bg-white/20 text-white border-white/40',
+      badgeText: 'भारत क्यूआर • BHARAT QR OFFICIAL',
+      logoBorder: 'border-amber-300',
+      crosshairColor: '#ea580c',
+      targetBadgeBg: 'bg-gradient-to-r from-orange-600 to-amber-600',
+      idBg: 'bg-amber-50',
+      idBorder: 'border-amber-300',
+      idText: 'text-slate-950',
+      verifiedBg: 'bg-white/20 text-white border-white/40',
+      footerBg: 'bg-slate-950 text-amber-300',
+    },
+    emerald: {
+      border: 'border-emerald-600',
+      headerBg: 'bg-gradient-to-br from-slate-950 via-emerald-950 to-teal-950',
+      topStripe: 'bg-gradient-to-r from-emerald-400 via-teal-300 to-amber-300',
+      badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30',
+      badgeText: 'SECURE COMMERCIAL DESK • 0% EXTRA FEE',
+      logoBorder: 'border-emerald-400/50',
+      crosshairColor: '#059669',
+      targetBadgeBg: 'bg-emerald-600',
+      idBg: 'bg-emerald-50',
+      idBorder: 'border-emerald-200',
+      idText: 'text-emerald-950',
+      verifiedBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+      footerBg: 'bg-slate-950 text-emerald-200',
+    },
+    minimal: {
+      border: 'border-slate-900',
+      headerBg: 'bg-black',
+      topStripe: 'bg-slate-400',
+      badgeBg: 'bg-white/10 text-white border-white/20',
+      badgeText: 'BHARAT QR • CONTACTLESS PAYMENTS',
+      logoBorder: 'border-white/40',
+      crosshairColor: '#0f172a',
+      targetBadgeBg: 'bg-black',
+      idBg: 'bg-slate-100',
+      idBorder: 'border-slate-300',
+      idText: 'text-slate-950',
+      verifiedBg: 'bg-white/10 text-white border-white/20',
+      footerBg: 'bg-black text-slate-300',
+    },
+  }[theme];
+
+  return (
+    <div className={`w-full flex flex-col justify-between bg-white text-slate-900 rounded-[28px] overflow-hidden border-[3px] ${themeConfig.border} shadow-xl ${isCompactPreview ? 'text-[92%]' : ''}`}>
+      
+      {/* Top Accent Color Bar */}
+      <div className={`w-full h-2.5 ${themeConfig.topStripe}`} />
+
+      {/* Header Banner */}
+      <div className={`w-full px-6 py-5 ${themeConfig.headerBg} text-white flex flex-col items-center text-center space-y-2`}>
+        {/* National / Bharat QR Top Badge */}
+        <div className={`px-3.5 py-1 rounded-full text-[10px] font-black tracking-widest uppercase border flex items-center gap-1.5 ${themeConfig.badgeBg}`}>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span>{themeConfig.badgeText}</span>
+        </div>
+
+        {/* Business Logo & Name */}
+        <div className="flex flex-col items-center space-y-1 pt-1">
+          {showLogo && logoUrl ? (
+            <img
+              src={logoUrl}
+              alt="Business Logo"
+              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover bg-white p-1 border-2 ${themeConfig.logoBorder} shadow-lg`}
+            />
+          ) : (
+            <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-white/10 border-2 ${themeConfig.logoBorder} flex items-center justify-center text-white`}>
+              <Store className="w-5 h-5 sm:w-6 sm:h-6" />
+            </div>
+          )}
+
+          <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white drop-shadow-sm pt-0.5">
+            {title || 'MY BUSINESS'}
+          </h2>
+
+          <p className="text-[10px] sm:text-[11px] font-bold tracking-wider text-slate-300 uppercase max-w-md px-2">
+            {subtitle}
+          </p>
+        </div>
+
+        {/* Verified Merchant Badge */}
+        <div className={`inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wider border ${themeConfig.verifiedBg}`}>
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span>Verified Merchant • 100% Direct Settlement</span>
+        </div>
+      </div>
+
+      {/* Middle QR & Scanner Body */}
+      <div className="w-full flex-1 p-5 sm:p-6 flex flex-col items-center justify-center space-y-3.5 bg-white">
+        
+        {/* Floating Scan Label */}
+        <div className={`px-4 py-1 rounded-full text-white font-black text-[11px] tracking-wider uppercase shadow-md flex items-center gap-1.5 ${themeConfig.targetBadgeBg}`}>
+          <QrCode className="w-3.5 h-3.5" />
+          <span>Scan To Pay Any Amount</span>
+        </div>
+
+        {/* QR Code Container with 4 Corner Crosshairs */}
+        <div className="relative p-4 sm:p-5 bg-white border-2 border-slate-200 rounded-3xl shadow-inner">
+          <div className="absolute top-2 left-2 w-4 h-4 sm:w-5 sm:h-5 border-t-4 border-l-4 rounded-tl-sm" style={{ borderColor: themeConfig.crosshairColor }} />
+          <div className="absolute top-2 right-2 w-4 h-4 sm:w-5 sm:h-5 border-t-4 border-r-4 rounded-tr-sm" style={{ borderColor: themeConfig.crosshairColor }} />
+          <div className="absolute bottom-2 left-2 w-4 h-4 sm:w-5 sm:h-5 border-b-4 border-l-4 rounded-bl-sm" style={{ borderColor: themeConfig.crosshairColor }} />
+          <div className="absolute bottom-2 right-2 w-4 h-4 sm:w-5 sm:h-5 border-b-4 border-r-4 rounded-br-sm" style={{ borderColor: themeConfig.crosshairColor }} />
+
+          <img
+            src={qrUrl}
+            alt="Merchant Standee QR"
+            className="w-52 h-52 sm:w-60 sm:h-60 object-contain rounded-xl select-none"
+            crossOrigin="anonymous"
+          />
+
+          {!isCustomQr && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="p-1 rounded-xl bg-white shadow-md border border-slate-200">
+                <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg ${themeConfig.targetBadgeBg} flex items-center justify-center text-white font-black text-xs sm:text-sm`}>
+                  ₹
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Official UPI ID Container */}
+        <div className={`w-full max-w-sm px-4 py-2.5 rounded-2xl border-2 text-center shadow-xs ${themeConfig.idBg} ${themeConfig.idBorder}`}>
+          <div className="text-[9px] uppercase font-black tracking-widest text-slate-500 mb-0.5">
+            OFFICIAL UPI ID
+          </div>
+          <div className={`font-mono font-black text-sm sm:text-base tracking-wider select-all ${themeConfig.idText}`}>
+            {upiId || 'merchant@waaxis'}
+          </div>
+          <div className="text-[11px] font-semibold text-slate-600 mt-0.5">
+            Payee: <span className="font-bold text-slate-900">{title}</span>
+          </div>
+          {amount && amount > 0 && (
+            <div className="mt-1 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black">
+              <span>Amount: {formatINR(amount)}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Accepted Apps Supported Row */}
+        <div className="w-full flex flex-col items-center space-y-1.5 pt-0.5">
+          <div className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">
+            ACCEPTED ON ALL PAYMENT APPS
+          </div>
+          
+          <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+            {/* Google Pay */}
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white border border-slate-200 shadow-xs">
+              <span className="font-black text-[11px] tracking-tight text-slate-800">
+                <span className="text-blue-500">G</span>
+                <span className="text-red-500">o</span>
+                <span className="text-amber-500">o</span>
+                <span className="text-blue-500">g</span>
+                <span className="text-emerald-500">l</span>
+                <span className="text-red-500">e</span>
+                <span className="text-slate-800 ml-1">Pay</span>
+              </span>
+            </div>
+
+            {/* PhonePe */}
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#5f259f] text-white shadow-xs">
+              <div className="w-3 h-3 rounded-full bg-white text-[#5f259f] font-black text-[8px] flex items-center justify-center">
+                पे
+              </div>
+              <span className="font-black text-[11px] tracking-tight">PhonePe</span>
+            </div>
+
+            {/* Paytm */}
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#002e6e] text-white shadow-xs">
+              <span className="font-black text-[11px] tracking-tight">
+                Pay<span className="text-[#00baf2]">tm</span>
+              </span>
+            </div>
+
+            {/* BHIM UPI */}
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-900 text-white shadow-xs">
+              <span className="text-orange-400 font-black text-[11px]">BHIM</span>
+              <span className="text-emerald-400 font-black text-[11px]">UPI</span>
+            </div>
+
+            {/* Amazon Pay */}
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#232f3e] text-white shadow-xs">
+              <span className="font-black text-[11px] text-[#ff9900]">amazon</span>
+              <span className="text-white text-[11px] font-semibold">pay</span>
+            </div>
+
+            {/* Any Bank UPI */}
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-300 text-slate-800 shadow-xs">
+              <span className="text-[10px] font-extrabold uppercase">Any Bank</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Standee Footer */}
+      <div className={`w-full px-5 py-3 ${themeConfig.footerBg} flex flex-col items-center text-center space-y-1`}>
+        <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-white/10 text-white text-[9px] font-black uppercase tracking-wider">
+          <span>⚡ Instant Settlement</span>
+          <span>•</span>
+          <span>0% Extra Charges</span>
+          <span>•</span>
+          <span>NPCI Bharat QR</span>
+        </div>
+
+        {((showPhone && phone) || (showAddress && address)) && (
+          <div className="text-[10px] font-semibold text-slate-300 flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5">
+            {showPhone && phone && (
+              <span className="flex items-center gap-1">
+                <Phone className="w-3 h-3 text-slate-400" /> {phone}
+              </span>
+            )}
+            {showAddress && address && (
+              <span className="flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-slate-400" /> {address}
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+          POWERED BY SMARTKHATA PRO • OFFICIAL MERCHANT COUNTER STANDEE
+        </div>
+      </div>
+
+    </div>
+  );
+}
 
 export default function UpiCollectionPage() {
   const {
@@ -138,6 +428,40 @@ export default function UpiCollectionPage() {
   const selectedCust = customers.find(c => c.id === selectedCustomerId);
   const customerDisplayName = selectedCust?.name || 'Valued Customer';
   const customerPhone = selectedCust?.phone || '';
+
+  // Shop Counter Standee Studio State
+  const [isStandeeModalOpen, setIsStandeeModalOpen] = useState(false);
+  const [standeeTheme, setStandeeTheme] = useState<'indigo' | 'bharat' | 'emerald' | 'minimal'>('indigo');
+  const [standeeTitle, setStandeeTitle] = useState(paymentSettings.payeeName || settings.businessName || 'My Business');
+  const [standeeSubtitle, setStandeeSubtitle] = useState('ACCEPTED HERE • SCAN & PAY USING ANY UPI APP');
+  const [standeeShowLogo, setStandeeShowLogo] = useState(true);
+  const [standeeShowPhone, setStandeeShowPhone] = useState(true);
+  const [standeeShowAddress, setStandeeShowAddress] = useState(false);
+  const [standeeIncludeAmount, setStandeeIncludeAmount] = useState(false);
+
+  // Sync standee title when payeeName or settings.businessName updates
+  useEffect(() => {
+    if (paymentSettings.payeeName || settings.businessName) {
+      setStandeeTitle(paymentSettings.payeeName || settings.businessName);
+    }
+  }, [paymentSettings.payeeName, settings.businessName]);
+
+  const standeeAmount = standeeIncludeAmount && numCollectAmount > 0 ? numCollectAmount : undefined;
+  const standeeUpiUri = buildUpiUri(upiId, standeeTitle, standeeAmount, standeeAmount ? collectNote : undefined);
+  const standeeQrImage = customQrUrl && customQrUrl.trim().length > 0 && !standeeIncludeAmount
+    ? customQrUrl
+    : getQrCodeUrl(standeeUpiUri, 500);
+
+  const handleDownloadStandeeQr = () => {
+    const a = document.createElement('a');
+    a.href = standeeQrImage;
+    a.download = `${(standeeTitle || 'Shop').replace(/[^a-zA-Z0-9]/g, '_')}_QR_Standee.png`;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    addToast('Standee QR Downloaded', 'QR code image downloaded to your device.', 'success');
+  };
 
   // Handle QR image file upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -487,11 +811,16 @@ export default function UpiCollectionPage() {
               Gateway Settings
             </Link>
             <button
-              onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              type="button"
+              onClick={() => setIsStandeeModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-md shadow-indigo-600/25 transition-all cursor-pointer"
+              title="Design & Print Beautiful Modern Shop Standee (A4/Stand)"
             >
-              <Printer className="w-4 h-4 text-slate-400" />
-              Print Shop Standee
+              <Printer className="w-4 h-4" />
+              <span>Print Shop Standee</span>
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-white/20 text-white uppercase tracking-wider">
+                Studio
+              </span>
             </button>
           </div>
         </div>
@@ -1542,58 +1871,270 @@ export default function UpiCollectionPage() {
 
       </div>
 
+      {/* SHOP COUNTER QR STANDEE STUDIO MODAL */}
+      {isStandeeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto print:hidden">
+          <div className="relative w-full max-w-5xl bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[94vh]">
+            
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 flex items-center justify-center">
+                  <Printer className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Shop Counter QR Standee Studio</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      Print Ready (A4 / A5)
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Select a modern theme, customize details, and print high-resolution standee for your shop counter.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsStandeeModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body: Controls & Live Preview */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-4 sm:p-6 overflow-y-auto">
+              
+              {/* Left Column: Customization Controls (5 cols) */}
+              <div className="lg:col-span-5 space-y-5">
+                
+                {/* 1. Theme Selector */}
+                <div>
+                  <label className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-2.5">
+                    <Palette className="w-4 h-4 text-indigo-500" />
+                    <span>Choose Standee Theme</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {[
+                      { id: 'indigo', name: 'Indigo Pro', badge: 'Fintech Aurora', color: 'from-slate-950 via-indigo-950 to-indigo-900' },
+                      { id: 'bharat', name: 'Bharat Retail', badge: 'Tricolor / Saffron', color: 'from-amber-600 via-orange-600 to-slate-900' },
+                      { id: 'emerald', name: 'Emerald Trust', badge: 'Bank Green', color: 'from-slate-950 via-emerald-950 to-teal-950' },
+                      { id: 'minimal', name: 'Minimal Black', badge: 'Monochrome', color: 'from-black to-slate-900' },
+                    ].map((th) => (
+                      <button
+                        key={th.id}
+                        type="button"
+                        onClick={() => setStandeeTheme(th.id as any)}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                          standeeTheme === th.id
+                            ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20'
+                            : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-800/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`w-5 h-5 rounded-lg bg-gradient-to-br ${th.color} border border-white/20`} />
+                          {standeeTheme === th.id && (
+                            <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-xs font-extrabold text-slate-900 dark:text-white">{th.name}</div>
+                          <div className="text-[10px] text-slate-500">{th.badge}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Shop Title / Payee Name */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between mb-1.5">
+                      <span>Shop / Merchant Name *</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Printed in bold header</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={standeeTitle}
+                      onChange={(e) => setStandeeTitle(e.target.value)}
+                      placeholder="e.g. My Super Store"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
+                      Tagline / Instruction
+                    </label>
+                    <input
+                      type="text"
+                      value={standeeSubtitle}
+                      onChange={(e) => setStandeeSubtitle(e.target.value)}
+                      placeholder="ACCEPTED HERE • SCAN & PAY USING ANY UPI APP"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                {/* 3. Toggle Options */}
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                  <div className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5 mb-1">
+                    <Sliders className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Display Options</span>
+                  </div>
+
+                  <label className="flex items-center justify-between cursor-pointer py-1">
+                    <span className="text-xs text-slate-700 dark:text-slate-300 font-medium">Show Business Logo</span>
+                    <input
+                      type="checkbox"
+                      checked={standeeShowLogo}
+                      onChange={(e) => setStandeeShowLogo(e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between cursor-pointer py-1 border-t border-slate-200 dark:border-slate-700/60 pt-2">
+                    <span className="text-xs text-slate-700 dark:text-slate-300 font-medium">
+                      Show Phone Number ({settings.businessPhone || 'No Phone'})
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={standeeShowPhone}
+                      onChange={(e) => setStandeeShowPhone(e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between cursor-pointer py-1 border-t border-slate-200 dark:border-slate-700/60 pt-2">
+                    <span className="text-xs text-slate-700 dark:text-slate-300 font-medium">
+                      Show Shop Address ({settings.businessAddress ? 'Set' : 'None'})
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={standeeShowAddress}
+                      onChange={(e) => setStandeeShowAddress(e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer"
+                    />
+                  </label>
+
+                  {numCollectAmount > 0 && (
+                    <label className="flex items-center justify-between cursor-pointer py-1 border-t border-slate-200 dark:border-slate-700/60 pt-2">
+                      <span className="text-xs text-slate-700 dark:text-slate-300 font-medium text-emerald-600 dark:text-emerald-400">
+                        Include Specific Amount ({formatINR(numCollectAmount)})
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={standeeIncludeAmount}
+                        onChange={(e) => setStandeeIncludeAmount(e.target.checked)}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 accent-emerald-600 cursor-pointer"
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {/* Helpful Merchant Pro-Tip */}
+                <div className="p-3 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 text-[11px] text-indigo-800 dark:text-indigo-300 flex items-start gap-2.5">
+                  <Sparkles className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+                  <div className="leading-relaxed">
+                    <strong>Printing Tip:</strong> Print on standard A4 / A5 glossy paper or photo paper. Place it inside an acrylic counter T-stand for a durable, professional counter display!
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Right Column: Live Scaled Standee Preview (7 cols) */}
+              <div className="lg:col-span-7 flex flex-col items-center">
+                <div className="w-full flex items-center justify-between mb-2 px-1">
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    <Eye className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Live Standee Preview (A4 Scale)</span>
+                  </span>
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    UPI: {upiId || 'Not Set'}
+                  </span>
+                </div>
+
+                <div className="w-full bg-slate-100 dark:bg-slate-950/80 p-3 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-inner flex items-center justify-center overflow-hidden">
+                  <div className="w-full max-w-sm sm:max-w-md transform transition-all duration-200">
+                    <ShopStandeeContent
+                      theme={standeeTheme}
+                      title={standeeTitle}
+                      subtitle={standeeSubtitle}
+                      upiId={upiId}
+                      qrUrl={standeeQrImage}
+                      showLogo={standeeShowLogo}
+                      logoUrl={settings.businessLogo}
+                      showPhone={standeeShowPhone}
+                      phone={settings.businessPhone}
+                      showAddress={standeeShowAddress}
+                      address={settings.businessAddress}
+                      amount={standeeAmount}
+                      isCustomQr={Boolean(customQrUrl && customQrUrl.trim().length > 0 && !standeeIncludeAmount)}
+                      isCompactPreview={true}
+                    />
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 sm:p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={handleDownloadStandeeQr}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+              >
+                <Download className="w-4 h-4 text-slate-500" />
+                <span>Download Standee QR Image</span>
+              </button>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsStandeeModalOpen(false)}
+                  className="px-4 py-2.5 rounded-2xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.print();
+                  }}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 cursor-pointer transition-all"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print Standee Now</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
       {/* DEDICATED MODERN PRINTABLE SHOP STANDEE (RENDERED ONLY DURING BROWSER PRINT) */}
-      <div className="hidden print:flex flex-col items-center justify-between min-h-[96vh] w-full max-w-xl mx-auto p-8 bg-white text-slate-900 border-[3px] border-slate-900 rounded-[36px] font-sans">
-        <div className="w-full flex flex-col items-center text-center space-y-2 border-b-2 border-slate-900 pb-5">
-          <div className="px-5 py-1.5 rounded-full bg-slate-900 text-white font-black text-xs tracking-widest uppercase flex items-center gap-2">
-            <span>BHARAT INTERFACE FOR MONEY</span>
-            <span>•</span>
-            <span>UPI</span>
-          </div>
-          <h1 className="text-3xl font-black tracking-tight text-slate-950 uppercase pt-1">
-            {payeeName || settings.businessName || 'MY BUSINESS'}
-          </h1>
-          <p className="text-xs font-bold text-slate-500 tracking-wider uppercase">
-            ACCEPTED HERE • SCAN &amp; PAY USING ANY UPI APP
-          </p>
-        </div>
-
-        <div className="my-6 flex flex-col items-center">
-          <div className="relative p-6 bg-white border-4 border-slate-900 rounded-3xl shadow-none">
-            <div className="absolute top-2 left-2 w-4 h-4 border-t-4 border-l-4 border-indigo-600 rounded-tl-sm" />
-            <div className="absolute top-2 right-2 w-4 h-4 border-t-4 border-r-4 border-indigo-600 rounded-tr-sm" />
-            <div className="absolute bottom-2 left-2 w-4 h-4 border-b-4 border-l-4 border-indigo-600 rounded-bl-sm" />
-            <div className="absolute bottom-2 right-2 w-4 h-4 border-b-4 border-r-4 border-indigo-600 rounded-br-sm" />
-
-            <img
-              src={activeQrDisplay}
-              alt="Merchant QR"
-              className="w-64 h-64 object-contain"
-            />
-          </div>
-
-          <div className="mt-4 px-6 py-2 rounded-2xl bg-slate-100 border-2 border-slate-300 font-mono font-black text-sm text-slate-900 text-center">
-            <span className="text-[10px] text-slate-500 block font-sans font-bold uppercase tracking-wider">UPI ID</span>
-            {upiId || 'merchant@upi'}
-          </div>
-        </div>
-
-        <div className="w-full flex flex-col items-center space-y-3 pt-4 border-t-2 border-slate-900">
-          <div className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">
-            ALL APPS SUPPORTED
-          </div>
-          <div className="flex items-center justify-center gap-4 text-xs font-black text-slate-800">
-            <span className="px-3 py-1 rounded-xl bg-slate-100 border border-slate-200">Google Pay</span>
-            <span className="px-3 py-1 rounded-xl bg-slate-100 border border-slate-200">PhonePe</span>
-            <span className="px-3 py-1 rounded-xl bg-slate-100 border border-slate-200">Paytm</span>
-            <span className="px-3 py-1 rounded-xl bg-slate-100 border border-slate-200">BHIM</span>
-            <span className="px-3 py-1 rounded-xl bg-slate-100 border border-slate-200">Any Bank</span>
-          </div>
-
-          <div className="text-[10px] text-slate-500 font-bold tracking-tight text-center pt-2">
-            ⚡ Instant Bank Settlement • 0% Convenience Fee • Powered by SmartKhata PRO
-          </div>
-        </div>
+      <div className="hidden print:flex flex-col items-center justify-between mx-auto bg-white font-sans standee-print-card print:w-[185mm] print:max-h-[275mm] print:m-auto print:p-0">
+        <ShopStandeeContent
+          theme={standeeTheme}
+          title={standeeTitle}
+          subtitle={standeeSubtitle}
+          upiId={upiId}
+          qrUrl={standeeQrImage}
+          showLogo={standeeShowLogo}
+          logoUrl={settings.businessLogo}
+          showPhone={standeeShowPhone}
+          phone={settings.businessPhone}
+          showAddress={standeeShowAddress}
+          address={settings.businessAddress}
+          amount={standeeAmount}
+          isCustomQr={Boolean(customQrUrl && customQrUrl.trim().length > 0 && !standeeIncludeAmount)}
+        />
       </div>
     </>
   );
