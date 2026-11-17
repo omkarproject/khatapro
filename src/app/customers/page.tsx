@@ -1337,10 +1337,10 @@ export default function CustomersPage() {
     addToast('QR Downloaded', `Saved ${filename}`, 'success');
   };
 
-  // Active customer transactions
+  // Active customer transactions (exclude deleted)
   const activeCustomerTxns = useMemo(() => {
     if (!activeCustomer) return [];
-    return transactions.filter(t => t.customerId === activeCustomer.id);
+    return transactions.filter(t => !t.isDeleted && t.status !== 'deleted' && t.customerId === activeCustomer.id);
   }, [transactions, activeCustomer]);
 
   return (

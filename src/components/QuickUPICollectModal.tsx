@@ -86,6 +86,9 @@ export default function QuickUPICollectModal() {
 
   // Filtered transactions for History view
   const filteredTransactions = transactions.filter((txn) => {
+    // Exclude deleted transactions
+    if (txn.isDeleted || txn.status === 'deleted') return false;
+
     // 1. Search Query
     if (historySearch.trim()) {
       const q = historySearch.toLowerCase().trim();

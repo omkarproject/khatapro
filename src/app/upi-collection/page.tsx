@@ -439,9 +439,11 @@ export default function UpiCollectionPage() {
     addToast('Recorded in Khata! 📒', `${formatINR(numCollectAmount)} recorded successfully.`, 'success');
   };
 
-  // Filter collection transactions for ledger
+  // Filter collection transactions for ledger (exclude deleted)
   const collectionTransactions = useMemo(() => {
-    return transactions.filter(t => t.type === 'collection' || t.type === 'income' || t.type === 'credit');
+    return transactions.filter(
+      t => !t.isDeleted && t.status !== 'deleted' && (t.type === 'collection' || t.type === 'income' || t.type === 'credit')
+    );
   }, [transactions]);
 
   const totalCollected = collectionTransactions.reduce((acc, t) => acc + t.amount, 0);
