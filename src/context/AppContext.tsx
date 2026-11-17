@@ -26,6 +26,7 @@ import { deleteFromDriveFiles } from '@/lib/driveUploadClient';
 import { setActiveLanguage, setActiveCurrency, getActiveLanguage, getActiveCurrency, LanguageOption, CurrencyOption, t } from '@/lib/i18n';
 import { syncLiveExchangeRates } from '@/lib/currencyService';
 import { getSupabaseClient } from '@/lib/supabase';
+import { detectDeviceMetadata } from '@/lib/deviceUtils';
 
 export const defaultEmptyProfile: UserProfile = {
   id: '',
@@ -1028,6 +1029,19 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         if (elapsed > 18000) {
           debouncedLoadFromCloud(userId, 'heartbeat_poll');
         }
+
+        // Remotely revoked device safety check
+        try {
+          const meta = detectDeviceMetadata();
+          fetch(`/api/auth/devices?deviceId=${encodeURIComponent(meta.deviceId)}&userId=${encodeURIComponent(userId)}`)
+            .then(r => r.json())
+            .then(res => {
+              if (res && res.isCurrentRevoked) {
+                logout();
+              }
+            })
+            .catch(() => null);
+        } catch {}
       }
     }, 20000);
 
@@ -1093,6 +1107,23 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
     // Load isolated data from Supabase Cloud for this user
     await loadUserDataFromCloud(user.id);
+
+    // Register active device session in background
+    try {
+      const meta = detectDeviceMetadata();
+      fetch('/api/auth/devices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'register',
+          deviceId: meta.deviceId,
+          deviceName: meta.deviceName,
+          deviceType: meta.deviceType,
+          browser: meta.browser,
+          os: meta.os,
+        }),
+      }).catch(() => null);
+    } catch {}
 
     // Notify AutoBackupGuardian to initiate Day's 1st Open Auto Backup with live progress & alerts
     if (typeof window !== 'undefined') {

@@ -606,5 +606,21 @@ export interface AuthenticatorItem {
   updatedAt: string;
 }
 
+export interface DeviceSession {
+  id: string; // unique device identifier (e.g. dev_...)
+  userId: string;
+  deviceName: string; // e.g. "Windows 11 • Chrome"
+  deviceType: 'desktop' | 'mobile' | 'tablet' | 'unknown';
+  browser: string; // e.g. "Chrome 131"
+  os: string; // e.g. "Windows 11"
+  ip: string; // e.g. "103.212.145.22"
+  location?: string;
+  lastActive: string; // ISO date string
+  createdAt: string; // ISO date string
+  isCurrent?: boolean;
+  isRevoked?: boolean;
+}
+
+
 
 

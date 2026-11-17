@@ -43,7 +43,8 @@ import {
   Play,
   Folder,
   Users,
-  RotateCcw
+  RotateCcw,
+  Laptop
 } from 'lucide-react';
 import { formatINR, formatDate } from '@/lib/utils';
 import { SavingsGoal, SavingsDeposit, SupportTicket } from '@/types';
@@ -51,6 +52,7 @@ import GlobalSearchModal from './GlobalSearchModal';
 import CurrencyLanguageModal from './CurrencyLanguageModal';
 import { BusinessCardModal } from './BusinessCardModal';
 import { InvoiceTemplatesModal } from './InvoiceTemplatesModal';
+import { DevicesModal } from './DevicesModal';
 import { getActiveCurrency, getActiveLanguage, t } from '@/lib/i18n';
 import { getLiveRateDisplay } from '@/lib/currencyService';
 
@@ -128,6 +130,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
   const [isCurrencyLanguageOpen, setIsCurrencyLanguageOpen] = useState(false);
   const [isBusinessCardOpen, setIsBusinessCardOpen] = useState(false);
   const [isInvoiceTemplatesOpen, setIsInvoiceTemplatesOpen] = useState(false);
+  const [isDevicesModalOpen, setIsDevicesModalOpen] = useState(false);
   const [currencyLanguageTab, setCurrencyLanguageTab] = useState<'language' | 'currency'>('language');
   const [activeCurrency, setActiveCurrencyState] = useState(() => getActiveCurrency());
   const [activeLanguage, setActiveLanguageState] = useState(() => getActiveLanguage());
@@ -1710,6 +1713,24 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                           type="button"
                           onClick={() => {
                             setIsUserMenuOpen(false);
+                            setIsDevicesModalOpen(true);
+                          }}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors cursor-pointer text-left"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Laptop className="w-3.5 h-3.5 text-cyan-500" />
+                            <span>Devices</span>
+                          </div>
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Active
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
                             logout();
                           }}
                           className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
@@ -1904,6 +1925,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
       )}
       <BusinessCardModal isOpen={isBusinessCardOpen} onClose={() => setIsBusinessCardOpen(false)} />
       <InvoiceTemplatesModal isOpen={isInvoiceTemplatesOpen} onClose={() => setIsInvoiceTemplatesOpen(false)} />
+      <DevicesModal isOpen={isDevicesModalOpen} onClose={() => setIsDevicesModalOpen(false)} />
     </>
   );
 }

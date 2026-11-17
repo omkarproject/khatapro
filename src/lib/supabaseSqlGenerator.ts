@@ -358,6 +358,22 @@ CREATE TABLE IF NOT EXISTS public.global_config (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- 2.19 Active User Devices & Login Sessions Table
+CREATE TABLE IF NOT EXISTS public.user_devices (
+  id TEXT NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  device_name TEXT NOT NULL,
+  device_type TEXT DEFAULT 'desktop',
+  browser TEXT DEFAULT '',
+  os TEXT DEFAULT '',
+  ip TEXT DEFAULT '',
+  location TEXT DEFAULT '',
+  last_active TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  is_revoked BOOLEAN DEFAULT FALSE,
+  PRIMARY KEY (id, user_id)
+);
+
 -- ==========================================================
 -- 3. ENABLE ROW LEVEL SECURITY (RLS) POLICIES
 -- ==========================================================
@@ -373,6 +389,7 @@ ALTER TABLE public.payment_reminders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_devices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.passwords ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customer_drive_folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customer_drive_files ENABLE ROW LEVEL SECURITY;
@@ -450,6 +467,11 @@ DO $$ BEGIN
   CREATE POLICY "global_config_read" ON public.global_config FOR SELECT USING (true);
 EXCEPTION WHEN OTHERS THEN NULL; END $$;
 
+DO $$ BEGIN
+  DROP POLICY IF EXISTS "user_devices_isolation" ON public.user_devices;
+  CREATE POLICY "user_devices_isolation" ON public.user_devices FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+
 -- ==========================================================
 -- 4. PERFORMANCE OPTIMIZATION INDEXES
 -- ==========================================================
@@ -465,6 +487,7 @@ CREATE INDEX IF NOT EXISTS idx_documents_user_id ON public.documents(user_id);
 CREATE INDEX IF NOT EXISTS idx_notes_user_id ON public.notes(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON public.tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_passwords_user_id ON public.passwords(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_devices_user_id ON public.user_devices(user_id);
 
 -- ==========================================================
 -- 5. TRIGGER FOR AUTOMATIC PROFILE CREATION
