@@ -11,7 +11,6 @@ import {
   Globe,
   Clock,
   LogOut,
-  ShieldCheck,
   AlertTriangle,
   RotateCw,
   Check,
@@ -38,11 +37,18 @@ export function DevicesModal({ isOpen, onClose }: DevicesModalProps) {
   const [showConfirmLogoutAll, setShowConfirmLogoutAll] = useState(false);
 
   const currentDeviceId = typeof window !== 'undefined' ? getOrCreateDeviceId() : '';
+  const currentUserId = currentUser?.id;
+  const devicesRef = React.useRef<DeviceSession[]>([]);
+  devicesRef.current = devices;
 
   const fetchDevices = useCallback(async (quiet = false) => {
-    if (!currentUser) return;
-    if (!quiet) setIsLoading(true);
-    else setIsRefreshing(true);
+    if (!currentUserId) return;
+    const hasDevices = devicesRef.current.length > 0;
+    if (!quiet && !hasDevices) {
+      setIsLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
 
     try {
       // 1. Send heartbeat / register current device first
@@ -61,7 +67,7 @@ export function DevicesModal({ isOpen, onClose }: DevicesModalProps) {
       }).catch(() => null);
 
       // 2. Fetch list of active devices
-      const res = await fetch(`/api/auth/devices?deviceId=${encodeURIComponent(meta.deviceId)}&userId=${encodeURIComponent(currentUser.id)}`);
+      const res = await fetch(`/api/auth/devices?deviceId=${encodeURIComponent(meta.deviceId)}&userId=${encodeURIComponent(currentUserId)}`);
       const data = await res.json();
 
       if (data.success && Array.isArray(data.devices)) {
@@ -75,7 +81,7 @@ export function DevicesModal({ isOpen, onClose }: DevicesModalProps) {
         if (!enriched.some(d => d.isCurrent)) {
           enriched.unshift({
             id: meta.deviceId,
-            userId: currentUser.id,
+            userId: currentUserId,
             deviceName: meta.deviceName,
             deviceType: meta.deviceType,
             browser: meta.browser,
@@ -104,13 +110,13 @@ export function DevicesModal({ isOpen, onClose }: DevicesModalProps) {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [currentUser]);
+  }, [currentUserId, refreshActiveDevicesCount]);
 
   useEffect(() => {
-    if (isOpen) {
-      fetchDevices();
+    if (isOpen && currentUserId) {
+      fetchDevices(devicesRef.current.length > 0);
     }
-  }, [isOpen, fetchDevices]);
+  }, [isOpen, currentUserId, fetchDevices]);
 
   if (!isOpen) return null;
 
@@ -246,7 +252,6 @@ export function DevicesModal({ isOpen, onClose }: DevicesModalProps) {
                 <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
                   Active Devices & Login Sessions
                 </h2>
-                <span className="text-xs text-slate-400 hidden sm:inline">(लॉगिन डिवाइसेस)</span>
               </div>
               <p className="text-xs text-slate-400">
                 Manage all devices where your account is currently signed in.
@@ -347,7 +352,7 @@ export function DevicesModal({ isOpen, onClose }: DevicesModalProps) {
 
         {/* Device List Body */}
         <div className="p-6 overflow-y-auto space-y-3.5 flex-1">
-          {isLoading ? (
+          {isLoading && devices.length === 0 ? (
             <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-3">
               <RotateCw className="w-6 h-6 animate-spin text-cyan-400" />
               <p className="text-xs">Scanning active device sessions...</p>
@@ -461,15 +466,6 @@ export function DevicesModal({ isOpen, onClose }: DevicesModalProps) {
               );
             })
           )}
-
-          {/* Security Tip Banner */}
-          <div className="p-3.5 rounded-2xl bg-indigo-950/30 border border-indigo-500/20 flex items-start gap-3 mt-4">
-            <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-            <div className="text-[11px] text-slate-300 leading-relaxed">
-              <span className="font-semibold text-indigo-300">Account Security Note: </span>
-              If you see any device or IP you do not recognize, click <strong className="text-rose-400">Logout</strong> immediately to revoke its access, and update your account password in Settings.
-            </div>
-          </div>
         </div>
 
         {/* Modal Footer */}

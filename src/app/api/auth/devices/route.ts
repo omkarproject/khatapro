@@ -236,7 +236,6 @@ export async function POST(req: NextRequest) {
             ...paySettings,
             active_devices: list,
           },
-          updated_at: nowIso,
         }).eq('user_id', userId);
       } catch (settingsErr) {
         console.warn('Failed saving active_devices in system_settings:', settingsErr);
@@ -282,7 +281,6 @@ export async function POST(req: NextRequest) {
             ...paySettings,
             active_devices: list,
           },
-          updated_at: nowIso,
         }).eq('user_id', userId);
       } catch {}
 
@@ -335,7 +333,6 @@ export async function POST(req: NextRequest) {
             ...paySettings,
             active_devices: list,
           },
-          updated_at: nowIso,
         }).eq('user_id', userId);
       } catch {}
 
@@ -399,7 +396,6 @@ export async function DELETE(req: NextRequest) {
           ...paySettings,
           active_devices: list,
         },
-        updated_at: nowIso,
       }).eq('user_id', userId);
     } catch {}
 
