@@ -28,6 +28,7 @@ import {
   ExternalLink,
   AlertCircle,
   RefreshCw,
+  RotateCcw,
   Wallet,
   Settings as SettingsIcon,
   Search,
@@ -395,6 +396,7 @@ export default function UpiCollectionPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [isQrGenerated, setIsQrGenerated] = useState(false);
 
   // Gateway execution state
   const [isGatewayLoading, setIsGatewayLoading] = useState(false);
@@ -422,8 +424,19 @@ export default function UpiCollectionPage() {
   }, [paymentSettings, settings.businessName]);
 
   const numCollectAmount = parseFloat(collectAmount) || 0;
-  const activeUpiUri = buildUpiUri(upiId, payeeName, numCollectAmount > 0 ? numCollectAmount : undefined, collectNote);
-  const activeQrDisplay = customQrUrl && customQrUrl.trim().length > 0 ? customQrUrl : getQrCodeUrl(activeUpiUri, 350);
+  const isAmountLocked = isQrGenerated && numCollectAmount > 0;
+  const activeUpiUri = buildUpiUri(
+    upiId,
+    payeeName || settings.businessName || 'Merchant',
+    isAmountLocked ? numCollectAmount : undefined,
+    collectNote || 'Payment settlement'
+  );
+
+  // When amount is locked, ALWAYS generate dynamic amount-locked QR
+  // When no amount is locked, use custom uploaded QR if exists, else dynamic counter QR
+  const activeQrDisplay = isAmountLocked
+    ? getQrCodeUrl(activeUpiUri, 400)
+    : (customQrUrl && customQrUrl.trim().length > 0 ? customQrUrl : getQrCodeUrl(activeUpiUri, 350));
 
   const selectedCust = customers.find(c => c.id === selectedCustomerId);
   const customerDisplayName = selectedCust?.name || 'Valued Customer';
@@ -461,6 +474,38 @@ export default function UpiCollectionPage() {
     a.click();
     document.body.removeChild(a);
     addToast('Standee QR Downloaded', 'QR code image downloaded to your device.', 'success');
+  };
+
+  // Generate dynamic amount-locked QR
+  const handleGenerateLockedQr = () => {
+    if (numCollectAmount <= 0) {
+      addToast('Amount Required', 'Please enter a valid amount to generate an amount-locked QR.', 'warning');
+      return;
+    }
+    if (!upiId || !upiId.includes('@')) {
+      addToast('UPI ID Missing', 'Please configure your UPI ID in Settings first.', 'error');
+      return;
+    }
+    setIsQrGenerated(true);
+    addToast('Amount-Locked QR Generated! 🔒', `QR is locked to ${formatINR(numCollectAmount)}. Customer cannot change the amount while paying.`, 'success');
+  };
+
+  // Reset amount-locked QR back to default counter QR
+  const handleResetLockedQr = () => {
+    setIsQrGenerated(false);
+    addToast('QR Reset', 'Standee QR reset to default counter payment QR.', 'info');
+  };
+
+  // Download active displayed QR
+  const handleDownloadActiveQr = () => {
+    const a = document.createElement('a');
+    a.href = activeQrDisplay;
+    a.download = `${(payeeName || 'Payment').replace(/[^a-zA-Z0-9]/g, '_')}_${isAmountLocked ? `INR_${numCollectAmount}` : 'UPI'}_QR.png`;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    addToast('QR Downloaded', 'QR code image downloaded to your device.', 'success');
   };
 
   // Handle QR image file upload
@@ -565,7 +610,9 @@ export default function UpiCollectionPage() {
 
   // Direct UPI WhatsApp Share
   const handleShareWhatsAppDirectUpi = () => {
-    const shareMessage = `Dear ${customerDisplayName},\n\nPlease pay ${numCollectAmount > 0 ? formatINR(numCollectAmount) : 'your balance'} to *${payeeName}* via UPI.\n\n*UPI ID:* ${upiId}\n*Note:* ${collectNote}\n\n*Direct Payment Link:*\n${activeUpiUri}\n\nThank you,\n${settings.businessName}`;
+    const amountText = numCollectAmount > 0 ? `*${formatINR(numCollectAmount)}*` : 'your balance';
+    const lockNote = isAmountLocked ? `\n🔒 *Amount Locked:* ${formatINR(numCollectAmount)}` : '';
+    const shareMessage = `Dear ${customerDisplayName},\n\nPlease pay ${amountText} to *${payeeName}* via UPI.${lockNote}\n\n*UPI ID:* ${upiId}\n*Note:* ${collectNote}\n\n*Direct Payment Link:*\n${activeUpiUri}\n\nThank you,\n${settings.businessName}`;
     openWhatsApp(customerPhone, shareMessage);
   };
 
@@ -796,9 +843,6 @@ export default function UpiCollectionPage() {
                 }
               </span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Collect payments instantly via your configured active gateway with one-click WhatsApp links and automated Khatabook ledger tracking.
-            </p>
           </div>
 
           <div className="flex items-center gap-2.5">
@@ -973,19 +1017,27 @@ export default function UpiCollectionPage() {
           </div>
         )}
 
-        {/* TAB 1: DEFAULT UPI & QR */}
+        {/* TAB 1: DIRECT UPI & INSTANT QR */}
         {activeTab === 'direct_upi' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Standee QR Card */}
+            {/* Left: Standee / Dynamic QR Card */}
             <div className="lg:col-span-5 flex flex-col items-center p-6 glass-card border border-indigo-200/60 dark:border-indigo-900/40 text-center relative overflow-hidden">
               <div className="w-full flex items-center justify-between pb-3 mb-2 border-b border-slate-100 dark:border-slate-800">
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Active Merchant Standee QR
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
-                  {paymentSettings.isDefaultQrSaved ? 'Default Saved' : 'Auto Generated'}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <QrCode className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <span className="text-xs font-bold tracking-wider text-slate-800 dark:text-slate-200">
+                    {isAmountLocked ? 'Amount-Locked Dynamic QR' : 'UPI Payment QR'}
+                  </span>
+                </div>
+                {isAmountLocked ? (
+                  <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-emerald-500 text-white flex items-center gap-1 animate-pulse shadow-sm">
+                    <Check className="w-3 h-3" /> Locked: {formatINR(numCollectAmount)}
+                  </span>
+                ) : (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
+                    {paymentSettings.isDefaultQrSaved ? 'Default Saved' : 'Counter QR'}
+                  </span>
+                )}
               </div>
 
               {/* Standee Card */}
@@ -997,18 +1049,35 @@ export default function UpiCollectionPage() {
                   {upiId}
                 </div>
 
-                <div className="my-4 p-2 bg-white rounded-2xl border border-slate-100 shadow-inner flex items-center justify-center">
+                <div className="my-4 p-2 bg-white rounded-2xl border border-slate-100 shadow-inner flex items-center justify-center relative">
                   <img
                     src={activeQrDisplay}
                     alt="Merchant UPI QR"
                     className="w-52 h-52 object-contain rounded-xl"
                   />
+                  {isAmountLocked && (
+                    <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-black shadow-md flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5" /> {formatINR(numCollectAmount)}
+                    </div>
+                  )}
                 </div>
 
                 <div className="text-center">
                   <div className="text-lg font-black text-slate-900">
-                    {numCollectAmount > 0 ? formatINR(numCollectAmount) : 'Scan & Pay Any Amount'}
+                    {isAmountLocked ? (
+                      <span className="text-emerald-600 flex items-center justify-center gap-1.5">
+                        <Lock className="w-4 h-4 text-emerald-600 inline" />
+                        {formatINR(numCollectAmount)}
+                      </span>
+                    ) : (
+                      'Scan & Pay Any Amount'
+                    )}
                   </div>
+                  {isAmountLocked && (
+                    <div className="text-[11px] text-emerald-700 font-semibold mt-0.5">
+                      Amount locked in UPI apps (PhonePe, GPay, Paytm)
+                    </div>
+                  )}
                   <div className="flex items-center justify-center gap-2 mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                     <span>GPay</span> • <span>PhonePe</span> • <span>Paytm</span> • <span>BHIM</span>
                   </div>
@@ -1021,6 +1090,7 @@ export default function UpiCollectionPage() {
                   {upiId || 'Configure UPI in Settings'}
                 </span>
                 <button
+                  type="button"
                   onClick={handleCopy}
                   className="flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 shrink-0 cursor-pointer"
                 >
@@ -1028,116 +1098,50 @@ export default function UpiCollectionPage() {
                   <span>{copied ? 'Copied' : 'Copy UPI'}</span>
                 </button>
               </div>
+
+              {/* Action Buttons under QR */}
+              <div className="w-full grid grid-cols-2 gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={handleDownloadActiveQr}
+                  className="py-2.5 px-3 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>{isAmountLocked ? 'Download Locked' : 'Download QR'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsStandeeModalOpen(true)}
+                  className="py-2.5 px-3 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print Standee</span>
+                </button>
+              </div>
             </div>
 
-            {/* Right: Settings & Dynamic Calculator */}
-            <div className="lg:col-span-7 space-y-6">
-              {/* Form 1: Default Settings */}
+            {/* Right: Collect from Customer & Generate Amount-Locked QR */}
+            <div className="lg:col-span-7">
               <div className="glass-card p-6 space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
                   <div>
                     <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                      Default UPI &amp; QR Configuration
+                      <DollarSign className="w-4 h-4 text-emerald-500" />
+                      Collect from Customer
                     </h3>
                     <p className="text-xs text-slate-400">
-                      Enter your UPI ID and upload your counter QR code standee image.
+                      Select customer, set amount, and generate an amount-locked UPI QR or share direct payment link.
                     </p>
                   </div>
-
-                  {savedSuccess && (
-                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-3 py-1 rounded-full flex items-center gap-1 animate-fade-in">
-                      <Check className="w-3.5 h-3.5" /> Saved as Default!
-                    </span>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                      Your UPI ID (VPA) *
-                    </label>
-                    <input
-                      type="text"
-                      value={upiId}
-                      onChange={(e) => setUpiId(e.target.value)}
-                      placeholder="e.g. yourstore@okhdfcbank"
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                      Payee / Merchant Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={payeeName}
-                      onChange={(e) => setPayeeName(e.target.value)}
-                      placeholder="e.g. My Business / Store Name"
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Custom QR Upload Box */}
-                <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="space-y-0.5">
-                    <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                      <Upload className="w-3.5 h-3.5 text-indigo-500" />
-                      Upload Custom Business QR Code Image
-                    </div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                      {customQrUrl ? 'Custom QR image is active.' : 'Upload your physical counter QR image (PNG, JPG)'}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      accept="image/*"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      {customQrUrl ? 'Change QR' : 'Select Image'}
-                    </button>
-                    {customQrUrl && (
-                      <button
-                        type="button"
-                        onClick={() => setCustomQrUrl(undefined)}
-                        className="text-xs text-rose-500 hover:underline px-2 font-medium cursor-pointer"
-                      >
-                        Reset
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleSaveDefault}
-                    className="px-5 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 flex items-center gap-2 active:scale-95 transition-all cursor-pointer"
+                  <Link
+                    href="/settings"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors shrink-0"
+                    title="Configure UPI VPA & Merchant Name in Settings"
                   >
-                    <Save className="w-4 h-4" />
-                    Save as Permanent Default QR &amp; UPI
-                  </button>
+                    <SettingsIcon className="w-3.5 h-3.5" />
+                    <span>UPI Settings</span>
+                  </Link>
                 </div>
-              </div>
-
-              {/* Form 2: Quick Collect & WhatsApp */}
-              <div className="glass-card p-6 space-y-4">
-                <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                  <DollarSign className="w-4 h-4 text-cyan-500" />
-                  Collect from Customer (Generate Link &amp; WhatsApp)
-                </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -1147,10 +1151,14 @@ export default function UpiCollectionPage() {
                     <select
                       value={selectedCustomerId}
                       onChange={(e) => {
-                        setSelectedCustomerId(e.target.value);
-                        const c = customers.find(item => item.id === e.target.value);
+                        const newId = e.target.value;
+                        setSelectedCustomerId(newId);
+                        const c = customers.find(item => item.id === newId);
                         if (c && c.outstandingBalance > 0) {
                           setCollectAmount(c.outstandingBalance.toString());
+                        }
+                        if (isQrGenerated) {
+                          setIsQrGenerated(false);
                         }
                       }}
                       className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
@@ -1158,7 +1166,7 @@ export default function UpiCollectionPage() {
                       <option value="">-- Direct Payment / Any Customer --</option>
                       {customers.map((c) => (
                         <option key={c.id} value={c.id}>
-                          {c.name} (Due: {formatINR(c.outstandingBalance)})
+                          {c.name} {c.outstandingBalance > 0 ? `(Due: ${formatINR(c.outstandingBalance)})` : '(No Due)'}
                         </option>
                       ))}
                     </select>
@@ -1166,16 +1174,63 @@ export default function UpiCollectionPage() {
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                      Amount to Request ({getActiveCurrency().symbol})
+                      Amount to Request ({getActiveCurrency().symbol}) *
                     </label>
                     <input
                       type="number"
                       value={collectAmount}
-                      onChange={(e) => setCollectAmount(e.target.value)}
+                      onChange={(e) => {
+                        setCollectAmount(e.target.value);
+                        if (isQrGenerated) {
+                          setIsQrGenerated(false);
+                        }
+                      }}
                       placeholder="e.g. 2500"
                       className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
                     />
                   </div>
+                </div>
+
+                {/* Quick Amount Suggestion Chips */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[11px] font-medium text-slate-400 mr-1">Quick Amount:</span>
+                  {selectedCust && selectedCust.outstandingBalance > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCollectAmount(selectedCust.outstandingBalance.toString());
+                        setIsQrGenerated(false);
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors cursor-pointer"
+                    >
+                      Full Due ({formatINR(selectedCust.outstandingBalance)})
+                    </button>
+                  )}
+                  {[100, 500, 1000, 2000, 5000].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => {
+                        setCollectAmount(amt.toString());
+                        setIsQrGenerated(false);
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                    >
+                      +₹{amt.toLocaleString('en-IN')}
+                    </button>
+                  ))}
+                  {collectAmount && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCollectAmount('');
+                        setIsQrGenerated(false);
+                      }}
+                      className="px-2 py-1 text-[11px] font-medium text-rose-500 hover:underline cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
 
                 <div>
@@ -1191,25 +1246,93 @@ export default function UpiCollectionPage() {
                   />
                 </div>
 
-                <div className="pt-2 flex flex-wrap items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={handleShareWhatsAppDirectUpi}
-                    className="px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all cursor-pointer"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    Share on WhatsApp
-                  </button>
+                {/* Amount-Locked Status Banner */}
+                {isAmountLocked && (
+                  <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                        <Lock className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                          Amount-Locked QR Active: {formatINR(numCollectAmount)}
+                        </div>
+                        <div className="text-[11px] text-emerald-700/80 dark:text-emerald-400">
+                          Customer scanning this QR will see exact {formatINR(numCollectAmount)} prefilled &amp; locked.
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleDownloadActiveQr}
+                        className="px-3 py-1.5 text-xs font-bold rounded-xl bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleResetLockedQr}
+                        className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Reset</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-                  <button
-                    type="button"
-                    onClick={() => handleRecordCollection('UPI QR')}
-                    disabled={numCollectAmount <= 0}
-                    className="px-5 py-2.5 rounded-2xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5 shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
-                  >
-                    <Check className="w-4 h-4" />
-                    Record in Khata
-                  </button>
+                {/* Actions Bar */}
+                <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    {/* Generate QR Button */}
+                    <button
+                      type="button"
+                      onClick={handleGenerateLockedQr}
+                      className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer ${
+                        isAmountLocked
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
+                          : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20 active:scale-95'
+                      }`}
+                    >
+                      <QrCode className="w-4 h-4" />
+                      <span>{isAmountLocked ? 'QR Amount Locked' : 'Generate QR (Lock Amount)'}</span>
+                    </button>
+
+                    {isAmountLocked && (
+                      <button
+                        type="button"
+                        onClick={handleResetLockedQr}
+                        className="px-3 py-2.5 rounded-2xl text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-1 cursor-pointer transition-colors"
+                        title="Reset QR to counter mode"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Reset QR</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleShareWhatsAppDirectUpi}
+                      className="px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all cursor-pointer active:scale-95"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      <span>Share WhatsApp</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRecordCollection('UPI QR')}
+                      disabled={numCollectAmount <= 0}
+                      className="px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5 shadow-md shadow-indigo-500/20 transition-all cursor-pointer active:scale-95"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>Record in Khata</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

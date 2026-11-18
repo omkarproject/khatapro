@@ -2596,9 +2596,6 @@ export default function SettingsPage() {
                 <QrCode className="w-5 h-5 text-indigo-500" />
                 Payment Collection Methods & Gateways
               </h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Select your primary collection mode. Support for 0% Direct UPI QR, Cashfree PG, Razorpay PG, and Instant Webhook UPI Gateway.
-              </p>
             </div>
 
             {/* Quick Step-by-Step PDF Guide Launch Button */}
