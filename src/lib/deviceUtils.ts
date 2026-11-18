@@ -157,3 +157,42 @@ export function formatLastActive(isoDate?: string): string {
     return 'Recently';
   }
 }
+
+/**
+ * Realtime broadcast function to instantly invalidate sessions across tabs and devices.
+ */
+export function broadcastSessionRevocation(payload: {
+  action: 'logout_device' | 'logout_others' | 'logout_all';
+  targetDeviceId?: string;
+  originDeviceId: string;
+  userId: string;
+}) {
+  if (typeof window === 'undefined') return;
+
+  const data = {
+    ...payload,
+    timestamp: Date.now(),
+  };
+
+  // 1. BroadcastChannel for instant same-browser cross-tab sync (<5ms)
+  try {
+    if ('BroadcastChannel' in window) {
+      const bc = new BroadcastChannel(`khatapro_session_sync_${payload.userId}`);
+      bc.postMessage(data);
+      setTimeout(() => {
+        try { bc.close(); } catch {}
+      }, 500);
+    }
+  } catch {}
+
+  // 2. localStorage storage event fallback (<5ms)
+  try {
+    localStorage.setItem('khatapro_session_event', JSON.stringify(data));
+  } catch {}
+
+  // 3. Supabase Realtime WebSocket broadcast for instant cross-device sync (<50ms)
+  try {
+    window.dispatchEvent(new CustomEvent('khatapro_send_session_broadcast', { detail: data }));
+  } catch {}
+}
+

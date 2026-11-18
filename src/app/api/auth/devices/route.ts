@@ -108,21 +108,33 @@ export async function GET(req: NextRequest) {
       tableExists = false;
     }
 
-    // 2. Fallback to system_settings.payment_settings.active_devices if table not yet migrated
-    if (!tableExists) {
-      const { data: userSettings } = await supabase
-        .from('system_settings')
-        .select('payment_settings')
-        .eq('user_id', userId)
-        .single();
+    // 2. Also check system_settings.payment_settings.active_devices as dual-layer sync
+    if (!tableExists || devices.length === 0 || !devices.some(d => d.id === currentDeviceId)) {
+      try {
+        const { data: userSettings } = await supabase
+          .from('system_settings')
+          .select('payment_settings')
+          .eq('user_id', userId)
+          .single();
 
-      const paySettings = userSettings?.payment_settings || {};
-      const storedDevices: any[] = Array.isArray(paySettings.active_devices) ? paySettings.active_devices : [];
+        const paySettings = userSettings?.payment_settings || {};
+        const storedDevices: any[] = Array.isArray(paySettings.active_devices) ? paySettings.active_devices : [];
 
-      devices = storedDevices.map((d: any) => ({
-        ...d,
-        isCurrent: currentDeviceId ? d.id === currentDeviceId : false,
-      }));
+        for (const sd of storedDevices) {
+          const existingIdx = devices.findIndex(d => d.id === sd.id);
+          if (existingIdx >= 0) {
+            // If revoked in system_settings, ensure marked revoked
+            if (sd.isRevoked) {
+              devices[existingIdx].isRevoked = true;
+            }
+          } else {
+            devices.push({
+              ...sd,
+              isCurrent: currentDeviceId ? sd.id === currentDeviceId : false,
+            });
+          }
+        }
+      } catch {}
     }
 
     // 3. Check if current device is revoked

@@ -26,7 +26,7 @@ import { deleteFromDriveFiles } from '@/lib/driveUploadClient';
 import { setActiveLanguage, setActiveCurrency, getActiveLanguage, getActiveCurrency, LanguageOption, CurrencyOption, t } from '@/lib/i18n';
 import { syncLiveExchangeRates } from '@/lib/currencyService';
 import { getSupabaseClient } from '@/lib/supabase';
-import { detectDeviceMetadata } from '@/lib/deviceUtils';
+import { detectDeviceMetadata, getOrCreateDeviceId, broadcastSessionRevocation } from '@/lib/deviceUtils';
 
 export const defaultEmptyProfile: UserProfile = {
   id: '',
@@ -248,6 +248,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
   const [activeDevicesCount, setActiveDevicesCount] = useState<number>(1);
+  const logoutRef = useRef<() => void>(() => {});
 
   const refreshActiveDevicesCount = useCallback(async (): Promise<number> => {
     const curU = currentUser || StorageService.getCurrentUser();
@@ -256,6 +257,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       const meta = detectDeviceMetadata();
       const res = await fetch(`/api/auth/devices?deviceId=${encodeURIComponent(meta.deviceId)}&userId=${encodeURIComponent(curU.id)}`);
       const data = await res.json();
+      if (data && data.isCurrentRevoked) {
+        logoutRef.current();
+        return 0;
+      }
       if (data && data.success && Array.isArray(data.devices)) {
         const activeList = data.devices.filter((d: any) => !d.isRevoked);
         const count = Math.max(1, activeList.length);
@@ -1070,6 +1075,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     }
 
     // 1. Browser BroadcastChannel for instant same-device multi-tab sync (<5ms)
+    let sessionBc: BroadcastChannel | null = null;
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       try {
         const bc = new BroadcastChannel(`khatapro_sync_${userId}`);
@@ -1083,6 +1089,23 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           }
         };
         broadcastChannelRef.current = bc;
+
+        // Dedicated session revocation channel across tabs in same browser (<5ms)
+        sessionBc = new BroadcastChannel(`khatapro_session_sync_${userId}`);
+        sessionBc.onmessage = (event) => {
+          const payload = event.data;
+          if (!payload || payload.userId !== userId) return;
+          const myDevId = myDeviceIdRef.current;
+          if (payload.action === 'logout_all') {
+            logout();
+          } else if (payload.action === 'logout_others' && payload.originDeviceId !== myDevId) {
+            logout();
+          } else if (payload.action === 'logout_device' && payload.targetDeviceId === myDevId) {
+            logout();
+          } else {
+            refreshActiveDevicesCount();
+          }
+        };
       } catch (e) {
         console.warn('BroadcastChannel initialization error:', e);
       }
@@ -1097,6 +1120,23 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           refreshData();
           debouncedLoadFromCloud(userId, 'storage_event');
         }
+      }
+      if (e.key === 'khatapro_session_event' && e.newValue) {
+        try {
+          const payload = JSON.parse(e.newValue);
+          if (payload && payload.userId === userId) {
+            const myDevId = myDeviceIdRef.current;
+            if (payload.action === 'logout_all') {
+              logout();
+            } else if (payload.action === 'logout_others' && payload.originDeviceId !== myDevId) {
+              logout();
+            } else if (payload.action === 'logout_device' && payload.targetDeviceId === myDevId) {
+              logout();
+            } else {
+              refreshActiveDevicesCount();
+            }
+          }
+        } catch {}
       }
     };
     if (typeof window !== 'undefined') {
@@ -1119,6 +1159,23 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           const payload = message.payload;
           if (payload && payload.originDeviceId !== myDeviceIdRef.current && payload.userId === userId) {
             debouncedLoadFromCloud(userId, payload.action || 'device_broadcast');
+          }
+        });
+
+        // Instant Realtime Session Revocation / Logout events (<50ms)
+        channel.on('broadcast', { event: 'khatapro_session_event' }, (message) => {
+          const payload = message.payload;
+          if (!payload || payload.userId !== userId) return;
+          const myDevId = myDeviceIdRef.current;
+          console.log(`⚡ [Realtime Session Event] Action: ${payload.action}, Origin: ${payload.originDeviceId}, Mine: ${myDevId}`);
+          if (payload.action === 'logout_all') {
+            logout();
+          } else if (payload.action === 'logout_others' && payload.originDeviceId !== myDevId) {
+            logout();
+          } else if (payload.action === 'logout_device' && payload.targetDeviceId === myDevId) {
+            logout();
+          } else {
+            refreshActiveDevicesCount();
           }
         });
 
@@ -1207,13 +1264,29 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       refreshActiveDevicesCount();
     };
 
+    const handleSendSessionBroadcast = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const detail = customEvent.detail;
+      if (realtimeChannelRef.current && detail) {
+        try {
+          realtimeChannelRef.current.send({
+            type: 'broadcast',
+            event: 'khatapro_session_event',
+            payload: detail,
+          });
+        } catch {}
+      }
+    };
+
     if (typeof window !== 'undefined') {
       window.addEventListener('focus', handleFocus);
       window.addEventListener('online', handleOnline);
+      window.addEventListener('storage', handleStorageEvent);
+      window.addEventListener('khatapro_send_session_broadcast', handleSendSessionBroadcast);
       document.addEventListener('visibilitychange', handleVisibility);
     }
 
-    // 6. Lightweight safety polling interval (every 20s when tab is active)
+    // 6. Ultra-fast session validity & revoked device check interval (every 2.5s)
     const pollingInterval = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         const elapsed = Date.now() - lastCloudSyncTimestampRef.current;
@@ -1237,7 +1310,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
             .catch(() => null);
         } catch {}
       }
-    }, 20000);
+    }, 2500);
 
     return () => {
       clearInterval(versionCheckInterval);
@@ -1245,6 +1318,9 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       if (broadcastChannelRef.current) {
         try { broadcastChannelRef.current.close(); } catch {}
         broadcastChannelRef.current = null;
+      }
+      if (sessionBc) {
+        try { sessionBc.close(); } catch {}
       }
       if (realtimeChannelRef.current && supabase) {
         try { supabase.removeChannel(realtimeChannelRef.current); } catch {}
@@ -1254,9 +1330,9 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         window.removeEventListener('focus', handleFocus);
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('storage', handleStorageEvent);
+        window.removeEventListener('khatapro_send_session_broadcast', handleSendSessionBroadcast);
         document.removeEventListener('visibilitychange', handleVisibility);
       }
-      clearInterval(pollingInterval);
     };
   }, [currentUser?.id]);
 
@@ -1437,6 +1513,25 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
   // Logout handler
   const logout = () => {
+    const curU = currentUserRef.current || currentUser || StorageService.getCurrentUser();
+    const myDevId = typeof window !== 'undefined' ? getOrCreateDeviceId() : '';
+    if (curU && myDevId) {
+      try {
+        broadcastSessionRevocation({
+          action: 'logout_device',
+          originDeviceId: myDevId,
+          targetDeviceId: myDevId,
+          userId: curU.id,
+        });
+        fetch('/api/auth/devices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'logout_device', deviceId: myDevId }),
+          keepalive: true,
+        }).catch(() => null);
+      } catch {}
+    }
+
     setCurrentUserState(null);
     StorageService.setCurrentUser(null);
     StorageService.clearAllGroupNotifications();
@@ -1474,6 +1569,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       window.location.href = '/login';
     }
   };
+
+  logoutRef.current = logout;
 
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);

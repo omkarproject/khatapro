@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
+import { downloadBrandedLockedQr } from '@/lib/qrCardGenerator';
 import { getActiveCurrency, t } from '@/lib/i18n';
 import { isGatewayActive } from '@/types';
 import {
@@ -329,6 +330,7 @@ function ShopStandeeContent({
 export default function UpiCollectionPage() {
   const {
     settings,
+    profile,
     saveDefaultUpiAndQr,
     transactions,
     customers,
@@ -441,6 +443,9 @@ export default function UpiCollectionPage() {
   const selectedCust = customers.find(c => c.id === selectedCustomerId);
   const customerDisplayName = selectedCust?.name || 'Valued Customer';
   const customerPhone = selectedCust?.phone || '';
+  const merchantLogo = settings.businessLogo || profile?.logo || profile?.avatarUrl || settings.websiteLogo;
+  const brandDisplayName = settings.websiteName || 'SmartKhata ERP';
+  const brandLogoUrl = settings.websiteLogo || '/smartkhatalogo.png';
 
   // Shop Counter Standee Studio State
   const [isStandeeModalOpen, setIsStandeeModalOpen] = useState(false);
@@ -496,16 +501,36 @@ export default function UpiCollectionPage() {
     addToast('QR Reset', 'Standee QR reset to default counter payment QR.', 'info');
   };
 
-  // Download active displayed QR
-  const handleDownloadActiveQr = () => {
-    const a = document.createElement('a');
-    a.href = activeQrDisplay;
-    a.download = `${(payeeName || 'Payment').replace(/[^a-zA-Z0-9]/g, '_')}_${isAmountLocked ? `INR_${numCollectAmount}` : 'UPI'}_QR.png`;
-    a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    addToast('QR Downloaded', 'QR code image downloaded to your device.', 'success');
+  // Download active displayed QR with high-definition branding & center logo
+  const handleDownloadActiveQr = async () => {
+    try {
+      addToast('Preparing Branded QR Card... 🎨', 'Generating high-definition stylish standee card...', 'info');
+      await downloadBrandedLockedQr({
+        upiUri: activeUpiUri,
+        amount: isAmountLocked ? numCollectAmount : 0,
+        businessName: settings.businessName || payeeName || profile?.businessName || 'Business Payment',
+        payeeName: payeeName || settings.businessName,
+        upiId: upiId,
+        customerName: selectedCust?.name,
+        note: collectNote,
+        logoUrl: merchantLogo,
+        brandName: brandDisplayName,
+        brandLogoUrl: brandLogoUrl,
+        websiteUrl: typeof window !== 'undefined' ? window.location.host : 'smartkhatapro.in',
+      });
+      addToast('QR Standee Downloaded! 📥', 'High-resolution branded QR card saved to downloads.', 'success');
+    } catch (err) {
+      console.error('Failed generating branded QR card:', err);
+      // Fallback to direct raw QR download
+      const a = document.createElement('a');
+      a.href = activeQrDisplay;
+      a.download = `${(payeeName || 'Payment').replace(/[^a-zA-Z0-9]/g, '_')}_${isAmountLocked ? `INR_${numCollectAmount}` : 'UPI'}_QR.png`;
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      addToast('QR Downloaded', 'QR code image downloaded to your device.', 'success');
+    }
   };
 
   // Handle QR image file upload
@@ -1055,6 +1080,22 @@ export default function UpiCollectionPage() {
                     alt="Merchant UPI QR"
                     className="w-52 h-52 object-contain rounded-xl"
                   />
+                  {/* Center Business / User Profile Logo */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="p-1 rounded-2xl bg-white shadow-lg border border-slate-200">
+                      {merchantLogo ? (
+                        <img
+                          src={merchantLogo}
+                          alt="Merchant Logo"
+                          className="w-10 h-10 rounded-xl object-cover bg-white"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 text-white font-black text-sm flex items-center justify-center">
+                          {payeeName ? payeeName[0].toUpperCase() : '₹'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   {isAmountLocked && (
                     <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-black shadow-md flex items-center gap-1">
                       <Lock className="w-2.5 h-2.5" /> {formatINR(numCollectAmount)}
@@ -1062,7 +1103,7 @@ export default function UpiCollectionPage() {
                   )}
                 </div>
 
-                <div className="text-center">
+                <div className="text-center w-full">
                   <div className="text-lg font-black text-slate-900">
                     {isAmountLocked ? (
                       <span className="text-emerald-600 flex items-center justify-center gap-1.5">
@@ -1078,8 +1119,23 @@ export default function UpiCollectionPage() {
                       Amount locked in UPI apps (PhonePe, GPay, Paytm)
                     </div>
                   )}
+
+                  {/* Customer Name in Standee Card */}
+                  {selectedCust && (
+                    <div className="mt-2 py-1 px-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] flex items-center justify-center gap-1.5 text-slate-700 mx-auto max-w-[240px]">
+                      <span className="text-slate-400 font-bold uppercase text-[9px]">Billed To:</span>
+                      <span className="font-extrabold text-slate-900 truncate max-w-[150px]">{selectedCust.name}</span>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-center gap-2 mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                     <span>GPay</span> • <span>PhonePe</span> • <span>Paytm</span> • <span>BHIM</span>
+                  </div>
+
+                  {/* Footer website Brand Display Name */}
+                  <div className="mt-3 pt-2 border-t border-slate-100 w-full flex items-center justify-between text-[9px] text-slate-400 font-bold tracking-wider uppercase px-1">
+                    <span className="truncate max-w-[150px]">{brandDisplayName}</span>
+                    <span className="text-indigo-600 font-extrabold">NPCI UPI QR</span>
                   </div>
                 </div>
               </div>
