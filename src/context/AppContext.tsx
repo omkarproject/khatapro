@@ -452,6 +452,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
       const payload = {
         userId,
+        deletedRecordIds: StorageService.getAllDeletedRecordIds(),
         data: {
           customers: curCustomers,
           transactions: StorageService.getTransactions(),
@@ -470,8 +471,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           groups: StorageService.getGroups(),
           settings: {
             ...StorageService.getSettings(),
+            monthlyBudgetCap: StorageService.getSettings().monthlyBudgetCap ?? 150000,
             paymentSettings: {
               ...(StorageService.getSettings().paymentSettings || {}),
+              monthlyBudgetCap: StorageService.getSettings().monthlyBudgetCap ?? 150000,
               khataGroups: StorageService.getGroups(),
               khataGroupNotifications: StorageService.getGroupNotifications(),
             },
@@ -492,6 +495,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       if (res.ok) {
         setCloudSyncStatus('synced');
         lastCloudSyncTimestampRef.current = Date.now();
+        // Clear locally tracked deleted IDs now that cloud database has confirmed their removal
+        StorageService.clearDeletedRecordIds();
         // ⚡ Instantly broadcast live update to all other devices & tabs!
         broadcastRealtimeChange(userId, 'database_update');
 
@@ -545,11 +550,12 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           const d = json.data;
 
           // Universal entity merger to protect against empty arrays overwriting local records
-          const mergeEntities = <T extends { id: string }>(localList: T[], cloudList?: T[]): T[] => {
+          const mergeEntities = <T extends { id: string }>(localList: T[], cloudList?: T[], tableName?: string): T[] => {
             if (!Array.isArray(cloudList)) return localList;
+            const deletedIds = tableName ? StorageService.getDeletedRecordIds(tableName) : new Set<string>();
             const map = new Map<string, T>();
             localList.forEach(item => {
-              if (item && item.id) map.set(item.id, item);
+              if (item && item.id && !deletedIds.has(item.id)) map.set(item.id, item);
             });
             const cloudIds = new Set(cloudList.map(item => item?.id).filter(Boolean));
 
@@ -562,6 +568,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
             cloudList.forEach(item => {
               if (item && item.id) {
+                if (deletedIds.has(item.id)) {
+                  // Intentionally deleted locally, never restore from cloud snapshot
+                  return;
+                }
                 const existing = map.get(item.id);
                 if (existing) {
                   const isExistingDeleted = (existing as any).isDeleted || (existing as any).status === 'deleted';
@@ -623,54 +633,64 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
           // Accurately reflect cloud state (merging with local to preserve soft-deletions and local groups)
           if (Array.isArray(d.customers)) {
-            const mergedCusts = mergeEntities(StorageService.getCustomers(), d.customers);
+            const mergedCusts = mergeEntities(StorageService.getCustomers(), d.customers, 'customers');
             StorageService.setCustomers(mergedCusts);
             setCustomers(mergedCusts);
           }
 
           if (Array.isArray(d.transactions)) {
-            const mergedTxns = mergeEntities(StorageService.getTransactions(), d.transactions);
+            const mergedTxns = mergeEntities(StorageService.getTransactions(), d.transactions, 'transactions');
             StorageService.setTransactions(mergedTxns);
             setTransactions(mergedTxns);
           }
           if (Array.isArray(d.products)) {
-            const merged = mergeEntities(StorageService.getProducts(), d.products);
+            const merged = mergeEntities(StorageService.getProducts(), d.products, 'products');
+            StorageService.setProducts(merged);
             setProducts(merged);
           }
           if (Array.isArray(d.invoices)) {
-            const merged = mergeEntities(StorageService.getInvoices(), d.invoices);
+            const merged = mergeEntities(StorageService.getInvoices(), d.invoices, 'invoices');
+            StorageService.setInvoices(merged);
             setInvoices(merged);
           }
           if (Array.isArray(d.expenses)) {
-            const merged = mergeEntities(StorageService.getExpenses(), d.expenses);
+            const merged = mergeEntities(StorageService.getExpenses(), d.expenses, 'expenses');
+            StorageService.setExpenses(merged);
             setExpenses(merged);
           }
           if (Array.isArray(d.savingsGoals)) {
-            const merged = mergeEntities(StorageService.getSavingsGoals(), d.savingsGoals);
+            const merged = mergeEntities(StorageService.getSavingsGoals(), d.savingsGoals, 'savings_goals');
+            StorageService.setSavingsGoals(merged);
             setSavingsGoals(merged);
           }
           if (Array.isArray(d.reminders)) {
-            const merged = mergeEntities(StorageService.getReminders(), d.reminders);
+            const merged = mergeEntities(StorageService.getReminders(), d.reminders, 'reminders');
+            StorageService.setReminders(merged);
             setReminders(merged);
           }
           if (Array.isArray(d.documents)) {
-            const merged = mergeEntities(StorageService.getDocuments(), d.documents);
+            const merged = mergeEntities(StorageService.getDocuments(), d.documents, 'documents');
+            StorageService.setDocuments(merged);
             setDocuments(merged);
           }
           if (Array.isArray(d.notes)) {
-            const merged = mergeEntities(StorageService.getNotes(), d.notes);
+            const merged = mergeEntities(StorageService.getNotes(), d.notes, 'notes');
+            StorageService.setNotes(merged);
             setNotes(merged);
           }
           if (Array.isArray(d.tasks)) {
-            const merged = mergeEntities(StorageService.getTasks(), d.tasks);
+            const merged = mergeEntities(StorageService.getTasks(), d.tasks, 'tasks');
+            StorageService.setTasks(merged);
             setTasks(merged);
           }
           if (Array.isArray(d.passwords)) {
-            const merged = mergeEntities(StorageService.getPasswords(), d.passwords);
+            const merged = mergeEntities(StorageService.getPasswords(), d.passwords, 'passwords');
+            StorageService.setPasswords(merged);
             setPasswords(merged);
           }
           if (Array.isArray(d.authenticators)) {
-            const merged = mergeEntities(StorageService.getAuthenticators(), d.authenticators);
+            const merged = mergeEntities(StorageService.getAuthenticators(), d.authenticators, 'authenticators');
+            StorageService.setAuthenticators(merged);
             setAuthenticators(merged);
           }
           if (Array.isArray(d.customerDriveFolders) || Array.isArray(d.customerDriveFiles)) {
@@ -741,6 +761,11 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
               return {
                 ...prev,
                 ...d.settings,
+                monthlyBudgetCap: d.settings.monthlyBudgetCap !== undefined 
+                  ? d.settings.monthlyBudgetCap 
+                  : (d.settings.paymentSettings?.monthlyBudgetCap !== undefined 
+                      ? d.settings.paymentSettings.monthlyBudgetCap 
+                      : (prev.monthlyBudgetCap || 150000)),
                 websiteName: brandStored.websiteName !== undefined ? brandStored.websiteName : (d.settings.websiteName || prev.websiteName || ''),
                 websiteLogo: brandStored.websiteLogo !== undefined ? brandStored.websiteLogo : (d.settings.websiteLogo || prev.websiteLogo || ''),
                 websiteFavicon: brandStored.websiteFavicon !== undefined ? brandStored.websiteFavicon : (d.settings.websiteFavicon || prev.websiteFavicon || ''),

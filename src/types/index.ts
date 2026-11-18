@@ -486,6 +486,9 @@ export interface PaymentSettings {
   upiGatewayKey?: string;
   upiGatewaySecret?: string;
   upiGatewayWebhookUrl?: string;
+  monthlyBudgetCap?: number;
+  expenseCategories?: string[];
+  savingsCategories?: string[];
   deletedPeerIds?: string[];
   dismissedAlertIds?: string[];
 }

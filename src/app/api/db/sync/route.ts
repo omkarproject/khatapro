@@ -851,8 +851,15 @@ export async function GET(req: NextRequest) {
       businessPhone: sbSet.data.business_phone || '',
       businessEmail: sbSet.data.business_email || '',
       businessAddress: sbSet.data.business_address || '',
+      monthlyBudgetCap: sbSet.data.payment_settings?.monthlyBudgetCap ?? 150000,
+      expenseCategories: sbSet.data.payment_settings?.expenseCategories,
+      savingsCategories: sbSet.data.payment_settings?.savingsCategories,
+      currency: sbSet.data.payment_settings?.currency || 'INR',
+      language: sbSet.data.payment_settings?.language || 'en',
+      gstin: sbSet.data.payment_settings?.gstin || '',
       paymentSettings: {
         ...(sbSet.data.payment_settings || {}),
+        monthlyBudgetCap: sbSet.data.payment_settings?.monthlyBudgetCap ?? 150000,
         businessLogo: logo,
       },
       darkMode: Boolean(sbSet.data.dark_mode),
@@ -1269,7 +1276,8 @@ async function syncPeerMerchants(
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { userId, data } = body;
+    const { userId, data, deletedRecordIds } = body;
+    const allDeletedIds: Record<string, string[]> = deletedRecordIds || (data && (data as any).deletedRecordIds) || {};
 
     if (!userId) {
       return NextResponse.json({ success: false, message: 'userId is required' }, { status: 400 });
@@ -1306,9 +1314,26 @@ export async function POST(req: NextRequest) {
     let peerSyncResult = { peerLinked: false, matchedPeers: [] as any[] };
 
     if (data) {
+      const promises: Promise<any>[] = [];
+
+      // 0. Direct removal of all explicitly registered deleted IDs across tables
+      if (allDeletedIds && typeof allDeletedIds === 'object') {
+        for (const [table, ids] of Object.entries(allDeletedIds)) {
+          if (Array.isArray(ids) && ids.length > 0) {
+            promises.push(
+              Promise.resolve(supabase.from(table).delete().eq('user_id', userId).in('id', ids))
+                .then(({ error }) => {
+                  if (error) console.error(`[explicitDelete] Error deleting from ${table}:`, error.message);
+                })
+            );
+          }
+        }
+      }
+
       // Helper to batch upsert converted rows and remove deleted records from Supabase
       const syncRowsWithDeletions = async (table: string, rows: any[]) => {
         const activeIds = new Set(rows.map(r => r.id));
+        const tableDeletedSet = allDeletedIds && Array.isArray(allDeletedIds[table]) ? new Set(allDeletedIds[table]) : null;
 
         // 1. Delete rows in Supabase that the user has deleted
         const { data: existing, error: fetchErr } = await supabase
@@ -1317,17 +1342,27 @@ export async function POST(req: NextRequest) {
           .eq('user_id', userId);
 
         if (!fetchErr && existing && existing.length > 0) {
-          // Safeguard: Never delete existing cloud records if incoming rows array is empty!
-          // An empty array in sync payload occurs on fresh device/browser or before initial load.
+          // If incoming rows array is empty, delete explicitly marked deleted records, else preserve
           if (rows.length === 0) {
-            console.warn(`[syncRowsWithDeletions] Preserving ${existing.length} records in table ${table} for user ${userId} (incoming rows was empty)`);
+            if (tableDeletedSet && tableDeletedSet.size > 0) {
+              const toDelete = existing.map(e => String(e.id)).filter(id => tableDeletedSet.has(id));
+              if (toDelete.length > 0) {
+                console.log(`[syncRowsWithDeletions] Deleting ${toDelete.length} explicitly deleted records from ${table} for user ${userId}:`, toDelete);
+                for (let i = 0; i < toDelete.length; i += 50) {
+                  const chunk = toDelete.slice(i, i + 50);
+                  await supabase.from(table).delete().eq('user_id', userId).in('id', chunk);
+                }
+              }
+            } else {
+              console.warn(`[syncRowsWithDeletions] Preserving ${existing.length} records in table ${table} for user ${userId} (incoming rows was empty and no explicit deletion)`);
+            }
           } else {
             const toDelete = existing
               .map(e => String(e.id))
               .filter(id => {
                 // Safeguard: peer_txn_ rows are managed exclusively by syncPeerMerchants
                 if (table === 'transactions' && id.startsWith('peer_txn_')) return false;
-                return !activeIds.has(id);
+                return !activeIds.has(id) || (tableDeletedSet && tableDeletedSet.has(id));
               });
 
             if (toDelete.length > 0) {
@@ -1357,8 +1392,6 @@ export async function POST(req: NextRequest) {
           );
         }
       };
-
-      const promises: Promise<any>[] = [];
 
       if (Array.isArray(data.customers)) {
         const rows = data.customers.filter((c: any) => c && c.id).map((c: any) => customerToDb(c, userId));
@@ -1432,6 +1465,14 @@ export async function POST(req: NextRequest) {
       if (data.settings) {
         const paymentSettingsWithLogo = {
           ...(data.settings.paymentSettings || {}),
+          monthlyBudgetCap: data.settings.monthlyBudgetCap !== undefined 
+            ? data.settings.monthlyBudgetCap 
+            : (data.settings.paymentSettings?.monthlyBudgetCap ?? 150000),
+          expenseCategories: data.settings.expenseCategories || data.settings.paymentSettings?.expenseCategories,
+          savingsCategories: data.settings.savingsCategories || data.settings.paymentSettings?.savingsCategories,
+          currency: data.settings.currency || data.settings.paymentSettings?.currency || 'INR',
+          language: data.settings.language || data.settings.paymentSettings?.language || 'en',
+          gstin: data.settings.gstin || data.settings.paymentSettings?.gstin || '',
           businessLogo: logoToSave,
           websiteName: data.settings.websiteName || '',
           websiteLogo: data.settings.websiteLogo || '',

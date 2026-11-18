@@ -263,32 +263,32 @@ export function generateOtpEmailHtml(params: OtpEmailTemplateParams): { subject:
   let badgeText = 'Verification OTP';
   let badgeColor = '#4f46e5'; // Indigo
   let introMessage = 'Use the 6-digit verification code below to complete your authentication request.';
-  let subject = `[${cleanBrandName}] Your Verification Code: ${otp}`;
+  let subject = `${otp} is your ${cleanBrandName} verification code`;
 
   if (purpose === 'signup') {
     title = 'Welcome! Verify Your New Account';
     badgeText = 'Account Signup';
     badgeColor = '#059669'; // Emerald
     introMessage = `Hello${recipientName ? ' ' + recipientName : ''}, welcome to ${cleanBrandName}! Please enter this one-time code to verify your email and activate your business ledger vault.`;
-    subject = `🎉 Welcome to ${cleanBrandName} — Verify Your Account (${otp})`;
+    subject = `${otp} is your ${cleanBrandName} account verification code`;
   } else if (purpose === 'login') {
     title = 'Login Security Verification';
     badgeText = 'Secure Sign-In';
     badgeColor = '#4f46e5'; // Indigo
     introMessage = `A login attempt was initiated for your account (${recipientEmail}). Enter the code below to complete your sign-in.`;
-    subject = `🔐 [${cleanBrandName}] Sign-In OTP: ${otp}`;
+    subject = `${otp} is your ${cleanBrandName} login security code`;
   } else if (purpose === 'forgot_password') {
     title = 'Password Reset Request';
     badgeText = 'Account Recovery';
     badgeColor = '#e11d48'; // Rose
     introMessage = `We received a request to reset the password for your ${cleanBrandName} account. Enter this code to set up a new password.`;
-    subject = `🔑 [${cleanBrandName}] Password Reset Code: ${otp}`;
+    subject = `${otp} is your ${cleanBrandName} password reset code`;
   } else if (purpose === 'resend') {
     title = 'New Verification Code';
     badgeText = 'Resent Code';
     badgeColor = '#d97706'; // Amber
     introMessage = `Here is your requested new verification code. All previous codes have been invalidated.`;
-    subject = `🔄 [${cleanBrandName}] New Verification OTP: ${otp}`;
+    subject = `${otp} is your new ${cleanBrandName} verification code`;
   }
 
   const html = `
@@ -445,6 +445,10 @@ export function generateOtpEmailHtml(params: OtpEmailTemplateParams): { subject:
   </style>
 </head>
 <body>
+  <!-- Preheader text to optimize email deliverability and avoid spam classification -->
+  <div style="display:none;font-size:1px;color:#0b0f19;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
+    ${otp} is your ${cleanBrandName} verification code. Valid for 10 minutes. Do not share this code with anyone.&#847; &zwnj; &nbsp; &#8199;
+  </div>
   <div class="wrapper">
     <div class="container">
       <div class="header-bar"></div>
@@ -570,6 +574,8 @@ export async function sendOtpEmailDirect(params: {
     // Auto background attach SMTP Username / Mailbox Email as the sender address:
     const senderEmail = config.user.trim();
     const formattedFrom = `"${displayName}" <${senderEmail}>`;
+    const senderDomain = senderEmail.includes('@') ? senderEmail.split('@')[1] : 'rpmdg.me';
+    const cleanMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 10)}@${senderDomain}>`;
 
     const info = await transporter.sendMail({
       from: formattedFrom,
@@ -577,6 +583,19 @@ export async function sendOtpEmailDirect(params: {
       subject,
       text,
       html,
+      messageId: cleanMessageId,
+      envelope: {
+        from: senderEmail,
+        to: params.to,
+      },
+      headers: {
+        'X-Priority': '1',
+        'X-MSMail-Priority': 'High',
+        'Importance': 'High',
+        'Auto-Submitted': 'auto-generated',
+        'X-Auto-Response-Suppress': 'All',
+        'List-Unsubscribe': `<mailto:${senderEmail}?subject=unsubscribe>`,
+      },
       attachments: logoAttachments.length > 0 ? logoAttachments : undefined,
     });
 
@@ -611,7 +630,7 @@ export function generateWelcomeEmailHtml(params: {
   const cleanBrandName = brandName.trim() || 'KhataPro';
   const cleanBadgeText = customBadgeText?.trim() || '';
   const greeting = recipientName ? `Hello ${recipientName},` : 'Hello Business Owner,';
-  const subject = `🎉 Welcome to ${cleanBrandName}! Your Merchant Ledger is Activated`;
+  const subject = `${cleanBrandName} Account Activated — Welcome aboard`;
 
   const effectiveLogoTag = customLogoImgTag !== undefined 
     ? customLogoImgTag 
@@ -777,6 +796,10 @@ export function generateWelcomeEmailHtml(params: {
   </style>
 </head>
 <body>
+  <!-- Preheader text to optimize email deliverability and avoid spam classification -->
+  <div style="display:none;font-size:1px;color:#0b0f19;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
+    Welcome to ${cleanBrandName}! Your business ledger and billing account is now activated. Log in to explore your dashboard.&#847; &zwnj; &nbsp; &#8199;
+  </div>
   <div class="wrapper">
     <div class="container">
       <div class="header-bar"></div>
@@ -923,6 +946,8 @@ export async function sendWelcomeEmailDirect(params: {
 
     const senderEmail = config.user.trim();
     const formattedFrom = `"${displayName}" <${senderEmail}>`;
+    const senderDomain = senderEmail.includes('@') ? senderEmail.split('@')[1] : 'rpmdg.me';
+    const cleanMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 10)}@${senderDomain}>`;
 
     const info = await transporter.sendMail({
       from: formattedFrom,
@@ -930,6 +955,19 @@ export async function sendWelcomeEmailDirect(params: {
       subject,
       text,
       html,
+      messageId: cleanMessageId,
+      envelope: {
+        from: senderEmail,
+        to: params.to,
+      },
+      headers: {
+        'X-Priority': '1',
+        'X-MSMail-Priority': 'High',
+        'Importance': 'High',
+        'Auto-Submitted': 'auto-generated',
+        'X-Auto-Response-Suppress': 'All',
+        'List-Unsubscribe': `<mailto:${senderEmail}?subject=unsubscribe>`,
+      },
       attachments: logoAttachments.length > 0 ? logoAttachments : undefined,
     });
 

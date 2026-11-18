@@ -877,6 +877,9 @@ export default function InvoicesPage() {
                         onClick={() => {
                           if (confirm(`Are you sure you want to delete Invoice #${inv.invoiceNumber}?`)) {
                             deleteInvoice(inv.id);
+                            if (activeInvoice && activeInvoice.id === inv.id) {
+                              setActiveInvoice(null);
+                            }
                           }
                         }}
                         className="p-1.5 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/60 text-slate-400 hover:text-rose-600 transition-colors"

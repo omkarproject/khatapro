@@ -113,6 +113,45 @@ function setLocalItem<T>(rawKey: string, value: T): void {
   }
 }
 
+// -------------------------------------------------------------
+// Deleted Record Registry: Prevents resurrected deleted records
+// -------------------------------------------------------------
+const DELETED_RECORD_KEYS = 'skp_deleted_record_ids';
+
+export function getDeletedRecordIds(table: string): Set<string> {
+  const all = getLocalItem<Record<string, string[]>>(DELETED_RECORD_KEYS, {});
+  return new Set(all[table] || []);
+}
+
+export function getAllDeletedRecordIds(): Record<string, string[]> {
+  return getLocalItem<Record<string, string[]>>(DELETED_RECORD_KEYS, {});
+}
+
+export function addDeletedRecordId(table: string, id: string): void {
+  if (!id) return;
+  const all = getLocalItem<Record<string, string[]>>(DELETED_RECORD_KEYS, {});
+  const current = new Set(all[table] || []);
+  current.add(id);
+  all[table] = Array.from(current);
+  setLocalItem(DELETED_RECORD_KEYS, all);
+}
+
+export function clearDeletedRecordIds(table?: string, ids?: string[]): void {
+  const all = getLocalItem<Record<string, string[]>>(DELETED_RECORD_KEYS, {});
+  if (!table) {
+    setLocalItem(DELETED_RECORD_KEYS, {});
+    return;
+  }
+  if (!ids || ids.length === 0) {
+    delete all[table];
+  } else {
+    const set = new Set(all[table] || []);
+    ids.forEach(id => set.delete(id));
+    all[table] = Array.from(set);
+  }
+  setLocalItem(DELETED_RECORD_KEYS, all);
+}
+
 export const getCleanDefaultSettings = (businessName: string = '', phone: string = '', email: string = ''): SystemSettings => {
   let globalWebName = '';
   let globalWebLogo = '';
@@ -290,6 +329,12 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
 };
 
 export const StorageService = {
+  // Deleted Record Registry for Anti-Resurrection Cloud Sync
+  getDeletedRecordIds: (table: string): Set<string> => getDeletedRecordIds(table),
+  getAllDeletedRecordIds: (): Record<string, string[]> => getAllDeletedRecordIds(),
+  addDeletedRecordId: (table: string, id: string): void => addDeletedRecordId(table, id),
+  clearDeletedRecordIds: (table?: string, ids?: string[]): void => clearDeletedRecordIds(table, ids),
+
   // Auth User Session (Per-User Isolation)
   getCurrentUser: (): UserProfile | null => {
     if (typeof window === 'undefined') return null;
@@ -336,11 +381,12 @@ export const StorageService = {
   }) => {
     if (typeof window === 'undefined') return;
 
-    const mergeEntities = <T extends { id: string }>(localList: T[], incomingList?: T[]): T[] => {
+    const mergeEntities = <T extends { id: string }>(localList: T[], incomingList?: T[], tableName?: string): T[] => {
       if (!Array.isArray(incomingList)) return localList;
+      const deletedIds = tableName ? getDeletedRecordIds(tableName) : new Set<string>();
       const map = new Map<string, T>();
       localList.forEach(item => {
-        if (item && item.id) map.set(item.id, item);
+        if (item && item.id && !deletedIds.has(item.id)) map.set(item.id, item);
       });
       const incomingIds = new Set(incomingList.map(item => item?.id).filter(Boolean));
 
@@ -353,6 +399,10 @@ export const StorageService = {
 
       incomingList.forEach(item => {
         if (item && item.id) {
+          if (deletedIds.has(item.id)) {
+            // Intentionally deleted locally, do not resurrect
+            return;
+          }
           const existing = map.get(item.id);
           if (existing) {
             const isExistingDeleted = (existing as any).isDeleted || (existing as any).status === 'deleted';
@@ -376,18 +426,18 @@ export const StorageService = {
       return Array.from(map.values());
     };
 
-    if (data.customers !== undefined) setLocalItem(STORAGE_KEYS.CUSTOMERS, mergeEntities(StorageService.getCustomers(), data.customers));
-    if (data.transactions !== undefined) setLocalItem(STORAGE_KEYS.TRANSACTIONS, mergeEntities(StorageService.getTransactions(), data.transactions));
-    if (data.products !== undefined) setLocalItem(STORAGE_KEYS.PRODUCTS, mergeEntities(StorageService.getProducts(), data.products));
-    if (data.invoices !== undefined) setLocalItem(STORAGE_KEYS.INVOICES, mergeEntities(StorageService.getInvoices(), data.invoices));
-    if (data.expenses !== undefined) setLocalItem(STORAGE_KEYS.EXPENSES, mergeEntities(StorageService.getExpenses(), data.expenses));
-    if (data.savingsGoals !== undefined) setLocalItem(STORAGE_KEYS.SAVINGS, mergeEntities(StorageService.getSavingsGoals(), data.savingsGoals));
-    if (data.reminders !== undefined) setLocalItem(STORAGE_KEYS.REMINDERS, mergeEntities(StorageService.getReminders(), data.reminders));
-    if (data.documents !== undefined) setLocalItem(STORAGE_KEYS.DOCUMENTS, mergeEntities(StorageService.getDocuments(), data.documents));
-    if (data.notes !== undefined) setLocalItem(STORAGE_KEYS.NOTES, mergeEntities(StorageService.getNotes(), data.notes));
-    if (data.tasks !== undefined) setLocalItem(STORAGE_KEYS.TASKS, mergeEntities(StorageService.getTasks(), data.tasks));
-    if (data.passwords !== undefined) setLocalItem(STORAGE_KEYS.PASSWORDS, mergeEntities(StorageService.getPasswords(), data.passwords));
-    if (data.authenticators !== undefined) setLocalItem(STORAGE_KEYS.AUTHENTICATOR, mergeEntities(StorageService.getAuthenticators(), data.authenticators));
+    if (data.customers !== undefined) setLocalItem(STORAGE_KEYS.CUSTOMERS, mergeEntities(StorageService.getCustomers(), data.customers, 'customers'));
+    if (data.transactions !== undefined) setLocalItem(STORAGE_KEYS.TRANSACTIONS, mergeEntities(StorageService.getTransactions(), data.transactions, 'transactions'));
+    if (data.products !== undefined) setLocalItem(STORAGE_KEYS.PRODUCTS, mergeEntities(StorageService.getProducts(), data.products, 'products'));
+    if (data.invoices !== undefined) setLocalItem(STORAGE_KEYS.INVOICES, mergeEntities(StorageService.getInvoices(), data.invoices, 'invoices'));
+    if (data.expenses !== undefined) setLocalItem(STORAGE_KEYS.EXPENSES, mergeEntities(StorageService.getExpenses(), data.expenses, 'expenses'));
+    if (data.savingsGoals !== undefined) setLocalItem(STORAGE_KEYS.SAVINGS, mergeEntities(StorageService.getSavingsGoals(), data.savingsGoals, 'savings_goals'));
+    if (data.reminders !== undefined) setLocalItem(STORAGE_KEYS.REMINDERS, mergeEntities(StorageService.getReminders(), data.reminders, 'reminders'));
+    if (data.documents !== undefined) setLocalItem(STORAGE_KEYS.DOCUMENTS, mergeEntities(StorageService.getDocuments(), data.documents, 'documents'));
+    if (data.notes !== undefined) setLocalItem(STORAGE_KEYS.NOTES, mergeEntities(StorageService.getNotes(), data.notes, 'notes'));
+    if (data.tasks !== undefined) setLocalItem(STORAGE_KEYS.TASKS, mergeEntities(StorageService.getTasks(), data.tasks, 'tasks'));
+    if (data.passwords !== undefined) setLocalItem(STORAGE_KEYS.PASSWORDS, mergeEntities(StorageService.getPasswords(), data.passwords, 'passwords'));
+    if (data.authenticators !== undefined) setLocalItem(STORAGE_KEYS.AUTHENTICATOR, mergeEntities(StorageService.getAuthenticators(), data.authenticators, 'authenticators'));
     if (data.settings !== undefined) {
       const existingSettings = StorageService.getSettings();
       const existingProfile = StorageService.getProfile();
@@ -695,11 +745,21 @@ export const StorageService = {
       s.websiteFavicon = s.websiteLogo;
     }
 
+    if (s.monthlyBudgetCap === undefined && s.paymentSettings?.monthlyBudgetCap !== undefined) {
+      s.monthlyBudgetCap = s.paymentSettings.monthlyBudgetCap;
+    }
+
     return s;
   },
   updateSettings: (settings: Partial<SystemSettings>): SystemSettings => {
     const cur = StorageService.getSettings();
     const merged: SystemSettings = { ...cur, ...settings };
+    if (merged.monthlyBudgetCap !== undefined) {
+      if (!merged.paymentSettings) merged.paymentSettings = {} as any;
+      merged.paymentSettings.monthlyBudgetCap = merged.monthlyBudgetCap;
+    } else if (merged.paymentSettings?.monthlyBudgetCap !== undefined) {
+      merged.monthlyBudgetCap = merged.paymentSettings.monthlyBudgetCap;
+    }
     setLocalItem(STORAGE_KEYS.SETTINGS, merged);
     
     const storedProfile = getLocalItem<UserProfile | null>(STORAGE_KEYS.PROFILE, null as any);
@@ -1245,7 +1305,11 @@ export const StorageService = {
 
     const updated = list.filter(i => i.id !== id);
     setLocalItem(STORAGE_KEYS.INVOICES, updated);
+    addDeletedRecordId('invoices', id);
     return updated;
+  },
+  setInvoices: (invoices: Invoice[]): void => {
+    setLocalItem(STORAGE_KEYS.INVOICES, invoices);
   },
   reconcileInvoiceStock: (): boolean => {
     if (typeof window === 'undefined') return false;
@@ -1340,7 +1404,11 @@ export const StorageService = {
   deleteProduct: (id: string): Product[] => {
     const list = StorageService.getProducts().filter(p => p.id !== id);
     setLocalItem(STORAGE_KEYS.PRODUCTS, list);
+    addDeletedRecordId('products', id);
     return list;
+  },
+  setProducts: (products: Product[]): void => {
+    setLocalItem(STORAGE_KEYS.PRODUCTS, products);
   },
   adjustStock: (productId: string, quantityChange: number): Product[] => {
     const list = StorageService.getProducts();
@@ -1382,7 +1450,11 @@ export const StorageService = {
   deleteExpense: (id: string): Expense[] => {
     const list = StorageService.getExpenses().filter(e => e.id !== id);
     setLocalItem(STORAGE_KEYS.EXPENSES, list);
+    addDeletedRecordId('expenses', id);
     return list;
+  },
+  setExpenses: (expenses: Expense[]): void => {
+    setLocalItem(STORAGE_KEYS.EXPENSES, expenses);
   },
 
   // Savings Goals
@@ -1403,7 +1475,11 @@ export const StorageService = {
   deleteSavingsGoal: (id: string): SavingsGoal[] => {
     const list = StorageService.getSavingsGoals().filter(g => g.id !== id);
     setLocalItem(STORAGE_KEYS.SAVINGS, list);
+    addDeletedRecordId('savings_goals', id);
     return list;
+  },
+  setSavingsGoals: (goals: SavingsGoal[]): void => {
+    setLocalItem(STORAGE_KEYS.SAVINGS, goals);
   },
 
   // Payment Reminders
@@ -1424,7 +1500,11 @@ export const StorageService = {
   deleteReminder: (id: string): PaymentReminder[] => {
     const list = StorageService.getReminders().filter(r => r.id !== id);
     setLocalItem(STORAGE_KEYS.REMINDERS, list);
+    addDeletedRecordId('reminders', id);
     return list;
+  },
+  setReminders: (reminders: PaymentReminder[]): void => {
+    setLocalItem(STORAGE_KEYS.REMINDERS, reminders);
   },
 
   // Documents
@@ -1438,7 +1518,11 @@ export const StorageService = {
   deleteDocument: (id: string): DocumentItem[] => {
     const list = StorageService.getDocuments().filter(d => d.id !== id);
     setLocalItem(STORAGE_KEYS.DOCUMENTS, list);
+    addDeletedRecordId('documents', id);
     return list;
+  },
+  setDocuments: (docs: DocumentItem[]): void => {
+    setLocalItem(STORAGE_KEYS.DOCUMENTS, docs);
   },
 
   // Customer Drive & Vault (Per-customer folders & documents)
@@ -1525,7 +1609,11 @@ export const StorageService = {
     const list = StorageService.getNotes();
     const updated = list.filter(n => n.id !== id);
     setLocalItem(STORAGE_KEYS.NOTES, updated);
+    addDeletedRecordId('notes', id);
     return updated;
+  },
+  setNotes: (notes: NoteItem[]): void => {
+    setLocalItem(STORAGE_KEYS.NOTES, notes);
   },
 
   // Tasks Management
@@ -1563,7 +1651,11 @@ export const StorageService = {
     const list = StorageService.getTasks();
     const updated = list.filter(t => t.id !== id);
     setLocalItem(STORAGE_KEYS.TASKS, updated);
+    addDeletedRecordId('tasks', id);
     return updated;
+  },
+  setTasks: (tasks: TaskItem[]): void => {
+    setLocalItem(STORAGE_KEYS.TASKS, tasks);
   },
 
   // Password Manager
@@ -1585,7 +1677,11 @@ export const StorageService = {
     const list = StorageService.getPasswords();
     const updated = list.filter(p => p.id !== id);
     setLocalItem(STORAGE_KEYS.PASSWORDS, updated);
+    addDeletedRecordId('passwords', id);
     return updated;
+  },
+  setPasswords: (passwords: PasswordItem[]): void => {
+    setLocalItem(STORAGE_KEYS.PASSWORDS, passwords);
   },
 
   // Authenticator / 2FA Manager
@@ -1607,7 +1703,11 @@ export const StorageService = {
     const list = StorageService.getAuthenticators();
     const updated = list.filter(a => a.id !== id);
     setLocalItem(STORAGE_KEYS.AUTHENTICATOR, updated);
+    addDeletedRecordId('authenticators', id);
     return updated;
+  },
+  setAuthenticators: (authenticators: AuthenticatorItem[]): void => {
+    setLocalItem(STORAGE_KEYS.AUTHENTICATOR, authenticators);
   },
 
   // Khata Groups

@@ -242,9 +242,25 @@ export default function ExpensesPage() {
     updateSettings({
       ...settings,
       monthlyBudgetCap: val,
+      paymentSettings: {
+        ...(settings.paymentSettings || {}),
+        monthlyBudgetCap: val,
+      },
     });
     setIsEditingBudget(false);
     addToast('Budget Cap Updated', `Monthly budget cap set to ${formatINR(val)}`, 'success');
+  };
+
+  const handleDeleteExpense = (id: string, title?: string) => {
+    const label = title ? `"${title}"` : 'this expense';
+    if (typeof window !== 'undefined' && !window.confirm(`Are you sure you want to delete ${label}?`)) {
+      return;
+    }
+    deleteExpense(id);
+    if (editingExpenseId === id) {
+      setIsModalOpen(false);
+      resetForm();
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1258,7 +1274,7 @@ export default function ExpensesPage() {
                               {/* Delete Expense Button (Trash2 Icon) */}
                               <button
                                 type="button"
-                                onClick={() => deleteExpense(exp.id)}
+                                onClick={() => handleDeleteExpense(exp.id, exp.title)}
                                 className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/15 transition-all cursor-pointer"
                                 title="Delete Expense"
                               >
@@ -1617,23 +1633,38 @@ export default function ExpensesPage() {
                 </label>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsModalOpen(false);
-                    resetForm();
-                  }}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all cursor-pointer"
-                >
-                  {editingExpenseId ? 'Update Expense' : 'Save Expense'}
-                </button>
+              <div className="pt-2 flex items-center justify-between gap-2">
+                {editingExpenseId ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const exp = expenses.find(e => e.id === editingExpenseId);
+                      handleDeleteExpense(editingExpenseId, exp?.title);
+                    }}
+                    className="px-3 py-2 rounded-xl text-xs font-bold text-rose-500 hover:text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Expense</span>
+                  </button>
+                ) : <div />}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      resetForm();
+                    }}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all cursor-pointer"
+                  >
+                    {editingExpenseId ? 'Update Expense' : 'Save Expense'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
