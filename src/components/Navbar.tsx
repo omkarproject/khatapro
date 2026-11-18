@@ -91,6 +91,8 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     currentUser,
     openAuthModal,
     logout,
+    activeDevicesCount,
+    refreshActiveDevicesCount,
     playPaymentNotificationSound,
   } = useApp();
 
@@ -98,6 +100,17 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+
+  // Realtime active device count refresh whenever user profile popover is opened
+  useEffect(() => {
+    if (isUserMenuOpen && currentUser) {
+      refreshActiveDevicesCount();
+      const interval = setInterval(() => {
+        refreshActiveDevicesCount();
+      }, 6000);
+      return () => clearInterval(interval);
+    }
+  }, [isUserMenuOpen, currentUser, refreshActiveDevicesCount]);
 
   const [localBrand, setLocalBrand] = useState<any>(() => {
     if (typeof window !== 'undefined') {
@@ -1723,7 +1736,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                           </div>
                           <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            Active
+                            {activeDevicesCount > 0 ? `${activeDevicesCount} Active` : '1 Active'}
                           </span>
                         </button>
 

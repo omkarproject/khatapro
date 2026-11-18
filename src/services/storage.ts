@@ -1895,37 +1895,64 @@ export const StorageService = {
     return updated;
   },
 
-  // Completely wipe local and session storage on logout (preserving only public branding for /login)
+  // Completely wipe all local and session storage, cookies, and browser caches on logout
   clearOnLogout: (): void => {
     if (typeof window === 'undefined') return;
     try {
-      const preserved: Record<string, string> = {};
-      const keysToPreserve = [
-        'skp_global_branding',
-        'skp_global_system_config',
-        'skp_brand_name',
-        'skp_brand_logo',
-        'skp_brand_favicon',
-        'skp_brand_badge',
-        'skp_brand_badge_bg',
-        'skp_brand_tagline',
-        'skp_brand_support_location',
-        'skp_brand_support_phone',
-        'skp_brand_support_email',
-        'skp_policy_terms',
-        'skp_policy_refunds',
-        'skp_policy_privacy',
-      ];
-      for (const k of keysToPreserve) {
-        const val = localStorage.getItem(k);
-        if (val !== null) preserved[k] = val;
+      // 1. Wipe 100% of localStorage
+      try {
+        localStorage.clear();
+      } catch (e) {
+        console.warn('localStorage.clear failed:', e);
       }
 
-      localStorage.clear();
-      sessionStorage.clear();
+      // 2. Wipe 100% of sessionStorage
+      try {
+        sessionStorage.clear();
+      } catch (e) {
+        console.warn('sessionStorage.clear failed:', e);
+      }
 
-      for (const [k, v] of Object.entries(preserved)) {
-        localStorage.setItem(k, v);
+      // 3. Clear all browser cookies across root and domain
+      if (typeof document !== 'undefined') {
+        try {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i];
+            const eqPos = cookie.indexOf('=');
+            const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
+            if (name) {
+              document.cookie = `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0; SameSite=Lax;`;
+              document.cookie = `${name}=; Path=/; Domain=${window.location.hostname}; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0; SameSite=Lax;`;
+            }
+          }
+        } catch (e) {
+          console.warn('Cookie cleanup failed:', e);
+        }
+      }
+
+      // 4. Clear CacheStorage (service workers / browser request caches)
+      if (typeof window !== 'undefined' && 'caches' in window) {
+        try {
+          caches.keys().then((names) => {
+            names.forEach((name) => {
+              try { caches.delete(name); } catch {}
+            });
+          }).catch(() => null);
+        } catch {}
+      }
+
+      // 5. Clear IndexedDB databases if any exist
+      if (typeof window !== 'undefined' && 'indexedDB' in window && typeof indexedDB.databases === 'function') {
+        try {
+          indexedDB.databases().then((dbs) => {
+            dbs.forEach((db) => {
+              if (db.name) {
+                try { indexedDB.deleteDatabase(db.name); } catch {}
+              }
+            });
+          }).catch(() => null);
+        } catch {}
       }
     } catch (e) {
       console.warn('StorageService.clearOnLogout failed:', e);

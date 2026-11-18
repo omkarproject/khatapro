@@ -29,7 +29,7 @@ interface DevicesModalProps {
 }
 
 export function DevicesModal({ isOpen, onClose }: DevicesModalProps) {
-  const { currentUser, logout, addToast } = useApp();
+  const { currentUser, logout, addToast, refreshActiveDevicesCount } = useApp();
   const [devices, setDevices] = useState<DeviceSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -96,6 +96,7 @@ export function DevicesModal({ isOpen, onClose }: DevicesModalProps) {
         });
 
         setDevices(enriched);
+        refreshActiveDevicesCount();
       }
     } catch (err) {
       console.error('Failed to load active devices:', err);
@@ -142,6 +143,7 @@ export function DevicesModal({ isOpen, onClose }: DevicesModalProps) {
       if (json.success) {
         addToast('Device Logged Out', `${device.deviceName} has been logged out successfully.`, 'success');
         setDevices(prev => prev.filter(d => d.id !== device.id));
+        refreshActiveDevicesCount();
       } else {
         addToast('Error', json.message || 'Could not log out device.', 'error');
       }
@@ -174,6 +176,7 @@ export function DevicesModal({ isOpen, onClose }: DevicesModalProps) {
       if (json.success) {
         addToast('All Other Devices Logged Out', 'All other login sessions have been terminated.', 'success');
         setDevices(prev => prev.filter(d => d.isCurrent));
+        refreshActiveDevicesCount();
       } else {
         addToast('Error', json.message || 'Failed to logout other devices.', 'error');
       }

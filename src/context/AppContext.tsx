@@ -151,6 +151,8 @@ interface AppContextType {
   register: (data: { name: string; email: string; password: string; businessName?: string; phone?: string; role?: UserRole }) => Promise<void>;
   applyAuthenticatedUser: (user: UserProfile) => Promise<void>;
   logout: () => void;
+  activeDevicesCount: number;
+  refreshActiveDevicesCount: () => Promise<number>;
   cloudSyncStatus: 'synced' | 'syncing' | 'offline' | 'error';
   syncWithDatabase: () => Promise<void>;
   loadUserDataFromCloud: (userId: string, silent?: boolean) => Promise<void>;
@@ -231,6 +233,32 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   });
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
+  const [activeDevicesCount, setActiveDevicesCount] = useState<number>(1);
+
+  const refreshActiveDevicesCount = useCallback(async (): Promise<number> => {
+    const curU = currentUser || StorageService.getCurrentUser();
+    if (!curU) return 1;
+    try {
+      const meta = detectDeviceMetadata();
+      const res = await fetch(`/api/auth/devices?deviceId=${encodeURIComponent(meta.deviceId)}&userId=${encodeURIComponent(curU.id)}`);
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.devices)) {
+        const activeList = data.devices.filter((d: any) => !d.isRevoked);
+        const count = Math.max(1, activeList.length);
+        setActiveDevicesCount(count);
+        return count;
+      }
+    } catch (err) {
+      console.warn('Failed to refresh active devices count:', err);
+    }
+    return 1;
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (currentUser) {
+      refreshActiveDevicesCount();
+    }
+  }, [currentUser, refreshActiveDevicesCount]);
 
   // Localization & Multi-Currency State
   const [activeLanguage, setActiveLanguageState] = useState<LanguageOption>(() => getActiveLanguage());
@@ -1053,6 +1081,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         if (elapsed > 6000) {
           debouncedLoadFromCloud(userId, 'visibility_change');
         }
+        refreshActiveDevicesCount();
       }
     };
     const handleFocus = () => {
@@ -1060,9 +1089,11 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       if (elapsed > 6000) {
         debouncedLoadFromCloud(userId, 'window_focus');
       }
+      refreshActiveDevicesCount();
     };
     const handleOnline = () => {
       debouncedLoadFromCloud(userId, 'network_online');
+      refreshActiveDevicesCount();
     };
 
     if (typeof window !== 'undefined') {
@@ -1079,7 +1110,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           debouncedLoadFromCloud(userId, 'heartbeat_poll');
         }
 
-        // Remotely revoked device safety check
+        // Remotely revoked device safety check & active devices count sync
         try {
           const meta = detectDeviceMetadata();
           fetch(`/api/auth/devices?deviceId=${encodeURIComponent(meta.deviceId)}&userId=${encodeURIComponent(userId)}`)
@@ -1087,6 +1118,9 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
             .then(res => {
               if (res && res.isCurrentRevoked) {
                 logout();
+              } else if (res && Array.isArray(res.devices)) {
+                const activeList = res.devices.filter((d: any) => !d.isRevoked);
+                setActiveDevicesCount(Math.max(1, activeList.length));
               }
             })
             .catch(() => null);
@@ -1171,7 +1205,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           browser: meta.browser,
           os: meta.os,
         }),
-      }).catch(() => null);
+      }).then(() => refreshActiveDevicesCount()).catch(() => null);
     } catch {}
 
     // Notify AutoBackupGuardian to initiate Day's 1st Open Auto Backup with live progress & alerts
@@ -1292,9 +1326,15 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setGroups([]);
     setGroupNotifications([]);
     setSettingsState(getCleanDefaultSettings());
+    setActiveDevicesCount(1);
     addToast('Signed Out', 'You have logged out of your account.', 'info');
     if (typeof window !== 'undefined') {
-      window.location.replace('/login');
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch {}
+      // Perform hard reload to /login
+      window.location.href = '/login';
     }
   };
 
@@ -2425,6 +2465,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         register,
         applyAuthenticatedUser,
         logout,
+        activeDevicesCount,
+        refreshActiveDevicesCount,
         cloudSyncStatus,
         syncWithDatabase,
         loadUserDataFromCloud,
