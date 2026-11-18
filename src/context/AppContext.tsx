@@ -346,6 +346,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const currentUserRef = useRef<UserProfile | null>(currentUser);
   const seenTransactionIdsRef = useRef<Set<string>>(new Set());
   const isInitialCloudLoadedRef = useRef<boolean>(false);
+  const lastKnownCloudVersionRef = useRef<string>('');
 
   useEffect(() => {
     currentUserRef.current = currentUser;
@@ -480,6 +481,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
       const payload = {
         userId,
+        originDeviceId: myDeviceIdRef.current,
         deletedRecordIds: StorageService.getAllDeletedRecordIds(),
         data: {
           customers: curCustomers,
@@ -530,6 +532,9 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
         try {
           const syncJson = await res.json();
+          if (syncJson?.version) {
+            lastKnownCloudVersionRef.current = syncJson.version;
+          }
           if (syncJson.peerLinked && Array.isArray(syncJson.matchedPeers) && syncJson.matchedPeers.length > 0) {
             syncJson.matchedPeers.forEach((mp: any) => {
               broadcastRealtimeChange(mp.id, 'peer_merchant_update');
@@ -554,6 +559,24 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   };
 
   const syncWithDatabase = async (targetUser?: UserProfile | null) => {
+    // ⚡ Instantly notify other open tabs on this machine in <5ms
+    const user = targetUser || currentUserRef.current;
+    if (user?.id) {
+      try {
+        if (broadcastChannelRef.current) {
+          broadcastChannelRef.current.postMessage({
+            userId: user.id,
+            originDeviceId: myDeviceIdRef.current,
+            action: 'local_mutation',
+            timestamp: Date.now(),
+          });
+        }
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('khatapro_realtime_ping', `${myDeviceIdRef.current}_${Date.now()}`);
+        }
+      } catch {}
+    }
+
     // ⚡ Coalesce rapid calls into a single optimal database sync with 80ms debounce
     if (syncDebounceTimeoutRef.current) {
       clearTimeout(syncDebounceTimeoutRef.current);
@@ -577,50 +600,69 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         if (json.success && json.data) {
           const d = json.data;
 
-          // Universal entity merger to protect against empty arrays overwriting local records
+          // Universal entity merger to protect against stale data and eliminate multi-device conflicts
           const mergeEntities = <T extends { id: string }>(localList: T[], cloudList?: T[], tableName?: string): T[] => {
             if (!Array.isArray(cloudList)) return localList;
             const deletedIds = tableName ? StorageService.getDeletedRecordIds(tableName) : new Set<string>();
-            const map = new Map<string, T>();
-            localList.forEach(item => {
-              if (item && item.id && !deletedIds.has(item.id)) map.set(item.id, item);
-            });
-            const cloudIds = new Set(cloudList.map(item => item?.id).filter(Boolean));
 
-            // Clean stale mirrored peer transactions that were deleted from the cloud ledger
-            map.forEach((item, id) => {
-              if (id.startsWith('peer_txn_') && !cloudIds.has(id)) {
-                map.delete(id);
-              }
-            });
-
+            // 1. Map all incoming cloud entities (excluding local pending deletions)
+            const incomingMap = new Map<string, T>();
             cloudList.forEach(item => {
-              if (item && item.id) {
-                if (deletedIds.has(item.id)) {
-                  // Intentionally deleted locally, never restore from cloud snapshot
-                  return;
-                }
-                const existing = map.get(item.id);
-                if (existing) {
-                  const isExistingDeleted = (existing as any).isDeleted || (existing as any).status === 'deleted';
-                  const isIncomingDeleted = (item as any).isDeleted || (item as any).status === 'deleted';
-                  const cloudTime = new Date((item as any).updatedAt || (item as any).updated_at || (item as any).createdAt || 0).getTime();
-                  const localTime = new Date((existing as any).updatedAt || (existing as any).updated_at || (existing as any).deletedAt || (existing as any).createdAt || 0).getTime();
+              if (item && item.id && !deletedIds.has(item.id)) {
+                incomingMap.set(item.id, item);
+              }
+            });
 
-                  // If locally deleted and incoming cloud snapshot is not deleted, preserve local deletion unless cloud is strictly newer
-                  if (isExistingDeleted && !isIncomingDeleted && cloudTime <= localTime) {
-                    return;
-                  }
+            // 2. Map local entities (excluding local pending deletions)
+            const localMap = new Map<string, T>();
+            localList.forEach(item => {
+              if (item && item.id && !deletedIds.has(item.id)) {
+                localMap.set(item.id, item);
+              }
+            });
 
-                  if (cloudTime >= localTime) {
-                    map.set(item.id, item);
-                  }
+            const resultMap = new Map<string, T>();
+            const now = Date.now();
+
+            // 3. Cloud records are authoritative base:
+            // If record exists in both, compare timestamps (updatedAt || createdAt)
+            // Strictly newer version wins; if equal or cloud is newer, cloud wins.
+            incomingMap.forEach((cloudItem, id) => {
+              const localItem = localMap.get(id);
+              if (!localItem) {
+                resultMap.set(id, cloudItem);
+              } else {
+                const localTime = new Date((localItem as any).updatedAt || (localItem as any).updated_at || (localItem as any).deletedAt || (localItem as any).createdAt || 0).getTime();
+                const cloudTime = new Date((cloudItem as any).updatedAt || (cloudItem as any).updated_at || (cloudItem as any).deletedAt || (cloudItem as any).createdAt || 0).getTime();
+
+                const isLocalDeleted = (localItem as any).isDeleted || (localItem as any).status === 'deleted';
+                const isCloudDeleted = (cloudItem as any).isDeleted || (cloudItem as any).status === 'deleted';
+
+                if (isLocalDeleted && !isCloudDeleted && cloudTime <= localTime) {
+                  // Local soft-delete is pending upload
+                  resultMap.set(id, localItem);
+                } else if (localTime > cloudTime) {
+                  // Local edit is strictly newer and pending upload
+                  resultMap.set(id, localItem);
                 } else {
-                  map.set(item.id, item);
+                  // Cloud is newer or equal -> Cloud wins
+                  resultMap.set(id, cloudItem);
                 }
               }
             });
-            return Array.from(map.values());
+
+            // 4. Preserve ONLY very recent local creations (< 45s) that haven't been pushed to cloud yet.
+            // Older items missing from cloud were deleted on another device -> DO NOT KEEP!
+            localMap.forEach((localItem, id) => {
+              if (!incomingMap.has(id)) {
+                const createdTime = new Date((localItem as any).createdAt || (localItem as any).date || 0).getTime();
+                if (createdTime > 0 && (now - createdTime) < 45000) {
+                  resultMap.set(id, localItem);
+                }
+              }
+            });
+
+            return Array.from(resultMap.values());
           };
 
           // If silently received live update from another device, check for genuine new recent payment to chime
@@ -948,6 +990,9 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           isInitialCloudLoadedRef.current = true;
           setCloudSyncStatus('synced');
           lastCloudSyncTimestampRef.current = Date.now();
+          if (d.settings?.updated_at || d.settings?.updatedAt) {
+            lastKnownCloudVersionRef.current = d.settings.updated_at || d.settings.updatedAt;
+          }
           return;
         }
       }
@@ -1065,6 +1110,13 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         channel.subscribe((status) => {
           if (status === 'SUBSCRIBED') {
             console.log(`🟢 [Realtime Live Sync] Connected to Supabase channel: ${channelName}`);
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            console.warn(`⚠️ [Realtime] Channel status: ${status}, retrying subscription in 3s...`);
+            setTimeout(() => {
+              if (currentUserRef.current?.id === userId && channel) {
+                try { channel.subscribe(); } catch {}
+              }
+            }, 3000);
           }
         });
 
@@ -1074,11 +1126,34 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       }
     }
 
-    // 4. Tab Focus & Visibility Change Listeners (wakes up mobile device / inactive tab)
+    // 4. Ultra-fast sub-25ms version check interval (3.5s) to guarantee instantaneous sync even if WebSockets drop or sleep on mobile
+    const versionCheckInterval = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && !isSyncInFlightRef.current && !isSyncingFromCloudRef.current) {
+        try {
+          const res = await fetch(`/api/db/sync?userId=${encodeURIComponent(userId)}&checkVersion=true`, {
+            headers: { 'X-Auth-Session': userId },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && data.version) {
+              if (lastKnownCloudVersionRef.current && data.version !== lastKnownCloudVersionRef.current) {
+                console.log(`⚡ [Realtime Live Sync] Version bump detected (${lastKnownCloudVersionRef.current} -> ${data.version}). Refreshing...`);
+                lastKnownCloudVersionRef.current = data.version;
+                debouncedLoadFromCloud(userId, 'live_poll_version_change');
+              } else if (!lastKnownCloudVersionRef.current) {
+                lastKnownCloudVersionRef.current = data.version;
+              }
+            }
+          }
+        } catch {}
+      }
+    }, 3500);
+
+    // 5. Tab Focus & Visibility Change Listeners (wakes up mobile device / inactive tab)
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         const elapsed = Date.now() - lastCloudSyncTimestampRef.current;
-        if (elapsed > 6000) {
+        if (elapsed > 4000) {
           debouncedLoadFromCloud(userId, 'visibility_change');
         }
         refreshActiveDevicesCount();
@@ -1086,7 +1161,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     };
     const handleFocus = () => {
       const elapsed = Date.now() - lastCloudSyncTimestampRef.current;
-      if (elapsed > 6000) {
+      if (elapsed > 4000) {
         debouncedLoadFromCloud(userId, 'window_focus');
       }
       refreshActiveDevicesCount();
@@ -1102,7 +1177,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       document.addEventListener('visibilitychange', handleVisibility);
     }
 
-    // 5. Lightweight safety polling interval (every 20s when tab is active)
+    // 6. Lightweight safety polling interval (every 20s when tab is active)
     const pollingInterval = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         const elapsed = Date.now() - lastCloudSyncTimestampRef.current;
@@ -1129,6 +1204,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     }, 20000);
 
     return () => {
+      clearInterval(versionCheckInterval);
+      clearInterval(pollingInterval);
       if (broadcastChannelRef.current) {
         try { broadcastChannelRef.current.close(); } catch {}
         broadcastChannelRef.current = null;

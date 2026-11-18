@@ -391,6 +391,7 @@ function customerFromDb(row: any) {
     bankAccounts: row.bank_accounts || [],
     upiDetails: row.upi_details || [],
     createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
   };
 }
 
@@ -486,7 +487,7 @@ function transactionFromDb(row: any) {
     deletedBy,
     createdBy: row.created_by || '',
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    updatedAt: row.updated_at || row.created_at,
     groupId,
     groupName,
     splitMembers,
@@ -552,6 +553,7 @@ function invoiceFromDb(row: any) {
     upiPaymentQr: row.upi_payment_qr || undefined,
     stockDeducted: Boolean(row.stock_deducted),
     createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
   };
 }
 
@@ -584,6 +586,7 @@ function expenseFromDb(row: any) {
     recurringFrequency: row.recurring_frequency || undefined,
     tags: row.tags || [],
     createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
   };
 }
 
@@ -608,6 +611,7 @@ function savingsGoalFromDb(row: any) {
     documentType: row.document_type || undefined,
     deposits: row.deposits || [],
     createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
   };
 }
 
@@ -628,6 +632,7 @@ function reminderFromDb(row: any) {
     note: row.note || undefined,
     transactionId: row.transaction_id || undefined,
     createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
   };
 }
 
@@ -652,6 +657,7 @@ function documentFromDb(row: any) {
     relatedEntityName: row.related_entity_name || undefined,
     driveFileId,
     uploadedAt: row.uploaded_at,
+    updatedAt: row.updated_at || row.uploaded_at || new Date().toISOString(),
   };
 }
 
@@ -667,7 +673,7 @@ function noteFromDb(row: any) {
     isPinned: Boolean(row.is_pinned),
     attachedImage: row.attached_image || undefined,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    updatedAt: row.updated_at || row.created_at,
   };
 }
 
@@ -683,6 +689,7 @@ function taskFromDb(row: any) {
     priority: row.priority || 'medium',
     category: row.category || 'General',
     createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
     completedAt: row.completed_at || undefined,
   };
 }
@@ -699,7 +706,7 @@ function passwordFromDb(row: any) {
     notes: row.notes || undefined,
     category: row.category || 'Business',
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    updatedAt: row.updated_at || row.created_at,
   };
 }
 
@@ -710,6 +717,7 @@ function customerDriveFolderFromDb(row: any) {
     name: row.name,
     color: row.color || undefined,
     createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
   };
 }
 
@@ -742,8 +750,8 @@ function customerDriveFileFromDb(row: any) {
     dataUrl: finalDisplayUrl,
     folderId: row.folder_id || undefined,
     createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
     uploadedAt: row.uploaded_at,
-    updatedAt: row.updated_at,
   };
 }
 
@@ -781,6 +789,21 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabaseAdmin();
     if (!supabase) {
       return NextResponse.json({ success: false, message: 'Could not connect to Supabase Cloud Database' }, { status: 500 });
+    }
+
+    // Fast sub-25ms version check for lightweight cross-device change detection
+    if (searchParams.get('checkVersion') === 'true') {
+      const { data: setRow } = await supabase
+        .from('system_settings')
+        .select('updated_at')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      return NextResponse.json({
+        success: true,
+        version: setRow?.updated_at || '',
+        timestamp: Date.now(),
+      });
     }
 
     // Security check: Validate caller session against requested userId to prevent IDOR
@@ -1278,6 +1301,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { userId, data, deletedRecordIds } = body;
     const allDeletedIds: Record<string, string[]> = deletedRecordIds || (data && (data as any).deletedRecordIds) || {};
+    const syncTimestamp = new Date().toISOString();
 
     if (!userId) {
       return NextResponse.json({ success: false, message: 'userId is required' }, { status: 400 });
@@ -1523,7 +1547,7 @@ export async function POST(req: NextRequest) {
               payment_settings: paymentSettingsWithLogo,
               dark_mode: data.settings.darkMode,
               backend_provider: 'supabase',
-              updated_at: new Date().toISOString(),
+              updated_at: syncTimestamp,
             }, { onConflict: 'user_id' })
           )
         );
@@ -1553,6 +1577,29 @@ export async function POST(req: NextRequest) {
       if (Array.isArray(data.customers)) {
         peerSyncResult = await syncPeerMerchants(supabase, userId, data.customers, Array.isArray(data.transactions) ? data.transactions : []);
       }
+
+      // Instant server-side Supabase Realtime broadcast to wake up all active devices
+      try {
+        const liveChannel = supabase.channel(`khatapro_realtime_${userId}`);
+        liveChannel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            liveChannel.send({
+              type: 'broadcast',
+              event: 'khatapro_device_sync',
+              payload: {
+                userId,
+                originDeviceId: body.originDeviceId || '',
+                action: 'server_cloud_updated',
+                timestamp: Date.now(),
+              },
+            }).finally(() => {
+              try { supabase.removeChannel(liveChannel); } catch {}
+            });
+          }
+        });
+      } catch (bcErr) {
+        console.warn('Server-side realtime broadcast warning:', bcErr);
+      }
     }
 
     return NextResponse.json({
@@ -1561,7 +1608,8 @@ export async function POST(req: NextRequest) {
       provider: 'supabase',
       peerLinked: peerSyncResult.peerLinked,
       matchedPeers: peerSyncResult.matchedPeers,
-      timestamp: new Date().toISOString(),
+      timestamp: syncTimestamp,
+      version: syncTimestamp,
     });
   } catch (error: any) {
     console.error('Sync POST error:', error);

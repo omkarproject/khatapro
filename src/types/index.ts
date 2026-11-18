@@ -113,6 +113,7 @@ export interface Customer {
   bankAccounts?: CustomerBankAccount[];
   upiDetails?: CustomerUpiDetail[];
   createdAt: string;
+  updatedAt?: string;
 }
 
 export type TransactionType = 'credit' | 'debit' | 'income' | 'expense' | 'collection' | 'payment' | 'transfer' | 'adjustment';
@@ -284,6 +285,7 @@ export interface Invoice {
   upiPaymentQr?: string;
   stockDeducted?: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface InvoiceChargeConfig {
@@ -347,6 +349,7 @@ export interface Expense {
   recurringFrequency?: 'weekly' | 'monthly' | 'yearly';
   tags: string[];
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface SavingsDeposit {
@@ -374,6 +377,7 @@ export interface SavingsGoal {
   documentType?: string;
   deposits?: SavingsDeposit[];
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface PaymentReminder {
@@ -392,6 +396,7 @@ export interface PaymentReminder {
   note?: string;
   transactionId?: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface DocumentItem {
@@ -405,6 +410,7 @@ export interface DocumentItem {
   relatedEntityName?: string;
   driveFileId?: string;
   uploadedAt: string;
+  updatedAt?: string;
 }
 
 export interface CustomerDriveFile {
@@ -609,6 +615,7 @@ export interface TaskItem {
   category?: string;
   createdAt: string;
   completedAt?: string;
+  updatedAt?: string;
 }
 
 export interface PasswordItem {

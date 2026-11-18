@@ -384,46 +384,65 @@ export const StorageService = {
     const mergeEntities = <T extends { id: string }>(localList: T[], incomingList?: T[], tableName?: string): T[] => {
       if (!Array.isArray(incomingList)) return localList;
       const deletedIds = tableName ? getDeletedRecordIds(tableName) : new Set<string>();
-      const map = new Map<string, T>();
-      localList.forEach(item => {
-        if (item && item.id && !deletedIds.has(item.id)) map.set(item.id, item);
-      });
-      const incomingIds = new Set(incomingList.map(item => item?.id).filter(Boolean));
 
-      // Clean stale mirrored peer transactions that were deleted from the cloud ledger
-      map.forEach((item, id) => {
-        if (id.startsWith('peer_txn_') && !incomingIds.has(id)) {
-          map.delete(id);
-        }
-      });
-
+      // 1. Map all incoming cloud entities (excluding local pending deletions)
+      const incomingMap = new Map<string, T>();
       incomingList.forEach(item => {
-        if (item && item.id) {
-          if (deletedIds.has(item.id)) {
-            // Intentionally deleted locally, do not resurrect
-            return;
-          }
-          const existing = map.get(item.id);
-          if (existing) {
-            const isExistingDeleted = (existing as any).isDeleted || (existing as any).status === 'deleted';
-            const isIncomingDeleted = (item as any).isDeleted || (item as any).status === 'deleted';
-            const incomingTime = new Date((item as any).updatedAt || (item as any).updated_at || (item as any).createdAt || 0).getTime();
-            const localTime = new Date((existing as any).updatedAt || (existing as any).updated_at || (existing as any).deletedAt || (existing as any).createdAt || 0).getTime();
+        if (item && item.id && !deletedIds.has(item.id)) {
+          incomingMap.set(item.id, item);
+        }
+      });
 
-            // If locally deleted and incoming cloud snapshot is not deleted, preserve local deletion unless incoming is strictly newer
-            if (isExistingDeleted && !isIncomingDeleted && incomingTime <= localTime) {
-              return;
-            }
+      // 2. Map local entities (excluding local pending deletions)
+      const localMap = new Map<string, T>();
+      localList.forEach(item => {
+        if (item && item.id && !deletedIds.has(item.id)) {
+          localMap.set(item.id, item);
+        }
+      });
 
-            if (incomingTime >= localTime) {
-              map.set(item.id, item);
-            }
+      const resultMap = new Map<string, T>();
+      const now = Date.now();
+
+      // 3. Cloud records are authoritative base:
+      // If record exists in both, compare timestamps (updatedAt || createdAt)
+      // Strictly newer version wins; if equal or cloud is newer, cloud wins.
+      incomingMap.forEach((cloudItem, id) => {
+        const localItem = localMap.get(id);
+        if (!localItem) {
+          resultMap.set(id, cloudItem);
+        } else {
+          const localTime = new Date((localItem as any).updatedAt || (localItem as any).updated_at || (localItem as any).deletedAt || (localItem as any).createdAt || 0).getTime();
+          const cloudTime = new Date((cloudItem as any).updatedAt || (cloudItem as any).updated_at || (cloudItem as any).deletedAt || (cloudItem as any).createdAt || 0).getTime();
+
+          const isLocalDeleted = (localItem as any).isDeleted || (localItem as any).status === 'deleted';
+          const isCloudDeleted = (cloudItem as any).isDeleted || (cloudItem as any).status === 'deleted';
+
+          if (isLocalDeleted && !isCloudDeleted && cloudTime <= localTime) {
+            // Local soft-delete is pending upload
+            resultMap.set(id, localItem);
+          } else if (localTime > cloudTime) {
+            // Local edit is strictly newer and pending upload
+            resultMap.set(id, localItem);
           } else {
-            map.set(item.id, item);
+            // Cloud is newer or equal -> Cloud wins
+            resultMap.set(id, cloudItem);
           }
         }
       });
-      return Array.from(map.values());
+
+      // 4. Preserve ONLY very recent local creations (< 45s) that haven't been pushed to cloud yet.
+      // Older items missing from cloud were deleted on another device -> DO NOT KEEP!
+      localMap.forEach((localItem, id) => {
+        if (!incomingMap.has(id)) {
+          const createdTime = new Date((localItem as any).createdAt || (localItem as any).date || 0).getTime();
+          if (createdTime > 0 && (now - createdTime) < 45000) {
+            resultMap.set(id, localItem);
+          }
+        }
+      });
+
+      return Array.from(resultMap.values());
     };
 
     if (data.customers !== undefined) setLocalItem(STORAGE_KEYS.CUSTOMERS, mergeEntities(StorageService.getCustomers(), data.customers, 'customers'));
@@ -943,24 +962,32 @@ export const StorageService = {
     const customers = StorageService.getCustomers();
     const idx = customers.findIndex(c => c.id === customer.id);
     let updated: Customer[];
+    const nowStr = new Date().toISOString();
+    const custWithTime: Customer = {
+      ...customer,
+      createdAt: customer.createdAt || nowStr,
+      updatedAt: nowStr,
+    };
     if (idx >= 0) {
       updated = [...customers];
-      updated[idx] = customer;
+      updated[idx] = custWithTime;
     } else {
-      updated = [customer, ...customers];
+      updated = [custWithTime, ...customers];
     }
     setLocalItem(STORAGE_KEYS.CUSTOMERS, updated);
     return updated;
   },
   deleteCustomer: (id: string): Customer[] => {
     const customers = StorageService.getCustomers();
+    const nowStr = new Date().toISOString();
     const updated = customers.map(c => {
       if (c.id === id) {
         return {
           ...c,
           status: 'deleted' as const,
           isDeleted: true,
-          deletedAt: new Date().toISOString(),
+          deletedAt: nowStr,
+          updatedAt: nowStr,
         };
       }
       return c;
@@ -970,6 +997,7 @@ export const StorageService = {
   },
   restoreCustomer: (id: string): Customer[] => {
     const customers = StorageService.getCustomers();
+    const nowStr = new Date().toISOString();
     const updated = customers.map(c => {
       if (c.id === id) {
         return {
@@ -977,6 +1005,7 @@ export const StorageService = {
           status: 'active' as const,
           isDeleted: false,
           deletedAt: undefined,
+          updatedAt: nowStr,
         };
       }
       return c;
@@ -987,7 +1016,14 @@ export const StorageService = {
   hardDeleteCustomer: (id: string): Customer[] => {
     const customers = StorageService.getCustomers().filter(c => c.id !== id);
     setLocalItem(STORAGE_KEYS.CUSTOMERS, customers);
-    const txns = StorageService.getTransactions().filter(t => t.customerId !== id);
+    addDeletedRecordId('customers', id);
+    const txns = StorageService.getTransactions().filter(t => {
+      if (t.customerId === id) {
+        addDeletedRecordId('transactions', t.id);
+        return false;
+      }
+      return true;
+    });
     setLocalItem(STORAGE_KEYS.TRANSACTIONS, txns);
     return customers;
   },
@@ -1001,7 +1037,13 @@ export const StorageService = {
   },
   addTransaction: (transaction: Transaction): Transaction[] => {
     const list = StorageService.getTransactions();
-    const updated = [transaction, ...list];
+    const nowStr = new Date().toISOString();
+    const txnToSave = {
+      ...transaction,
+      createdAt: transaction.createdAt || nowStr,
+      updatedAt: nowStr,
+    };
+    const updated = [txnToSave, ...list];
     setLocalItem(STORAGE_KEYS.TRANSACTIONS, updated);
 
     // If transaction is linked to customer (credit, debit, collection), update customer balance
@@ -1042,8 +1084,13 @@ export const StorageService = {
     if (idx < 0) return list;
 
     const oldTxn = list[idx];
+    const nowStr = new Date().toISOString();
+    const txnToSave = {
+      ...updatedTxn,
+      updatedAt: nowStr,
+    };
     const updatedList = [...list];
-    updatedList[idx] = updatedTxn;
+    updatedList[idx] = txnToSave;
     setLocalItem(STORAGE_KEYS.TRANSACTIONS, updatedList);
 
     // Re-adjust customer balance accurately
@@ -1124,6 +1171,7 @@ export const StorageService = {
           isDeleted: false,
           deletedAt: undefined,
           deletedBy: undefined,
+          updatedAt: new Date().toISOString(),
         };
       }
       return t;
@@ -1168,6 +1216,7 @@ export const StorageService = {
     }
     const updatedList = list.filter(t => t.id !== transactionId);
     setLocalItem(STORAGE_KEYS.TRANSACTIONS, updatedList);
+    addDeletedRecordId('transactions', transactionId);
     return updatedList;
   },
 
@@ -1257,11 +1306,18 @@ export const StorageService = {
       setLocalItem(STORAGE_KEYS.PRODUCTS, Array.from(prodMap.values()));
     }
 
+    const nowStr = new Date().toISOString();
+    const invWithTime: Invoice = {
+      ...invoice,
+      createdAt: invoice.createdAt || nowStr,
+      updatedAt: nowStr,
+    };
+
     if (idx >= 0) {
       updated = [...list];
-      updated[idx] = invoice;
+      updated[idx] = invWithTime;
     } else {
-      updated = [invoice, ...list];
+      updated = [invWithTime, ...list];
     }
     setLocalItem(STORAGE_KEYS.INVOICES, updated);
     return updated;
@@ -1373,11 +1429,16 @@ export const StorageService = {
     const list = StorageService.getProducts();
     const idx = list.findIndex(p => p.id === product.id);
     let updated: Product[];
+    const nowStr = new Date().toISOString();
+    const prodWithTime: Product = {
+      ...product,
+      updatedAt: nowStr,
+    };
     if (idx >= 0) {
       updated = [...list];
-      updated[idx] = product;
+      updated[idx] = prodWithTime;
     } else {
-      updated = [product, ...list];
+      updated = [prodWithTime, ...list];
     }
     setLocalItem(STORAGE_KEYS.PRODUCTS, updated);
     return updated;
@@ -1430,7 +1491,13 @@ export const StorageService = {
   getExpenses: (): Expense[] => getLocalItem(STORAGE_KEYS.EXPENSES, []),
   addExpense: (expense: Expense): Expense[] => {
     const list = StorageService.getExpenses();
-    const updated = [expense, ...list];
+    const nowStr = new Date().toISOString();
+    const expWithTime: Expense = {
+      ...expense,
+      createdAt: expense.createdAt || nowStr,
+      updatedAt: nowStr,
+    };
+    const updated = [expWithTime, ...list];
     setLocalItem(STORAGE_KEYS.EXPENSES, updated);
     return updated;
   },
@@ -1438,11 +1505,17 @@ export const StorageService = {
     const list = StorageService.getExpenses();
     const idx = list.findIndex(e => e.id === expense.id);
     let updated: Expense[];
+    const nowStr = new Date().toISOString();
+    const expWithTime: Expense = {
+      ...expense,
+      createdAt: expense.createdAt || nowStr,
+      updatedAt: nowStr,
+    };
     if (idx >= 0) {
       updated = [...list];
-      updated[idx] = expense;
+      updated[idx] = expWithTime;
     } else {
-      updated = [expense, ...list];
+      updated = [expWithTime, ...list];
     }
     setLocalItem(STORAGE_KEYS.EXPENSES, updated);
     return updated;
@@ -1463,11 +1536,17 @@ export const StorageService = {
     const list = StorageService.getSavingsGoals();
     const idx = list.findIndex(g => g.id === goal.id);
     let updated: SavingsGoal[];
+    const nowStr = new Date().toISOString();
+    const goalWithTime: SavingsGoal = {
+      ...goal,
+      createdAt: goal.createdAt || nowStr,
+      updatedAt: nowStr,
+    };
     if (idx >= 0) {
       updated = [...list];
-      updated[idx] = goal;
+      updated[idx] = goalWithTime;
     } else {
-      updated = [goal, ...list];
+      updated = [goalWithTime, ...list];
     }
     setLocalItem(STORAGE_KEYS.SAVINGS, updated);
     return updated;
@@ -1488,11 +1567,17 @@ export const StorageService = {
     const list = StorageService.getReminders();
     const idx = list.findIndex(r => r.id === reminder.id);
     let updated: PaymentReminder[];
+    const nowStr = new Date().toISOString();
+    const reminderWithTime: PaymentReminder = {
+      ...reminder,
+      createdAt: reminder.createdAt || nowStr,
+      updatedAt: nowStr,
+    };
     if (idx >= 0) {
       updated = [...list];
-      updated[idx] = reminder;
+      updated[idx] = reminderWithTime;
     } else {
-      updated = [reminder, ...list];
+      updated = [reminderWithTime, ...list];
     }
     setLocalItem(STORAGE_KEYS.REMINDERS, updated);
     return updated;
@@ -1511,7 +1596,13 @@ export const StorageService = {
   getDocuments: (): DocumentItem[] => getLocalItem(STORAGE_KEYS.DOCUMENTS, []),
   addDocument: (doc: DocumentItem): DocumentItem[] => {
     const list = StorageService.getDocuments();
-    const updated = [doc, ...list];
+    const nowStr = new Date().toISOString();
+    const docWithTime: DocumentItem = {
+      ...doc,
+      uploadedAt: doc.uploadedAt || nowStr,
+      updatedAt: nowStr,
+    };
+    const updated = [docWithTime, ...list];
     setLocalItem(STORAGE_KEYS.DOCUMENTS, updated);
     return updated;
   },
@@ -1596,11 +1687,17 @@ export const StorageService = {
     const list = StorageService.getNotes();
     const idx = list.findIndex(n => n.id === note.id);
     let updated: NoteItem[];
+    const nowStr = new Date().toISOString();
+    const noteWithTime: NoteItem = {
+      ...note,
+      createdAt: note.createdAt || nowStr,
+      updatedAt: nowStr,
+    };
     if (idx >= 0) {
       updated = [...list];
-      updated[idx] = note;
+      updated[idx] = noteWithTime;
     } else {
-      updated = [note, ...list];
+      updated = [noteWithTime, ...list];
     }
     setLocalItem(STORAGE_KEYS.NOTES, updated);
     return updated;
@@ -1622,11 +1719,17 @@ export const StorageService = {
     const list = StorageService.getTasks();
     const idx = list.findIndex(t => t.id === task.id);
     let updated: TaskItem[];
+    const nowStr = new Date().toISOString();
+    const taskWithTime: TaskItem = {
+      ...task,
+      createdAt: task.createdAt || nowStr,
+      updatedAt: nowStr,
+    };
     if (idx >= 0) {
       updated = [...list];
-      updated[idx] = task;
+      updated[idx] = taskWithTime;
     } else {
-      updated = [task, ...list];
+      updated = [taskWithTime, ...list];
     }
     setLocalItem(STORAGE_KEYS.TASKS, updated);
     return updated;
@@ -1664,11 +1767,17 @@ export const StorageService = {
     const list = StorageService.getPasswords();
     const idx = list.findIndex(p => p.id === item.id);
     let updated: PasswordItem[];
+    const nowStr = new Date().toISOString();
+    const itemWithTime: PasswordItem = {
+      ...item,
+      createdAt: item.createdAt || nowStr,
+      updatedAt: nowStr,
+    };
     if (idx >= 0) {
       updated = [...list];
-      updated[idx] = item;
+      updated[idx] = itemWithTime;
     } else {
-      updated = [item, ...list];
+      updated = [itemWithTime, ...list];
     }
     setLocalItem(STORAGE_KEYS.PASSWORDS, updated);
     return updated;
@@ -1690,11 +1799,17 @@ export const StorageService = {
     const list = StorageService.getAuthenticators();
     const idx = list.findIndex(a => a.id === item.id);
     let updated: AuthenticatorItem[];
+    const nowStr = new Date().toISOString();
+    const itemWithTime: AuthenticatorItem = {
+      ...item,
+      createdAt: item.createdAt || nowStr,
+      updatedAt: nowStr,
+    };
     if (idx >= 0) {
       updated = [...list];
-      updated[idx] = item;
+      updated[idx] = itemWithTime;
     } else {
-      updated = [item, ...list];
+      updated = [itemWithTime, ...list];
     }
     setLocalItem(STORAGE_KEYS.AUTHENTICATOR, updated);
     return updated;
