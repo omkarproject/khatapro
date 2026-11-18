@@ -58,6 +58,7 @@ import {
   UserMinus,
   ShieldAlert,
   Sparkles,
+  BadgeCheck,
   CheckSquare,
   Square,
   Eye,
@@ -4051,8 +4052,8 @@ function KhataPageInner() {
                                 </span>
                               )}
                               {(cust.category === 'Merchant' || cust.id.startsWith('peer_cust_')) && (
-                                <span className="px-1.5 py-0.2 rounded-full text-[8px] font-black bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0 shadow-2xs">
-                                  P2P
+                                <span title="Verified Merchant" className="inline-flex items-center text-emerald-500 shrink-0">
+                                  <BadgeCheck className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500/20" />
                                 </span>
                               )}
                             </div>
@@ -4261,8 +4262,13 @@ function KhataPageInner() {
                             <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
                               <User className="w-4 h-4" />
                             </div>
-                            <span className="text-sm font-bold text-slate-900 dark:text-white">
-                              {activeCustomer.name}
+                            <span className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                              <span>{activeCustomer.name}</span>
+                              {(activeCustomer.category === 'Merchant' || activeCustomer.id.startsWith('peer_cust_')) && (
+                                <span title="Verified Merchant" className="inline-flex items-center text-emerald-500 shrink-0">
+                                  <BadgeCheck className="w-4 h-4 text-emerald-500 fill-emerald-500/20" />
+                                </span>
+                              )}
                             </span>
                           </div>
                           <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
@@ -4542,9 +4548,8 @@ function KhataPageInner() {
                                 {activeCustomer.name}
                               </span>
                               {(activeCustomer.category === 'Merchant' || activeCustomer.id.startsWith('peer_cust_')) && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shadow-2xs">
-                                  <Sparkles className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400" />
-                                  P2P Active
+                                <span title="Verified Merchant" className="inline-flex items-center text-emerald-500 shrink-0">
+                                  <BadgeCheck className="w-5 h-5 text-emerald-500 fill-emerald-500/20" />
                                 </span>
                               )}
                             </div>
@@ -5887,8 +5892,9 @@ function KhataPageInner() {
                   <span className="flex items-center gap-1.5">
                     Mobile Number
                     {khataP2PMatched && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-500 text-white shadow-xs animate-pulse">
-                        P2P
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500 text-white shadow-xs">
+                        <BadgeCheck className="w-3 h-3 text-white" />
+                        Verified
                       </span>
                     )}
                   </span>

@@ -52,6 +52,7 @@ import {
   ClipboardPaste,
   Loader2,
   RotateCcw,
+  BadgeCheck,
 } from 'lucide-react';
 
 const POPULAR_BANKS = [
@@ -1452,8 +1453,13 @@ export default function CustomersPage() {
                       )}
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                        {cust.name}
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span className="truncate">{cust.name}</span>
+                        {(cust.category === 'Merchant' || cust.id.startsWith('peer_cust_')) && (
+                          <span title="Verified Merchant" className="inline-flex items-center text-emerald-500 shrink-0">
+                            <BadgeCheck className="w-4 h-4 text-emerald-500 fill-emerald-500/20" />
+                          </span>
+                        )}
                       </h3>
                       <div className="text-[11px] text-slate-400 flex items-center gap-1">
                         <Building className="w-3 h-3 text-slate-400" />
@@ -1467,12 +1473,16 @@ export default function CustomersPage() {
                       Deleted
                     </span>
                   ) : (
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase inline-flex items-center gap-1 ${
                       cust.category === 'VIP' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' :
                       cust.category === 'Wholesale' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400' :
+                      cust.category === 'Merchant' || cust.id.startsWith('peer_cust_') ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' :
                       'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
                     }`}>
-                      {cust.category}
+                      {(cust.category === 'Merchant' || cust.id.startsWith('peer_cust_')) && (
+                        <BadgeCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400 fill-emerald-500/20 shrink-0" />
+                      )}
+                      {cust.category === 'Merchant' || cust.id.startsWith('peer_cust_') ? 'VERIFIED' : cust.category}
                     </span>
                   )}
                 </div>
@@ -1691,8 +1701,13 @@ export default function CustomersPage() {
                   )}
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                    {activeCustomer.name}
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <span>{activeCustomer.name}</span>
+                    {(activeCustomer.category === 'Merchant' || activeCustomer.id.startsWith('peer_cust_')) && (
+                      <span title="Verified Merchant" className="inline-flex items-center text-emerald-500 shrink-0">
+                        <BadgeCheck className="w-5 h-5 text-emerald-500 fill-emerald-500/20" />
+                      </span>
+                    )}
                   </h2>
                   <p className="text-xs text-slate-400 flex items-center gap-1.5 flex-wrap">
                     <span>{activeCustomer.phone}</span>
@@ -1916,8 +1931,9 @@ export default function CustomersPage() {
                     <span className="flex items-center gap-1.5">
                       Phone Number *
                       {isP2PMatched && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-500 text-white shadow-xs animate-pulse">
-                          P2P
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500 text-white shadow-xs">
+                          <BadgeCheck className="w-3 h-3 text-white" />
+                          Verified
                         </span>
                       )}
                     </span>
@@ -2012,7 +2028,7 @@ export default function CustomersPage() {
                     <option value="Wholesale">Wholesale</option>
                     <option value="Regular">Regular</option>
                     <option value="Retail">Retail</option>
-                    <option value="Merchant">Merchant (P2P)</option>
+                    <option value="Merchant">Merchant (Verified)</option>
                   </select>
                 </div>
                 <div>
