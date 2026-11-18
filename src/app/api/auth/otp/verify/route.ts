@@ -273,20 +273,22 @@ export async function POST(req: NextRequest) {
         } catch {}
       }
 
-      // Query user system_settings for business_logo if avatar is empty
+      // Query user system_settings for business_logo and theme preference
       let avatarUrl = profile.avatar_url || '';
-      if (!avatarUrl) {
-        try {
-          const { data: setRow } = await supabase
-            .from('system_settings')
-            .select('business_logo, payment_settings')
-            .eq('user_id', profile.id)
-            .single();
-          if (setRow) {
-            avatarUrl = setRow.business_logo || setRow.payment_settings?.businessLogo || '';
-          }
-        } catch {}
-      }
+      let isDark = false;
+      try {
+        const { data: setRow } = await supabase
+          .from('system_settings')
+          .select('business_logo, payment_settings, dark_mode')
+          .eq('user_id', profile.id)
+          .single();
+        if (setRow) {
+          avatarUrl = setRow.business_logo || setRow.payment_settings?.businessLogo || '';
+          isDark = (setRow.dark_mode !== undefined && setRow.dark_mode !== null)
+            ? Boolean(setRow.dark_mode)
+            : Boolean(setRow.payment_settings?.darkMode);
+        }
+      } catch {}
 
       const safeUser = {
         id: profile.id,
@@ -303,6 +305,9 @@ export async function POST(req: NextRequest) {
         success: true,
         message: safeUser.name ? `Welcome back, ${safeUser.name}!` : 'Welcome back!',
         user: safeUser,
+        settings: {
+          darkMode: isDark,
+        },
         token: `token_${safeUser.id}_${Date.now()}`,
         provider: 'supabase',
       });
@@ -310,6 +315,12 @@ export async function POST(req: NextRequest) {
       res.cookies.set('skp_auth_session', String(safeUser.id), {
         path: '/',
         maxAge: 60 * 60 * 24 * 30,
+        sameSite: 'lax',
+      });
+
+      res.cookies.set('skp_theme', isDark ? 'dark' : 'light', {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 365,
         sameSite: 'lax',
       });
 

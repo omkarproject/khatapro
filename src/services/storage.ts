@@ -510,6 +510,14 @@ export const StorageService = {
       };
       setLocalItem(STORAGE_KEYS.SETTINGS, mergedSettings);
 
+      if (data.settings.darkMode !== undefined && typeof window !== 'undefined') {
+        const isDark = Boolean(data.settings.darkMode);
+        try {
+          localStorage.setItem('skp_theme', isDark ? 'dark' : 'light');
+          document.cookie = `skp_theme=${isDark ? 'dark' : 'light'}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+        } catch {}
+      }
+
       if (
         data.settings.websiteName ||
         data.settings.websiteLogo ||
@@ -768,6 +776,14 @@ export const StorageService = {
       s.monthlyBudgetCap = s.paymentSettings.monthlyBudgetCap;
     }
 
+    if (typeof window !== 'undefined') {
+      try {
+        const themeVal = localStorage.getItem('skp_theme');
+        if (themeVal === 'dark') s.darkMode = true;
+        else if (themeVal === 'light') s.darkMode = false;
+      } catch {}
+    }
+
     return s;
   },
   updateSettings: (settings: Partial<SystemSettings>): SystemSettings => {
@@ -778,6 +794,13 @@ export const StorageService = {
       merged.paymentSettings.monthlyBudgetCap = merged.monthlyBudgetCap;
     } else if (merged.paymentSettings?.monthlyBudgetCap !== undefined) {
       merged.monthlyBudgetCap = merged.paymentSettings.monthlyBudgetCap;
+    }
+    if (merged.darkMode !== undefined && typeof window !== 'undefined') {
+      try {
+        const themeVal = merged.darkMode ? 'dark' : 'light';
+        localStorage.setItem('skp_theme', themeVal);
+        document.cookie = `skp_theme=${themeVal}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+      } catch {}
     }
     setLocalItem(STORAGE_KEYS.SETTINGS, merged);
     
@@ -2014,9 +2037,13 @@ export const StorageService = {
   clearOnLogout: (): void => {
     if (typeof window === 'undefined') return;
     try {
-      // 1. Wipe 100% of localStorage
+      // 1. Wipe localStorage (preserving user's chosen UI theme)
       try {
+        const themeToPreserve = localStorage.getItem('skp_theme');
         localStorage.clear();
+        if (themeToPreserve) {
+          localStorage.setItem('skp_theme', themeToPreserve);
+        }
       } catch (e) {
         console.warn('localStorage.clear failed:', e);
       }
@@ -2036,7 +2063,7 @@ export const StorageService = {
             const cookie = cookies[i];
             const eqPos = cookie.indexOf('=');
             const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
-            if (name) {
+            if (name && name !== 'skp_theme') {
               document.cookie = `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0; SameSite=Lax;`;
               document.cookie = `${name}=; Path=/; Domain=${window.location.hostname}; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0; SameSite=Lax;`;
             }

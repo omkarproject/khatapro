@@ -211,7 +211,21 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     }
     return s;
   });
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const storedTheme = localStorage.getItem('skp_theme');
+      if (storedTheme === 'dark') return true;
+      if (storedTheme === 'light') return false;
+      const s = StorageService.getSettings();
+      if (s && s.darkMode !== undefined) return Boolean(s.darkMode);
+      if (typeof document !== 'undefined') {
+        const matchCookie = document.cookie.match(/skp_theme=(dark|light)/);
+        if (matchCookie) return matchCookie[1] === 'dark';
+        return document.documentElement.classList.contains('dark');
+      }
+    }
+    return false;
+  });
   const [activeRole, setActiveRole] = useState<UserRole>('user');
 
   // Collect Modal
@@ -330,7 +344,14 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setGroupNotifications(StorageService.getGroupNotifications());
     const s = StorageService.getSettings();
     setSettingsState(s);
-    setDarkMode(s.darkMode);
+    if (s.darkMode !== undefined) {
+      const isDark = Boolean(s.darkMode);
+      setDarkMode(isDark);
+      if (typeof document !== 'undefined') {
+        if (isDark) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+      }
+    }
   };
 
   // --- REALTIME MULTI-DEVICE LIVE SYNC ENGINE ---
@@ -811,6 +832,21 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
             });
           }
           if (d.settings) {
+            if (d.settings.darkMode !== undefined) {
+              const isDark = Boolean(d.settings.darkMode);
+              setDarkMode(isDark);
+              if (typeof document !== 'undefined') {
+                if (isDark) document.documentElement.classList.add('dark');
+                else document.documentElement.classList.remove('dark');
+                try {
+                  localStorage.setItem('skp_theme', isDark ? 'dark' : 'light');
+                  document.cookie = `skp_theme=${isDark ? 'dark' : 'light'}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+                } catch {}
+              }
+            }
+            if (d.settings.currency) setActiveCurrency(d.settings.currency);
+            if (d.settings.language) setActiveLanguage(d.settings.language);
+
             setSettingsState(prev => {
               const globalLogo = typeof window !== 'undefined' ? localStorage.getItem('khatapro_business_logo') || '' : '';
               const incomingLogo = d.settings.businessLogo !== undefined 
@@ -1240,6 +1276,18 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     const user: UserProfile = data.user;
     if (user.language) setActiveLanguage(user.language);
     if (user.currency) setActiveCurrency(user.currency);
+    if (data.settings?.darkMode !== undefined) {
+      const isDark = Boolean(data.settings.darkMode);
+      setDarkMode(isDark);
+      if (typeof document !== 'undefined') {
+        if (isDark) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+        try {
+          localStorage.setItem('skp_theme', isDark ? 'dark' : 'light');
+          document.cookie = `skp_theme=${isDark ? 'dark' : 'light'}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+        } catch {}
+      }
+    }
     setCurrentUserState(user);
     StorageService.setCurrentUser(user);
     if (typeof document !== 'undefined') {
@@ -1316,6 +1364,18 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     const user: UserProfile = data.user;
     if (user.language) setActiveLanguage(user.language);
     if (user.currency) setActiveCurrency(user.currency);
+    if (data.settings?.darkMode !== undefined) {
+      const isDark = Boolean(data.settings.darkMode);
+      setDarkMode(isDark);
+      if (typeof document !== 'undefined') {
+        if (isDark) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+        try {
+          localStorage.setItem('skp_theme', isDark ? 'dark' : 'light');
+          document.cookie = `skp_theme=${isDark ? 'dark' : 'light'}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+        } catch {}
+      }
+    }
     setCurrentUserState(user);
     StorageService.setCurrentUser(user);
     if (typeof document !== 'undefined') {
@@ -1719,9 +1779,25 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const toggleDarkMode = () => {
     const nextMode = !darkMode;
     setDarkMode(nextMode);
-    const updated = { ...settings, darkMode: nextMode };
+    if (typeof document !== 'undefined') {
+      if (nextMode) document.documentElement.classList.add('dark');
+      else document.documentElement.classList.remove('dark');
+      try {
+        localStorage.setItem('skp_theme', nextMode ? 'dark' : 'light');
+        document.cookie = `skp_theme=${nextMode ? 'dark' : 'light'}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+      } catch {}
+    }
+    const updated = {
+      ...settings,
+      darkMode: nextMode,
+      paymentSettings: {
+        ...(settings.paymentSettings || {}),
+        darkMode: nextMode,
+      },
+    };
     setSettingsState(updated);
     StorageService.updateSettings(updated);
+    syncWithDatabase();
   };
 
   const setProfile = (p: UserProfile, options?: { silent?: boolean }) => {
@@ -1766,6 +1842,19 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const updateSettings = (newSettings: Partial<SystemSettings>, options?: { silent?: boolean }) => {
     const merged = StorageService.updateSettings(newSettings);
     setSettingsState(merged);
+
+    if (newSettings.darkMode !== undefined) {
+      const isDark = Boolean(newSettings.darkMode);
+      setDarkMode(isDark);
+      if (typeof document !== 'undefined') {
+        if (isDark) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+        try {
+          localStorage.setItem('skp_theme', isDark ? 'dark' : 'light');
+          document.cookie = `skp_theme=${isDark ? 'dark' : 'light'}; Path=/; Max-Age=31536000; SameSite=Lax;`;
+        } catch {}
+      }
+    }
 
     // If Maintenance Mode, Beta Testing, or Website Branding was modified, broadcast immediately to Global System Config
     const hasBrandingUpdates = 

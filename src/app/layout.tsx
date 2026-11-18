@@ -59,6 +59,29 @@ export default async function RootLayout({
             __html: `
               (function() {
                 try {
+                  // Instant Theme / Dark Mode Application (Zero Flash)
+                  var theme = localStorage.getItem('skp_theme');
+                  if (!theme) {
+                    var rawSettings = localStorage.getItem('khatapro_settings');
+                    if (rawSettings) {
+                      var parsedS = JSON.parse(rawSettings);
+                      if (parsedS && parsedS.darkMode !== undefined) {
+                        theme = parsedS.darkMode ? 'dark' : 'light';
+                      }
+                    }
+                  }
+                  if (!theme) {
+                    var matchCookie = document.cookie.match(/skp_theme=(dark|light)/);
+                    if (matchCookie) theme = matchCookie[1];
+                  }
+                  if (theme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                  } else if (theme === 'light') {
+                    document.documentElement.classList.remove('dark');
+                  }
+                } catch(e) {}
+
+                try {
                   var serverBrand = ${JSON.stringify(serverBranding || null)};
                   window.__INITIAL_BRANDING__ = serverBrand;
 

@@ -884,8 +884,13 @@ export async function GET(req: NextRequest) {
         ...(sbSet.data.payment_settings || {}),
         monthlyBudgetCap: sbSet.data.payment_settings?.monthlyBudgetCap ?? 150000,
         businessLogo: logo,
+        darkMode: (sbSet.data.dark_mode !== undefined && sbSet.data.dark_mode !== null)
+          ? Boolean(sbSet.data.dark_mode)
+          : Boolean(sbSet.data.payment_settings?.darkMode),
       },
-      darkMode: Boolean(sbSet.data.dark_mode),
+      darkMode: (sbSet.data.dark_mode !== undefined && sbSet.data.dark_mode !== null)
+        ? Boolean(sbSet.data.dark_mode)
+        : Boolean(sbSet.data.payment_settings?.darkMode),
       backendProvider: sbSet.data.backend_provider || 'supabase',
       websiteName: globalBranding?.websiteName || sbSet.data.payment_settings?.websiteName || '',
       websiteLogo: globalBranding?.websiteLogo || sbSet.data.payment_settings?.websiteLogo || '',
@@ -1507,6 +1512,7 @@ export async function POST(req: NextRequest) {
           websiteSupportLocation: data.settings.websiteSupportLocation || '',
           websiteSupportPhone: data.settings.websiteSupportPhone || '',
           websiteSupportEmail: data.settings.websiteSupportEmail || '',
+          darkMode: Boolean(data.settings.darkMode),
         };
 
         if (
@@ -1545,7 +1551,7 @@ export async function POST(req: NextRequest) {
               business_email: data.settings.businessEmail,
               business_address: data.settings.businessAddress,
               payment_settings: paymentSettingsWithLogo,
-              dark_mode: data.settings.darkMode,
+              dark_mode: Boolean(data.settings.darkMode),
               backend_provider: 'supabase',
               updated_at: syncTimestamp,
             }, { onConflict: 'user_id' })

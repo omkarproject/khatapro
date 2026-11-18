@@ -90,6 +90,10 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
+    const isDark = (userSettings?.dark_mode !== undefined && userSettings?.dark_mode !== null)
+      ? Boolean(userSettings.dark_mode)
+      : Boolean(userSettings?.payment_settings?.darkMode);
+
     const safeUser = {
       id: sbUser.id,
       name: profile?.name || sbUser.user_metadata?.name || '',
@@ -105,6 +109,9 @@ export async function POST(req: NextRequest) {
       success: true,
       message: `Welcome back, ${safeUser.name}! (Authenticated and verified via Supabase Cloud Database)`,
       user: safeUser,
+      settings: {
+        darkMode: isDark,
+      },
       token: data.session?.access_token || `token_${sbUser.id}_${Date.now()}`,
       provider: 'supabase',
     });
@@ -112,6 +119,12 @@ export async function POST(req: NextRequest) {
     res.cookies.set('skp_auth_session', String(sbUser.id), {
       path: '/',
       maxAge: 60 * 60 * 24 * 30, // 30 days
+      sameSite: 'lax',
+    });
+
+    res.cookies.set('skp_theme', isDark ? 'dark' : 'light', {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
       sameSite: 'lax',
     });
 
