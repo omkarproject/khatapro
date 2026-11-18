@@ -1056,7 +1056,7 @@ export default function UpiCollectionPage() {
                 </div>
                 {isAmountLocked ? (
                   <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-emerald-500 text-white flex items-center gap-1 animate-pulse shadow-sm">
-                    <Check className="w-3 h-3" /> Locked: {formatINR(numCollectAmount)}
+                    <Check className="w-3 h-3" /> AMOUNT: {formatINR(numCollectAmount)}
                   </span>
                 ) : (
                   <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
@@ -1108,7 +1108,7 @@ export default function UpiCollectionPage() {
                     {isAmountLocked ? (
                       <span className="text-emerald-600 flex items-center justify-center gap-1.5">
                         <Lock className="w-4 h-4 text-emerald-600 inline" />
-                        {formatINR(numCollectAmount)}
+                        AMOUNT: {formatINR(numCollectAmount)}
                       </span>
                     ) : (
                       'Scan & Pay Any Amount'
@@ -1311,7 +1311,7 @@ export default function UpiCollectionPage() {
                       </div>
                       <div>
                         <div className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                          Amount-Locked QR Active: {formatINR(numCollectAmount)}
+                          AMOUNT: {formatINR(numCollectAmount)}
                         </div>
                         <div className="text-[11px] text-emerald-700/80 dark:text-emerald-400">
                           Customer scanning this QR will see exact {formatINR(numCollectAmount)} prefilled &amp; locked.
