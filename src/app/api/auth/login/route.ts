@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 import { sendWelcomeEmailDirect } from '@/lib/emailService';
+import { resolveUserEmail, verifyUserCredentials } from '@/lib/authHelpers';
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,52 +26,11 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
-    const cleanInput = String(email).trim();
-    let resolvedEmail = cleanInput.toLowerCase();
+    // Resolves email whether user entered email, phone number (with or without country code), or username
+    const resolvedEmail = await resolveUserEmail(supabase, email);
 
-    // If input does not contain @, try resolving via registered phone or username
-    if (!cleanInput.includes('@')) {
-      const cleanPhone = cleanInput.replace(/\D/g, '');
-      const { data: matchedProfiles } = await supabase
-        .from('profiles')
-        .select('email, id')
-        .or(`phone.eq.${cleanInput}${cleanPhone ? `,phone.eq.${cleanPhone}` : ''},name.ilike.${cleanInput}`)
-        .limit(1);
-
-      if (matchedProfiles && matchedProfiles.length > 0 && matchedProfiles[0].email) {
-        resolvedEmail = matchedProfiles[0].email.toLowerCase().trim();
-      }
-    }
-
-    // Authenticate strictly via Supabase Auth (database cryptographic password verification)
-    let { data, error } = await supabase.auth.signInWithPassword({
-      email: resolvedEmail,
-      password,
-    });
-
-    // If initial login fails due to unconfirmed email, verify if account exists and confirm if password matches
-    if (error || !data?.user) {
-      try {
-        const { data: listRes } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-        const existingAuthUser = listRes?.users?.find(u => u.email?.toLowerCase() === resolvedEmail);
-
-        if (existingAuthUser && !existingAuthUser.email_confirmed_at) {
-          await supabase.auth.admin.updateUserById(existingAuthUser.id, {
-            email_confirm: true,
-          });
-          const retryRes = await supabase.auth.signInWithPassword({
-            email: resolvedEmail,
-            password,
-          });
-          if (retryRes.data?.user) {
-            data = retryRes.data;
-            error = null;
-          }
-        }
-      } catch (authCheckErr) {
-        console.warn('Auth auto-confirm fallback error:', authCheckErr);
-      }
-    }
+    // Authenticate resiliently via Supabase Auth (verifies original password, trimmed password, and canonical email)
+    let { data, error } = await verifyUserCredentials(supabase, resolvedEmail, password);
 
     if (error || !data?.user) {
       return NextResponse.json({

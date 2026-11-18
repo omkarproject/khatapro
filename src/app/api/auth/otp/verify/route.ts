@@ -3,6 +3,7 @@ import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 import { verifyOtp as verifyLocalOtp, getOtp, validatePasswordStrength } from '@/lib/otpStore';
 import { sendWelcomeEmailDirect } from '@/lib/emailService';
 import { verifyTotpToken } from '@/lib/totp';
+import { resolveUserEmail } from '@/lib/authHelpers';
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,22 +31,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Could not connect to Supabase' }, { status: 500 });
     }
 
-    const cleanInput = String(email).trim();
-    let cleanEmail = cleanInput.toLowerCase();
-
-    // If input does not contain @, try resolving via registered phone or username
-    if (!cleanInput.includes('@')) {
-      const cleanPhone = cleanInput.replace(/\D/g, '');
-      const { data: matchedProfiles } = await supabase
-        .from('profiles')
-        .select('email, id')
-        .or(`phone.eq.${cleanInput}${cleanPhone ? `,phone.eq.${cleanPhone}` : ''},name.ilike.${cleanInput}`)
-        .limit(1);
-
-      if (matchedProfiles && matchedProfiles.length > 0 && matchedProfiles[0].email) {
-        cleanEmail = matchedProfiles[0].email.toLowerCase().trim();
-      }
-    }
+    const cleanEmail = await resolveUserEmail(supabase, email);
 
     // 1. Verify code: Check local store first, then check Supabase verifyOtp
     let isCodeValid = false;

@@ -157,7 +157,10 @@ export default function AuthModal() {
     setErrorMsg('');
     setSuccessMsg('');
 
-    if (!email.trim() || !password) {
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
+
+    if (!cleanEmail || !cleanPassword) {
       setErrorMsg('Please enter both email and password.');
       return;
     }
@@ -175,9 +178,9 @@ export default function AuthModal() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: email.trim(),
+          email: cleanEmail,
           purpose: 'login',
-          password,
+          password: cleanPassword,
         }),
       });
 
@@ -194,14 +197,14 @@ export default function AuthModal() {
         if (type === 'authenticator') {
           setSuccessMsg('Enter the 6-digit code from your Authenticator app.');
         } else {
-          setSuccessMsg(`2FA Login verification code sent to ${email.trim()}.`);
+          setSuccessMsg(`2FA Login verification code sent to ${cleanEmail}.`);
           setResendTimer(60);
         }
         return;
       }
 
       // Direct sign in with password
-      await login(email.trim(), password);
+      await login(cleanEmail, cleanPassword);
       closeAuthModal();
     } catch (err: any) {
       if (err.require2FA || err.message?.includes('Two-Factor Authentication is enabled')) {
@@ -211,7 +214,7 @@ export default function AuthModal() {
         setOtpCode('');
         setSuccessMsg(type === 'authenticator'
           ? 'Enter the 6-digit code from your Authenticator app.'
-          : `2FA Login verification code sent to ${email.trim()}.`);
+          : `2FA Login verification code sent to ${cleanEmail}.`);
         return;
       }
       setErrorMsg(err.message || 'Invalid email or password.');
@@ -331,7 +334,7 @@ export default function AuthModal() {
             email: email.trim(),
             code: clean,
             purpose: 'login',
-            password,
+            password: password.trim(),
           }),
         });
 

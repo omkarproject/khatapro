@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 import { validatePasswordStrength } from '@/lib/otpStore';
+import { verifyUserCredentials } from '@/lib/authHelpers';
 
 export async function POST(req: NextRequest) {
   try {
@@ -90,11 +91,8 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Verify current password against Supabase cryptographic hash
-      const { error: authErr } = await supabase.auth.signInWithPassword({
-        email: targetEmail,
-        password: currentPassword,
-      });
+      // Verify current password resiliently against Supabase cryptographic hash
+      const { error: authErr } = await verifyUserCredentials(supabase, targetEmail, currentPassword);
 
       if (authErr) {
         return NextResponse.json(

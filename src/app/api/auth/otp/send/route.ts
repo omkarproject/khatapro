@@ -3,6 +3,7 @@ import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 import { saveOtp, validatePasswordStrength } from '@/lib/otpStore';
 import { getActiveSmtpConfig, sendOtpEmailDirect } from '@/lib/emailService';
 import { getGlobalBrandingFromDb } from '@/lib/globalBranding';
+import { resolveUserEmail, verifyUserCredentials } from '@/lib/authHelpers';
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,22 +29,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Could not connect to Supabase' }, { status: 500 });
     }
 
-    const cleanInput = String(email).trim();
-    let cleanEmail = cleanInput.toLowerCase();
-
-    // If input does not contain @, try resolving via registered phone or username
-    if (!cleanInput.includes('@')) {
-      const cleanPhone = cleanInput.replace(/\D/g, '');
-      const { data: matchedProfiles } = await supabase
-        .from('profiles')
-        .select('email, id')
-        .or(`phone.eq.${cleanInput}${cleanPhone ? `,phone.eq.${cleanPhone}` : ''},name.ilike.${cleanInput}`)
-        .limit(1);
-
-      if (matchedProfiles && matchedProfiles.length > 0 && matchedProfiles[0].email) {
-        cleanEmail = matchedProfiles[0].email.toLowerCase().trim();
-      }
-    }
+    // Resolves email whether user entered email, phone number (with or without country code), or username
+    const cleanEmail = await resolveUserEmail(supabase, email);
 
     // =========================================================================
     // 1. SPECIFIC HANDLING FOR LOGIN (2FA TOTP AUTHENTICATOR / EMAIL OTP)
@@ -53,29 +40,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: 'Password is required to initiate login verification' }, { status: 400 });
       }
 
-      // Verify credentials first with Supabase Auth
-      let { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password,
-      });
-
-      // Auto-confirm fallback if account was not email-confirmed
-      if (authErr || !authData?.user) {
-        try {
-          const { data: listRes } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-          const existingAuthUser = listRes?.users?.find(u => u.email?.toLowerCase() === cleanEmail);
-          if (existingAuthUser && !existingAuthUser.email_confirmed_at) {
-            await supabase.auth.admin.updateUserById(existingAuthUser.id, { email_confirm: true });
-            const retryRes = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
-            if (retryRes.data?.user) {
-              authData = retryRes.data;
-              authErr = null;
-            }
-          }
-        } catch (retryErr) {
-          console.warn('Auto-confirm retry error:', retryErr);
-        }
-      }
+      // Verify credentials resiliently (tests original password, trimmed password, and canonical email)
+      const { data: authData, error: authErr } = await verifyUserCredentials(supabase, cleanEmail, password);
 
       if (authErr || !authData?.user) {
         return NextResponse.json({

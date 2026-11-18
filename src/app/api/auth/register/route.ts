@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanEmail = email.toLowerCase().trim();
+    const cleanPassword = String(password || '').trim();
     const cleanName = name.trim();
     const cleanBusinessName = (businessName || `${cleanName}'s Business`).trim();
     const cleanPhone = (phone || '').trim();
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
     try {
       const { data: adminUser, error: adminErr } = await supabase.auth.admin.createUser({
         email: cleanEmail,
-        password,
+        password: cleanPassword,
         email_confirm: true,
         user_metadata: {
           name: cleanName,
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
       try {
         const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
           email: cleanEmail,
-          password,
+          password: cleanPassword,
           options: {
             data: {
               name: cleanName,
@@ -126,7 +127,7 @@ export async function POST(req: NextRequest) {
     // CRITICAL: Ensure password and metadata are up to date on auth.users
     try {
       await supabase.auth.admin.updateUserById(createdUserId, {
-        password,
+        password: cleanPassword,
         email_confirm: true,
         user_metadata: {
           name: cleanName,

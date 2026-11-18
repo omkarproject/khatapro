@@ -1118,7 +1118,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: loginEmail, password: loginPass }),
+      body: JSON.stringify({ email: loginEmail.trim(), password: loginPass.trim() }),
     });
 
     const data = await res.json();
