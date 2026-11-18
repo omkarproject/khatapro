@@ -847,18 +847,18 @@ export default function UpiCollectionPage() {
 
   return (
     <>
-      <div className="print:hidden space-y-6">
+      <div className="print:hidden space-y-4 sm:space-y-6">
         
         {/* Header with Active Mode Indicator */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2.5">
-                <QrCode className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-                Payment Collection Hub
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <QrCode className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                <span>Payment Collection Hub</span>
               </h1>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 shadow-xs">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[11px] sm:text-xs font-bold px-2.5 py-0.5 sm:py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 shadow-xs shrink-0">
+                <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 animate-pulse" />
                 Active Mode: {
                   isCashfreeActive && activeMode === 'cashfree' ? 'Cashfree PG' :
                   isRazorpayActive && activeMode === 'razorpay' ? 'Razorpay PG' :
@@ -870,24 +870,24 @@ export default function UpiCollectionPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2.5 w-full sm:w-auto">
             <Link
               href="/settings"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl sm:rounded-2xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs"
               title="Configure API Keys & Gateways in Settings"
             >
-              <SettingsIcon className="w-4 h-4 text-slate-400" />
-              Gateway Settings
+              <SettingsIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400" />
+              <span>Gateway Settings</span>
             </Link>
             <button
               type="button"
               onClick={() => setIsStandeeModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-md shadow-indigo-600/25 transition-all cursor-pointer"
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl sm:rounded-2xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-md shadow-indigo-600/25 transition-all cursor-pointer"
               title="Design & Print Beautiful Modern Shop Standee (A4/Stand)"
             >
-              <Printer className="w-4 h-4" />
-              <span>Print Shop Standee</span>
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-white/20 text-white uppercase tracking-wider">
+              <Printer className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span>Shop Standee</span>
+              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-white/20 text-white uppercase tracking-wider">
                 Studio
               </span>
             </button>
@@ -895,7 +895,7 @@ export default function UpiCollectionPage() {
         </div>
 
         {/* Gateway Navigation Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none border-b border-slate-200 dark:border-slate-800 touch-pan-x">
           {/* Tab 1: Default UPI & QR */}
           {isDirectUpiActive && (
             <button
@@ -1044,9 +1044,9 @@ export default function UpiCollectionPage() {
 
         {/* TAB 1: DIRECT UPI & INSTANT QR */}
         {activeTab === 'direct_upi' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
             {/* Left: Standee / Dynamic QR Card */}
-            <div className="lg:col-span-5 flex flex-col items-center p-6 glass-card border border-indigo-200/60 dark:border-indigo-900/40 text-center relative overflow-hidden">
+            <div className="lg:col-span-5 flex flex-col items-center p-4 sm:p-6 glass-card rounded-2xl sm:rounded-3xl border border-indigo-200/60 dark:border-indigo-900/40 text-center relative overflow-hidden">
               <div className="w-full flex items-center justify-between pb-3 mb-2 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-1.5">
                   <QrCode className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
@@ -1066,7 +1066,7 @@ export default function UpiCollectionPage() {
               </div>
 
               {/* Standee Card */}
-              <div className="w-full max-w-xs bg-white rounded-3xl p-5 shadow-xl border border-slate-200/80 my-3 flex flex-col items-center">
+              <div className="w-full max-w-[280px] sm:max-w-xs bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xl border border-slate-200/80 my-2 sm:my-3 flex flex-col items-center">
                 <div className="text-sm font-black text-slate-900 truncate max-w-[240px]">
                   {payeeName}
                 </div>
@@ -1074,11 +1074,11 @@ export default function UpiCollectionPage() {
                   {upiId}
                 </div>
 
-                <div className="my-4 p-2 bg-white rounded-2xl border border-slate-100 shadow-inner flex items-center justify-center relative">
+                <div className="my-3 sm:my-4 p-2 bg-white rounded-2xl border border-slate-100 shadow-inner flex items-center justify-center relative">
                   <img
                     src={activeQrDisplay}
                     alt="Merchant UPI QR"
-                    className="w-52 h-52 object-contain rounded-xl"
+                    className="w-44 h-44 sm:w-52 sm:h-52 object-contain rounded-xl"
                   />
                   {/* Center Business / User Profile Logo */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -1087,10 +1087,10 @@ export default function UpiCollectionPage() {
                         <img
                           src={merchantLogo}
                           alt="Merchant Logo"
-                          className="w-10 h-10 rounded-xl object-cover bg-white"
+                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover bg-white"
                         />
                       ) : (
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 text-white font-black text-sm flex items-center justify-center">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 text-white font-black text-sm flex items-center justify-center">
                           {payeeName ? payeeName[0].toUpperCase() : '₹'}
                         </div>
                       )}
@@ -1104,7 +1104,7 @@ export default function UpiCollectionPage() {
                 </div>
 
                 <div className="text-center w-full">
-                  <div className="text-lg font-black text-slate-900">
+                  <div className="text-base sm:text-lg font-black text-slate-900">
                     {isAmountLocked ? (
                       <span className="text-emerald-600 flex items-center justify-center gap-1.5">
                         <Lock className="w-4 h-4 text-emerald-600 inline" />
@@ -1141,7 +1141,7 @@ export default function UpiCollectionPage() {
               </div>
 
               {/* Quick Copy UPI Button */}
-              <div className="w-full flex items-center justify-between bg-slate-100 dark:bg-slate-800/80 px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs mt-3">
+              <div className="w-full flex items-center justify-between bg-slate-100 dark:bg-slate-800/80 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-700 text-[11px] sm:text-xs mt-3">
                 <span className="font-mono text-slate-700 dark:text-slate-300 truncate mr-2">
                   {upiId || 'Configure UPI in Settings'}
                 </span>
@@ -1160,7 +1160,7 @@ export default function UpiCollectionPage() {
                 <button
                   type="button"
                   onClick={handleDownloadActiveQr}
-                  className="py-2.5 px-3 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                  className="py-2.5 px-2 sm:px-3 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer min-h-[42px] touch-manipulation"
                 >
                   <Download className="w-3.5 h-3.5 text-indigo-500" />
                   <span>{isAmountLocked ? 'Download Locked' : 'Download QR'}</span>
@@ -1168,7 +1168,7 @@ export default function UpiCollectionPage() {
                 <button
                   type="button"
                   onClick={() => setIsStandeeModalOpen(true)}
-                  className="py-2.5 px-3 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  className="py-2.5 px-2 sm:px-3 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[42px] touch-manipulation"
                 >
                   <Printer className="w-3.5 h-3.5" />
                   <span>Print Standee</span>
@@ -1178,20 +1178,20 @@ export default function UpiCollectionPage() {
 
             {/* Right: Collect from Customer & Generate Amount-Locked QR */}
             <div className="lg:col-span-7">
-              <div className="glass-card p-6 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="glass-card p-4 sm:p-6 rounded-2xl sm:rounded-3xl space-y-4">
+                <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
                   <div>
-                    <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                       <DollarSign className="w-4 h-4 text-emerald-500" />
                       Collect from Customer
                     </h3>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-[11px] sm:text-xs text-slate-400">
                       Select customer, set amount, and generate an amount-locked UPI QR or share direct payment link.
                     </p>
                   </div>
                   <Link
                     href="/settings"
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors shrink-0"
+                    className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-semibold text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors shrink-0"
                     title="Configure UPI VPA & Merchant Name in Settings"
                   >
                     <SettingsIcon className="w-3.5 h-3.5" />
@@ -1199,7 +1199,7 @@ export default function UpiCollectionPage() {
                   </Link>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       Select Khata Customer (Optional)
@@ -1217,7 +1217,7 @@ export default function UpiCollectionPage() {
                           setIsQrGenerated(false);
                         }
                       }}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
+                      className="w-full px-3 py-2.5 sm:py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
                     >
                       <option value="">-- Direct Payment / Any Customer --</option>
                       {customers.map((c) => (
@@ -1242,14 +1242,14 @@ export default function UpiCollectionPage() {
                         }
                       }}
                       placeholder="e.g. 2500"
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
+                      className="w-full px-3 py-2.5 sm:py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
                     />
                   </div>
                 </div>
 
                 {/* Quick Amount Suggestion Chips */}
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  <span className="text-[11px] font-medium text-slate-400 mr-1">Quick Amount:</span>
+                  <span className="text-[11px] font-semibold text-slate-400 mr-1">Quick:</span>
                   {selectedCust && selectedCust.outstandingBalance > 0 && (
                     <button
                       type="button"
@@ -1257,7 +1257,7 @@ export default function UpiCollectionPage() {
                         setCollectAmount(selectedCust.outstandingBalance.toString());
                         setIsQrGenerated(false);
                       }}
-                      className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors cursor-pointer"
+                      className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors cursor-pointer touch-manipulation active:scale-95"
                     >
                       Full Due ({formatINR(selectedCust.outstandingBalance)})
                     </button>
@@ -1270,7 +1270,7 @@ export default function UpiCollectionPage() {
                         setCollectAmount(amt.toString());
                         setIsQrGenerated(false);
                       }}
-                      className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                      className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer touch-manipulation active:scale-95"
                     >
                       +₹{amt.toLocaleString('en-IN')}
                     </button>
@@ -1282,7 +1282,7 @@ export default function UpiCollectionPage() {
                         setCollectAmount('');
                         setIsQrGenerated(false);
                       }}
-                      className="px-2 py-1 text-[11px] font-medium text-rose-500 hover:underline cursor-pointer"
+                      className="px-2 py-1 text-[11px] font-medium text-rose-500 hover:underline cursor-pointer touch-manipulation"
                     >
                       Clear
                     </button>
@@ -1298,13 +1298,13 @@ export default function UpiCollectionPage() {
                     value={collectNote}
                     onChange={(e) => setCollectNote(e.target.value)}
                     placeholder="e.g. Settlement for goods"
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
+                    className="w-full px-3 py-2.5 sm:py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
                   />
                 </div>
 
                 {/* Amount-Locked Status Banner */}
                 {isAmountLocked && (
-                  <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
+                  <div className="p-3 sm:p-3.5 rounded-xl sm:rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm">
                         <Lock className="w-4 h-4" />
@@ -1313,16 +1313,16 @@ export default function UpiCollectionPage() {
                         <div className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
                           AMOUNT: {formatINR(numCollectAmount)}
                         </div>
-                        <div className="text-[11px] text-emerald-700/80 dark:text-emerald-400">
+                        <div className="text-[10px] sm:text-[11px] text-emerald-700/80 dark:text-emerald-400">
                           Customer scanning this QR will see exact {formatINR(numCollectAmount)} prefilled &amp; locked.
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto shrink-0">
                       <button
                         type="button"
                         onClick={handleDownloadActiveQr}
-                        className="px-3 py-1.5 text-xs font-bold rounded-xl bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                        className="w-full sm:w-auto px-3 py-2 text-xs font-bold rounded-xl bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 flex items-center justify-center gap-1 cursor-pointer transition-colors shadow-sm min-h-[38px] touch-manipulation"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Download</span>
@@ -1330,7 +1330,7 @@ export default function UpiCollectionPage() {
                       <button
                         type="button"
                         onClick={handleResetLockedQr}
-                        className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 flex items-center gap-1 cursor-pointer transition-colors"
+                        className="w-full sm:w-auto px-3 py-2 text-xs font-semibold rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 flex items-center justify-center gap-1 cursor-pointer transition-colors min-h-[38px] touch-manipulation"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                         <span>Reset</span>
@@ -1340,16 +1340,16 @@ export default function UpiCollectionPage() {
                 )}
 
                 {/* Actions Bar */}
-                <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-2">
+                <div className="pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
                     {/* Generate QR Button */}
                     <button
                       type="button"
                       onClick={handleGenerateLockedQr}
-                      className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer ${
+                      className={`flex-1 sm:flex-none justify-center px-4 py-2.5 rounded-xl sm:rounded-2xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95 min-h-[42px] touch-manipulation ${
                         isAmountLocked
                           ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
-                          : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20 active:scale-95'
+                          : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20'
                       }`}
                     >
                       <QrCode className="w-4 h-4" />
@@ -1360,33 +1360,33 @@ export default function UpiCollectionPage() {
                       <button
                         type="button"
                         onClick={handleResetLockedQr}
-                        className="px-3 py-2.5 rounded-2xl text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-1 cursor-pointer transition-colors"
+                        className="px-3 py-2.5 rounded-xl sm:rounded-2xl text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-1 cursor-pointer transition-colors border border-slate-200 dark:border-slate-700 sm:border-0 min-h-[42px] touch-manipulation"
                         title="Reset QR to counter mode"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Reset QR</span>
+                        <span className="inline">Reset</span>
                       </button>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
                     <button
                       type="button"
                       onClick={handleShareWhatsAppDirectUpi}
-                      className="px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all cursor-pointer active:scale-95"
+                      className="w-full sm:w-auto justify-center px-3.5 py-2.5 rounded-xl sm:rounded-2xl text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all cursor-pointer active:scale-95 min-h-[42px] touch-manipulation"
                     >
                       <Share2 className="w-4 h-4" />
-                      <span>Share WhatsApp</span>
+                      <span>WhatsApp</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => handleRecordCollection('UPI QR')}
                       disabled={numCollectAmount <= 0}
-                      className="px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5 shadow-md shadow-indigo-500/20 transition-all cursor-pointer active:scale-95"
+                      className="w-full sm:w-auto justify-center px-3.5 py-2.5 rounded-xl sm:rounded-2xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5 shadow-md shadow-indigo-500/20 transition-all cursor-pointer active:scale-95 min-h-[42px] touch-manipulation"
                     >
                       <Check className="w-4 h-4" />
-                      <span>Record in Khata</span>
+                      <span>Record Khata</span>
                     </button>
                   </div>
                 </div>
@@ -1429,17 +1429,17 @@ export default function UpiCollectionPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
               {/* Left Column: Cashfree Branding Card */}
-              <div className="lg:col-span-5 p-6 rounded-3xl bg-gradient-to-br from-purple-900 via-indigo-950 to-slate-950 text-white flex flex-col justify-between shadow-2xl border border-purple-800/40">
-                <div className="space-y-5">
+              <div className="lg:col-span-5 p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-purple-900 via-indigo-950 to-slate-950 text-white flex flex-col justify-between shadow-2xl border border-purple-800/40">
+                <div className="space-y-4 sm:space-y-5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-2xl bg-purple-500/30 flex items-center justify-center text-purple-200 font-black text-lg border border-purple-400/30">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-purple-500/30 flex items-center justify-center text-purple-200 font-black text-base sm:text-lg border border-purple-400/30">
                         CF
                       </div>
                       <div>
-                        <span className="font-black text-base tracking-wide text-white block">
+                        <span className="font-black text-sm sm:text-base tracking-wide text-white block">
                           Cashfree PG
                         </span>
                         <span className="text-[10px] text-purple-300 block">
@@ -1447,22 +1447,22 @@ export default function UpiCollectionPage() {
                         </span>
                       </div>
                     </div>
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                    <span className="text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 sm:py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                       {paymentSettings.cashfreeEnv === 'sandbox' ? 'Sandbox Mode' : 'Live Mode'}
                     </span>
                   </div>
 
-                  <div className="pt-3">
-                    <span className="text-xs text-purple-300 uppercase font-bold tracking-wider block">
+                  <div className="pt-2 sm:pt-3">
+                    <span className="text-[11px] sm:text-xs text-purple-300 uppercase font-bold tracking-wider block">
                       Amount to Request
                     </span>
-                    <div className="text-4xl font-black tracking-tight text-white mt-1">
+                    <div className="text-3xl sm:text-4xl font-black tracking-tight text-white mt-1">
                       {numCollectAmount > 0 ? formatINR(numCollectAmount) : '₹0.00'}
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-xs space-y-2">
+                  <div className="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 text-xs space-y-2">
                     <div className="flex justify-between text-xs text-purple-200">
                       <span>Customer:</span>
                       <span className="font-bold text-white truncate max-w-[160px]">{customerDisplayName}</span>
@@ -1480,26 +1480,26 @@ export default function UpiCollectionPage() {
                   </div>
                 </div>
 
-                <div className="pt-6 mt-6 border-t border-white/10 space-y-3">
-                  <div className="text-[11px] text-purple-300 font-medium text-center">
+                <div className="pt-4 sm:pt-6 mt-4 sm:mt-6 border-t border-white/10 space-y-2 sm:space-y-3">
+                  <div className="text-[10px] sm:text-[11px] text-purple-300 font-medium text-center">
                     Supports 100+ payment methods: Google Pay, PhonePe, Paytm, All Cards &amp; NetBanking.
                   </div>
                 </div>
               </div>
 
               {/* Right Column: Collect Options */}
-              <div className="lg:col-span-7 glass-card p-6 space-y-5">
+              <div className="lg:col-span-7 glass-card p-4 sm:p-6 rounded-2xl sm:rounded-3xl space-y-4 sm:space-y-5">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                    <CreditCard className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 dark:text-purple-400" />
                     Collect via Cashfree Payment Gateway
                   </h3>
-                  <span className="text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/50 px-2.5 py-1 rounded-full">
-                    Automated Reconciliation
+                  <span className="text-[10px] sm:text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full shrink-0">
+                    Automated
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       Customer from Khatabook
@@ -1513,7 +1513,7 @@ export default function UpiCollectionPage() {
                           setCollectAmount(c.outstandingBalance.toString());
                         }
                       }}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
+                      className="w-full px-3 py-2.5 sm:py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
                     >
                       <option value="">-- Direct Customer / Walk-in --</option>
                       {customers.map((c) => (
@@ -1533,7 +1533,7 @@ export default function UpiCollectionPage() {
                       value={collectAmount}
                       onChange={(e) => setCollectAmount(e.target.value)}
                       placeholder="e.g. 1500"
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
+                      className="w-full px-3 py-2.5 sm:py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
                     />
                   </div>
                 </div>
@@ -1547,17 +1547,17 @@ export default function UpiCollectionPage() {
                     value={collectNote}
                     onChange={(e) => setCollectNote(e.target.value)}
                     placeholder="e.g. Invoice payment / Goods settlement"
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+                    className="w-full px-3 py-2.5 sm:py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
                   />
                 </div>
 
                 {/* Primary Cashfree Action Buttons */}
-                <div className="pt-3 space-y-3">
+                <div className="pt-2 sm:pt-3 space-y-2.5 sm:space-y-3">
                   <button
                     type="button"
                     onClick={handleExecuteCashfreeCheckout}
                     disabled={isGatewayLoading || numCollectAmount <= 0}
-                    className="w-full py-3.5 rounded-2xl text-xs font-extrabold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-purple-600/25 active:scale-[0.99] transition-all cursor-pointer"
+                    className="w-full py-3 sm:py-3.5 rounded-xl sm:rounded-2xl text-xs font-extrabold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-purple-600/25 active:scale-[0.99] transition-all cursor-pointer min-h-[44px] touch-manipulation"
                   >
                     {isGatewayLoading ? (
                       <>
@@ -1572,11 +1572,11 @@ export default function UpiCollectionPage() {
                     )}
                   </button>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
                     <button
                       type="button"
                       onClick={handleShareWhatsAppCashfree}
-                      className="py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                      className="py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer min-h-[42px] touch-manipulation"
                     >
                       <Share2 className="w-3.5 h-3.5" />
                       <span>WhatsApp Link</span>
@@ -1585,7 +1585,7 @@ export default function UpiCollectionPage() {
                     <button
                       type="button"
                       onClick={() => handleCopyPaymentLink('cashfree')}
-                      className="py-2.5 px-3 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      className="py-2.5 px-3 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[42px] touch-manipulation"
                     >
                       {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{copiedLink ? 'Copied!' : 'Copy Link'}</span>
@@ -1595,7 +1595,7 @@ export default function UpiCollectionPage() {
                       type="button"
                       onClick={() => handleRecordCollection('Cashfree PG')}
                       disabled={numCollectAmount <= 0}
-                      className="py-2.5 px-3 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all cursor-pointer"
+                      className="py-2.5 px-3 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all cursor-pointer min-h-[42px] touch-manipulation"
                     >
                       <Check className="w-3.5 h-3.5" />
                       <span>Record in Khata</span>
@@ -1641,17 +1641,17 @@ export default function UpiCollectionPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
               {/* Left Column: Razorpay Card */}
-              <div className="lg:col-span-5 p-6 rounded-3xl bg-gradient-to-br from-blue-900 via-indigo-950 to-slate-950 text-white flex flex-col justify-between shadow-2xl border border-blue-800/40">
-                <div className="space-y-5">
+              <div className="lg:col-span-5 p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-blue-900 via-indigo-950 to-slate-950 text-white flex flex-col justify-between shadow-2xl border border-blue-800/40">
+                <div className="space-y-4 sm:space-y-5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-2xl bg-blue-500/30 flex items-center justify-center text-blue-200 font-black text-lg border border-blue-400/30">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-blue-500/30 flex items-center justify-center text-blue-200 font-black text-base sm:text-lg border border-blue-400/30">
                         RZ
                       </div>
                       <div>
-                        <span className="font-black text-base tracking-wide text-white block">
+                        <span className="font-black text-sm sm:text-base tracking-wide text-white block">
                           Razorpay PG
                         </span>
                         <span className="text-[10px] text-blue-300 block">
@@ -1659,22 +1659,22 @@ export default function UpiCollectionPage() {
                         </span>
                       </div>
                     </div>
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1.5">
+                    <span className="text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 sm:py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
                       {paymentSettings.razorpayEnv === 'test' ? 'Test Mode' : 'Live Mode'}
                     </span>
                   </div>
 
-                  <div className="pt-3">
-                    <span className="text-xs text-blue-300 uppercase font-bold tracking-wider block">
+                  <div className="pt-2 sm:pt-3">
+                    <span className="text-[11px] sm:text-xs text-blue-300 uppercase font-bold tracking-wider block">
                       Amount to Request
                     </span>
-                    <div className="text-4xl font-black tracking-tight text-white mt-1">
+                    <div className="text-3xl sm:text-4xl font-black tracking-tight text-white mt-1">
                       {numCollectAmount > 0 ? formatINR(numCollectAmount) : '₹0.00'}
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-xs space-y-2">
+                  <div className="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 text-xs space-y-2">
                     <div className="flex justify-between text-xs text-blue-200">
                       <span>Customer:</span>
                       <span className="font-bold text-white truncate max-w-[160px]">{customerDisplayName}</span>
@@ -1692,26 +1692,26 @@ export default function UpiCollectionPage() {
                   </div>
                 </div>
 
-                <div className="pt-6 mt-6 border-t border-white/10 space-y-3">
-                  <div className="text-[11px] text-blue-300 font-medium text-center">
+                <div className="pt-4 sm:pt-6 mt-4 sm:mt-6 border-t border-white/10 space-y-2 sm:space-y-3">
+                  <div className="text-[10px] sm:text-[11px] text-blue-300 font-medium text-center">
                     Instant checkout supporting UPI Apps, Credit/Debit Cards, EMI &amp; NetBanking.
                   </div>
                 </div>
               </div>
 
               {/* Right Column: Collect Form */}
-              <div className="lg:col-span-7 glass-card p-6 space-y-5">
+              <div className="lg:col-span-7 glass-card p-4 sm:p-6 rounded-2xl sm:rounded-3xl space-y-4 sm:space-y-5">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                    <ShieldCheck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400" />
                     Collect via Razorpay Payment Gateway
                   </h3>
-                  <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2.5 py-1 rounded-full">
-                    Instant Processing
+                  <span className="text-[10px] sm:text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full shrink-0">
+                    Instant
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       Customer from Khatabook
@@ -1725,7 +1725,7 @@ export default function UpiCollectionPage() {
                           setCollectAmount(c.outstandingBalance.toString());
                         }
                       }}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
+                      className="w-full px-3 py-2.5 sm:py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
                     >
                       <option value="">-- Direct Customer / Walk-in --</option>
                       {customers.map((c) => (
@@ -1745,7 +1745,7 @@ export default function UpiCollectionPage() {
                       value={collectAmount}
                       onChange={(e) => setCollectAmount(e.target.value)}
                       placeholder="e.g. 2000"
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
+                      className="w-full px-3 py-2.5 sm:py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
                     />
                   </div>
                 </div>
@@ -1759,17 +1759,17 @@ export default function UpiCollectionPage() {
                     value={collectNote}
                     onChange={(e) => setCollectNote(e.target.value)}
                     placeholder="e.g. Settlement for goods"
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+                    className="w-full px-3 py-2.5 sm:py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
                   />
                 </div>
 
                 {/* Primary Razorpay Action Buttons */}
-                <div className="pt-3 space-y-3">
+                <div className="pt-2 sm:pt-3 space-y-2.5 sm:space-y-3">
                   <button
                     type="button"
                     onClick={handleExecuteRazorpayCheckout}
                     disabled={isGatewayLoading || numCollectAmount <= 0}
-                    className="w-full py-3.5 rounded-2xl text-xs font-extrabold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/25 active:scale-[0.99] transition-all cursor-pointer"
+                    className="w-full py-3 sm:py-3.5 rounded-xl sm:rounded-2xl text-xs font-extrabold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/25 active:scale-[0.99] transition-all cursor-pointer min-h-[44px] touch-manipulation"
                   >
                     {isGatewayLoading ? (
                       <>
@@ -1784,11 +1784,11 @@ export default function UpiCollectionPage() {
                     )}
                   </button>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
                     <button
                       type="button"
                       onClick={handleShareWhatsAppRazorpay}
-                      className="py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                      className="py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer min-h-[42px] touch-manipulation"
                     >
                       <Share2 className="w-3.5 h-3.5" />
                       <span>WhatsApp Link</span>
@@ -1797,7 +1797,7 @@ export default function UpiCollectionPage() {
                     <button
                       type="button"
                       onClick={() => handleCopyPaymentLink('razorpay')}
-                      className="py-2.5 px-3 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      className="py-2.5 px-3 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[42px] touch-manipulation"
                     >
                       {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{copiedLink ? 'Copied!' : 'Copy Link'}</span>
@@ -1807,7 +1807,7 @@ export default function UpiCollectionPage() {
                       type="button"
                       onClick={() => handleRecordCollection('Razorpay PG')}
                       disabled={numCollectAmount <= 0}
-                      className="py-2.5 px-3 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all cursor-pointer"
+                      className="py-2.5 px-3 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all cursor-pointer min-h-[42px] touch-manipulation"
                     >
                       <Check className="w-3.5 h-3.5" />
                       <span>Record in Khata</span>
@@ -1822,20 +1822,20 @@ export default function UpiCollectionPage() {
         {/* TAB 4: UPI PG (DYNAMIC) */}
         {activeTab === 'upi_gateway' && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
               {/* Dynamic QR Display Card */}
-              <div className="lg:col-span-5 flex flex-col items-center p-6 glass-card border border-cyan-200/60 dark:border-cyan-900/40 text-center relative overflow-hidden">
+              <div className="lg:col-span-5 flex flex-col items-center p-4 sm:p-6 glass-card rounded-2xl sm:rounded-3xl border border-cyan-200/60 dark:border-cyan-900/40 text-center relative overflow-hidden">
                 <div className="w-full flex items-center justify-between pb-3 mb-2 border-b border-slate-100 dark:border-slate-800">
                   <span className="text-xs font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400 flex items-center gap-1.5">
                     <Smartphone className="w-3.5 h-3.5" />
                     Dynamic Intent QR
                   </span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-400">
-                    Auto Webhook Verified
+                    Auto Webhook
                   </span>
                 </div>
 
-                <div className="w-full max-w-xs bg-white rounded-3xl p-5 shadow-xl border border-slate-200/80 my-3 flex flex-col items-center">
+                <div className="w-full max-w-[280px] sm:max-w-xs bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xl border border-slate-200/80 my-2 sm:my-3 flex flex-col items-center">
                   <div className="text-sm font-black text-slate-900 truncate max-w-[240px]">
                     {paymentSettings.upiGatewayProvider || 'UPI Payment Gateway'}
                   </div>
@@ -1843,16 +1843,16 @@ export default function UpiCollectionPage() {
                     Merchant ID: {paymentSettings.upiGatewayKey || 'Configured'}
                   </div>
 
-                  <div className="my-4 p-2 bg-white rounded-2xl border border-slate-100 shadow-inner flex items-center justify-center">
+                  <div className="my-3 sm:my-4 p-2 bg-white rounded-2xl border border-slate-100 shadow-inner flex items-center justify-center">
                     <img
                       src={activeQrDisplay}
                       alt="Dynamic UPI QR"
-                      className="w-52 h-52 object-contain rounded-xl"
+                      className="w-44 h-44 sm:w-52 sm:h-52 object-contain rounded-xl"
                     />
                   </div>
 
                   <div className="text-center">
-                    <div className="text-lg font-black text-slate-900">
+                    <div className="text-base sm:text-lg font-black text-slate-900">
                       {numCollectAmount > 0 ? formatINR(numCollectAmount) : 'Scan & Pay Amount'}
                     </div>
                     <div className="flex items-center justify-center gap-2 mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -1861,7 +1861,7 @@ export default function UpiCollectionPage() {
                   </div>
                 </div>
 
-                <div className="w-full p-3 bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800/40 rounded-2xl text-[11px] text-cyan-800 dark:text-cyan-200 text-left space-y-1">
+                <div className="w-full p-3 bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800/40 rounded-xl sm:rounded-2xl text-[11px] text-cyan-800 dark:text-cyan-200 text-left space-y-1">
                   <div className="font-bold flex items-center gap-1">
                     <Zap className="w-3.5 h-3.5 text-cyan-500" /> Real-Time Webhook Reconciliation
                   </div>
@@ -1872,13 +1872,13 @@ export default function UpiCollectionPage() {
               </div>
 
               {/* Right: Dynamic Collection Form */}
-              <div className="lg:col-span-7 glass-card p-6 space-y-4">
-                <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+              <div className="lg:col-span-7 glass-card p-4 sm:p-6 rounded-2xl sm:rounded-3xl space-y-4">
+                <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                   <Smartphone className="w-4 h-4 text-cyan-500" />
                   Generate Dynamic UPI PG Intent
                 </h3>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       Khata Customer (Optional)
@@ -1892,7 +1892,7 @@ export default function UpiCollectionPage() {
                           setCollectAmount(c.outstandingBalance.toString());
                         }
                       }}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
+                      className="w-full px-3 py-2.5 sm:py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
                     >
                       <option value="">-- Any Walk-in Customer --</option>
                       {customers.map((c) => (
@@ -1912,7 +1912,7 @@ export default function UpiCollectionPage() {
                       value={collectAmount}
                       onChange={(e) => setCollectAmount(e.target.value)}
                       placeholder="e.g. 500"
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
+                      className="w-full px-3 py-2.5 sm:py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
                     />
                   </div>
                 </div>
@@ -1926,28 +1926,28 @@ export default function UpiCollectionPage() {
                     value={collectNote}
                     onChange={(e) => setCollectNote(e.target.value)}
                     placeholder="e.g. Dynamic UPI payment"
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
+                    className="w-full px-3 py-2.5 sm:py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
                   />
                 </div>
 
-                <div className="pt-3 flex flex-wrap items-center justify-end gap-3">
+                <div className="pt-3 grid grid-cols-2 sm:flex sm:items-center sm:justify-end gap-2 sm:gap-3 w-full sm:w-auto">
                   <button
                     type="button"
                     onClick={handleShareWhatsAppDirectUpi}
-                    className="px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all cursor-pointer"
+                    className="w-full sm:w-auto justify-center px-3.5 py-2.5 rounded-xl sm:rounded-2xl text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all cursor-pointer active:scale-95 min-h-[42px] touch-manipulation"
                   >
                     <Share2 className="w-4 h-4" />
-                    Share on WhatsApp
+                    <span>WhatsApp</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleRecordCollection('UPI Gateway')}
                     disabled={numCollectAmount <= 0}
-                    className="px-5 py-2.5 rounded-2xl text-xs font-bold text-white bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all cursor-pointer"
+                    className="w-full sm:w-auto justify-center px-4 py-2.5 rounded-xl sm:rounded-2xl text-xs font-bold text-white bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all cursor-pointer active:scale-95 min-h-[42px] touch-manipulation"
                   >
                     <Check className="w-4 h-4" />
-                    Record in Khata
+                    <span>Record Khata</span>
                   </button>
                 </div>
               </div>
@@ -1957,20 +1957,21 @@ export default function UpiCollectionPage() {
 
         {/* TAB 5: COLLECTION HISTORY LEDGER */}
         {activeTab === 'history' && (
-          <div className="glass-card p-6 space-y-4">
+          <div className="glass-card p-4 sm:p-6 rounded-2xl sm:rounded-3xl space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
               <div>
-                <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                  <History className="w-5 h-5 text-indigo-500" />
+                <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <History className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-500" />
                   Payment Collection Ledger &amp; Inflow
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-[11px] sm:text-xs text-slate-400">
                   Total Recorded Inflow Across Gateways: <span className="font-mono font-bold text-emerald-600">{formatINR(totalCollected)}</span>
                 </p>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Desktop Table View */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 dark:border-slate-800">
                   <tr>
@@ -2045,31 +2046,99 @@ export default function UpiCollectionPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile Card List View */}
+            <div className="sm:hidden space-y-2.5">
+              {collectionTransactions.length === 0 ? (
+                <div className="text-center py-8 text-xs text-slate-400">
+                  No payment collections recorded yet.
+                </div>
+              ) : (
+                collectionTransactions.map((t) => (
+                  <div
+                    key={t.id}
+                    className="p-3.5 rounded-2xl bg-white dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 shadow-xs space-y-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          {t.customerName || 'Customer'}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          {formatDate(t.date)}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-sm font-mono font-black text-emerald-600 dark:text-emerald-400">
+                          +{formatINR(t.amount)}
+                        </div>
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 inline-block mt-0.5">
+                          Settled
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          (t.category || '').toLowerCase().includes('cashfree')
+                            ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
+                            : (t.category || '').toLowerCase().includes('razorpay')
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                            : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
+                        }`}>
+                          {(t.category || '').toLowerCase().includes('cashfree') ? 'CASHFREE' : (t.category || '').toLowerCase().includes('razorpay') ? 'RAZORPAY' : (t.paymentMode?.toUpperCase() || 'UPI')}
+                        </span>
+                        {t.referenceNo && (
+                          <span className="font-mono text-[10px] text-slate-400 truncate max-w-[120px]">
+                            #{t.referenceNo}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (confirm(`Delete collection record of ${formatINR(t.amount)}?`)) {
+                            await hardDeleteTransaction(t.id);
+                          }
+                        }}
+                        title="Delete Record"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
+
 
       </div>
 
       {/* SHOP COUNTER QR STANDEE STUDIO MODAL */}
       {isStandeeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto print:hidden">
-          <div className="relative w-full max-w-5xl bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[94vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-5 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto print:hidden">
+          <div className="relative w-full max-w-5xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[96vh]">
             
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 flex items-center justify-center">
-                  <Printer className="w-5 h-5" />
+            <div className="p-3.5 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                  <Printer className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                    <span>Shop Counter QR Standee Studio</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                      Print Ready (A4 / A5)
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    <span>Shop Standee Studio</span>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      Print Ready (A4/A5)
                     </span>
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Select a modern theme, customize details, and print high-resolution standee for your shop counter.
+                  <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 hidden xs:block">
+                    Select a theme, customize details, and print standee for your counter.
                   </p>
                 </div>
               </div>
@@ -2077,7 +2146,7 @@ export default function UpiCollectionPage() {
               <button
                 type="button"
                 onClick={() => setIsStandeeModalOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
                 title="Close"
               >
                 <X className="w-5 h-5" />
@@ -2085,18 +2154,18 @@ export default function UpiCollectionPage() {
             </div>
 
             {/* Modal Body: Controls & Live Preview */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-4 sm:p-6 overflow-y-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 p-3.5 sm:p-6 overflow-y-auto">
               
               {/* Left Column: Customization Controls (5 cols) */}
-              <div className="lg:col-span-5 space-y-5">
+              <div className="lg:col-span-5 space-y-4 sm:space-y-5">
                 
                 {/* 1. Theme Selector */}
                 <div>
-                  <label className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-2.5">
+                  <label className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-2 sm:mb-2.5">
                     <Palette className="w-4 h-4 text-indigo-500" />
                     <span>Choose Standee Theme</span>
                   </label>
-                  <div className="grid grid-cols-2 gap-2.5">
+                  <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
                     {[
                       { id: 'indigo', name: 'Indigo Pro', badge: 'Fintech Aurora', color: 'from-slate-950 via-indigo-950 to-indigo-900' },
                       { id: 'bharat', name: 'Bharat Retail', badge: 'Tricolor / Saffron', color: 'from-amber-600 via-orange-600 to-slate-900' },
@@ -2107,14 +2176,14 @@ export default function UpiCollectionPage() {
                         key={th.id}
                         type="button"
                         onClick={() => setStandeeTheme(th.id as any)}
-                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        className={`p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                           standeeTheme === th.id
                             ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20'
                             : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-800/40'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-2">
-                          <span className={`w-5 h-5 rounded-lg bg-gradient-to-br ${th.color} border border-white/20`} />
+                          <span className={`w-4 h-4 sm:w-5 sm:h-5 rounded-lg bg-gradient-to-br ${th.color} border border-white/20`} />
                           {standeeTheme === th.id && (
                             <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                           )}
@@ -2133,7 +2202,7 @@ export default function UpiCollectionPage() {
                   <div>
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between mb-1.5">
                       <span>Shop / Merchant Name *</span>
-                      <span className="text-[10px] text-slate-400 font-normal">Printed in bold header</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Bold header</span>
                     </label>
                     <input
                       type="text"
@@ -2159,7 +2228,7 @@ export default function UpiCollectionPage() {
                 </div>
 
                 {/* 3. Toggle Options */}
-                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                <div className="p-3 sm:p-3.5 rounded-xl sm:rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 space-y-2 sm:space-y-2.5">
                   <div className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5 mb-1">
                     <Sliders className="w-3.5 h-3.5 text-indigo-500" />
                     <span>Display Options</span>
@@ -2215,10 +2284,10 @@ export default function UpiCollectionPage() {
                 </div>
 
                 {/* Helpful Merchant Pro-Tip */}
-                <div className="p-3 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 text-[11px] text-indigo-800 dark:text-indigo-300 flex items-start gap-2.5">
+                <div className="p-3 rounded-xl sm:rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 text-[11px] text-indigo-800 dark:text-indigo-300 flex items-start gap-2.5">
                   <Sparkles className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
                   <div className="leading-relaxed">
-                    <strong>Printing Tip:</strong> Print on standard A4 / A5 glossy paper or photo paper. Place it inside an acrylic counter T-stand for a durable, professional counter display!
+                    <strong>Printing Tip:</strong> Print on standard A4 / A5 paper. Place it inside an acrylic counter T-stand for a durable display!
                   </div>
                 </div>
 
@@ -2236,8 +2305,8 @@ export default function UpiCollectionPage() {
                   </span>
                 </div>
 
-                <div className="w-full bg-slate-100 dark:bg-slate-950/80 p-3 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-inner flex items-center justify-center overflow-hidden">
-                  <div className="w-full max-w-sm sm:max-w-md transform transition-all duration-200">
+                <div className="w-full bg-slate-100 dark:bg-slate-950/80 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 shadow-inner flex items-center justify-center overflow-hidden">
+                  <div className="w-full max-w-[280px] xs:max-w-xs sm:max-w-md transform transition-all duration-200">
                     <ShopStandeeContent
                       theme={standeeTheme}
                       title={standeeTitle}
@@ -2261,21 +2330,21 @@ export default function UpiCollectionPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 sm:p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-wrap items-center justify-between gap-3">
+            <div className="p-3.5 sm:p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
               <button
                 type="button"
                 onClick={handleDownloadStandeeQr}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl sm:rounded-2xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors w-full sm:w-auto min-h-[42px] touch-manipulation"
               >
                 <Download className="w-4 h-4 text-slate-500" />
                 <span>Download Standee QR Image</span>
               </button>
 
-              <div className="flex items-center gap-2.5">
+              <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setIsStandeeModalOpen(false)}
-                  className="px-4 py-2.5 rounded-2xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                  className="w-full sm:w-auto justify-center px-4 py-2.5 rounded-xl sm:rounded-2xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors min-h-[42px] touch-manipulation"
                 >
                   Cancel
                 </button>
@@ -2285,10 +2354,10 @@ export default function UpiCollectionPage() {
                   onClick={() => {
                     window.print();
                   }}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 cursor-pointer transition-all"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 cursor-pointer transition-all min-h-[42px] touch-manipulation"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Print Standee Now</span>
+                  <span>Print Standee</span>
                 </button>
               </div>
             </div>
