@@ -78,7 +78,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0B0F19] print:bg-white print:min-h-0 print:block">
       <AuthGuard>
         {currentUser && (
-          <div className="print:hidden">
+          <div className="sticky top-0 z-40 w-full print:hidden">
             <Navbar onToggleSidebar={() => setMobileSidebarOpen(prev => !prev)} />
           </div>
         )}
