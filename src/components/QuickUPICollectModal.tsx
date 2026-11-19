@@ -162,11 +162,9 @@ export default function QuickUPICollectModal() {
     }
   }, [isCollectModalOpen, collectModalData]);
 
-  if (!isCollectModalOpen) return null;
-
   const numAmount = parseFloat(amount) || 0;
   const currentCust = customers.find((c) => c.id === selectedCustomer);
-  const customerDisplayName = currentCust?.name || collectModalData.customerName || 'Customer';
+  const customerDisplayName = currentCust?.name || collectModalData?.customerName || 'Customer';
   const customerPhone = currentCust?.phone || '';
 
   // Amount-locked dynamic QR logic
@@ -565,7 +563,7 @@ export default function QuickUPICollectModal() {
   };
 
   const collectionHistoryTransactions = useMemo(() => {
-    return transactions.filter(isOnlineCollectionTxn);
+    return (transactions || []).filter(isOnlineCollectionTxn);
   }, [transactions]);
 
   // Filtered transactions for History view
@@ -577,12 +575,14 @@ export default function QuickUPICollectModal() {
         const matchRef = (txn.referenceNo || '').toLowerCase().includes(q);
         const matchNote = (txn.note || '').toLowerCase().includes(q);
         const matchMode = (txn.paymentMode || '').toLowerCase().includes(q);
-        const matchAmt = txn.amount.toString().includes(q);
+        const matchAmt = txn.amount != null ? txn.amount.toString().includes(q) : false;
         if (!matchName && !matchRef && !matchNote && !matchMode && !matchAmt) return false;
       }
 
       if (historyDateRange !== 'all') {
+        if (!txn.date) return false;
         const txnDate = new Date(txn.date);
+        if (isNaN(txnDate.getTime())) return false;
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -606,6 +606,8 @@ export default function QuickUPICollectModal() {
 
   const totalFilteredCollection = filteredTransactions
     .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+  if (!isCollectModalOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -840,7 +842,13 @@ export default function QuickUPICollectModal() {
                               {txn.customerName || 'Customer'}
                             </div>
                             <div className="text-[10px] text-slate-400 flex items-center gap-1.5 truncate">
-                              <span>{new Date(txn.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+                              <span>
+                                {(() => {
+                                  if (!txn.date) return 'Recent';
+                                  const dt = new Date(txn.date);
+                                  return isNaN(dt.getTime()) ? 'Recent' : dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+                                })()}
+                              </span>
                               <span>•</span>
                               <span>{txn.paymentMode || txn.category}</span>
                             </div>

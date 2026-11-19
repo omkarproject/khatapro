@@ -135,6 +135,8 @@ export default function DashboardPage() {
   } = useApp();
 
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [cashFlowTab, setCashFlowTab] = useState<'all' | 'khata' | 'expenses' | 'net' | 'online'>('all');
+  const [chartViewMode, setChartViewMode] = useState<'bars' | 'area'>('bars');
   const [, setLangTick] = useState(0);
 
   React.useEffect(() => {
@@ -744,112 +746,221 @@ export default function DashboardPage() {
       {/* Second Row: Charts & Visual Analytics */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-3.5">
         
-        {/* Cash Flow Velocity Chart */}
+        {/* Cash Flow Velocity Chart with Individual Metric View & Grouped Multi-Bar View */}
         <div className="lg:col-span-8 glass-card p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-2.5">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                 Cash Flow Velocity
               </h3>
+              {cashFlowTab === 'all' && (
+                <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setChartViewMode('bars')}
+                    className={`px-1.5 py-0.5 rounded-md transition-all cursor-pointer ${
+                      chartViewMode === 'bars'
+                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Bars
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChartViewMode('area')}
+                    className={`px-1.5 py-0.5 rounded-md transition-all cursor-pointer ${
+                      chartViewMode === 'area'
+                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Curves
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 text-xs font-bold">
-              <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" /> KHATA
-              </span>
-              <span className="flex items-center gap-1.5 text-rose-500">
-                <span className="w-2 h-2 rounded-full bg-rose-500" /> EXPENSES
-              </span>
-              <span className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
-                <span className="w-2 h-2 rounded-full bg-indigo-500" /> NET AMOUNT
-              </span>
-              <span className="flex items-center gap-1.5 text-cyan-600 dark:text-cyan-400">
-                <span className="w-2 h-2 rounded-full bg-cyan-500" /> ONLINE COLLECTIONS
-              </span>
+
+            {/* Individual Metric Selectors */}
+            <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setCashFlowTab('all')}
+                className={`px-2 py-1 rounded-xl transition-all cursor-pointer text-[10.5px] font-extrabold ${
+                  cashFlowTab === 'all'
+                    ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                }`}
+              >
+                All Metrics
+              </button>
+              <button
+                type="button"
+                onClick={() => setCashFlowTab('khata')}
+                className={`flex items-center gap-1 px-2 py-1 rounded-xl transition-all cursor-pointer text-[10.5px] font-extrabold ${
+                  cashFlowTab === 'khata'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/60 hover:bg-emerald-100/60'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> KHATA
+              </button>
+              <button
+                type="button"
+                onClick={() => setCashFlowTab('expenses')}
+                className={`flex items-center gap-1 px-2 py-1 rounded-xl transition-all cursor-pointer text-[10.5px] font-extrabold ${
+                  cashFlowTab === 'expenses'
+                    ? 'bg-rose-600 text-white shadow-sm'
+                    : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-800/60 hover:bg-rose-100/60'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> EXPENSES
+              </button>
+              <button
+                type="button"
+                onClick={() => setCashFlowTab('net')}
+                className={`flex items-center gap-1 px-2 py-1 rounded-xl transition-all cursor-pointer text-[10.5px] font-extrabold ${
+                  cashFlowTab === 'net'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/80 dark:border-indigo-800/60 hover:bg-indigo-100/60'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> NET AMOUNT
+              </button>
+              <button
+                type="button"
+                onClick={() => setCashFlowTab('online')}
+                className={`flex items-center gap-1 px-2 py-1 rounded-xl transition-all cursor-pointer text-[10.5px] font-extrabold ${
+                  cashFlowTab === 'online'
+                    ? 'bg-cyan-600 text-white shadow-sm'
+                    : 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 border border-cyan-200/80 dark:border-cyan-800/60 hover:bg-cyan-100/60'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" /> ONLINE COLLECTIONS
+              </button>
             </div>
           </div>
 
           <div className="w-full h-56 sm:h-60 lg:h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={cashFlowData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorKhata" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#10B981" stopOpacity={0.0}/>
-                  </linearGradient>
-                  <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F43F5E" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#F43F5E" stopOpacity={0.0}/>
-                  </linearGradient>
-                  <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366F1" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#6366F1" stopOpacity={0.0}/>
-                  </linearGradient>
-                  <linearGradient id="colorOnline" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#06B6D4" stopOpacity={0.0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.15)" />
-                <XAxis dataKey="day" stroke="#94A3B8" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis
-                  stroke="#94A3B8"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                  domain={maxCashFlowVal === 0 ? [0, 1000] : [0, 'auto']}
-                  tickFormatter={(val) => {
-                    if (val === 0) return '₹0';
-                    if (val >= 1000) return `₹${Math.round(val / 1000)}k`;
-                    return `₹${val}`;
-                  }}
-                />
-                <Tooltip content={<CustomCashFlowTooltip />} />
-                <Area
-                  type="monotone"
-                  dataKey="khata"
-                  name="KHATA"
-                  stroke="#10B981"
-                  strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#colorKhata)"
-                  dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#10B981', fill: '#fff' }}
-                  activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#10B981' }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="expenses"
-                  name="EXPENSES"
-                  stroke="#F43F5E"
-                  strokeWidth={2.5}
-                  fillOpacity={1}
-                  fill="url(#colorExpenses)"
-                  dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#F43F5E', fill: '#fff' }}
-                  activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#F43F5E' }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="netAmount"
-                  name="NET AMOUNT"
-                  stroke="#6366F1"
-                  strokeWidth={2.5}
-                  strokeDasharray="4 4"
-                  fillOpacity={1}
-                  fill="url(#colorNet)"
-                  dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#6366F1', fill: '#fff' }}
-                  activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#6366F1' }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="onlineCollections"
-                  name="ONLINE COLLECTIONS"
-                  stroke="#06B6D4"
-                  strokeWidth={2.5}
-                  fillOpacity={1}
-                  fill="url(#colorOnline)"
-                  dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#06B6D4', fill: '#fff' }}
-                  activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#06B6D4' }}
-                />
-              </AreaChart>
+              {cashFlowTab === 'all' && chartViewMode === 'bars' ? (
+                /* 1. GROUPED MULTI-BAR CHART: All 4 metrics side-by-side in distinct colors */
+                <BarChart data={cashFlowData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.15)" />
+                  <XAxis dataKey="day" stroke="#94A3B8" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis
+                    stroke="#94A3B8"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                    domain={maxCashFlowVal === 0 ? [0, 1000] : [0, 'auto']}
+                    tickFormatter={(val) => {
+                      if (val === 0) return '₹0';
+                      if (val >= 1000) return `₹${Math.round(val / 1000)}k`;
+                      return `₹${val}`;
+                    }}
+                  />
+                  <Tooltip content={<CustomCashFlowTooltip />} />
+                  <Bar dataKey="khata" name="KHATA" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={14} />
+                  <Bar dataKey="expenses" name="EXPENSES" fill="#F43F5E" radius={[4, 4, 0, 0]} maxBarSize={14} />
+                  <Bar dataKey="netAmount" name="NET AMOUNT" fill="#6366F1" radius={[4, 4, 0, 0]} maxBarSize={14} />
+                  <Bar dataKey="onlineCollections" name="ONLINE COLLECTIONS" fill="#06B6D4" radius={[4, 4, 0, 0]} maxBarSize={14} />
+                </BarChart>
+              ) : (
+                /* 2. AREA / INDIVIDUAL METRIC CHART */
+                <AreaChart data={cashFlowData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorKhata" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#10B981" stopOpacity={0.0}/>
+                    </linearGradient>
+                    <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#F43F5E" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#F43F5E" stopOpacity={0.0}/>
+                    </linearGradient>
+                    <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366F1" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#6366F1" stopOpacity={0.0}/>
+                    </linearGradient>
+                    <linearGradient id="colorOnline" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#06B6D4" stopOpacity={0.0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.15)" />
+                  <XAxis dataKey="day" stroke="#94A3B8" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis
+                    stroke="#94A3B8"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                    domain={maxCashFlowVal === 0 ? [0, 1000] : [0, 'auto']}
+                    tickFormatter={(val) => {
+                      if (val === 0) return '₹0';
+                      if (val >= 1000) return `₹${Math.round(val / 1000)}k`;
+                      return `₹${val}`;
+                    }}
+                  />
+                  <Tooltip content={<CustomCashFlowTooltip />} />
+
+                  {(cashFlowTab === 'all' || cashFlowTab === 'khata') && (
+                    <Area
+                      type="monotone"
+                      dataKey="khata"
+                      name="KHATA"
+                      stroke="#10B981"
+                      strokeWidth={3}
+                      fillOpacity={1}
+                      fill="url(#colorKhata)"
+                      dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#10B981', fill: '#fff' }}
+                      activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#10B981' }}
+                    />
+                  )}
+
+                  {(cashFlowTab === 'all' || cashFlowTab === 'expenses') && (
+                    <Area
+                      type="monotone"
+                      dataKey="expenses"
+                      name="EXPENSES"
+                      stroke="#F43F5E"
+                      strokeWidth={2.5}
+                      fillOpacity={1}
+                      fill="url(#colorExpenses)"
+                      dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#F43F5E', fill: '#fff' }}
+                      activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#F43F5E' }}
+                    />
+                  )}
+
+                  {(cashFlowTab === 'all' || cashFlowTab === 'net') && (
+                    <Area
+                      type="monotone"
+                      dataKey="netAmount"
+                      name="NET AMOUNT"
+                      stroke="#6366F1"
+                      strokeWidth={2.5}
+                      strokeDasharray={cashFlowTab === 'all' ? '4 4' : undefined}
+                      fillOpacity={1}
+                      fill="url(#colorNet)"
+                      dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#6366F1', fill: '#fff' }}
+                      activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#6366F1' }}
+                    />
+                  )}
+
+                  {(cashFlowTab === 'all' || cashFlowTab === 'online') && (
+                    <Area
+                      type="monotone"
+                      dataKey="onlineCollections"
+                      name="ONLINE COLLECTIONS"
+                      stroke="#06B6D4"
+                      strokeWidth={2.5}
+                      fillOpacity={1}
+                      fill="url(#colorOnline)"
+                      dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#06B6D4', fill: '#fff' }}
+                      activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#06B6D4' }}
+                    />
+                  )}
+                </AreaChart>
+              )}
             </ResponsiveContainer>
           </div>
         </div>
