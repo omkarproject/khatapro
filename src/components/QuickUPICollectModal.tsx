@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
 import { downloadBrandedLockedQr } from '@/lib/qrCardGenerator';
@@ -64,6 +64,9 @@ export default function QuickUPICollectModal() {
     return 'direct_upi';
   });
 
+  const [lastActiveTab, setLastActiveTab] = useState<'direct_upi' | 'cashfree' | 'razorpay' | 'upi_gateway'>('direct_upi');
+  const wasOpenRef = useRef(false);
+
   const [serverCfConfigured, setServerCfConfigured] = useState(false);
 
   // Form State
@@ -106,21 +109,28 @@ export default function QuickUPICollectModal() {
       .catch(() => {});
   }, []);
 
-  // Sync state when modal opens
+  // Sync state ONLY when modal transitions from closed to open (prevents flickering loop)
   useEffect(() => {
-    if (isCollectModalOpen) {
-      const preferredMode = ((collectModalData as any)?.method) || activeMode;
+    if (isCollectModalOpen && !wasOpenRef.current) {
+      wasOpenRef.current = true;
+      const modalMethod = (collectModalData as any)?.method;
+      const preferredMode = modalMethod || activeMode;
+      let initialTab: 'direct_upi' | 'cashfree' | 'razorpay' | 'upi_gateway' = 'direct_upi';
+
       if (preferredMode && isGatewayActive(preferredMode, paymentSettings)) {
-        setActiveTab(preferredMode);
+        initialTab = preferredMode;
       } else if (isDirectUpiActive) {
-        setActiveTab('direct_upi');
+        initialTab = 'direct_upi';
       } else if (isCashfreeActive) {
-        setActiveTab('cashfree');
+        initialTab = 'cashfree';
       } else if (isRazorpayActive) {
-        setActiveTab('razorpay');
-      } else {
-        setActiveTab('direct_upi');
+        initialTab = 'razorpay';
+      } else if (isUpiGatewayActive) {
+        initialTab = 'upi_gateway';
       }
+
+      setActiveTab(initialTab);
+      setLastActiveTab(initialTab);
 
       setUpiId(paymentSettings.upiId || '');
       setPayeeName(paymentSettings.payeeName || settings.businessName || profile.businessName || currentUser?.businessName || 'Business');
@@ -130,25 +140,27 @@ export default function QuickUPICollectModal() {
       setIsGatewayLoading(false);
       setIsQrGenerated(false);
 
-      if (collectModalData.amount) {
+      if (collectModalData?.amount) {
         setAmount(collectModalData.amount.toString());
       } else {
         setAmount('');
       }
 
-      if (collectModalData.note) {
+      if (collectModalData?.note) {
         setNote(collectModalData.note);
       } else {
         setNote('Payment settlement');
       }
 
-      if (collectModalData.customerId) {
+      if (collectModalData?.customerId) {
         setSelectedCustomer(collectModalData.customerId);
       } else {
         setSelectedCustomer('');
       }
+    } else if (!isCollectModalOpen) {
+      wasOpenRef.current = false;
     }
-  }, [isCollectModalOpen, paymentSettings, profile, collectModalData, activeMode, isDirectUpiActive, isCashfreeActive, isRazorpayActive]);
+  }, [isCollectModalOpen, collectModalData]);
 
   if (!isCollectModalOpen) return null;
 
@@ -515,45 +527,85 @@ export default function QuickUPICollectModal() {
     }, 1500);
   };
 
+  // Filter only actual payment collections (Payment Collection Hub or Payment Link)
+  const isOnlineCollectionTxn = (txn: any) => {
+    if (!txn || txn.isDeleted || txn.status === 'deleted') return false;
+    if (txn.type === 'collection') return true;
+    const cat = (txn.category || '').toLowerCase();
+    if (
+      cat.includes('collection') ||
+      cat.includes('gateway') ||
+      cat.includes('cashfree') ||
+      cat.includes('razorpay') ||
+      cat.includes('upi direct') ||
+      cat.includes('payment link')
+    ) {
+      return true;
+    }
+    const ref = (txn.referenceNo || '').toLowerCase();
+    if (
+      ref.startsWith('cf_') ||
+      ref.startsWith('pay_') ||
+      ref.startsWith('upi-') ||
+      ref.startsWith('rzp_') ||
+      ref.startsWith('col_')
+    ) {
+      return true;
+    }
+    const noteText = (txn.note || '').toLowerCase();
+    if (
+      noteText.includes('collected via') ||
+      noteText.includes('payment link') ||
+      noteText.includes('online collection') ||
+      noteText.includes('shop upi qr')
+    ) {
+      return true;
+    }
+    return false;
+  };
+
+  const collectionHistoryTransactions = useMemo(() => {
+    return transactions.filter(isOnlineCollectionTxn);
+  }, [transactions]);
+
   // Filtered transactions for History view
-  const filteredTransactions = transactions.filter((txn) => {
-    if (txn.isDeleted || txn.status === 'deleted') return false;
-
-    if (historySearch.trim()) {
-      const q = historySearch.toLowerCase().trim();
-      const matchName = (txn.customerName || '').toLowerCase().includes(q);
-      const matchRef = (txn.referenceNo || '').toLowerCase().includes(q);
-      const matchNote = (txn.note || '').toLowerCase().includes(q);
-      const matchMode = (txn.paymentMode || '').toLowerCase().includes(q);
-      const matchAmt = txn.amount.toString().includes(q);
-      if (!matchName && !matchRef && !matchNote && !matchMode && !matchAmt) return false;
-    }
-
-    if (historyDateRange !== 'all') {
-      const txnDate = new Date(txn.date);
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-      if (historyDateRange === 'today') {
-        if (txnDate < todayStart) return false;
-      } else if (historyDateRange === 'yesterday') {
-        const yestStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
-        if (txnDate < yestStart || txnDate >= todayStart) return false;
-      } else if (historyDateRange === '7days') {
-        const sevenDaysAgo = new Date(todayStart.getTime() - 7 * 24 * 60 * 1000);
-        if (txnDate < sevenDaysAgo) return false;
-      } else if (historyDateRange === '30days') {
-        const thirtyDaysAgo = new Date(todayStart.getTime() - 30 * 24 * 60 * 1000);
-        if (txnDate < thirtyDaysAgo) return false;
+  const filteredTransactions = useMemo(() => {
+    return collectionHistoryTransactions.filter((txn) => {
+      if (historySearch.trim()) {
+        const q = historySearch.toLowerCase().trim();
+        const matchName = (txn.customerName || '').toLowerCase().includes(q);
+        const matchRef = (txn.referenceNo || '').toLowerCase().includes(q);
+        const matchNote = (txn.note || '').toLowerCase().includes(q);
+        const matchMode = (txn.paymentMode || '').toLowerCase().includes(q);
+        const matchAmt = txn.amount.toString().includes(q);
+        if (!matchName && !matchRef && !matchNote && !matchMode && !matchAmt) return false;
       }
-    }
 
-    return true;
-  });
+      if (historyDateRange !== 'all') {
+        const txnDate = new Date(txn.date);
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        if (historyDateRange === 'today') {
+          if (txnDate < todayStart) return false;
+        } else if (historyDateRange === 'yesterday') {
+          const yestStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
+          if (txnDate < yestStart || txnDate >= todayStart) return false;
+        } else if (historyDateRange === '7days') {
+          const sevenDaysAgo = new Date(todayStart.getTime() - 7 * 24 * 60 * 1000);
+          if (txnDate < sevenDaysAgo) return false;
+        } else if (historyDateRange === '30days') {
+          const thirtyDaysAgo = new Date(todayStart.getTime() - 30 * 24 * 60 * 1000);
+          if (txnDate < thirtyDaysAgo) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [collectionHistoryTransactions, historySearch, historyDateRange]);
 
   const totalFilteredCollection = filteredTransactions
-    .filter((t) => t.type === 'collection' || t.type === 'credit' || t.type === 'income')
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -580,18 +632,25 @@ export default function QuickUPICollectModal() {
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
-              onClick={() => setActiveTab(activeTab === 'history' ? 'direct_upi' : 'history')}
+              onClick={() => {
+                if (activeTab === 'history') {
+                  setActiveTab(lastActiveTab);
+                } else {
+                  setLastActiveTab(activeTab);
+                  setActiveTab('history');
+                }
+              }}
               className={`relative p-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'history'
                   ? 'bg-amber-600 text-white shadow-sm'
                   : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
               }`}
-              title="Transaction History"
+              title="Online Collection History"
             >
               <History className="w-4 h-4" />
-              {transactions.length > 0 && (
+              {collectionHistoryTransactions.length > 0 && (
                 <span className="absolute -top-1 -right-1 text-[9px] min-w-4 h-4 px-1 rounded-full bg-amber-600 text-white font-mono font-bold flex items-center justify-center border border-white dark:border-slate-900">
-                  {transactions.length}
+                  {collectionHistoryTransactions.length}
                 </span>
               )}
             </button>
@@ -609,7 +668,10 @@ export default function QuickUPICollectModal() {
           {/* 1. Default UPI & Shop QR */}
           <button
             type="button"
-            onClick={() => setActiveTab('direct_upi')}
+            onClick={() => {
+              setActiveTab('direct_upi');
+              setLastActiveTab('direct_upi');
+            }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'direct_upi'
                 ? 'bg-indigo-600 text-white shadow-sm'
@@ -627,7 +689,10 @@ export default function QuickUPICollectModal() {
           {(isCashfreeActive || serverCfConfigured) && (
             <button
               type="button"
-              onClick={() => setActiveTab('cashfree')}
+              onClick={() => {
+                setActiveTab('cashfree');
+                setLastActiveTab('cashfree');
+              }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'cashfree'
                   ? 'bg-purple-600 text-white shadow-sm'
@@ -646,7 +711,10 @@ export default function QuickUPICollectModal() {
           {isRazorpayActive && (
             <button
               type="button"
-              onClick={() => setActiveTab('razorpay')}
+              onClick={() => {
+                setActiveTab('razorpay');
+                setLastActiveTab('razorpay');
+              }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'razorpay'
                   ? 'bg-blue-600 text-white shadow-sm'
@@ -665,7 +733,10 @@ export default function QuickUPICollectModal() {
           {isUpiGatewayActive && (
             <button
               type="button"
-              onClick={() => setActiveTab('upi_gateway')}
+              onClick={() => {
+                setActiveTab('upi_gateway');
+                setLastActiveTab('upi_gateway');
+              }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'upi_gateway'
                   ? 'bg-cyan-600 text-white shadow-sm'
@@ -740,10 +811,18 @@ export default function QuickUPICollectModal() {
               {/* Transactions List */}
               <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
                 {filteredTransactions.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-slate-400">No transactions found.</div>
+                  <div className="py-10 px-4 text-center space-y-2">
+                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 mx-auto flex items-center justify-center">
+                      <History className="w-5 h-5" />
+                    </div>
+                    <div className="text-xs font-bold text-slate-700 dark:text-slate-300">No Online Collections Yet</div>
+                    <p className="text-[11px] text-slate-400 max-w-xs mx-auto leading-relaxed">
+                      Payments received via Payment Collection Hub QR, Cashfree PG, Razorpay, or customer payment links will appear here.
+                    </p>
+                  </div>
                 ) : (
                   filteredTransactions.map((txn) => {
-                    const isCollection = txn.type === 'collection' || txn.type === 'credit' || txn.type === 'income';
+                    const isCollection = true;
                     return (
                       <div
                         key={txn.id}

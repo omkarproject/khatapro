@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 
 export default function SupportChatWidget() {
-  const { currentUser, addToast, t, settings } = useApp();
+  const { currentUser, profile, addToast, t, settings } = useApp();
   const pathname = usePathname();
   const isDashboard = pathname === '/' || pathname === '';
   const [isOpen, setIsOpen] = useState(false);
@@ -43,7 +43,10 @@ export default function SupportChatWidget() {
   const isAdmin = Boolean(
     currentUser?.role === 'admin' ||
     currentUser?.role === 'super_admin' ||
-    currentUser?.email === 'anantyadav8924@gmail.com'
+    profile?.role === 'admin' ||
+    profile?.role === 'super_admin' ||
+    currentUser?.email === 'anantyadav8924@gmail.com' ||
+    profile?.email === 'anantyadav8924@gmail.com'
   );
 
   // Listen for programmatic open requests (e.g. from Dashboard Support Card or Navbar Alerts)

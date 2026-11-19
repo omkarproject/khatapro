@@ -81,6 +81,43 @@ const DAILY_BUSINESS_MOTIVATIONS = [
   "जब तक गल्ला भारी है, तब तक दुनिया तुम्हारी है! 🌍💸 आज धंधे में धुआंधार बिक्री करो!"
 ];
 
+const CustomCashFlowTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-900/95 backdrop-blur-md rounded-2xl border border-slate-700/60 p-3 shadow-2xl text-xs space-y-2 min-w-[210px]">
+        <div className="font-bold text-white border-b border-slate-800 pb-1.5 flex items-center justify-between">
+          <span>{label} Overview</span>
+          <span className="text-[10px] text-slate-400 font-normal">Live Cashflow</span>
+        </div>
+        <div className="space-y-1.5">
+          {payload.map((item: any) => {
+            const color =
+              item.name === 'KHATA'
+                ? '#10B981'
+                : item.name === 'EXPENSES'
+                ? '#F43F5E'
+                : item.name === 'NET AMOUNT'
+                ? '#6366F1'
+                : '#06B6D4';
+            return (
+              <div key={item.name} className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-1.5 text-slate-300 font-semibold text-[11px]">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                  {item.name}:
+                </span>
+                <span className="font-mono font-bold text-white text-[11px]">
+                  ₹{Number(item.value || 0).toLocaleString('en-IN')}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function DashboardPage() {
   const {
     customers,
@@ -736,19 +773,19 @@ export default function DashboardPage() {
               <AreaChart data={cashFlowData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorKhata" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.35}/>
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.2}/>
                     <stop offset="95%" stopColor="#10B981" stopOpacity={0.0}/>
                   </linearGradient>
                   <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F43F5E" stopOpacity={0.3}/>
+                    <stop offset="5%" stopColor="#F43F5E" stopOpacity={0.2}/>
                     <stop offset="95%" stopColor="#F43F5E" stopOpacity={0.0}/>
                   </linearGradient>
                   <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366F1" stopOpacity={0.35}/>
+                    <stop offset="5%" stopColor="#6366F1" stopOpacity={0.2}/>
                     <stop offset="95%" stopColor="#6366F1" stopOpacity={0.0}/>
                   </linearGradient>
                   <linearGradient id="colorOnline" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.35}/>
+                    <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.2}/>
                     <stop offset="95%" stopColor="#06B6D4" stopOpacity={0.0}/>
                   </linearGradient>
                 </defs>
@@ -766,21 +803,52 @@ export default function DashboardPage() {
                     return `₹${val}`;
                   }}
                 />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                    borderRadius: '16px',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    color: '#fff',
-                    fontSize: '12px',
-                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)',
-                  }}
-                  formatter={(value: any, name: any) => [`₹${Number(value || 0).toLocaleString('en-IN')}`, name]}
+                <Tooltip content={<CustomCashFlowTooltip />} />
+                <Area
+                  type="monotone"
+                  dataKey="khata"
+                  name="KHATA"
+                  stroke="#10B981"
+                  strokeWidth={3}
+                  fillOpacity={1}
+                  fill="url(#colorKhata)"
+                  dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#10B981', fill: '#fff' }}
+                  activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#10B981' }}
                 />
-                <Area type="monotone" dataKey="khata" name="KHATA" stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorKhata)" />
-                <Area type="monotone" dataKey="expenses" name="EXPENSES" stroke="#F43F5E" strokeWidth={2.5} fillOpacity={1} fill="url(#colorExpenses)" />
-                <Area type="monotone" dataKey="netAmount" name="NET AMOUNT" stroke="#6366F1" strokeWidth={2.5} fillOpacity={1} fill="url(#colorNet)" />
-                <Area type="monotone" dataKey="onlineCollections" name="ONLINE COLLECTIONS" stroke="#06B6D4" strokeWidth={2.5} fillOpacity={1} fill="url(#colorOnline)" />
+                <Area
+                  type="monotone"
+                  dataKey="expenses"
+                  name="EXPENSES"
+                  stroke="#F43F5E"
+                  strokeWidth={2.5}
+                  fillOpacity={1}
+                  fill="url(#colorExpenses)"
+                  dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#F43F5E', fill: '#fff' }}
+                  activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#F43F5E' }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="netAmount"
+                  name="NET AMOUNT"
+                  stroke="#6366F1"
+                  strokeWidth={2.5}
+                  strokeDasharray="4 4"
+                  fillOpacity={1}
+                  fill="url(#colorNet)"
+                  dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#6366F1', fill: '#fff' }}
+                  activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#6366F1' }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="onlineCollections"
+                  name="ONLINE COLLECTIONS"
+                  stroke="#06B6D4"
+                  strokeWidth={2.5}
+                  fillOpacity={1}
+                  fill="url(#colorOnline)"
+                  dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#06B6D4', fill: '#fff' }}
+                  activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#06B6D4' }}
+                />
               </AreaChart>
             </ResponsiveContainer>
           </div>
