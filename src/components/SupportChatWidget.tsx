@@ -327,8 +327,8 @@ export default function SupportChatWidget() {
 
   return (
     <>
-      {/* 1. FLOATING ACTION BUTTON (Icon only; green notification dot only visible when new/unread messages exist) */}
-      {!isOpen && isDashboard && (
+      {/* 1. FLOATING ACTION BUTTON (Visible only for non-admin merchants; hidden for Admin) */}
+      {!isOpen && isDashboard && !isAdmin && (
         <button
           type="button"
           onClick={() => {

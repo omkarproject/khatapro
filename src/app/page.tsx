@@ -300,17 +300,17 @@ export default function DashboardPage() {
     };
   }, [customers, transactions, expenses, savingsGoals, products, invoices]);
 
-  // Cash flow chart data - dynamically calculated from actual transactions & expenses
+  // Cash flow chart data - dynamically calculated for KHATA, EXPENSES, NET AMOUNT, ONLINE COLLECTIONS
   const cashFlowData = useMemo(() => {
     const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const dayMap: Record<string, { income: number; expense: number; collection: number }> = {
-      Mon: { income: 0, expense: 0, collection: 0 },
-      Tue: { income: 0, expense: 0, collection: 0 },
-      Wed: { income: 0, expense: 0, collection: 0 },
-      Thu: { income: 0, expense: 0, collection: 0 },
-      Fri: { income: 0, expense: 0, collection: 0 },
-      Sat: { income: 0, expense: 0, collection: 0 },
-      Sun: { income: 0, expense: 0, collection: 0 },
+    const dayMap: Record<string, { khata: number; expenses: number; invoices: number; onlineCollections: number }> = {
+      Mon: { khata: 0, expenses: 0, invoices: 0, onlineCollections: 0 },
+      Tue: { khata: 0, expenses: 0, invoices: 0, onlineCollections: 0 },
+      Wed: { khata: 0, expenses: 0, invoices: 0, onlineCollections: 0 },
+      Thu: { khata: 0, expenses: 0, invoices: 0, onlineCollections: 0 },
+      Fri: { khata: 0, expenses: 0, invoices: 0, onlineCollections: 0 },
+      Sat: { khata: 0, expenses: 0, invoices: 0, onlineCollections: 0 },
+      Sun: { khata: 0, expenses: 0, invoices: 0, onlineCollections: 0 },
     };
 
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -322,10 +322,29 @@ export default function DashboardPage() {
         if (!isNaN(d.getTime())) {
           const day = dayNames[d.getDay()];
           if (dayMap[day]) {
-            if (t.type === 'collection' || (t.type === 'debit' && t.category === 'Payment Received')) {
-              dayMap[day].collection += Number(t.amount) || 0;
-            } else if (t.type === 'income') {
-              dayMap[day].income += Number(t.amount) || 0;
+            const amt = Number(t.amount) || 0;
+            // Khata: collections + payments received + incomes
+            if (
+              t.type === 'collection' ||
+              t.type === 'income' ||
+              (t.type === 'debit' && (t.category === 'Payment Received' || t.note?.toLowerCase().includes('payment received')))
+            ) {
+              dayMap[day].khata += amt;
+            }
+
+            // Online Collections: transactions from Payment Collection Hub or payment link
+            if (
+              t.type === 'collection' ||
+              t.category === 'Online Payment Collection' ||
+              t.category === 'UPI Direct Collection' ||
+              t.category === 'Cashfree Payment Gateway' ||
+              t.category === 'Cashfree PG' ||
+              t.category === 'Razorpay Payment Gateway' ||
+              t.category === 'Razorpay PG' ||
+              (t.referenceNo && (t.referenceNo.startsWith('CF_') || t.referenceNo.startsWith('pay_') || t.referenceNo.startsWith('UPI-') || t.referenceNo.startsWith('rzp_'))) ||
+              (t.note && (t.note.toLowerCase().includes('collected via') || t.note.toLowerCase().includes('online payment')))
+            ) {
+              dayMap[day].onlineCollections += amt;
             }
           }
         }
@@ -338,24 +357,45 @@ export default function DashboardPage() {
         if (!isNaN(d.getTime())) {
           const day = dayNames[d.getDay()];
           if (dayMap[day]) {
-            dayMap[day].expense += Number(e.amount) || 0;
+            dayMap[day].expenses += Number(e.amount) || 0;
           }
         }
       } catch {}
     });
 
-    return weekDays.map(day => ({
-      day,
-      income: dayMap[day].income,
-      expense: dayMap[day].expense,
-      collection: dayMap[day].collection,
-    }));
-  }, [transactions, expenses]);
+    invoices.forEach(inv => {
+      try {
+        const d = new Date(inv.issueDate || inv.createdAt || '');
+        if (!isNaN(d.getTime())) {
+          const day = dayNames[d.getDay()];
+          if (dayMap[day]) {
+            dayMap[day].invoices += Number(inv.total) || 0;
+          }
+        }
+      } catch {}
+    });
+
+    return weekDays.map(day => {
+      const k = dayMap[day].khata;
+      const exp = dayMap[day].expenses;
+      const inv = dayMap[day].invoices;
+      const oc = dayMap[day].onlineCollections;
+      const net = k - exp - inv;
+
+      return {
+        day,
+        khata: k,
+        expenses: exp,
+        netAmount: net,
+        onlineCollections: oc,
+      };
+    });
+  }, [transactions, expenses, invoices]);
 
   // Max cashflow value to properly format Y-Axis ticks
   const maxCashFlowVal = useMemo(() => {
     return Math.max(
-      ...cashFlowData.map(d => Math.max(d.income, d.expense, d.collection)),
+      ...cashFlowData.map(d => Math.max(d.khata, d.expenses, Math.abs(d.netAmount), d.onlineCollections)),
       0
     );
   }, [cashFlowData]);
@@ -671,25 +711,22 @@ export default function DashboardPage() {
         <div className="lg:col-span-8 glass-card p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
             <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                {t('cashFlowVelocity', 'Cash Flow Velocity')}
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400">
-                  {t('livePulse', 'Live Trend')}
-                </span>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                Cash Flow Velocity
               </h3>
-              <p className="text-[11px] text-slate-400">
-                {t('cashFlowVelocity', 'Daily comparison of collections, general sales, and operational expenses')}
-              </p>
             </div>
-            <div className="flex flex-wrap items-center gap-3 text-xs font-semibold">
-              <span className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
-                <span className="w-2 h-2 rounded-full bg-indigo-600" /> {t('collection', 'Collection')}
-              </span>
-              <span className="flex items-center gap-1.5 text-cyan-500">
-                <span className="w-2 h-2 rounded-full bg-cyan-500" /> {t('income', 'Income')}
+            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 text-xs font-bold">
+              <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" /> KHATA
               </span>
               <span className="flex items-center gap-1.5 text-rose-500">
-                <span className="w-2 h-2 rounded-full bg-rose-500" /> {t('expense', 'Expense')}
+                <span className="w-2 h-2 rounded-full bg-rose-500" /> EXPENSES
+              </span>
+              <span className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
+                <span className="w-2 h-2 rounded-full bg-indigo-500" /> NET AMOUNT
+              </span>
+              <span className="flex items-center gap-1.5 text-cyan-600 dark:text-cyan-400">
+                <span className="w-2 h-2 rounded-full bg-cyan-500" /> ONLINE COLLECTIONS
               </span>
             </div>
           </div>
@@ -698,12 +735,20 @@ export default function DashboardPage() {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={cashFlowData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="colorCollection" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#4F46E5" stopOpacity={0.0}/>
+                  <linearGradient id="colorKhata" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.35}/>
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0.0}/>
                   </linearGradient>
-                  <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.3}/>
+                  <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F43F5E" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#F43F5E" stopOpacity={0.0}/>
+                  </linearGradient>
+                  <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366F1" stopOpacity={0.35}/>
+                    <stop offset="95%" stopColor="#6366F1" stopOpacity={0.0}/>
+                  </linearGradient>
+                  <linearGradient id="colorOnline" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.35}/>
                     <stop offset="95%" stopColor="#06B6D4" stopOpacity={0.0}/>
                   </linearGradient>
                 </defs>
@@ -723,16 +768,19 @@ export default function DashboardPage() {
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
                     borderRadius: '16px',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
                     color: '#fff',
                     fontSize: '12px',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)',
                   }}
-                  formatter={(value: any) => [`₹${Number(value).toLocaleString('en-IN')}`, '']}
+                  formatter={(value: any, name: any) => [`₹${Number(value || 0).toLocaleString('en-IN')}`, name]}
                 />
-                <Area type="monotone" dataKey="collection" stroke="#4F46E5" strokeWidth={3} fillOpacity={1} fill="url(#colorCollection)" />
-                <Area type="monotone" dataKey="income" stroke="#06B6D4" strokeWidth={2} fillOpacity={1} fill="url(#colorIncome)" />
+                <Area type="monotone" dataKey="khata" name="KHATA" stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorKhata)" />
+                <Area type="monotone" dataKey="expenses" name="EXPENSES" stroke="#F43F5E" strokeWidth={2.5} fillOpacity={1} fill="url(#colorExpenses)" />
+                <Area type="monotone" dataKey="netAmount" name="NET AMOUNT" stroke="#6366F1" strokeWidth={2.5} fillOpacity={1} fill="url(#colorNet)" />
+                <Area type="monotone" dataKey="onlineCollections" name="ONLINE COLLECTIONS" stroke="#06B6D4" strokeWidth={2.5} fillOpacity={1} fill="url(#colorOnline)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
