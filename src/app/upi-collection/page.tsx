@@ -1066,19 +1066,19 @@ export default function UpiCollectionPage() {
               </div>
 
               {/* Standee Card */}
-              <div className="w-full max-w-[280px] sm:max-w-xs bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xl border border-slate-200/80 my-2 sm:my-3 flex flex-col items-center">
-                <div className="text-sm font-black text-slate-900 truncate max-w-[240px]">
+              <div className="w-full max-w-[240px] sm:max-w-xs bg-white rounded-2xl sm:rounded-3xl p-3 sm:p-5 shadow-xl border border-slate-200/80 my-2 sm:my-3 flex flex-col items-center">
+                <div className="text-xs sm:text-sm font-black text-slate-900 truncate max-w-[220px]">
                   {payeeName}
                 </div>
-                <div className="text-[11px] font-mono text-slate-500 truncate max-w-[240px] mt-0.5">
+                <div className="text-[10px] sm:text-[11px] font-mono text-slate-500 truncate max-w-[220px] mt-0.5">
                   {upiId}
                 </div>
 
-                <div className="my-3 sm:my-4 p-2 bg-white rounded-2xl border border-slate-100 shadow-inner flex items-center justify-center relative">
+                <div className="my-2.5 sm:my-4 p-1.5 sm:p-2 bg-white rounded-2xl border border-slate-100 shadow-inner flex items-center justify-center relative">
                   <img
                     src={activeQrDisplay}
                     alt="Merchant UPI QR"
-                    className="w-44 h-44 sm:w-52 sm:h-52 object-contain rounded-xl"
+                    className="w-36 h-36 sm:w-52 sm:h-52 object-contain rounded-xl"
                   />
                   {/* Center Business / User Profile Logo */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

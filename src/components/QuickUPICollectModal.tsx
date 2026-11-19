@@ -1,38 +1,33 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { formatINR, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
+import { downloadBrandedLockedQr } from '@/lib/qrCardGenerator';
+import { isGatewayActive } from '@/types';
 import {
   X,
   QrCode,
-  Upload,
   Check,
   Copy,
   Share2,
-  Save,
-  Sparkles,
-  Smartphone,
-  ShieldCheck,
-  CheckCircle2,
-  CreditCard,
-  Settings as SettingsIcon,
-  Loader2,
-  AlertCircle,
   Lock,
-  Zap,
+  Download,
+  RotateCcw,
   History,
-  Search,
-  Calendar,
-  Filter,
-  ArrowUpDown,
-  RefreshCw,
-  Eye,
-  FileText,
+  CreditCard,
+  ShieldCheck,
+  Smartphone,
+  AlertCircle,
+  Zap,
+  Loader2,
+  CheckCircle2,
   Clock,
   ArrowDownLeft,
-  ArrowUpRight
+  ArrowUpRight,
+  Eye,
+  RefreshCw,
+  Search,
 } from 'lucide-react';
 
 export default function QuickUPICollectModal() {
@@ -40,7 +35,6 @@ export default function QuickUPICollectModal() {
     settings,
     profile,
     currentUser,
-    saveDefaultUpiAndQr,
     isCollectModalOpen,
     closeCollectModal,
     collectModalData,
@@ -49,25 +43,40 @@ export default function QuickUPICollectModal() {
     addToast,
     transactions,
     openPaymentDetail,
-    t,
   } = useApp();
 
   const paymentSettings = settings.paymentSettings;
+  const activeMode = paymentSettings.collectionMode || 'direct_upi';
 
-  // Active gateway tab - defaults directly to merchant's configured active payment mode
+  const isDirectUpiActive = isGatewayActive('direct_upi', paymentSettings);
+  const isCashfreeActive = isGatewayActive('cashfree', paymentSettings);
+  const isRazorpayActive = isGatewayActive('razorpay', paymentSettings);
+  const isUpiGatewayActive = isGatewayActive('upi_gateway', paymentSettings);
+
   const [activeTab, setActiveTab] = useState<'direct_upi' | 'cashfree' | 'razorpay' | 'upi_gateway' | 'history'>(() => {
-    return ((collectModalData as any)?.method) || paymentSettings.collectionMode || 'direct_upi';
+    const modalMethod = (collectModalData as any)?.method;
+    if (modalMethod) return modalMethod;
+    if (isGatewayActive(activeMode, paymentSettings)) return activeMode;
+    if (isDirectUpiActive) return 'direct_upi';
+    if (isCashfreeActive) return 'cashfree';
+    if (isRazorpayActive) return 'razorpay';
+    if (isUpiGatewayActive) return 'upi_gateway';
+    return 'direct_upi';
   });
+
   const [serverCfConfigured, setServerCfConfigured] = useState(false);
 
   // Form State
   const [upiId, setUpiId] = useState(paymentSettings.upiId || '');
-  const [payeeName, setPayeeName] = useState(paymentSettings.payeeName || settings.businessName || profile.businessName || currentUser?.businessName || '');
+  const [payeeName, setPayeeName] = useState(
+    paymentSettings.payeeName || settings.businessName || profile.businessName || currentUser?.businessName || 'Business'
+  );
   const [amount, setAmount] = useState<string>('');
-  const [note, setNote] = useState<string>('');
+  const [note, setNote] = useState<string>('Payment settlement');
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
   const [customQrUrl, setCustomQrUrl] = useState<string | undefined>(paymentSettings.customQrUrl);
-  const [isDefaultSaved, setIsDefaultSaved] = useState<boolean>(paymentSettings.isDefaultQrSaved ?? true);
+
+  const [isQrGenerated, setIsQrGenerated] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [recordedSuccess, setRecordedSuccess] = useState(false);
@@ -75,106 +84,15 @@ export default function QuickUPICollectModal() {
   const [isGatewayLoading, setIsGatewayLoading] = useState(false);
   const [gatewayError, setGatewayError] = useState('');
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   // History & Filter States
   const [historySearch, setHistorySearch] = useState('');
   const [historyDateRange, setHistoryDateRange] = useState<'all' | 'today' | 'yesterday' | '7days' | '30days'>('all');
   const [historyGateway, setHistoryGateway] = useState<'all' | 'cashfree' | 'upi' | 'razorpay' | 'cash' | 'bank'>('all');
-  const [historyCustomer, setHistoryCustomer] = useState<'all' | string>('all');
-  const [historyType, setHistoryType] = useState<'all' | 'collection' | 'payment'>('all');
 
-  // Filtered transactions for History view
-  const filteredTransactions = transactions.filter((txn) => {
-    // Exclude deleted transactions
-    if (txn.isDeleted || txn.status === 'deleted') return false;
-
-    // 1. Search Query
-    if (historySearch.trim()) {
-      const q = historySearch.toLowerCase().trim();
-      const matchName = (txn.customerName || '').toLowerCase().includes(q);
-      const matchRef = (txn.referenceNo || '').toLowerCase().includes(q);
-      const matchNote = (txn.note || '').toLowerCase().includes(q);
-      const matchCategory = (txn.category || '').toLowerCase().includes(q);
-      const matchMode = (txn.paymentMode || '').toLowerCase().includes(q);
-      const matchAmt = txn.amount.toString().includes(q);
-      if (!matchName && !matchRef && !matchNote && !matchCategory && !matchMode && !matchAmt) {
-        return false;
-      }
-    }
-
-    // 2. Date Filter
-    if (historyDateRange !== 'all') {
-      const txnDate = new Date(txn.date);
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-      if (historyDateRange === 'today') {
-        if (txnDate < todayStart) return false;
-      } else if (historyDateRange === 'yesterday') {
-        const yestStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
-        if (txnDate < yestStart || txnDate >= todayStart) return false;
-      } else if (historyDateRange === '7days') {
-        const sevenDaysAgo = new Date(todayStart.getTime() - 7 * 24 * 60 * 1000);
-        if (txnDate < sevenDaysAgo) return false;
-      } else if (historyDateRange === '30days') {
-        const thirtyDaysAgo = new Date(todayStart.getTime() - 30 * 24 * 60 * 1000);
-        if (txnDate < thirtyDaysAgo) return false;
-      }
-    }
-
-    // 3. Gateway / Mode Filter
-    if (historyGateway !== 'all') {
-      const mode = (txn.paymentMode || '').toLowerCase();
-      const cat = (txn.category || '').toLowerCase();
-      if (historyGateway === 'cashfree') {
-        if (!cat.includes('cashfree') && !mode.includes('cashfree')) return false;
-      } else if (historyGateway === 'upi') {
-        if (!cat.includes('upi') && !mode.includes('upi')) return false;
-      } else if (historyGateway === 'razorpay') {
-        if (!cat.includes('razorpay') && !mode.includes('razorpay')) return false;
-      } else if (historyGateway === 'cash') {
-        if (!cat.includes('cash') && !mode.includes('cash')) return false;
-      } else if (historyGateway === 'bank') {
-        if (!cat.includes('bank') && !mode.includes('bank') && !cat.includes('neft') && !cat.includes('rtgs')) return false;
-      }
-    }
-
-    // 4. Customer Filter
-    if (historyCustomer !== 'all') {
-      if (txn.customerId !== historyCustomer) return false;
-    }
-
-    // 5. Type Filter
-    if (historyType !== 'all') {
-      if (historyType === 'collection') {
-        if (txn.type !== 'collection' && txn.type !== 'credit' && txn.type !== 'income') return false;
-      } else if (historyType === 'payment') {
-        if (txn.type !== 'payment' && txn.type !== 'debit' && txn.type !== 'expense') return false;
-      }
-    }
-
-    return true;
-  });
-
-  const totalFilteredCollection = filteredTransactions
-    .filter((t) => t.type === 'collection' || t.type === 'credit' || t.type === 'income')
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const totalFilteredCount = filteredTransactions.length;
-
-
-  // Check which methods are configured/active
-  const isCashfreeConfigured = !!(
-    (paymentSettings.cashfreeAppId?.trim() && paymentSettings.cashfreeSecretKey?.trim()) ||
-    serverCfConfigured
-  );
-  const isRazorpayConfigured = !!(
-    paymentSettings.razorpayKeyId?.trim() && paymentSettings.razorpayKeySecret?.trim()
-  );
-  const isUpiGatewayConfigured = !!(
-    paymentSettings.upiGatewayKey?.trim() && paymentSettings.upiGatewaySecret?.trim()
-  );
+  // Center logo & branding
+  const merchantLogo = profile?.logo || profile?.avatarUrl || settings.businessLogo || '';
+  const brandDisplayName = settings.websiteName || 'SmartKhata';
+  const brandLogoUrl = settings.websiteLogo || '';
 
   // Check server Cashfree config on mount
   useEffect(() => {
@@ -188,17 +106,29 @@ export default function QuickUPICollectModal() {
       .catch(() => {});
   }, []);
 
-  // Sync state when modal opens or settings change
+  // Sync state when modal opens
   useEffect(() => {
     if (isCollectModalOpen) {
-      const preferredMode = ((collectModalData as any)?.method) || paymentSettings.collectionMode || 'direct_upi';
-      setActiveTab(preferredMode);
+      const preferredMode = ((collectModalData as any)?.method) || activeMode;
+      if (preferredMode && isGatewayActive(preferredMode, paymentSettings)) {
+        setActiveTab(preferredMode);
+      } else if (isDirectUpiActive) {
+        setActiveTab('direct_upi');
+      } else if (isCashfreeActive) {
+        setActiveTab('cashfree');
+      } else if (isRazorpayActive) {
+        setActiveTab('razorpay');
+      } else {
+        setActiveTab('direct_upi');
+      }
+
       setUpiId(paymentSettings.upiId || '');
-      setPayeeName(paymentSettings.payeeName || settings.businessName || profile.businessName || currentUser?.businessName || '');
+      setPayeeName(paymentSettings.payeeName || settings.businessName || profile.businessName || currentUser?.businessName || 'Business');
       setCustomQrUrl(paymentSettings.customQrUrl);
       setRecordedSuccess(false);
       setGatewayError('');
       setIsGatewayLoading(false);
+      setIsQrGenerated(false);
 
       if (collectModalData.amount) {
         setAmount(collectModalData.amount.toString());
@@ -209,7 +139,7 @@ export default function QuickUPICollectModal() {
       if (collectModalData.note) {
         setNote(collectModalData.note);
       } else {
-        setNote('Payment for goods & services');
+        setNote('Payment settlement');
       }
 
       if (collectModalData.customerId) {
@@ -218,49 +148,88 @@ export default function QuickUPICollectModal() {
         setSelectedCustomer('');
       }
     }
-  }, [isCollectModalOpen, paymentSettings, profile, collectModalData]);
+  }, [isCollectModalOpen, paymentSettings, profile, collectModalData, activeMode, isDirectUpiActive, isCashfreeActive, isRazorpayActive]);
 
   if (!isCollectModalOpen) return null;
 
   const numAmount = parseFloat(amount) || 0;
   const currentCust = customers.find((c) => c.id === selectedCustomer);
-  const customerDisplayName = currentCust?.name || collectModalData.customerName || 'Valued Customer';
+  const customerDisplayName = currentCust?.name || collectModalData.customerName || 'Customer';
   const customerPhone = currentCust?.phone || '';
 
-  const currentUpiUri = buildUpiUri(upiId, payeeName, numAmount > 0 ? numAmount : undefined, note);
-  const displayQr = customQrUrl && customQrUrl.trim().length > 0 ? customQrUrl : getQrCodeUrl(currentUpiUri);
+  // Amount-locked dynamic QR logic
+  const isAmountLocked = isQrGenerated && numAmount > 0;
+  const currentUpiUri = buildUpiUri(
+    upiId,
+    payeeName,
+    isAmountLocked ? numAmount : undefined,
+    isAmountLocked ? (note || undefined) : undefined
+  );
 
-  // Handle local QR code image upload
-  const handleQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        addToast('File too large', 'Please upload a QR image under 5MB.', 'error');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64Url = event.target?.result as string;
-        setCustomQrUrl(base64Url);
-        addToast('QR Image Uploaded', 'Click "Save as Default" to keep this QR for future collections.', 'info');
-      };
-      reader.readAsDataURL(file);
-    }
+  const displayQr = isAmountLocked
+    ? getQrCodeUrl(currentUpiUri, 400)
+    : (customQrUrl && customQrUrl.trim().length > 0 ? customQrUrl : getQrCodeUrl(currentUpiUri, 400));
+
+  // Quick Amount chips
+  const quickAmounts = [100, 500, 1000, 2000, 5000];
+  const handleAddQuickAmount = (val: number) => {
+    const current = parseFloat(amount) || 0;
+    const next = current + val;
+    setAmount(next.toString());
+    setIsQrGenerated(false);
+  };
+  const handleClearAmount = () => {
+    setAmount('');
+    setIsQrGenerated(false);
   };
 
-  // Handle Save as Default
-  const handleSaveAsDefault = () => {
-    if (!upiId.includes('@')) {
-      addToast('Invalid UPI ID', 'Please enter a valid UPI ID (e.g. yourname@okhdfcbank)', 'error');
+  // Generate locked QR
+  const handleGenerateLockedQr = () => {
+    if (numAmount <= 0) {
+      addToast('Amount Required', 'Please enter a valid amount to generate an amount-locked QR.', 'warning');
       return;
     }
-    saveDefaultUpiAndQr({
-      upiId,
-      payeeName,
-      customQrUrl,
-    });
-    setIsDefaultSaved(true);
-    addToast('Default Saved', 'Your Shop UPI & QR configuration has been saved.', 'success');
+    if (!upiId || !upiId.includes('@')) {
+      addToast('UPI ID Missing', 'Please configure your UPI ID in Settings first.', 'error');
+      return;
+    }
+    setIsQrGenerated(true);
+    addToast('Amount-Locked QR Active! 🔒', `QR is locked to ${formatINR(numAmount)}.`, 'success');
+  };
+
+  const handleResetLockedQr = () => {
+    setIsQrGenerated(false);
+  };
+
+  // Download branded locked QR card
+  const handleDownloadActiveQr = async () => {
+    try {
+      addToast('Preparing Branded QR Card... 🎨', 'Generating high-definition stylish standee card...', 'info');
+      await downloadBrandedLockedQr({
+        upiUri: currentUpiUri,
+        amount: isAmountLocked ? numAmount : 0,
+        businessName: settings.businessName || payeeName || profile?.businessName || 'Business Payment',
+        payeeName: payeeName || settings.businessName,
+        upiId: upiId,
+        customerName: currentCust?.name,
+        note: note,
+        logoUrl: merchantLogo,
+        brandName: brandDisplayName,
+        brandLogoUrl: brandLogoUrl,
+        websiteUrl: typeof window !== 'undefined' ? window.location.host : 'smartkhatapro.in',
+      });
+      addToast('QR Standee Downloaded! 📥', 'High-resolution branded QR card saved to downloads.', 'success');
+    } catch (err) {
+      console.error('Failed generating branded QR card:', err);
+      const a = document.createElement('a');
+      a.href = displayQr;
+      a.download = `${(payeeName || 'Payment').replace(/[^a-zA-Z0-9]/g, '_')}_${isAmountLocked ? `INR_${numAmount}` : 'UPI'}_QR.png`;
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      addToast('QR Downloaded', 'QR code image downloaded to your device.', 'success');
+    }
   };
 
   // Copy UPI
@@ -271,7 +240,7 @@ export default function QuickUPICollectModal() {
     addToast('Copied to clipboard', `UPI ID ${upiId} copied.`, 'info');
   };
 
-  // Generate Online Payment Link
+  // Payment Link helper
   const getPaymentLink = (gatewayName: 'cashfree' | 'razorpay' | 'upi') => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const orderRef = `col_${Date.now()}`;
@@ -285,7 +254,6 @@ export default function QuickUPICollectModal() {
     return `${origin}/pay/${orderRef}?${params.toString()}`;
   };
 
-  // Copy Payment Link
   const handleCopyPaymentLink = (gw: 'cashfree' | 'razorpay' | 'upi') => {
     const link = getPaymentLink(gw);
     navigator.clipboard.writeText(link);
@@ -294,30 +262,28 @@ export default function QuickUPICollectModal() {
     addToast('Link Copied', 'Customer payment link copied to clipboard.', 'success');
   };
 
-  // WhatsApp Share for Default UPI
+  // WhatsApp Shares
   const handleShareWhatsAppUpi = () => {
     const recipient = customerPhone.replace(/[^0-9]/g, '');
     const shareMessage = `Dear ${customerDisplayName},\n\nPlease pay ${numAmount > 0 ? `₹${numAmount.toLocaleString('en-IN')}` : 'your balance'} to *${payeeName}* via UPI.\n\n*UPI ID:* ${upiId}\n*Note:* ${note}\n\n*Scan & Pay UPI Link:*\n${currentUpiUri}\n\nThank you,\n${settings.businessName}`;
     openWhatsApp(recipient, shareMessage);
   };
 
-  // WhatsApp Share for Cashfree
   const handleShareWhatsAppCashfree = () => {
     const recipient = customerPhone.replace(/[^0-9]/g, '');
     const link = getPaymentLink('cashfree');
-    const shareMessage = `Dear ${customerDisplayName},\n\nPlease complete your payment of *${numAmount > 0 ? `₹${numAmount.toLocaleString('en-IN')}` : ''}* securely to *${settings.businessName}* via Cashfree Payment Gateway (UPI, Debit/Credit Card, NetBanking):\n\n👉 *Pay Online Link:*\n${link}\n\n*Note:* ${note}\n\nThank you!`;
+    const shareMessage = `Dear ${customerDisplayName},\n\nPlease complete your payment of *${numAmount > 0 ? `₹${numAmount.toLocaleString('en-IN')}` : ''}* securely to *${settings.businessName}* via Cashfree:\n\n👉 *Pay Online Link:*\n${link}\n\n*Note:* ${note}\n\nThank you!`;
     openWhatsApp(recipient, shareMessage);
   };
 
-  // WhatsApp Share for Razorpay
   const handleShareWhatsAppRazorpay = () => {
     const recipient = customerPhone.replace(/[^0-9]/g, '');
     const link = getPaymentLink('razorpay');
-    const shareMessage = `Dear ${customerDisplayName},\n\nPlease complete your payment of *${numAmount > 0 ? `₹${numAmount.toLocaleString('en-IN')}` : ''}* securely to *${settings.businessName}* via Razorpay (UPI, Cards, NetBanking):\n\n👉 *Pay Online Link:*\n${link}\n\n*Note:* ${note}\n\nThank you!`;
+    const shareMessage = `Dear ${customerDisplayName},\n\nPlease complete your payment of *${numAmount > 0 ? `₹${numAmount.toLocaleString('en-IN')}` : ''}* securely to *${settings.businessName}* via Razorpay:\n\n👉 *Pay Online Link:*\n${link}\n\n*Note:* ${note}\n\nThank you!`;
     openWhatsApp(recipient, shareMessage);
   };
 
-  // Load Cashfree Checkout Script
+  // Load SDKs
   const loadCashfreeScript = (): Promise<boolean> => {
     return new Promise((resolve) => {
       if (typeof window === 'undefined') return resolve(false);
@@ -331,7 +297,6 @@ export default function QuickUPICollectModal() {
     });
   };
 
-  // Load Razorpay Checkout Script
   const loadRazorpayScript = (): Promise<boolean> => {
     return new Promise((resolve) => {
       if (typeof window === 'undefined') return resolve(false);
@@ -345,7 +310,7 @@ export default function QuickUPICollectModal() {
     });
   };
 
-  // Execute Cashfree In-Modal Popup Checkout
+  // Execute Cashfree Checkout
   const handleExecuteCashfreeCheckout = async () => {
     if (numAmount <= 0) {
       addToast('Amount Required', 'Please enter an amount to collect.', 'warning');
@@ -377,14 +342,13 @@ export default function QuickUPICollectModal() {
       });
 
       const data = await res.json();
-
       if (!res.ok || !data.paymentSessionId) {
         throw new Error(data.error || 'Failed to initialize Cashfree checkout session.');
       }
 
       const sdkLoaded = await loadCashfreeScript();
       if (!sdkLoaded || !(window as any).Cashfree) {
-        throw new Error('Could not load Cashfree Checkout SDK. Please check your internet connection.');
+        throw new Error('Could not load Cashfree SDK.');
       }
 
       const cashfree = new (window as any).Cashfree({ mode: env === 'production' ? 'production' : 'sandbox' });
@@ -395,7 +359,7 @@ export default function QuickUPICollectModal() {
         redirectTarget: '_modal',
       }).then(async (result: any) => {
         if (result.error) {
-          setGatewayError(result.error.message || 'Payment was cancelled or failed.');
+          setGatewayError(result.error.message || 'Payment cancelled or failed.');
           return;
         }
 
@@ -451,7 +415,7 @@ export default function QuickUPICollectModal() {
     }
   };
 
-  // Execute Razorpay In-Modal Popup Checkout
+  // Execute Razorpay Checkout
   const handleExecuteRazorpayCheckout = async () => {
     if (numAmount <= 0) {
       addToast('Amount Required', 'Please enter an amount to collect.', 'warning');
@@ -464,7 +428,7 @@ export default function QuickUPICollectModal() {
     try {
       const sdkLoaded = await loadRazorpayScript();
       if (!sdkLoaded || !(window as any).Razorpay) {
-        throw new Error('Razorpay Checkout SDK could not be loaded.');
+        throw new Error('Razorpay SDK could not be loaded.');
       }
 
       const options = {
@@ -521,12 +485,13 @@ export default function QuickUPICollectModal() {
     }
   };
 
-  // Mark as Collected manually in Ledger (for Default UPI)
+  // Mark as Collected in Ledger
   const handleRecordCollection = () => {
     if (numAmount <= 0) {
       addToast('Amount Required', 'Please enter an amount to record collection.', 'warning');
       return;
     }
+    const cat = activeTab === 'cashfree' ? 'Cashfree PG' : activeTab === 'razorpay' ? 'Razorpay PG' : 'UPI Direct Collection';
     addTransaction({
       id: `txn_${Date.now()}`,
       type: 'collection',
@@ -534,7 +499,7 @@ export default function QuickUPICollectModal() {
       date: new Date().toISOString(),
       customerId: currentCust?.id,
       customerName: customerDisplayName,
-      category: 'UPI Direct Collection',
+      category: cat,
       paymentMode: 'upi',
       referenceNo: `UPI-${Math.floor(100000000 + Math.random() * 900000000)}`,
       note: note || 'Collected via Shop UPI QR',
@@ -550,42 +515,82 @@ export default function QuickUPICollectModal() {
     }, 1500);
   };
 
+  // Filtered transactions for History view
+  const filteredTransactions = transactions.filter((txn) => {
+    if (txn.isDeleted || txn.status === 'deleted') return false;
+
+    if (historySearch.trim()) {
+      const q = historySearch.toLowerCase().trim();
+      const matchName = (txn.customerName || '').toLowerCase().includes(q);
+      const matchRef = (txn.referenceNo || '').toLowerCase().includes(q);
+      const matchNote = (txn.note || '').toLowerCase().includes(q);
+      const matchMode = (txn.paymentMode || '').toLowerCase().includes(q);
+      const matchAmt = txn.amount.toString().includes(q);
+      if (!matchName && !matchRef && !matchNote && !matchMode && !matchAmt) return false;
+    }
+
+    if (historyDateRange !== 'all') {
+      const txnDate = new Date(txn.date);
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      if (historyDateRange === 'today') {
+        if (txnDate < todayStart) return false;
+      } else if (historyDateRange === 'yesterday') {
+        const yestStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
+        if (txnDate < yestStart || txnDate >= todayStart) return false;
+      } else if (historyDateRange === '7days') {
+        const sevenDaysAgo = new Date(todayStart.getTime() - 7 * 24 * 60 * 1000);
+        if (txnDate < sevenDaysAgo) return false;
+      } else if (historyDateRange === '30days') {
+        const thirtyDaysAgo = new Date(todayStart.getTime() - 30 * 24 * 60 * 1000);
+        if (txnDate < thirtyDaysAgo) return false;
+      }
+    }
+
+    return true;
+  });
+
+  const totalFilteredCollection = filteredTransactions
+    .filter((t) => t.type === 'collection' || t.type === 'credit' || t.type === 'income')
+    .reduce((sum, t) => sum + t.amount, 0);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden flex flex-col max-h-[94vh]">
         
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl fintech-gradient-primary flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
-              <QrCode className="w-5 h-5" />
+        {/* Header - Compact, Neat, Clean */}
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl fintech-gradient-primary flex items-center justify-center text-white shadow-sm shrink-0">
+              <QrCode className="w-4 h-4" />
             </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                Collect Payment
-                <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                  Live &amp; Secure
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white truncate">
+                  Collect Payment
+                </h2>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
+                  Active Mode
                 </span>
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Collect instantly via UPI QR, Cashfree PG, or other active payment channels
-              </p>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={() => setActiveTab(activeTab === 'history' ? 'direct_upi' : 'history')}
               className={`relative p-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'history'
-                  ? 'bg-amber-600 text-white shadow-md shadow-amber-500/25'
-                  : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/60'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
               }`}
               title="Transaction History"
             >
               <History className="w-4 h-4" />
               {transactions.length > 0 && (
-                <span className="absolute -top-1 -right-1 text-[9px] min-w-4 h-4 px-1 rounded-full bg-amber-600 text-white font-mono font-bold flex items-center justify-center border border-white dark:border-slate-900 shadow-sm">
+                <span className="absolute -top-1 -right-1 text-[9px] min-w-4 h-4 px-1 rounded-full bg-amber-600 text-white font-mono font-bold flex items-center justify-center border border-white dark:border-slate-900">
                   {transactions.length}
                 </span>
               )}
@@ -594,932 +599,758 @@ export default function QuickUPICollectModal() {
               onClick={closeCollectModal}
               className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Dynamic Active Gateways Tab Bar */}
-        <div className="px-4 sm:px-6 pt-3 pb-1 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/30 dark:bg-slate-900/30 flex items-center gap-2 overflow-x-auto scrollbar-none">
-          
+        {/* Dynamic Mode Tab Bar */}
+        <div className="px-3 sm:px-5 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
           {/* 1. Default UPI & Shop QR */}
           <button
             type="button"
             onClick={() => setActiveTab('direct_upi')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'direct_upi'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
             }`}
           >
             <QrCode className="w-3.5 h-3.5" />
             <span>Default UPI &amp; QR</span>
-            {(!paymentSettings.collectionMode || paymentSettings.collectionMode === 'direct_upi') ? (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-400/20 text-emerald-300 flex items-center gap-1 border border-emerald-400/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active Mode
-              </span>
-            ) : (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
-                activeTab === 'direct_upi'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
-              }`}>
-                0% Fee
-              </span>
+            {activeMode === 'direct_upi' && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
             )}
           </button>
 
           {/* 2. Cashfree Payment Gateway */}
-          {(isCashfreeConfigured || paymentSettings.collectionMode === 'cashfree') && (
+          {(isCashfreeActive || serverCfConfigured) && (
             <button
               type="button"
               onClick={() => setActiveTab('cashfree')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'cashfree'
-                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
               }`}
             >
-              <CreditCard className="w-3.5 h-3.5 text-purple-300" />
+              <CreditCard className="w-3.5 h-3.5" />
               <span>Cashfree PG</span>
-              {paymentSettings.collectionMode === 'cashfree' ? (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-400/20 text-emerald-300 flex items-center gap-1 border border-emerald-400/30">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active Mode
-                </span>
-              ) : (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
-                  activeTab === 'cashfree' ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
-                }`}>
-                  Gateway
-                </span>
+              {activeMode === 'cashfree' && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
               )}
             </button>
           )}
 
           {/* 3. Razorpay Gateway */}
-          {(isRazorpayConfigured || paymentSettings.collectionMode === 'razorpay') && (
+          {isRazorpayActive && (
             <button
               type="button"
               onClick={() => setActiveTab('razorpay')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'razorpay'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
               }`}
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-300" />
+              <ShieldCheck className="w-3.5 h-3.5" />
               <span>Razorpay PG</span>
-              {paymentSettings.collectionMode === 'razorpay' ? (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-400/20 text-emerald-300 flex items-center gap-1 border border-emerald-400/30">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active Mode
-                </span>
-              ) : (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
-                  activeTab === 'razorpay' ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                }`}>
-                  Razorpay
-                </span>
+              {activeMode === 'razorpay' && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
               )}
             </button>
           )}
 
           {/* 4. Custom UPI Gateway */}
-          {(isUpiGatewayConfigured || paymentSettings.collectionMode === 'upi_gateway') && (
+          {isUpiGatewayActive && (
             <button
               type="button"
               onClick={() => setActiveTab('upi_gateway')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'upi_gateway'
-                  ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/20'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  ? 'bg-cyan-600 text-white shadow-sm'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
               }`}
             >
-              <Smartphone className="w-3.5 h-3.5 text-cyan-300" />
-              <span>UPI Gateway</span>
-              {paymentSettings.collectionMode === 'upi_gateway' ? (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-400/20 text-emerald-300 flex items-center gap-1 border border-emerald-400/30">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active Mode
-                </span>
-              ) : (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
-                  activeTab === 'upi_gateway' ? 'bg-white/20 text-white' : 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300'
-                }`}>
-                  Webhooks
-                </span>
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>UPI PG</span>
+              {activeMode === 'upi_gateway' && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
               )}
             </button>
           )}
-
         </div>
 
         {/* Modal Body */}
-        <div className="p-5 sm:p-6 overflow-y-auto space-y-5">
+        <div className="p-3 sm:p-5 overflow-y-auto space-y-4">
           {recordedSuccess ? (
-            <div className="py-12 flex flex-col items-center justify-center text-center space-y-4 animate-in zoom-in-95">
-              <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center animate-bounce">
-                <CheckCircle2 className="w-10 h-10" />
+            <div className="py-10 flex flex-col items-center justify-center text-center space-y-3 animate-in zoom-in-95">
+              <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                <CheckCircle2 className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white">Payment Recorded Successfully!</h3>
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-sm leading-relaxed">
-                {successMessage || `₹${numAmount.toLocaleString('en-IN')} has been added to transactions and customer ledger balance updated.`}
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">Payment Recorded Successfully!</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
+                {successMessage || `₹${numAmount.toLocaleString('en-IN')} recorded in Khata.`}
               </p>
             </div>
-                    ) : activeTab === 'history' ? (
-            /* TAB: TRANSACTION HISTORY WITH CUSTOMIZABLE FILTERS */
-            <div className="space-y-4 animate-in fade-in duration-200">
-              
-              {/* Summary Stats Banner */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/20">
+          ) : activeTab === 'history' ? (
+            /* TAB: TRANSACTION HISTORY */
+            <div className="space-y-3">
+              {/* Summary Banner */}
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                   <div className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Total Collections</div>
-                  <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-0.5">
+                  <div className="text-base sm:text-lg font-black text-slate-900 dark:text-white mt-0.5">
                     {formatINR(totalFilteredCollection)}
                   </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5 font-mono">Filtered Collections</div>
                 </div>
-
-                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800">
-                  <div className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">Transactions</div>
-                  <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-0.5">
-                    {totalFilteredCount} <span className="text-xs font-normal text-slate-400">records</span>
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5 font-mono">of {transactions.length} total in ledger</div>
-                </div>
-
-                <div className="col-span-2 sm:col-span-1 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800">
-                  <div className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">Current View</div>
-                  <div className="text-xs font-bold text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
-                    <Filter className="w-3.5 h-3.5" /> Filtered Logs
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5 truncate uppercase">
-                    {historyDateRange} • {historyGateway}
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800">
+                  <div className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">Records</div>
+                  <div className="text-base sm:text-lg font-black text-slate-900 dark:text-white mt-0.5">
+                    {filteredTransactions.length}
                   </div>
                 </div>
               </div>
 
-              {/* Customizable Filter Toolbar */}
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <Filter className="w-3.5 h-3.5 text-indigo-500" />
-                    Customizable Transaction Filters
-                  </span>
-                  {(historySearch || historyDateRange !== 'all' || historyGateway !== 'all' || historyCustomer !== 'all' || historyType !== 'all') && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHistorySearch('');
-                        setHistoryDateRange('all');
-                        setHistoryGateway('all');
-                        setHistoryCustomer('all');
-                        setHistoryType('all');
-                      }}
-                      className="text-[11px] text-rose-500 hover:underline font-bold flex items-center gap-1 cursor-pointer"
-                    >
-                      <RefreshCw className="w-3 h-3" /> Reset Filters
-                    </button>
-                  )}
-                </div>
-
-                {/* Search Bar */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+              {/* Search & Filter */}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
                   <input
                     type="text"
                     value={historySearch}
                     onChange={(e) => setHistorySearch(e.target.value)}
-                    placeholder="Search by customer name, UTR / Ref ID, note, amount..."
-                    className="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                    placeholder="Search customer, ref, note..."
+                    className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                   />
-                  {historySearch && (
-                    <button
-                      type="button"
-                      onClick={() => setHistorySearch('')}
-                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
                 </div>
-
-                {/* Filter Dropdowns Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  
-                  {/* Date Filter */}
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">
-                      Date Range
-                    </label>
-                    <select
-                      value={historyDateRange}
-                      onChange={(e) => setHistoryDateRange(e.target.value as any)}
-                      className="w-full px-2 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    >
-                      <option value="all">All Time</option>
-                      <option value="today">Today</option>
-                      <option value="yesterday">Yesterday</option>
-                      <option value="7days">Last 7 Days</option>
-                      <option value="30days">Last 30 Days</option>
-                    </select>
-                  </div>
-
-                  {/* Gateway Filter */}
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">
-                      Gateway / Channel
-                    </label>
-                    <select
-                      value={historyGateway}
-                      onChange={(e) => setHistoryGateway(e.target.value as any)}
-                      className="w-full px-2 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    >
-                      <option value="all">All Gateways</option>
-                      <option value="cashfree">Cashfree PG</option>
-                      <option value="upi">UPI Direct / QR</option>
-                      <option value="razorpay">Razorpay</option>
-                      <option value="cash">Cash In Hand</option>
-                      <option value="bank">Bank Transfer / NEFT</option>
-                    </select>
-                  </div>
-
-                  {/* Customer Filter */}
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">
-                      Customer
-                    </label>
-                    <select
-                      value={historyCustomer}
-                      onChange={(e) => setHistoryCustomer(e.target.value)}
-                      className="w-full px-2 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 truncate"
-                    >
-                      <option value="all">All Customers</option>
-                      {customers.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Type Filter */}
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">
-                      Type
-                    </label>
-                    <select
-                      value={historyType}
-                      onChange={(e) => setHistoryType(e.target.value as any)}
-                      className="w-full px-2 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    >
-                      <option value="all">All (In &amp; Out)</option>
-                      <option value="collection">Collections (Received)</option>
-                      <option value="payment">Payments (Given)</option>
-                    </select>
-                  </div>
-
-                </div>
+                <select
+                  value={historyDateRange}
+                  onChange={(e: any) => setHistoryDateRange(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                >
+                  <option value="all">All Dates</option>
+                  <option value="today">Today</option>
+                  <option value="yesterday">Yesterday</option>
+                  <option value="7days">Last 7 Days</option>
+                  <option value="30days">Last 30 Days</option>
+                </select>
               </div>
 
               {/* Transactions List */}
-              <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
                 {filteredTransactions.length === 0 ? (
-                  <div className="text-center py-10 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
-                    <FileText className="w-8 h-8 text-slate-400 mx-auto" />
-                    <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                      No transactions match the selected filters.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHistorySearch('');
-                        setHistoryDateRange('all');
-                        setHistoryGateway('all');
-                        setHistoryCustomer('all');
-                        setHistoryType('all');
-                      }}
-                      className="text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
-                    >
-                      Reset All Filters
-                    </button>
-                  </div>
+                  <div className="p-6 text-center text-xs text-slate-400">No transactions found.</div>
                 ) : (
                   filteredTransactions.map((txn) => {
                     const isCollection = txn.type === 'collection' || txn.type === 'credit' || txn.type === 'income';
-                    const isCashfree = (txn.category || '').toLowerCase().includes('cashfree') || (txn.paymentMode || '').toLowerCase().includes('cashfree');
-                    const isRazorpay = (txn.category || '').toLowerCase().includes('razorpay');
-
                     return (
                       <div
                         key={txn.id}
                         onClick={() => openPaymentDetail(txn)}
-                        className="group flex items-center justify-between p-3.5 rounded-2xl bg-white dark:bg-slate-800/80 hover:bg-indigo-50/50 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 transition-all cursor-pointer shadow-sm hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-500/50"
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          
-                          {/* Icon indicator */}
-                          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
-                            isCollection
-                              ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
-                              : 'bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400'
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                            isCollection ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60' : 'bg-rose-100 text-rose-600 dark:bg-rose-950/60'
                           }`}>
-                            {isCollection ? (
-                              <ArrowDownLeft className="w-5 h-5" />
-                            ) : (
-                              <ArrowUpRight className="w-5 h-5" />
-                            )}
+                            {isCollection ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
                           </div>
-
-                          {/* Customer & Info */}
-                          <div className="min-w-0 space-y-0.5">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                                {txn.customerName || 'Walk-in Customer'}
-                              </span>
-                              {isCashfree && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300">
-                                  Cashfree
-                                </span>
-                              )}
-                              {isRazorpay && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
-                                  Razorpay
-                                </span>
-                              )}
-                              <span className="text-[9px] px-1.5 py-0.2 rounded font-mono text-slate-500 bg-slate-100 dark:bg-slate-800">
-                                {txn.paymentMode || txn.category}
-                              </span>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                              {txn.customerName || 'Customer'}
                             </div>
-
-                            <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3 text-slate-400" />
-                                {new Date(txn.date).toLocaleDateString('en-IN', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  year: 'numeric',
-                                })}
-                              </span>
-                              {txn.referenceNo && (
-                                <span className="font-mono text-[10px] text-slate-400 truncate max-w-[140px]">
-                                  Ref: {txn.referenceNo}
-                                </span>
-                              )}
+                            <div className="text-[10px] text-slate-400 flex items-center gap-1.5 truncate">
+                              <span>{new Date(txn.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+                              <span>•</span>
+                              <span>{txn.paymentMode || txn.category}</span>
                             </div>
-
-                            {txn.note && (
-                              <div className="text-[10px] text-slate-500 truncate max-w-[240px] sm:max-w-xs">
-                                {txn.note}
-                              </div>
-                            )}
                           </div>
-
                         </div>
-
-                        {/* Amount & Click prompt */}
-                        <div className="text-right shrink-0 ml-3">
-                          <div className={`text-sm sm:text-base font-black font-mono ${
-                            isCollection
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : 'text-rose-600 dark:text-rose-400'
-                          }`}>
+                        <div className="text-right shrink-0">
+                          <div className={`text-xs font-black font-mono ${isCollection ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600'}`}>
                             {isCollection ? '+' : '-'} {formatINR(txn.amount)}
                           </div>
-                          <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold group-hover:underline flex items-center justify-end gap-0.5 mt-0.5">
-                            <Eye className="w-3 h-3" /> View Details
-                          </span>
+                          <div className="text-[9px] text-indigo-500 font-semibold flex items-center justify-end gap-0.5 mt-0.5">
+                            <Eye className="w-2.5 h-2.5" /> View
+                          </div>
                         </div>
-
                       </div>
                     );
                   })
                 )}
               </div>
-
             </div>
           ) : activeTab === 'cashfree' ? (
-            /* TAB 2: CASHFREE PAYMENT GATEWAY */
-            <div className="space-y-5">
+            /* TAB 2: CASHFREE PG */
+            <div className="space-y-3">
               {gatewayError && (
-                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 rounded-2xl border border-rose-200 dark:border-rose-800/60 flex items-start gap-2.5 text-xs text-rose-700 dark:text-rose-300">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
+                <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
                   <span>{gatewayError}</span>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                {/* Left Column: Cashfree Branding & Details Card */}
-                <div className="md:col-span-5 p-5 rounded-2xl bg-gradient-to-br from-purple-900 via-indigo-950 to-slate-950 text-white flex flex-col justify-between shadow-xl border border-purple-800/30">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-xl bg-purple-500/30 flex items-center justify-center text-purple-300 font-black">
-                          CF
-                        </div>
-                        <span className="font-extrabold text-sm tracking-wide text-purple-200">
-                          Cashfree PG
-                        </span>
-                      </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live Mode
-                      </span>
-                    </div>
-
-                    <div className="pt-2">
-                      <span className="text-[11px] text-purple-300 uppercase tracking-wider block">
-                        Collection Amount
-                      </span>
-                      <div className="text-3xl font-black tracking-tight text-white mt-0.5">
-                        {numAmount > 0 ? formatINR(numAmount) : '₹0'}
-                      </div>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-xs space-y-1.5">
-                      <div className="flex justify-between text-[11px] text-purple-200">
-                        <span>Customer:</span>
-                        <span className="font-semibold text-white truncate max-w-[130px]">{customerDisplayName}</span>
-                      </div>
-                      <div className="flex justify-between text-[11px] text-purple-200">
-                        <span>Merchant:</span>
-                        <span className="font-semibold text-white truncate max-w-[130px]">{settings.businessName}</span>
-                      </div>
-                      <div className="flex justify-between text-[11px] text-purple-200">
-                        <span>Security:</span>
-                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                          <Lock className="w-3 h-3" /> 256-Bit SSL
-                        </span>
-                      </div>
-                    </div>
+              {/* Compact 44px Cashfree Status Banner */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-purple-900 via-indigo-950 to-slate-950 text-white border border-purple-800/30 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-purple-500/30 flex items-center justify-center text-purple-300 font-black text-xs">
+                    CF
                   </div>
+                  <div>
+                    <span className="font-extrabold text-xs text-purple-100">Cashfree PG</span>
+                    <span className="text-[9px] ml-1.5 font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      Live
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-purple-300 uppercase block leading-none">Amount</span>
+                  <span className="text-sm font-black text-white">{numAmount > 0 ? formatINR(numAmount) : '₹0'}</span>
+                </div>
+              </div>
 
-                  <div className="pt-4 mt-4 border-t border-white/10 space-y-2">
-                    <div className="text-[10px] text-purple-300 font-medium text-center">
-                      Accepts GPay, PhonePe, Paytm, BHIM, Cards &amp; 50+ Netbanking Banks
-                    </div>
+              {/* Form Controls */}
+              <div className="space-y-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Customer (Optional)
+                  </label>
+                  <select
+                    value={selectedCustomer}
+                    onChange={(e) => {
+                      setSelectedCustomer(e.target.value);
+                      const c = customers.find((item) => item.id === e.target.value);
+                      if (c && c.outstandingBalance > 0 && !amount) {
+                        setAmount(c.outstandingBalance.toString());
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+                  >
+                    <option value="">-- Direct Customer --</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.outstandingBalance > 0 ? `(Due: ₹${c.outstandingBalance.toLocaleString('en-IN')})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Amount to Collect (₹) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-xs text-slate-400 font-bold">₹</span>
+                    <input
+                      type="number"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="e.g. 500"
+                      className="w-full pl-7 pr-3 py-1.5 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+                    />
                   </div>
                 </div>
 
-                {/* Right Column: Customer & Amount Form + Instant Actions */}
-                <div className="md:col-span-7 space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Customer (Optional - to link in Khata)
-                    </label>
-                    <select
-                      value={selectedCustomer}
-                      onChange={(e) => {
-                        setSelectedCustomer(e.target.value);
-                        const c = customers.find((item) => item.id === e.target.value);
-                        if (c && c.outstandingBalance > 0 && !amount) {
-                          setAmount(c.outstandingBalance.toString());
-                        }
-                      }}
-                      className="w-full px-3 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-900 dark:text-white"
+                {/* Quick Amount Chips */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  <span className="text-[10px] text-slate-400 font-semibold mr-1">Quick:</span>
+                  {quickAmounts.map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => handleAddQuickAmount(q)}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
                     >
-                      <option value="">-- Direct / Walk-in Customer --</option>
-                      {customers.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.phone}) - Due: ₹{c.outstandingBalance.toLocaleString('en-IN')}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Amount to Collect (₹) *
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">₹</span>
-                        <input
-                          type="number"
-                          value={amount}
-                          onChange={(e) => setAmount(e.target.value)}
-                          placeholder="e.g. 5000"
-                          className="w-full pl-7 pr-3 py-2 text-sm font-semibold rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-900 dark:text-white"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Payment Note
-                      </label>
-                      <input
-                        type="text"
-                        value={note}
-                        onChange={(e) => setNote(e.target.value)}
-                        placeholder="e.g. Invoice clearance"
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-900 dark:text-white"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Cashfree Action Buttons */}
-                  <div className="pt-3 space-y-2.5 border-t border-slate-100 dark:border-slate-800">
-                    
-                    {/* Primary Button: Open Official Cashfree Checkout Modal */}
+                      +₹{q >= 1000 ? `${q / 1000}k` : q}
+                    </button>
+                  ))}
+                  {amount && (
                     <button
                       type="button"
-                      onClick={handleExecuteCashfreeCheckout}
-                      disabled={isGatewayLoading || numAmount <= 0}
-                      className="w-full py-3.5 px-4 rounded-xl text-xs font-extrabold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 shadow-lg shadow-purple-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
+                      onClick={handleClearAmount}
+                      className="text-[10px] font-bold text-rose-500 hover:underline px-1 cursor-pointer"
                     >
-                      {isGatewayLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Connecting Cashfree Gateway...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
-                          <span>Pay Now (Open Cashfree Popup)</span>
-                        </>
-                      )}
+                      Clear
                     </button>
+                  )}
+                </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      {/* Secondary: Share Cashfree Link on WhatsApp */}
-                      <button
-                        type="button"
-                        onClick={handleShareWhatsAppCashfree}
-                        disabled={numAmount <= 0}
-                        className="py-2.5 px-3 rounded-xl text-xs font-semibold bg-[#25D366] hover:bg-[#20bd5a] disabled:opacity-50 text-white flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
-                      >
-                        <Share2 className="w-3.5 h-3.5" />
-                        <span>Send WhatsApp Link</span>
-                      </button>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Payment Note
+                  </label>
+                  <input
+                    type="text"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="e.g. Bill payment"
+                    className="w-full px-3 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
 
-                      {/* Tertiary: Copy Payment Link */}
-                      <button
-                        type="button"
-                        onClick={() => handleCopyPaymentLink('cashfree')}
-                        disabled={numAmount <= 0}
-                        className="py-2.5 px-3 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                      >
-                        {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedLink ? 'Link Copied' : 'Copy Link'}</span>
-                      </button>
-                    </div>
+                {/* Actions */}
+                <div className="pt-2 space-y-2 border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={handleExecuteCashfreeCheckout}
+                    disabled={isGatewayLoading || numAmount <= 0}
+                    className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 shadow-md shadow-purple-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                  >
+                    {isGatewayLoading ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Opening Cashfree...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                        <span>Pay Now (Cashfree Popup)</span>
+                      </>
+                    )}
+                  </button>
 
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={handleShareWhatsAppCashfree}
+                      disabled={numAmount <= 0}
+                      className="py-2 px-3 rounded-xl text-xs font-semibold bg-[#25D366] hover:bg-[#20bd5a] disabled:opacity-50 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>WhatsApp Link</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyPaymentLink('cashfree')}
+                      disabled={numAmount <= 0}
+                      className="py-2 px-3 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedLink ? 'Copied' : 'Copy Link'}</span>
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
           ) : activeTab === 'razorpay' ? (
-            /* TAB 3: RAZORPAY PAYMENT GATEWAY */
-            <div className="space-y-5">
+            /* TAB 3: RAZORPAY PG */
+            <div className="space-y-3">
               {gatewayError && (
-                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 rounded-2xl border border-rose-200 dark:border-rose-800/60 flex items-start gap-2.5 text-xs text-rose-700 dark:text-rose-300">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
+                <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
                   <span>{gatewayError}</span>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                <div className="md:col-span-5 p-5 rounded-2xl bg-gradient-to-br from-blue-900 via-indigo-950 to-slate-950 text-white flex flex-col justify-between shadow-xl border border-blue-800/30">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="font-extrabold text-sm tracking-wide text-blue-200 flex items-center gap-2">
-                        <ShieldCheck className="w-5 h-5 text-blue-400" /> Razorpay PG
-                      </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                        Active
-                      </span>
-                    </div>
+              {/* Compact 44px Razorpay Banner */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-950 text-white border border-blue-800/30 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-blue-400" />
+                  <span className="font-extrabold text-xs text-blue-100">Razorpay PG</span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    Live
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-blue-300 uppercase block leading-none">Amount</span>
+                  <span className="text-sm font-black text-white">{numAmount > 0 ? formatINR(numAmount) : '₹0'}</span>
+                </div>
+              </div>
 
-                    <div className="pt-2">
-                      <span className="text-[11px] text-blue-300 uppercase tracking-wider block">
-                        Collection Amount
-                      </span>
-                      <div className="text-3xl font-black tracking-tight text-white mt-0.5">
-                        {numAmount > 0 ? formatINR(numAmount) : '₹0'}
-                      </div>
-                    </div>
-                  </div>
+              {/* Form Controls */}
+              <div className="space-y-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Customer (Optional)
+                  </label>
+                  <select
+                    value={selectedCustomer}
+                    onChange={(e) => {
+                      setSelectedCustomer(e.target.value);
+                      const c = customers.find((item) => item.id === e.target.value);
+                      if (c && c.outstandingBalance > 0 && !amount) {
+                        setAmount(c.outstandingBalance.toString());
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+                  >
+                    <option value="">-- Direct Customer --</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.outstandingBalance > 0 ? `(Due: ₹${c.outstandingBalance.toLocaleString('en-IN')})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-                  <div className="pt-4 border-t border-white/10 text-[10px] text-blue-300 text-center">
-                    Accepts Cards, UPI, Netbanking &amp; Wallets
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Amount to Collect (₹) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-xs text-slate-400 font-bold">₹</span>
+                    <input
+                      type="number"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="e.g. 500"
+                      className="w-full pl-7 pr-3 py-1.5 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+                    />
                   </div>
                 </div>
 
-                <div className="md:col-span-7 space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Customer
-                    </label>
-                    <select
-                      value={selectedCustomer}
-                      onChange={(e) => {
-                        setSelectedCustomer(e.target.value);
-                        const c = customers.find((item) => item.id === e.target.value);
-                        if (c && c.outstandingBalance > 0 && !amount) {
-                          setAmount(c.outstandingBalance.toString());
-                        }
-                      }}
-                      className="w-full px-3 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
+                {/* Quick Amount Chips */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  <span className="text-[10px] text-slate-400 font-semibold mr-1">Quick:</span>
+                  {quickAmounts.map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => handleAddQuickAmount(q)}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
                     >
-                      <option value="">-- Direct / Walk-in Customer --</option>
-                      {customers.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.phone}) - Due: ₹{c.outstandingBalance.toLocaleString('en-IN')}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Amount (₹) *
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">₹</span>
-                        <input
-                          type="number"
-                          value={amount}
-                          onChange={(e) => setAmount(e.target.value)}
-                          placeholder="e.g. 5000"
-                          className="w-full pl-7 pr-3 py-2 text-sm font-semibold rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Payment Note
-                      </label>
-                      <input
-                        type="text"
-                        value={note}
-                        onChange={(e) => setNote(e.target.value)}
-                        placeholder="e.g. Invoice clearance"
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="pt-3 space-y-2.5 border-t border-slate-100 dark:border-slate-800">
+                      +₹{q >= 1000 ? `${q / 1000}k` : q}
+                    </button>
+                  ))}
+                  {amount && (
                     <button
                       type="button"
-                      onClick={handleExecuteRazorpayCheckout}
-                      disabled={isGatewayLoading || numAmount <= 0}
-                      className="w-full py-3.5 px-4 rounded-xl text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
+                      onClick={handleClearAmount}
+                      className="text-[10px] font-bold text-rose-500 hover:underline px-1 cursor-pointer"
                     >
-                      {isGatewayLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Opening Razorpay...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
-                          <span>Pay Now (Razorpay Popup)</span>
-                        </>
-                      )}
+                      Clear
                     </button>
+                  )}
+                </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={handleShareWhatsAppRazorpay}
-                        disabled={numAmount <= 0}
-                        className="py-2.5 px-3 rounded-xl text-xs font-semibold bg-[#25D366] hover:bg-[#20bd5a] disabled:opacity-50 text-white flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
-                      >
-                        <Share2 className="w-3.5 h-3.5" />
-                        <span>Send WhatsApp</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleCopyPaymentLink('razorpay')}
-                        disabled={numAmount <= 0}
-                        className="py-2.5 px-3 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                      >
-                        {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedLink ? 'Copied' : 'Copy Link'}</span>
-                      </button>
-                    </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Payment Note
+                  </label>
+                  <input
+                    type="text"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="e.g. Bill payment"
+                    className="w-full px-3 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                {/* Actions */}
+                <div className="pt-2 space-y-2 border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={handleExecuteRazorpayCheckout}
+                    disabled={isGatewayLoading || numAmount <= 0}
+                    className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                  >
+                    {isGatewayLoading ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Opening Razorpay...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                        <span>Pay Now (Razorpay Popup)</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={handleShareWhatsAppRazorpay}
+                      disabled={numAmount <= 0}
+                      className="py-2 px-3 rounded-xl text-xs font-semibold bg-[#25D366] hover:bg-[#20bd5a] disabled:opacity-50 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>WhatsApp Link</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyPaymentLink('razorpay')}
+                      disabled={numAmount <= 0}
+                      className="py-2 px-3 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedLink ? 'Copied' : 'Copy Link'}</span>
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
           ) : (
-            /* TAB 1: DEFAULT SHOP UPI & QR */
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-              {/* Left Column: QR Code & Visual Display */}
-              <div className="md:col-span-5 flex flex-col items-center justify-between p-5 rounded-2xl bg-gradient-to-b from-slate-50 to-indigo-50/40 dark:from-slate-800/60 dark:to-indigo-950/20 border border-indigo-100/80 dark:border-indigo-900/30 text-center">
-                <div className="w-full text-left mb-3">
-                  <span className="text-[11px] uppercase tracking-wider font-semibold text-indigo-600 dark:text-indigo-400">
-                    Payee: {payeeName}
-                  </span>
-                  <div className="text-xs text-slate-500 truncate font-mono">{upiId}</div>
+            /* TAB 1: DEFAULT SHOP UPI & QR (STREAMLINED & RESPONSIVE) */
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-5">
+              
+              {/* Left / Mobile Top: Compact Standee QR Card with Center Profile Logo */}
+              <div className="md:col-span-5 flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl bg-gradient-to-b from-slate-50 to-indigo-50/30 dark:from-slate-800/60 dark:to-indigo-950/20 border border-indigo-100/70 dark:border-indigo-900/30 text-center">
+                
+                {/* Standee Card */}
+                <div className="w-full max-w-[210px] sm:max-w-[240px] bg-white rounded-2xl p-3 sm:p-4 shadow-lg border border-slate-200/80 flex flex-col items-center">
+                  <div className="text-xs sm:text-sm font-black text-slate-900 truncate max-w-[190px]">
+                    {payeeName}
+                  </div>
+                  <div className="text-[10px] font-mono text-slate-500 truncate max-w-[190px] mt-0.5">
+                    {upiId}
+                  </div>
+
+                  {/* QR Image with Center Logo & Lock Tag */}
+                  <div className="my-2.5 p-1.5 bg-white rounded-xl border border-slate-100 shadow-inner flex items-center justify-center relative">
+                    <img
+                      src={displayQr}
+                      alt="UPI QR Code"
+                      className="w-32 h-32 sm:w-40 sm:h-40 object-contain rounded-lg"
+                    />
+
+                    {/* Center Avatar / Merchant Logo */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="p-0.5 rounded-xl bg-white shadow-md border border-slate-200">
+                        {merchantLogo ? (
+                          <img
+                            src={merchantLogo}
+                            alt="Logo"
+                            className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-cover bg-white"
+                          />
+                        ) : (
+                          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-cyan-500 text-white font-black text-xs flex items-center justify-center">
+                            {payeeName ? payeeName[0].toUpperCase() : '₹'}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Amount Locked Badge */}
+                    {isAmountLocked && (
+                      <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-black shadow-md flex items-center gap-0.5 animate-pulse">
+                        <Lock className="w-2.5 h-2.5" /> {formatINR(numAmount)}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bottom Text in Standee */}
+                  <div className="text-center w-full">
+                    {isAmountLocked ? (
+                      <div className="text-xs font-black text-emerald-600 flex items-center justify-center gap-1">
+                        <Lock className="w-3 h-3 text-emerald-600 inline" />
+                        AMOUNT: {formatINR(numAmount)}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] font-bold text-slate-800">
+                        Scan &amp; Pay Any Amount
+                      </div>
+                    )}
+                    <div className="text-[9px] text-slate-400 mt-0.5">
+                      PhonePe • GPay • Paytm • BHIM
+                    </div>
+                  </div>
                 </div>
 
-                {/* QR Code Container */}
-                <div className="relative group p-3 bg-white rounded-2xl shadow-lg border border-slate-200/70 dark:border-slate-700 flex items-center justify-center my-2">
-                  <img
-                    src={displayQr}
-                    alt="UPI QR Code"
-                    className="w-48 h-48 object-contain rounded-xl"
-                  />
-                  {customQrUrl && (
-                    <span className="absolute bottom-2 right-2 text-[10px] bg-slate-900/80 text-white px-2 py-0.5 rounded-md backdrop-blur-xs">
-                      Custom QR
-                    </span>
+                {/* QR Actions: Download & Reset */}
+                <div className="w-full flex items-center justify-center gap-1.5 mt-2.5">
+                  <button
+                    type="button"
+                    onClick={handleDownloadActiveQr}
+                    className="flex-1 py-1.5 px-2.5 text-[11px] font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center justify-center gap-1 shadow-xs transition-all cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Download QR</span>
+                  </button>
+
+                  {isAmountLocked && (
+                    <button
+                      type="button"
+                      onClick={handleResetLockedQr}
+                      className="py-1.5 px-2.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center gap-1 cursor-pointer"
+                      title="Reset back to counter QR"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Reset</span>
+                    </button>
                   )}
                 </div>
 
-                {/* Amount display under QR */}
-                <div className="my-2">
-                  <div className="text-2xl font-extrabold text-slate-900 dark:text-white">
-                    {numAmount > 0 ? formatINR(numAmount) : 'Any Amount'}
-                  </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Scan using PhonePe, GPay, Paytm, or BHIM
-                  </p>
-                </div>
-
-                {/* Quick UPI ID Copy Pill */}
-                <div className="w-full flex items-center justify-between bg-white dark:bg-slate-900 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs mt-2">
-                  <span className="font-mono text-slate-700 dark:text-slate-300 truncate mr-2">
+                {/* Quick Copy UPI ID */}
+                <div className="w-full flex items-center justify-between bg-white dark:bg-slate-900 px-2.5 py-1.5 rounded-xl border border-slate-200/80 dark:border-slate-700 text-[11px] mt-2">
+                  <span className="font-mono text-slate-600 dark:text-slate-400 truncate mr-2">
                     {upiId}
                   </span>
                   <button
+                    type="button"
                     onClick={handleCopyUpi}
-                    className="flex items-center gap-1 font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 cursor-pointer"
+                    className="flex items-center gap-1 font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 cursor-pointer shrink-0"
                   >
-                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                     <span>{copied ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
               </div>
 
-              {/* Right Column: Collection Inputs & UPI Setup */}
-              <div className="md:col-span-7 space-y-4">
-                {/* 1. UPI ID & Payee Setup */}
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                      Merchant UPI &amp; QR Settings
-                    </span>
+              {/* Right / Mobile Bottom: Collect from Customer Form */}
+              <div className="md:col-span-7 space-y-2.5">
+                
+                {/* 1. Customer Select */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Select Customer (Optional)
+                  </label>
+                  <select
+                    value={selectedCustomer}
+                    onChange={(e) => {
+                      setSelectedCustomer(e.target.value);
+                      const c = customers.find((item) => item.id === e.target.value);
+                      if (c && c.outstandingBalance > 0 && !amount) {
+                        setAmount(c.outstandingBalance.toString());
+                      }
+                      setIsQrGenerated(false);
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+                  >
+                    <option value="">-- Direct Payment / Any Customer --</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.outstandingBalance > 0 ? `(Due: ₹${c.outstandingBalance.toLocaleString('en-IN')})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 2. Amount Input */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Amount to Request (₹) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-xs text-slate-400 font-bold">₹</span>
+                    <input
+                      type="number"
+                      value={amount}
+                      onChange={(e) => {
+                        setAmount(e.target.value);
+                        setIsQrGenerated(false);
+                      }}
+                      placeholder="e.g. 500"
+                      className="w-full pl-7 pr-3 py-1.5 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                {/* 3. Quick Amount Chips */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  <span className="text-[10px] text-slate-400 font-semibold mr-1">Quick:</span>
+                  {quickAmounts.map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => handleAddQuickAmount(q)}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                    >
+                      +₹{q >= 1000 ? `${q / 1000}k` : q}
+                    </button>
+                  ))}
+                  {currentCust && currentCust.outstandingBalance > 0 && (
                     <button
                       type="button"
-                      onClick={handleSaveAsDefault}
-                      className="text-xs px-2.5 py-1 rounded-lg font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 flex items-center gap-1 transition-all cursor-pointer"
+                      onClick={() => {
+                        setAmount(currentCust.outstandingBalance.toString());
+                        setIsQrGenerated(false);
+                      }}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 hover:bg-amber-200 transition-colors cursor-pointer"
                     >
-                      <Save className="w-3.5 h-3.5" />
-                      Save as Default
+                      Full Due (₹{currentCust.outstandingBalance})
                     </button>
-                  </div>
+                  )}
+                  {amount && (
+                    <button
+                      type="button"
+                      onClick={handleClearAmount}
+                      className="text-[10px] font-bold text-rose-500 hover:underline px-1 cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                        UPI ID / VPA *
-                      </label>
-                      <input
-                        type="text"
-                        value={upiId}
-                        onChange={(e) => setUpiId(e.target.value)}
-                        placeholder="e.g. yourstore@okhdfcbank"
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-slate-900 dark:text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                        Payee / Business Name *
-                      </label>
-                      <input
-                        type="text"
-                        value={payeeName}
-                        onChange={(e) => setPayeeName(e.target.value)}
-                        placeholder="e.g. My Business / Store Name"
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
-                      />
-                    </div>
-                  </div>
+                {/* 4. Payment Remark */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Payment Remark / Bill Note
+                  </label>
+                  <input
+                    type="text"
+                    value={note}
+                    onChange={(e) => {
+                      setNote(e.target.value);
+                      setIsQrGenerated(false);
+                    }}
+                    placeholder="Payment settlement"
+                    className="w-full px-3 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
 
-                  {/* Upload Custom QR Image */}
-                  <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between">
-                    <div className="text-xs text-slate-500">
-                      {customQrUrl ? (
-                        <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                          <Check className="w-3.5 h-3.5" /> Custom QR image loaded
-                        </span>
-                      ) : (
-                        'Upload your printed Shop QR image'
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        accept="image/*"
-                        onChange={handleQrUpload}
-                        className="hidden"
-                      />
+                {/* 5. Primary Action: Generate QR (Lock Amount) */}
+                <div className="pt-2 space-y-2 border-t border-slate-100 dark:border-slate-800">
+                  {isAmountLocked ? (
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="px-3 py-1.5 text-xs font-medium rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center gap-1.5 cursor-pointer"
+                        onClick={handleResetLockedQr}
+                        className="flex-1 py-2 px-3 rounded-xl text-xs font-bold bg-emerald-600 text-white flex items-center justify-center gap-1.5 shadow-sm hover:bg-emerald-700 transition-colors cursor-pointer"
                       >
-                        <Upload className="w-3.5 h-3.5" />
-                        {customQrUrl ? 'Change QR' : 'Upload QR Image'}
+                        <Check className="w-3.5 h-3.5" />
+                        <span>QR Amount Locked: {formatINR(numAmount)}</span>
                       </button>
-                      {customQrUrl && (
-                        <button
-                          type="button"
-                          onClick={() => setCustomQrUrl(undefined)}
-                          className="text-xs text-rose-500 hover:underline px-1 cursor-pointer"
-                        >
-                          Clear
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={handleResetLockedQr}
+                        className="py-2 px-3 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 cursor-pointer"
+                        title="Unlock QR"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  </div>
-                </div>
-
-                {/* 2. Collection Transaction Details */}
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                      Customer (Optional - to link in KhataBook)
-                    </label>
-                    <select
-                      value={selectedCustomer}
-                      onChange={(e) => {
-                        setSelectedCustomer(e.target.value);
-                        const c = customers.find((item) => item.id === e.target.value);
-                        if (c && c.outstandingBalance > 0 && !amount) {
-                          setAmount(c.outstandingBalance.toString());
-                        }
-                      }}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleGenerateLockedQr}
+                      disabled={numAmount <= 0}
+                      className="w-full py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 shadow-md shadow-indigo-600/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     >
-                      <option value="">-- Direct / Walk-in Customer --</option>
-                      {customers.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.phone}) - Due: ₹{c.outstandingBalance.toLocaleString('en-IN')}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Generate QR (Lock Amount)</span>
+                    </button>
+                  )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                        Amount to Collect (₹)
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">₹</span>
-                        <input
-                          type="number"
-                          value={amount}
-                          onChange={(e) => setAmount(e.target.value)}
-                          placeholder="e.g. 5000"
-                          className="w-full pl-7 pr-3 py-2 text-sm font-semibold rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                        Payment Note
-                      </label>
-                      <input
-                        type="text"
-                        value={note}
-                        onChange={(e) => setNote(e.target.value)}
-                        placeholder="e.g. Bill clearance"
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
-                      />
-                    </div>
+                  {/* Secondary Buttons Grid */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={handleShareWhatsAppUpi}
+                      className="py-2 px-3 rounded-xl text-xs font-semibold bg-[#25D366] hover:bg-[#20bd5a] text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>WhatsApp</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRecordCollection}
+                      disabled={numAmount <= 0}
+                      className="py-2 px-3 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Record in Khata</span>
+                    </button>
                   </div>
                 </div>
 
-                {/* 3. Action Buttons */}
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap gap-2.5 justify-end">
-                  <button
-                    type="button"
-                    onClick={handleShareWhatsAppUpi}
-                    className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-[#25D366] hover:bg-[#20bd5a] text-white flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    Share on WhatsApp
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleRecordCollection}
-                    disabled={numAmount <= 0}
-                    className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center gap-1.5 shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
-                  >
-                    <Check className="w-4 h-4" />
-                    Record in Khata
-                  </button>
-                </div>
               </div>
+
             </div>
           )}
         </div>
+
       </div>
     </div>
   );
