@@ -28,7 +28,8 @@ import {
   Headphones,
   LifeBuoy,
   MessageSquare,
-  CheckCircle2
+  CheckCircle2,
+  Wallet
 } from 'lucide-react';
 import { SupportTicket } from '@/types';
 import {
@@ -165,8 +166,9 @@ export default function DashboardPage() {
 
   // Financial Metrics Computations
   const metrics = useMemo(() => {
-    // 1. Money In / Received (Khata customer payments + Collections + Incomes)
-    const khataReceived = transactions
+    // --- 1. KHATA CALCULATIONS ---
+    // Khata Credit (Payments received / Money in from Khata customers)
+    const khataCredit = transactions
       .filter(
         t =>
           !t.isDeleted &&
@@ -177,82 +179,123 @@ export default function DashboardPage() {
       )
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
-    // 2. Invoice Paid amounts (avoid double-counting if an invoice collection txn is already recorded)
-    const invoicePaid = invoices.reduce((sum, inv) => {
-      const paid = Number(inv.paidAmount) || (inv.status === 'paid' ? Number(inv.total) : 0);
-      if (paid <= 0) return sum;
-      const alreadyInTxns = transactions.some(
-        t =>
-          !t.isDeleted &&
-          t.status !== 'deleted' &&
-          (t.type === 'collection' || t.type === 'income' || t.category === 'Online Payment Collection') &&
-          (t.note?.includes(inv.invoiceNumber) || (t.referenceNo && t.referenceNo === inv.id))
-      );
-      return alreadyInTxns ? sum : sum + paid;
-    }, 0);
+    // Khata Debit (Credit given / Udhaar to customers / outstanding receivables)
+    const txnsKhataDebit = transactions
+      .filter(t => !t.isDeleted && t.status !== 'deleted' && t.type === 'credit' && Boolean(t.customerId))
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
-    // Total CREDIT: All Money In / Received into business (Khata payments received + Invoice paid amounts)
-    const totalCredit = khataReceived + invoicePaid;
-
-    // 3. Khata Market Outstanding / Due (Customer owes us)
-    const khataDue = customers.reduce(
+    const customersDue = customers.reduce(
       (sum, c) => (c.outstandingBalance > 0 ? sum + c.outstandingBalance : sum),
       0
     );
 
-    // 4. Invoices Pending / Unpaid amount (from Billing & Invoicing)
-    const invoiceDue = invoices.reduce((sum, inv) => {
-      if (inv.status === 'paid') return sum;
-      const total = Number(inv.total) || 0;
-      const paid = Number(inv.paidAmount) || 0;
-      return sum + Math.max(0, total - paid);
-    }, 0);
+    const khataDebit = txnsKhataDebit > 0 ? txnsKhataDebit : customersDue;
 
-    // Total DEBIT: Total Money Out / Pending receivables (Khata pending balance + Unpaid invoices)
-    const totalDebit = khataDue + invoiceDue;
+    // Difference: debit - credit
+    // If debit > credit -> Red color! If credit >= debit -> Green color!
+    const isKhataDebitHigher = khataDebit > khataCredit;
+    const khataDisplayAmount = Math.abs(khataCredit - khataDebit);
 
-    // Monthly Income & Expenses
-    const totalIncome = totalCredit;
+    // --- 2. EXPENSES CALCULATIONS ---
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    // All-time total expense (for backward compatibility & category chart)
     const totalExpense = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
-    // Net Profit
-    const netProfit = totalIncome - totalExpense;
+    // Current Month Expenses
+    const currentMonthExpenses = expenses
+      .filter(e => {
+        try {
+          const d = new Date(e.date);
+          return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+        } catch {
+          return false;
+        }
+      })
+      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
-    // Savings Total
+    // Current Week Expenses (Monday 00:00 to now)
+    const dayOfWeek = (now.getDay() + 6) % 7; // 0 = Mon
+    const weekStart = new Date(currentYear, currentMonth, now.getDate() - dayOfWeek, 0, 0, 0).getTime();
+    const currentWeekExpenses = expenses
+      .filter(e => {
+        try {
+          return new Date(e.date).getTime() >= weekStart;
+        } catch {
+          return false;
+        }
+      })
+      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+    // Today Expenses (Today 00:00 to now)
+    const todayStart = new Date(currentYear, currentMonth, now.getDate(), 0, 0, 0).getTime();
+    const todayExpenses = expenses
+      .filter(e => {
+        try {
+          return new Date(e.date).getTime() >= todayStart;
+        } catch {
+          return false;
+        }
+      })
+      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+    // --- 3. BILLING & INVOICING CALCULATIONS ---
+    const totalInvoiceAmount = invoices.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
+
+    // --- 4. NET AMOUNT (KHATA - EXPENSES - INV) ---
+    // User requested formula: KHATA (total) - EXPENSES (monthly) - INV (total billing)
+    const khataBase = khataCredit;
+    const netAmount = khataBase - currentMonthExpenses - totalInvoiceAmount;
+    const isNetPositive = netAmount >= 0;
+
+    // --- 5. ONLINE COLLECTIONS (Payment Collection Hub Only) ---
+    // Count only transactions recorded via Payment Collection Hub ("Record in Khata") or customer payment link!
+    const totalOnlineCollections = transactions
+      .filter(
+        t =>
+          !t.isDeleted &&
+          t.status !== 'deleted' &&
+          (
+            t.type === 'collection' ||
+            t.category === 'Online Payment Collection' ||
+            t.category === 'UPI Direct Collection' ||
+            t.category === 'Cashfree Payment Gateway' ||
+            t.category === 'Cashfree PG' ||
+            t.category === 'Razorpay Payment Gateway' ||
+            t.category === 'Razorpay PG' ||
+            (t.referenceNo && (t.referenceNo.startsWith('CF_') || t.referenceNo.startsWith('pay_') || t.referenceNo.startsWith('UPI-') || t.referenceNo.startsWith('rzp_'))) ||
+            (t.note && (t.note.toLowerCase().includes('collected via') || t.note.toLowerCase().includes('online payment')))
+          )
+      )
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+    // Total Savings
     const totalSavings = savingsGoals.reduce((sum, s) => sum + (Number(s.currentAmount) || 0), 0);
 
     // Inventory Value
     const inventoryVal = products.reduce((sum, p) => sum + ((Number(p.purchasePrice) || 0) * (Number(p.currentStock) || 0)), 0);
 
-    // UPI Collections Total
-    const totalUPICollections = transactions
-      .filter(
-        t =>
-          !t.isDeleted &&
-          t.status !== 'deleted' &&
-          ((t.type === 'collection' || (t.type === 'debit' && t.category === 'Payment Received')) &&
-            t.paymentMode === 'upi')
-      )
-      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-
     // Low stock count
     const lowStockItems = products.filter(p => p.currentStock <= p.minStock);
 
-    // Real Profit Margin %
-    const profitMargin = totalIncome > 0 ? Math.round((netProfit / totalIncome) * 100) : 0;
-
     return {
-      totalCredit,
-      totalDebit,
-      khataDue,
-      invoiceDue,
-      totalIncome,
+      khataCredit,
+      khataDebit,
+      isKhataDebitHigher,
+      khataDisplayAmount,
       totalExpense,
-      netProfit,
-      profitMargin,
+      currentMonthExpenses,
+      currentWeekExpenses,
+      todayExpenses,
+      totalInvoiceAmount,
+      khataBase,
+      netAmount,
+      isNetPositive,
+      totalOnlineCollections,
       totalSavings,
       inventoryVal,
-      totalUPICollections,
       lowStockItems,
     };
   }, [customers, transactions, expenses, savingsGoals, products, invoices]);
@@ -394,114 +437,135 @@ export default function DashboardPage() {
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         
-        {/* Total Credit - Money In / Received */}
+        {/* Card 1: KHATA (Debit vs Credit) */}
         <div className="glass-card p-2.5 sm:p-3.5 rounded-2xl relative overflow-hidden group">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-              {t('credit', 'CREDIT')}
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+              KHATA
             </span>
-            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-              <ArrowDownLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center shrink-0 ${
+              metrics.isKhataDebitHigher
+                ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400'
+                : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
+            }`}>
+              {metrics.isKhataDebitHigher ? (
+                <ArrowUpRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              ) : (
+                <ArrowDownLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              )}
             </div>
           </div>
-          <div className="text-lg sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 truncate">
-            {formatINR(metrics.totalCredit)}
+          <div className={`text-lg sm:text-2xl font-black truncate ${
+            metrics.isKhataDebitHigher ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
+          }`}>
+            {formatINR(metrics.khataDisplayAmount)}
           </div>
           <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 gap-1">
             <span className="truncate">
-              <span className="hidden sm:inline">{t('moneyIn', 'Money In & Received')}</span>
-              <span className="sm:hidden">{t('moneyInShort', 'Money In')}</span>
+              <span className="text-rose-500 font-bold">DEBIT: {formatINR(metrics.khataDebit)}</span>
+              <span className="mx-1 text-slate-300 dark:text-slate-600 font-normal">•</span>
+              <span className="text-emerald-500 font-bold">CREDIT: {formatINR(metrics.khataCredit)}</span>
             </span>
-            <Link href="/khata" className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold shrink-0">
-              <span className="hidden sm:inline">{t('viewKhata', 'View Khata →')}</span>
-              <span className="sm:hidden">{t('viewKhataShort', 'Khata →')}</span>
+            <Link href="/khata" className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold shrink-0">
+              <span className="hidden sm:inline">View Khata →</span>
+              <span className="sm:hidden">Khata →</span>
             </Link>
           </div>
         </div>
 
-        {/* Total Debit - Money Out / Pending Receivables */}
+        {/* Card 2: EXPENSES (Current Month & Breakdown) */}
         <div className="glass-card p-2.5 sm:p-3.5 rounded-2xl relative overflow-hidden group">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
-              {t('debit', 'DEBIT')}
+              EXPENSES
             </span>
             <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-              <ArrowUpRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              <Wallet className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="text-lg sm:text-2xl font-black text-rose-600 dark:text-rose-400 truncate">
-            {formatINR(metrics.totalDebit)}
+            {formatINR(metrics.currentMonthExpenses)}
           </div>
           <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 gap-1">
-            <span className="truncate mr-1">
-              <span className="hidden sm:inline">Khata: {formatINR(metrics.khataDue)} + Inv: {formatINR(metrics.invoiceDue)}</span>
-              <span className="sm:hidden">Due: {formatINR(metrics.khataDue + metrics.invoiceDue)}</span>
+            <span className="truncate mr-1 font-semibold">
+              <span>WEEK: {formatINR(metrics.currentWeekExpenses)}</span>
+              <span className="mx-1 text-slate-300 dark:text-slate-600 font-normal">•</span>
+              <span>DAY: {formatINR(metrics.todayExpenses)}</span>
             </span>
-            <span className={`font-semibold shrink-0 ${metrics.totalDebit === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {metrics.totalDebit === 0 ? t('clear', 'Clear') : t('pending', 'Pending')}
-            </span>
+            <Link
+              href="/expenses"
+              className="text-rose-600 dark:text-rose-400 hover:underline font-bold shrink-0 flex items-center gap-0.5"
+              title="Open Expense & Outflow Tracker"
+            >
+              <span>Expenses</span>
+              <span className="text-[9px]">→</span>
+            </Link>
           </div>
         </div>
 
-        {/* Net Business Profit */}
+        {/* Card 3: NET AMOUNT (KHATA - EXPENSES - INV) */}
         <div className="glass-card p-2.5 sm:p-3.5 rounded-2xl relative overflow-hidden group">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              {t('netProfit', 'NET PROFIT')}
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+              NET AMOUNT
             </span>
-            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+            <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center shrink-0 ${
+              metrics.isNetPositive
+                ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
+                : 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400'
+            }`}>
               <TrendingUp className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className={`text-lg sm:text-2xl font-black truncate ${metrics.netProfit > 0 ? 'text-emerald-600 dark:text-emerald-400' : metrics.netProfit < 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>
-            {formatINR(metrics.netProfit)}
+          <div className={`text-lg sm:text-2xl font-black truncate ${
+            metrics.isNetPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+          }`}>
+            {formatINR(metrics.netAmount)}
           </div>
-          <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 gap-1">
-            <span className="truncate">
-              <span className="hidden sm:inline">{t('revenue', 'Revenue')}: </span>
-              <span className="sm:hidden">{t('revShort', 'Rev')}: </span>
-              {formatINR(metrics.totalIncome)}
+          <div className="flex items-center justify-between text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 mt-1 gap-1">
+            <span className="truncate font-semibold">
+              <span>KHATA: {formatINR(metrics.khataBase)}</span>
+              <span className="mx-1 text-slate-300 dark:text-slate-600 font-normal">•</span>
+              <span>EXP: {formatINR(metrics.currentMonthExpenses)}</span>
+              <span className="mx-1 text-slate-300 dark:text-slate-600 font-normal">•</span>
+              <span>INV: {formatINR(metrics.totalInvoiceAmount)}</span>
             </span>
-            <span className={`text-[10px] sm:text-[11px] font-bold shrink-0 ${
-              metrics.totalIncome > 0 && metrics.netProfit > 0
-                ? 'text-emerald-500'
-                : metrics.netProfit < 0
-                ? 'text-rose-500'
-                : 'text-slate-400'
+            <span className={`text-[9px] sm:text-[10px] font-bold shrink-0 px-1.5 py-0.5 rounded-md ${
+              metrics.isNetPositive
+                ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60'
+                : 'text-rose-600 bg-rose-50 dark:bg-rose-950/60'
             }`}>
-              {metrics.totalIncome > 0
-                ? `${metrics.profitMargin >= 0 ? '+' : ''}${metrics.profitMargin}%`
-                : '0% Margin'}
+              {metrics.isNetPositive ? 'Net +' : 'Net -'}
             </span>
           </div>
         </div>
 
-        {/* UPI Direct Collections */}
+        {/* Card 4: ONLINE COLLECTIONS (Payment Collection Hub Only) */}
         <div className="glass-card p-2.5 sm:p-3.5 rounded-2xl relative overflow-hidden group">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              {t('upiCollections', 'UPI COLLECTIONS')}
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+              ONLINE COLLECTIONS
             </span>
             <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0">
-              <QrCode className="w-3.5 h-3.5" />
+              <CreditCard className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="text-lg sm:text-2xl font-black text-slate-900 dark:text-white truncate">
-            {formatINR(metrics.totalUPICollections)}
+            {formatINR(metrics.totalOnlineCollections)}
           </div>
           <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 gap-1">
-            <span className="truncate">
-              <span className="hidden sm:inline">{t('directMerchantQr', 'Direct Merchant QR')}</span>
-              <span className="sm:hidden">{t('directMerchantQrShort', 'Direct QR')}</span>
+            <span className="truncate text-slate-500">
+              <span className="hidden sm:inline">Payment Collection Hub</span>
+              <span className="sm:hidden">Collection Hub</span>
             </span>
-            <span className="text-cyan-600 dark:text-cyan-400 font-semibold shrink-0">
-              {metrics.totalUPICollections > 0 ? t('received', 'Received') : (
-                <>
-                  <span className="hidden sm:inline">{t('instantBankCredit', 'Instant Bank Credit')}</span>
-                  <span className="sm:hidden">{t('instantBankCreditShort', 'Instant')}</span>
-                </>
-              )}
-            </span>
+            <Link
+              href="/upi-collection"
+              className="text-cyan-600 dark:text-cyan-400 hover:underline font-bold shrink-0 text-[10px] sm:text-[11px]"
+              title="Open Payment Collection Hub"
+            >
+              <span className="hidden sm:inline">Collection Hub →</span>
+              <span className="sm:hidden">Hub →</span>
+            </Link>
           </div>
         </div>
 
