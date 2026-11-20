@@ -4,7 +4,7 @@ import React, { useState, useMemo, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import Loading from '@/components/Loading';
-import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
+import { formatINR, formatDate, buildUpiUri, buildRawUpiQrString, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
 import { getActiveCurrency, t } from '@/lib/i18n';
 import { convertCurrency, getExcelNumFmt, formatMoney } from '@/lib/currencyService';
 import { Customer, Transaction, TransactionType, PaymentReminder, KhataGroup, KhataGroupNotification, TransactionSplitMember, TransactionEditAudit, KhataGroupJoinRequest, KhataGroupBlockedMerchant } from '@/types';
@@ -3281,18 +3281,19 @@ function KhataPageInner() {
     }, 450);
   };
 
-  // Generate High-Res UPI QR Image Card with Red Total Due on top, QR in center, and UPI ID below
+  // Generate High-Res UPI QR Image Card with Red Total Due on top, QR in center, embedded logo, and UPI ID below
   const generateWhatsAppPaymentQrBlob = async (options: {
     dueAmount: number;
     upiId: string;
     payeeName: string;
     upiUri: string;
+    logoUrl?: string;
   }): Promise<Blob | null> => {
-    const { dueAmount, upiId, payeeName, upiUri } = options;
+    const { dueAmount, upiId, payeeName, upiUri, logoUrl } = options;
     if (typeof window === 'undefined') return null;
 
     try {
-      // 1. Generate QR data URL using QRCode library
+      // 1. Generate QR data URL using QRCode library with High error correction
       const qrDataUrl = await QRCode.toDataURL(upiUri, {
         width: 380,
         margin: 1,
@@ -3406,6 +3407,87 @@ function KhataPageInner() {
       const qrSize = qrContainerSize - qrPadding * 2;
       ctx.drawImage(qrImage, qrContainerX + qrPadding, qrContainerY + qrPadding, qrSize, qrSize);
 
+      // --- CENTER OF QR: PROFILE / BUSINESS LOGO BADGE ---
+      const centerX = qrContainerX + qrContainerSize / 2;
+      const centerY = qrContainerY + qrContainerSize / 2;
+      const logoOuterRadius = 38;
+      const logoInnerRadius = 32;
+
+      // White circular boundary ring
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, logoOuterRadius, 0, Math.PI * 2);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#E2E8F0';
+      ctx.stroke();
+      ctx.restore();
+
+      let logoDrawn = false;
+      if (logoUrl) {
+        try {
+          const logoImg = new Image();
+          logoImg.crossOrigin = 'anonymous';
+          logoImg.src = logoUrl;
+          await new Promise((resolve, reject) => {
+            logoImg.onload = () => resolve(null);
+            logoImg.onerror = reject;
+            setTimeout(() => resolve(null), 1200);
+          });
+
+          if (logoImg.naturalWidth > 0 && logoImg.naturalHeight > 0) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, logoInnerRadius, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.clip();
+            ctx.drawImage(
+              logoImg,
+              centerX - logoInnerRadius,
+              centerY - logoInnerRadius,
+              logoInnerRadius * 2,
+              logoInnerRadius * 2
+            );
+            ctx.restore();
+            logoDrawn = true;
+          }
+        } catch (e) {
+          console.warn('Center QR logo draw fallback:', e);
+        }
+      }
+
+      if (!logoDrawn) {
+        // Branded gradient badge with initials
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, logoInnerRadius, 0, Math.PI * 2);
+        const grad = ctx.createLinearGradient(
+          centerX - logoInnerRadius,
+          centerY - logoInnerRadius,
+          centerX + logoInnerRadius,
+          centerY + logoInnerRadius
+        );
+        grad.addColorStop(0, '#10B981');
+        grad.addColorStop(1, '#059669');
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        const initials = (payeeName || 'SK')
+          .trim()
+          .split(/\s+/)
+          .slice(0, 2)
+          .map((p) => p[0]?.toUpperCase() || '')
+          .join('') || 'SK';
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(initials, centerX, centerY);
+        ctx.restore();
+      }
+
       // --- BELOW QR: UPI ID CONTAINER ---
       const upiPillX = 50;
       const upiPillY = 566;
@@ -3467,6 +3549,7 @@ function KhataPageInner() {
       const officialPhone = (settings.businessPhone || profile?.phone || currentUser?.phone || '').trim();
       const upiId = (settings.paymentSettings?.upiId || (officialPhone ? `${officialPhone}@upi` : '')).trim();
       const payeeName = (settings.paymentSettings?.payeeName || businessName).trim();
+      const logoUrl = profile?.avatarUrl || currentUser?.avatarUrl || settings?.businessLogo || '';
 
       const upiUri = buildUpiUri(
         upiId,
@@ -3475,17 +3558,28 @@ function KhataPageInner() {
         `Payment from ${activeCustomer.name}`
       );
 
-      // Real payment reminder with locked UPI link
-      const messageText = numDue > 0
-        ? `Your balance of ${formattedDue} is Due.\nPlease pay at the earliest.\n\n⚡ Direct UPI Link (Amount Locked):\n${upiUri}\n\n—\n${businessName}${officialPhone ? `  (${officialPhone})` : ''}`
-        : `All dues are cleared (₹0 Due) for ${activeCustomer.name}.\nThank you!\n\n—\n${businessName}${officialPhone ? `  (${officialPhone})` : ''}`;
+      const rawQrString = buildRawUpiQrString(
+        upiId,
+        payeeName,
+        numDue > 0 ? numDue : undefined,
+        `Payment from ${activeCustomer.name}`
+      );
 
-      // Generate the custom QR card image (Total Due on top in Red or Settled in Emerald, QR in center, UPI ID below)
+      const appBaseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://khatapro-sooty.vercel.app';
+      const webPayUrl = `${appBaseUrl}/pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName).replace(/%20/g, '+')}&am=${numDue > 0 ? numDue.toFixed(2) : '0'}&tn=${encodeURIComponent(`Payment from ${activeCustomer.name}`).replace(/%20/g, '+')}`;
+
+      // Real payment reminder with locked online pay link and UPI intent
+      const messageText = numDue > 0
+        ? `*Payment Reminder from ${businessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${formattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n👉 *Tap to Pay Online (Instant UPI)*:\n${webPayUrl}\n\n⚡ *Direct UPI Link (Amount Locked)*:\n${upiUri}\n\nScan the attached QR code with Google Pay, PhonePe, Paytm, or BHIM.\n\nThank you,\n${businessName}${officialPhone ? `\n📞 ${officialPhone}` : ''}`
+        : `*Account Statement from ${businessName}*\n\nDear ${activeCustomer.name},\nAll dues are fully settled (*₹0 Due*).\nThank you for your business!\n\n—\n${businessName}${officialPhone ? `\n📞 ${officialPhone}` : ''}`;
+
+      // Generate the custom QR card image (Total Due on top in Red or Settled in Emerald, QR in center, embedded logo, UPI ID below)
       const blob = await generateWhatsAppPaymentQrBlob({
         dueAmount: numDue,
         upiId,
         payeeName,
-        upiUri,
+        upiUri: rawQrString,
+        logoUrl,
       });
 
       if (blob) {
@@ -3556,6 +3650,7 @@ function KhataPageInner() {
       const officialPhone = (settings.businessPhone || profile?.phone || currentUser?.phone || '').trim();
       const upiId = (settings.paymentSettings?.upiId || (officialPhone ? `${officialPhone}@upi` : '')).trim();
       const payeeName = (settings.paymentSettings?.payeeName || businessName).trim();
+      const logoUrl = profile?.avatarUrl || currentUser?.avatarUrl || settings?.businessLogo || '';
 
       const upiUri = buildUpiUri(
         upiId,
@@ -3564,16 +3659,27 @@ function KhataPageInner() {
         `Payment from ${activeCustomer.name}`
       );
 
+      const rawQrString = buildRawUpiQrString(
+        upiId,
+        payeeName,
+        numDue > 0 ? numDue : undefined,
+        `Payment from ${activeCustomer.name}`
+      );
+
+      const appBaseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://khatapro-sooty.vercel.app';
+      const webPayUrl = `${appBaseUrl}/pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName).replace(/%20/g, '+')}&am=${numDue > 0 ? numDue.toFixed(2) : '0'}&tn=${encodeURIComponent(`Payment from ${activeCustomer.name}`).replace(/%20/g, '+')}`;
+
       const shareText = numDue > 0
-        ? `Your balance of ${formattedDue} is Due.\nPlease pay at the earliest.\n\n⚡ Direct UPI Link (Amount Locked):\n${upiUri}\n\n—\n${businessName}${officialPhone ? `  (${officialPhone})` : ''}`
-        : `All dues are cleared (₹0 Due) for ${activeCustomer.name}.\nThank you!\n\n—\n${businessName}${officialPhone ? `  (${officialPhone})` : ''}`;
+        ? `*Payment Reminder from ${businessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${formattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n👉 *Tap to Pay Online (Instant UPI)*:\n${webPayUrl}\n\n⚡ *Direct UPI Link*:\n${upiUri}\n\n—\n${businessName}${officialPhone ? `  (${officialPhone})` : ''}`
+        : `*Account Statement from ${businessName}*\n\nDear ${activeCustomer.name},\nAll dues are cleared (*₹0 Due*).\nThank you!\n\n—\n${businessName}${officialPhone ? `  (${officialPhone})` : ''}`;
 
       // Generate the custom QR card image
       const blob = await generateWhatsAppPaymentQrBlob({
         dueAmount: numDue,
         upiId,
         payeeName,
-        upiUri,
+        upiUri: rawQrString,
+        logoUrl,
       });
 
       const fileName = `Payment_QR_${activeCustomer.name.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
@@ -3651,8 +3757,9 @@ function KhataPageInner() {
     const officialPhone = (settings.businessPhone || profile?.phone || currentUser?.phone || '').trim();
     const upiId = (settings.paymentSettings?.upiId || (officialPhone ? `${officialPhone}@upi` : '')).trim();
     const payeeName = (settings.paymentSettings?.payeeName || businessName).trim();
+    const logoUrl = profile?.avatarUrl || currentUser?.avatarUrl || settings?.businessLogo || '';
 
-    const upiUri = buildUpiUri(
+    const rawQrString = buildRawUpiQrString(
       upiId,
       payeeName,
       numDue > 0 ? numDue : undefined,
@@ -3663,7 +3770,8 @@ function KhataPageInner() {
       dueAmount: numDue,
       upiId,
       payeeName,
-      upiUri,
+      upiUri: rawQrString,
+      logoUrl,
     });
 
     if (blob) {
@@ -4627,7 +4735,7 @@ function KhataPageInner() {
                           <button
                             onClick={() => setIsUniversalShareModalOpen(true)}
                             className="p-2 rounded-xl text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer"
-                            title="Universal Share (WhatsApp, SMS, Email, System Share, Copy, QR)"
+                            title="Share"
                           >
                             <Share2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                           </button>
@@ -6702,7 +6810,7 @@ function KhataPageInner() {
         </div>
       )}
 
-      {/* ================= MODAL: UNIVERSAL SHARE OPTIONS (Windows / Android / Mac / iPhone) ================= */}
+      {/* ================= MODAL: SHARE (Windows / Android / Mac / iPhone) ================= */}
       {isUniversalShareModalOpen && activeCustomer && (() => {
         const currentCustBal = customerBalances[activeCustomer.id] ?? 0;
         const modalDueAmount = Math.max(0, currentCustBal);
@@ -6717,8 +6825,11 @@ function KhataPageInner() {
           modalDueAmount > 0 ? modalDueAmount : undefined,
           `Payment from ${activeCustomer.name}`
         );
+        const appBaseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://khatapro-sooty.vercel.app';
+        const modalWebPayUrl = `${appBaseUrl}/pay?pa=${encodeURIComponent(modalUpiId)}&pn=${encodeURIComponent(modalPayeeName).replace(/%20/g, '+')}&am=${modalDueAmount > 0 ? modalDueAmount.toFixed(2) : '0'}&tn=${encodeURIComponent(`Payment from ${activeCustomer.name}`).replace(/%20/g, '+')}`;
+
         const modalShareText = modalDueAmount > 0
-          ? `Your balance of ${modalFormattedDue} is Due.\nPlease pay at the earliest.\n\n⚡ Direct UPI Link (Amount Locked):\n${modalUpiUri}\n\n—\n${modalBusinessName}${modalOfficialPhone ? `  (${modalOfficialPhone})` : ''}`
+          ? `*Payment Reminder from ${modalBusinessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${modalFormattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n👉 *Tap to Pay Online (Instant UPI)*:\n${modalWebPayUrl}\n\n⚡ *Direct UPI Link*:\n${modalUpiUri}\n\n—\n${modalBusinessName}${modalOfficialPhone ? `\n📞 ${modalOfficialPhone}` : ''}`
           : currentCustBal < 0
           ? `Advance balance of ${formatINR(Math.abs(currentCustBal))} available for ${activeCustomer.name}.\n—\n${modalBusinessName}${modalOfficialPhone ? `  (${modalOfficialPhone})` : ''}`
           : `All dues are cleared (₹0 Due) for ${activeCustomer.name}.\nThank you!\n\n—\n${modalBusinessName}${modalOfficialPhone ? `  (${modalOfficialPhone})` : ''}`;
@@ -6735,7 +6846,7 @@ function KhataPageInner() {
                   </div>
                   <div>
                     <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
-                      Universal Share Options
+                      Share
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       {activeCustomer.name} • {currentCustBal > 0 ? (
@@ -6778,11 +6889,11 @@ function KhataPageInner() {
 
                 {/* Share Channels Heading */}
                 <div className="text-xs font-black uppercase tracking-wider text-slate-400 px-1">
-                  Choose Share Channel (All Devices)
+                  Choose Share Channel
                 </div>
 
                 {/* Options Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   
                   {/* 1. WhatsApp (Direct Intent / Web + QR Image) */}
                   <button
@@ -6791,18 +6902,17 @@ function KhataPageInner() {
                       handleShareWhatsApp();
                       setIsUniversalShareModalOpen(false);
                     }}
-                    className="p-3.5 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/30 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/60 transition-all text-left flex items-start gap-3 group cursor-pointer shadow-xs active:scale-98"
+                    className="p-3.5 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/30 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
                   >
-                    <div className="w-10 h-10 rounded-xl bg-[#25D366] text-white flex items-center justify-center shrink-0 shadow-xs">
-                      <Share2 className="w-5 h-5" />
+                    <div className="w-9 h-9 rounded-xl bg-[#25D366] text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Share2 className="w-4 h-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1">
                         <span className="text-xs font-bold text-slate-900 dark:text-white">WhatsApp</span>
-                        <span className="px-1.5 py-0.2 rounded-md bg-emerald-600 text-white text-[9px] font-bold">Fast</span>
                       </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                        Direct chat send with QR card & locked UPI link
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                        QR card + pay link
                       </p>
                     </div>
                   </button>
@@ -6814,40 +6924,82 @@ function KhataPageInner() {
                       handleUniversalShare();
                       setIsUniversalShareModalOpen(false);
                     }}
-                    className="p-3.5 rounded-2xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 hover:bg-indigo-100/70 dark:hover:bg-indigo-950/60 transition-all text-left flex items-start gap-3 group cursor-pointer shadow-xs active:scale-98"
+                    className="p-3.5 rounded-2xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 hover:bg-indigo-100/70 dark:hover:bg-indigo-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
                   >
-                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                      <Smartphone className="w-5 h-5" />
+                    <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Smartphone className="w-4 h-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1">
                         <span className="text-xs font-bold text-slate-900 dark:text-white">System Share</span>
-                        <span className="px-1.5 py-0.2 rounded-md bg-indigo-600 text-white text-[9px] font-bold">All Apps</span>
                       </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                        Phone / OS native sheet (Telegram, Drive, etc.)
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                        Native sheet
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* 3. Download QR Card */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleDownloadQrCard();
+                      setIsUniversalShareModalOpen(false);
+                    }}
+                    className="p-3.5 rounded-2xl border border-purple-200 dark:border-purple-900/60 bg-purple-50/60 dark:bg-purple-950/30 hover:bg-purple-100/70 dark:hover:bg-purple-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <QrCode className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">Save QR</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                        Download card
                       </p>
                     </div>
                   </button>
 
                 </div>
 
-                {/* Copy UPI Link Row */}
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[11px] font-bold text-slate-500 uppercase">Direct UPI Link</div>
-                    <div className="text-xs font-mono text-indigo-600 dark:text-indigo-400 truncate">
-                      {modalUpiUri}
+                {/* Quick Copy Rows */}
+                <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                  {/* Copy Online Web Pay Link */}
+                  <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Online Pay Link (Clickable)</div>
+                      <div className="text-xs font-mono text-slate-700 dark:text-slate-300 truncate">
+                        {modalWebPayUrl}
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyShareText(modalWebPayUrl)}
+                      className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy Link</span>
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyUpiUri(modalUpiUri)}
-                    className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
-                  >
-                    <Copy className="w-4 h-4" />
-                    <span>Copy UPI Link</span>
-                  </button>
+
+                  {/* Copy Direct UPI Intent */}
+                  <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">Direct UPI Link</div>
+                      <div className="text-xs font-mono text-slate-700 dark:text-slate-300 truncate">
+                        {modalUpiUri}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyUpiUri(modalUpiUri)}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy UPI</span>
+                    </button>
+                  </div>
                 </div>
 
               </div>

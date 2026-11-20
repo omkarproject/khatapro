@@ -34,18 +34,59 @@ export function formatDate(dateStr: string): string {
 }
 
 export function buildUpiUri(upiId: string, payeeName: string, amount?: number, note?: string): string {
-  const cleanUpiId = (upiId || '').trim();
-  const cleanPayee = (payeeName || 'Merchant').trim();
+  const cleanUpiId = (upiId || '').toLowerCase().trim();
+  const cleanPayee = (payeeName || 'Merchant')
+    .replace(/[^a-zA-Z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 50) || 'Merchant';
+
   const parts: string[] = [
     `pa=${cleanUpiId}`,
-    `pn=${encodeURIComponent(cleanPayee)}`,
-    `cu=INR`,
+    `pn=${encodeURIComponent(cleanPayee).replace(/%20/g, '+')}`,
   ];
-  if (amount && amount > 0) {
-    parts.push(`am=${amount.toFixed(2)}`);
+  if (amount !== undefined && amount !== null && Number(amount) > 0) {
+    parts.push(`am=${Number(amount).toFixed(2)}`);
   }
+  parts.push(`cu=INR`);
   if (note) {
-    parts.push(`tn=${encodeURIComponent(note.trim())}`);
+    const cleanNote = note
+      .replace(/[^a-zA-Z0-9 ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 50);
+    if (cleanNote) {
+      parts.push(`tn=${encodeURIComponent(cleanNote).replace(/%20/g, '+')}`);
+    }
+  }
+  return `upi://pay?${parts.join('&')}`;
+}
+
+export function buildRawUpiQrString(upiId: string, payeeName: string, amount?: number, note?: string): string {
+  const cleanUpiId = (upiId || '').toLowerCase().trim();
+  const cleanPayee = (payeeName || 'Merchant')
+    .replace(/[^a-zA-Z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 50) || 'Merchant';
+
+  const parts: string[] = [
+    `pa=${cleanUpiId}`,
+    `pn=${cleanPayee}`,
+  ];
+  if (amount !== undefined && amount !== null && Number(amount) > 0) {
+    parts.push(`am=${Number(amount).toFixed(2)}`);
+  }
+  parts.push(`cu=INR`);
+  if (note) {
+    const cleanNote = note
+      .replace(/[^a-zA-Z0-9 ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 50);
+    if (cleanNote) {
+      parts.push(`tn=${cleanNote}`);
+    }
   }
   return `upi://pay?${parts.join('&')}`;
 }
