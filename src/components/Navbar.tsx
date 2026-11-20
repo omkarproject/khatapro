@@ -454,8 +454,11 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
   const overdueReminders = reminders.filter((r) => {
     if (dismissedAlerts.includes(`overdue_${r.id}`) || dismissedAlerts.includes(`reminder_${r.id}`)) return false;
     if (r.status === 'sent') return false;
-    // Reminder notification triggers on or after set dueDate, or if marked overdue
-    return !r.dueDate || r.dueDate <= todayStr || r.reminderType === 'overdue';
+    // Reminder notification triggers strictly on or after set dueDate (never early for future dates)
+    if (r.dueDate) {
+      return r.dueDate <= todayStr;
+    }
+    return r.reminderType === 'overdue';
   });
 
   const dueSavingsGoals = savingsGoals.filter((g) => {
@@ -550,6 +553,61 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     unreadGroupAlerts.length +
     (isBackupRunning || isBackupCompletedAlert || isBackupFailedAlert ? 1 : 0) +
     (isDriveUploadRunning || isDriveUploadCompletedAlert ? 1 : 0);
+
+  // 🔔 Play notification sound automatically whenever a new Notification/Alert ARRIVES (not on click)
+  const knownAlertIdsRef = useRef<Set<string> | null>(null);
+
+  useEffect(() => {
+    const currentAlertIds = new Set<string>([
+      ...lowStockProducts.map((p) => `low_stock_${p.id}`),
+      ...overdueReminders.map((r) => `overdue_${r.id}`),
+      ...dueSavingsGoals.map((g) => `savings_${g.id}`),
+      ...activeNoteReminders.map((n) => `note_${n.id}`),
+      ...activeTaskReminders.map((t) => `task_${t.id}`),
+      ...unreadSupportTickets.map((t) => `ticket_${t.id}`),
+      ...unreadGroupAlerts.map((n) => `grp_notif_${n.id}`),
+    ]);
+    if (isBackupCompletedAlert) currentAlertIds.add(`backup_${autoBackupProgress?.date || todayStr}`);
+    if (isBackupFailedAlert) currentAlertIds.add(`backup_failed_${autoBackupProgress?.date || todayStr}`);
+    if (isDriveUploadCompletedAlert && customerDriveProgress?.batchId) {
+      currentAlertIds.add(`drive_upload_${customerDriveProgress.batchId}`);
+    }
+
+    if (knownAlertIdsRef.current === null) {
+      // First mount: establish baseline without playing sound immediately on page refresh
+      knownAlertIdsRef.current = currentAlertIds;
+      return;
+    }
+
+    let hasNewAlert = false;
+    for (const id of currentAlertIds) {
+      if (!knownAlertIdsRef.current.has(id)) {
+        hasNewAlert = true;
+        break;
+      }
+    }
+
+    knownAlertIdsRef.current = currentAlertIds;
+
+    if (hasNewAlert) {
+      playPaymentNotificationSound();
+    }
+  }, [
+    lowStockProducts,
+    overdueReminders,
+    dueSavingsGoals,
+    activeNoteReminders,
+    activeTaskReminders,
+    unreadSupportTickets,
+    unreadGroupAlerts,
+    isBackupCompletedAlert,
+    isBackupFailedAlert,
+    isDriveUploadCompletedAlert,
+    autoBackupProgress?.date,
+    customerDriveProgress?.batchId,
+    todayStr,
+    playPaymentNotificationSound,
+  ]);
 
   const handleClearAllAlerts = () => {
     const allIds: string[] = [
@@ -668,11 +726,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
             <div ref={notificationRef} className="relative">
               <button
                 onClick={() => {
-                  const willOpen = !isNotificationsOpen;
-                  setIsNotificationsOpen(willOpen);
-                  if (willOpen && totalAlerts > 0) {
-                    playPaymentNotificationSound();
-                  }
+                  setIsNotificationsOpen((prev) => !prev);
                 }}
                 className="relative p-2 sm:p-2.5 rounded-2xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                 title="Notifications & Alerts"

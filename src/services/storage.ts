@@ -1644,6 +1644,7 @@ export const StorageService = {
     const list = StorageService.getReminders().filter(r => r.id !== id);
     setLocalItem(STORAGE_KEYS.REMINDERS, list);
     addDeletedRecordId('reminders', id);
+    addDeletedRecordId('payment_reminders', id);
     return list;
   },
   setReminders: (reminders: PaymentReminder[]): void => {

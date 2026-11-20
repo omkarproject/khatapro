@@ -31,15 +31,25 @@ export default function RemindersPage() {
   // Form State
   const [selectedCustomerId, setSelectedCustomerId] = useState(customers[0]?.id || '');
   const [amount, setAmount] = useState('');
-  const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
-  const [reminderType, setReminderType] = useState<'upcoming' | 'overdue' | 'custom'>('overdue');
+  const [dueDate, setDueDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [reminderType, setReminderType] = useState<'upcoming' | 'overdue' | 'custom'>('upcoming');
   const [messageTemplate, setMessageTemplate] = useState(
     'Friendly reminder regarding your pending balance. Kindly pay via UPI to keep your ledger up to date. Thank you!'
   );
 
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const overdueCount = reminders.filter(r => (r.dueDate ? r.dueDate < todayStr : r.reminderType === 'overdue')).length;
+  const upcomingCount = reminders.filter(r => (r.dueDate ? r.dueDate >= todayStr : r.reminderType !== 'overdue')).length;
+
   const filteredReminders = reminders.filter(r => {
-    if (filter === 'overdue') return r.reminderType === 'overdue';
-    if (filter === 'upcoming') return r.reminderType === 'upcoming';
+    const isPastDue = r.dueDate ? r.dueDate < todayStr : r.reminderType === 'overdue';
+    if (filter === 'overdue') return isPastDue;
+    if (filter === 'upcoming') return !isPastDue;
     return true;
   });
 
@@ -62,6 +72,7 @@ export default function RemindersPage() {
     const cust = customers.find(c => c.id === selectedCustomerId);
     if (!cust) return;
 
+    const computedType = reminderType === 'custom' ? 'custom' : (dueDate < todayStr ? 'overdue' : 'upcoming');
     const newRem: PaymentReminder = {
       id: `rem_${Date.now()}`,
       customerId: cust.id,
@@ -70,7 +81,7 @@ export default function RemindersPage() {
       customerEmail: cust.email,
       amount: parseFloat(amount) || cust.outstandingBalance || 1000,
       dueDate,
-      reminderType,
+      reminderType: computedType,
       channels: ['whatsapp', 'sms'],
       status: 'pending',
       messageTemplate,
@@ -126,7 +137,7 @@ export default function RemindersPage() {
           }`}
         >
           <AlertTriangle className="w-3.5 h-3.5" />
-          Overdue
+          Overdue ({overdueCount})
         </button>
         <button
           onClick={() => setFilter('upcoming')}
@@ -137,14 +148,20 @@ export default function RemindersPage() {
           }`}
         >
           <Clock className="w-3.5 h-3.5" />
-          Upcoming Due
+          Upcoming Due ({upcomingCount})
         </button>
       </div>
 
       {/* Reminders Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filteredReminders.map((rem) => {
-          const isOverdue = rem.reminderType === 'overdue';
+          const isPastDue = rem.dueDate ? rem.dueDate < todayStr : rem.reminderType === 'overdue';
+          const isDueToday = rem.dueDate ? rem.dueDate === todayStr : false;
+          const statusBadge = isPastDue
+            ? { text: 'OVERDUE', cls: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400' }
+            : isDueToday
+            ? { text: 'DUE TODAY', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' }
+            : { text: 'UPCOMING', cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400' };
 
           return (
             <div
@@ -163,13 +180,9 @@ export default function RemindersPage() {
                   </div>
 
                   <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                      isOverdue
-                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400'
-                        : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
-                    }`}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${statusBadge.cls}`}
                   >
-                    {rem.reminderType}
+                    {statusBadge.text}
                   </span>
                 </div>
 

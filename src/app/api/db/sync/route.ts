@@ -1418,7 +1418,19 @@ export async function POST(req: NextRequest) {
       // Helper to batch upsert converted rows and remove deleted records from Supabase
       const syncRowsWithDeletions = async (table: string, rows: any[]) => {
         const activeIds = new Set(rows.map(r => r.id));
-        const tableDeletedSet = allDeletedIds && Array.isArray(allDeletedIds[table]) ? new Set(allDeletedIds[table]) : null;
+        const aliasKeys = [table];
+        if (table === 'payment_reminders') aliasKeys.push('reminders');
+        if (table === 'reminders') aliasKeys.push('payment_reminders');
+        if (table === 'savings_goals') aliasKeys.push('savingsGoals');
+
+        const tableDeletedSet = new Set<string>();
+        if (allDeletedIds) {
+          aliasKeys.forEach(k => {
+            if (Array.isArray(allDeletedIds[k])) {
+              allDeletedIds[k].forEach((id: string) => tableDeletedSet.add(String(id)));
+            }
+          });
+        }
 
         // 1. Delete rows in Supabase that the user has deleted
         const { data: existing, error: fetchErr } = await supabase

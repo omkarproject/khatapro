@@ -630,7 +630,18 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           // Universal entity merger to protect against stale data and eliminate multi-device conflicts
           const mergeEntities = <T extends { id: string }>(localList: T[], cloudList?: T[], tableName?: string): T[] => {
             if (!Array.isArray(cloudList)) return localList;
-            const deletedIds = tableName ? StorageService.getDeletedRecordIds(tableName) : new Set<string>();
+            const deletedIds = new Set<string>();
+            if (tableName) {
+              StorageService.getDeletedRecordIds(tableName).forEach(id => deletedIds.add(id));
+              if (tableName === 'reminders' || tableName === 'payment_reminders') {
+                StorageService.getDeletedRecordIds('reminders').forEach(id => deletedIds.add(id));
+                StorageService.getDeletedRecordIds('payment_reminders').forEach(id => deletedIds.add(id));
+              }
+              if (tableName === 'savings_goals' || tableName === 'savingsGoals') {
+                StorageService.getDeletedRecordIds('savings_goals').forEach(id => deletedIds.add(id));
+                StorageService.getDeletedRecordIds('savingsGoals').forEach(id => deletedIds.add(id));
+              }
+            }
 
             // 1. Map all incoming cloud entities (excluding local pending deletions)
             const incomingMap = new Map<string, T>();
@@ -2467,9 +2478,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     const updated = StorageService.saveNote(note);
     setNotes(updated);
     addToast('Note Saved', `Note "${note.title}" saved.`, 'success');
+    const linkedRemId = `note_rem_${note.id}`;
     if (note.reminderDate) {
       const noteRem: PaymentReminder = {
-        id: `note_rem_${note.id}`,
+        id: linkedRemId,
         customerId: 'notes_tasks_module',
         customerName: `📌 Note: ${note.title}`,
         customerPhone: '',
@@ -2483,6 +2495,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         createdAt: new Date().toISOString(),
       };
       saveReminder(noteRem);
+    } else {
+      if (StorageService.getReminders().some(r => r.id === linkedRemId)) {
+        deleteReminder(linkedRemId);
+      }
     }
     syncWithDatabase();
   };
@@ -2491,7 +2507,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     const updated = StorageService.deleteNote(id);
     setNotes(updated);
     const linkedRemId = `note_rem_${id}`;
-    if (reminders.some(r => r.id === linkedRemId)) {
+    if (StorageService.getReminders().some(r => r.id === linkedRemId)) {
       deleteReminder(linkedRemId);
     }
     addToast('Note Deleted', 'Note removed.', 'info');
@@ -2502,9 +2518,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     const updated = StorageService.saveTask(task);
     setTasks(updated);
     addToast('Task Saved', `Task "${task.title}" saved.`, 'success');
+    const linkedRemId = `task_rem_${task.id}`;
     if (task.reminderDate) {
       const taskRem: PaymentReminder = {
-        id: `task_rem_${task.id}`,
+        id: linkedRemId,
         customerId: 'notes_tasks_module',
         customerName: `📋 Task: ${task.title}`,
         customerPhone: '',
@@ -2518,6 +2535,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         createdAt: new Date().toISOString(),
       };
       saveReminder(taskRem);
+    } else {
+      if (StorageService.getReminders().some(r => r.id === linkedRemId)) {
+        deleteReminder(linkedRemId);
+      }
     }
     syncWithDatabase();
   };
@@ -2528,6 +2549,14 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     const target = updated.find(t => t.id === id);
     if (target?.isCompleted) {
       addToast('Task Completed', `"${target.title}" completed! 🎉`, 'success');
+    }
+    const linkedRem = StorageService.getReminders().find(r => r.id === `task_rem_${id}`);
+    if (linkedRem) {
+      saveReminder({
+        ...linkedRem,
+        status: target?.isCompleted ? 'sent' : 'pending',
+        sentAt: target?.isCompleted ? new Date().toISOString() : undefined,
+      });
     }
     syncWithDatabase();
   };

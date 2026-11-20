@@ -1690,7 +1690,8 @@ function KhataPageInner() {
       tomorrow.setDate(tomorrow.getDate() + 1);
       setReminderDate(tomorrow.toISOString().split('T')[0]);
       setReminderNote(txn.note ? `Payment reminder: ${txn.note}` : `Payment reminder for ${activeCustomer.name}`);
-      setReminderType(txn.type === 'credit' ? 'overdue' : 'upcoming');
+      const todayStr = new Date().toISOString().split('T')[0];
+      setReminderType(tomorrow.toISOString().split('T')[0] < todayStr ? 'overdue' : 'upcoming');
     }
     setIsReminderModalOpen(true);
   };
@@ -1718,7 +1719,7 @@ function KhataPageInner() {
       customerEmail: activeCustomer.email,
       amount: num,
       dueDate: reminderDate,
-      reminderType: reminderType,
+      reminderType: reminderDate < new Date().toISOString().split('T')[0] ? 'overdue' : (reminderType === 'custom' ? 'custom' : 'upcoming'),
       channels: ['whatsapp', 'sms'],
       status: 'pending',
       messageTemplate: reminderNote.trim() || `Payment reminder for ${activeCustomer.name}`,
@@ -2055,7 +2056,7 @@ function KhataPageInner() {
         customerEmail: activeCustomer.email,
         amount: num,
         dueDate: entryReminderDate,
-        reminderType: isGot ? 'upcoming' : 'overdue',
+        reminderType: entryReminderDate < new Date().toISOString().split('T')[0] ? 'overdue' : 'upcoming',
         channels: ['whatsapp', 'sms'],
         status: 'pending',
         messageTemplate: entryReminderNote.trim() || entryNotes.trim() || `Payment reminder for ${activeCustomer.name}`,
