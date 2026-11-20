@@ -3567,7 +3567,8 @@ function KhataPageInner() {
       );
 
       const appBaseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://khatapro-sooty.vercel.app';
-      const webPayUrl = `${appBaseUrl}/pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName).replace(/%20/g, '+')}&am=${numDue > 0 ? numDue.toFixed(2) : '0'}&tn=${encodeURIComponent(`Payment from ${activeCustomer.name}`).replace(/%20/g, '+')}&cid=${encodeURIComponent(activeCustomer.id)}&cn=${encodeURIComponent(activeCustomer.name).replace(/%20/g, '+')}&cphone=${encodeURIComponent(activeCustomer.phone || '')}`;
+      const activeGw = settings.paymentSettings?.collectionMode || 'cashfree';
+      const webPayUrl = `${appBaseUrl}/pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName).replace(/%20/g, '+')}&am=${numDue > 0 ? numDue.toFixed(2) : '0'}&tn=${encodeURIComponent(`Payment from ${activeCustomer.name}`).replace(/%20/g, '+')}&cid=${encodeURIComponent(activeCustomer.id)}&cn=${encodeURIComponent(activeCustomer.name).replace(/%20/g, '+')}&cphone=${encodeURIComponent(activeCustomer.phone || '')}&gw=${encodeURIComponent(activeGw)}`;
 
       // Real payment reminder with locked online pay link and UPI intent
       const messageText = numDue > 0
@@ -3668,7 +3669,8 @@ function KhataPageInner() {
       );
 
       const appBaseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://khatapro-sooty.vercel.app';
-      const webPayUrl = `${appBaseUrl}/pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName).replace(/%20/g, '+')}&am=${numDue > 0 ? numDue.toFixed(2) : '0'}&tn=${encodeURIComponent(`Payment from ${activeCustomer.name}`).replace(/%20/g, '+')}&cid=${encodeURIComponent(activeCustomer.id)}&cn=${encodeURIComponent(activeCustomer.name).replace(/%20/g, '+')}&cphone=${encodeURIComponent(activeCustomer.phone || '')}`;
+      const activeGw = settings.paymentSettings?.collectionMode || 'cashfree';
+      const webPayUrl = `${appBaseUrl}/pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName).replace(/%20/g, '+')}&am=${numDue > 0 ? numDue.toFixed(2) : '0'}&tn=${encodeURIComponent(`Payment from ${activeCustomer.name}`).replace(/%20/g, '+')}&cid=${encodeURIComponent(activeCustomer.id)}&cn=${encodeURIComponent(activeCustomer.name).replace(/%20/g, '+')}&cphone=${encodeURIComponent(activeCustomer.phone || '')}&gw=${encodeURIComponent(activeGw)}`;
 
       const shareText = numDue > 0
         ? `*Payment Reminder from ${businessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${formattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n👉 *Tap to Pay Online (Instant UPI)*:\n${webPayUrl}\n\n⚡ *Direct UPI Link*:\n${upiUri}\n\n—\n${businessName}${officialPhone ? `  (${officialPhone})` : ''}`
@@ -6827,7 +6829,8 @@ function KhataPageInner() {
           `Payment from ${activeCustomer.name}`
         );
         const appBaseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://khatapro-sooty.vercel.app';
-        const modalWebPayUrl = `${appBaseUrl}/pay?pa=${encodeURIComponent(modalUpiId)}&pn=${encodeURIComponent(modalPayeeName).replace(/%20/g, '+')}&am=${modalDueAmount > 0 ? modalDueAmount.toFixed(2) : '0'}&tn=${encodeURIComponent(`Payment from ${activeCustomer.name}`).replace(/%20/g, '+')}&cid=${encodeURIComponent(activeCustomer.id)}&cn=${encodeURIComponent(activeCustomer.name).replace(/%20/g, '+')}&cphone=${encodeURIComponent(activeCustomer.phone || '')}`;
+        const modalActiveGw = settings.paymentSettings?.collectionMode || 'cashfree';
+        const modalWebPayUrl = `${appBaseUrl}/pay?pa=${encodeURIComponent(modalUpiId)}&pn=${encodeURIComponent(modalPayeeName).replace(/%20/g, '+')}&am=${modalDueAmount > 0 ? modalDueAmount.toFixed(2) : '0'}&tn=${encodeURIComponent(`Payment from ${activeCustomer.name}`).replace(/%20/g, '+')}&cid=${encodeURIComponent(activeCustomer.id)}&cn=${encodeURIComponent(activeCustomer.name).replace(/%20/g, '+')}&cphone=${encodeURIComponent(activeCustomer.phone || '')}&gw=${encodeURIComponent(modalActiveGw)}`;
 
         const modalShareText = modalDueAmount > 0
           ? `*Payment Reminder from ${modalBusinessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${modalFormattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n👉 *Tap to Pay Online (Instant UPI)*:\n${modalWebPayUrl}\n\n⚡ *Direct UPI Link*:\n${modalUpiUri}\n\n—\n${modalBusinessName}${modalOfficialPhone ? `\n📞 ${modalOfficialPhone}` : ''}`

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCashfreeConfig } from '@/lib/cashfreeServer';
+import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,9 +15,32 @@ export async function POST(req: NextRequest) {
     }
 
     const serverConfig = getCashfreeConfig();
-    const finalAppId = (appId || serverConfig.appId || process.env.CASHFREE_APP_ID || '').trim();
-    const finalSecretKey = (secretKey || serverConfig.secretKey || process.env.CASHFREE_SECRET_KEY || '').trim();
-    const finalEnv = (env || serverConfig.env || process.env.CASHFREE_ENV || 'production') as 'sandbox' | 'production';
+    let finalAppId = (appId || serverConfig.appId || process.env.CASHFREE_APP_ID || '').trim();
+    let finalSecretKey = (secretKey || serverConfig.secretKey || process.env.CASHFREE_SECRET_KEY || '').trim();
+    let finalEnv = (env || serverConfig.env || process.env.CASHFREE_ENV || 'production') as 'sandbox' | 'production';
+
+    // Fallback: fetch from Supabase settings if credentials not passed by client
+    if ((!finalAppId || !finalSecretKey) && isSupabaseConfigured()) {
+      try {
+        const supabase = getSupabaseAdmin();
+        if (supabase) {
+          const { data: setRow } = await supabase.from('settings').select('payment_settings').limit(1).maybeSingle();
+          if (setRow?.payment_settings) {
+            if (!finalAppId && setRow.payment_settings.cashfreeAppId) {
+              finalAppId = setRow.payment_settings.cashfreeAppId.trim();
+            }
+            if (!finalSecretKey && setRow.payment_settings.cashfreeSecretKey) {
+              finalSecretKey = setRow.payment_settings.cashfreeSecretKey.trim();
+            }
+            if (setRow.payment_settings.cashfreeEnv) {
+              finalEnv = setRow.payment_settings.cashfreeEnv;
+            }
+          }
+        }
+      } catch (dbErr) {
+        console.warn('Error reading Cashfree credentials from Supabase in verify:', dbErr);
+      }
+    }
 
     if (!finalAppId || !finalSecretKey) {
       return NextResponse.json(
