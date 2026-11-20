@@ -8,7 +8,7 @@ import {
   LayoutDashboard,
   BookOpen,
   QrCode,
-  FileSpreadsheet,
+  Receipt,
   Users
 } from 'lucide-react';
 
@@ -20,7 +20,7 @@ function MobileNavComponent() {
     { label: 'Home', href: '/', icon: LayoutDashboard },
     { label: 'Khata', href: '/khata', icon: BookOpen },
     { label: 'Collect', isAction: true, icon: QrCode },
-    { label: 'Invoices', href: '/invoices', icon: FileSpreadsheet },
+    { label: 'Expenses', href: '/expenses', icon: Receipt },
     { label: 'CRM', href: '/customers', icon: Users },
   ];
 

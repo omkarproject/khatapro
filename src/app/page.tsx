@@ -11,6 +11,9 @@ import {
   TrendingDown,
   ArrowUpRight,
   ArrowDownLeft,
+  ArrowUp,
+  ArrowDown,
+  BookOpen,
   Users,
   CreditCard,
   Receipt,
@@ -614,15 +617,27 @@ export default function DashboardPage() {
           }`}>
             {formatINR(metrics.khataDisplayAmount)}
           </div>
-          <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 gap-1">
-            <span className="truncate">
-              <span className="text-rose-500 font-bold">DEBIT: {formatINR(metrics.khataDebit)}</span>
-              <span className="mx-1 text-slate-300 dark:text-slate-600 font-normal">•</span>
-              <span className="text-emerald-500 font-bold">CREDIT: {formatINR(metrics.khataCredit)}</span>
-            </span>
-            <Link href="/khata" className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold shrink-0">
-              <span className="hidden sm:inline">View Khata →</span>
-              <span className="sm:hidden">Khata →</span>
+          <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 gap-1">
+            <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 flex-wrap">
+              <span className="text-rose-500 font-bold flex items-center gap-0.5 whitespace-nowrap" title={`Debit / Given: ${formatINR(metrics.khataDebit)}`}>
+                <ArrowUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 stroke-[2.5]" />
+                <span className="hidden md:inline text-[9px] uppercase font-semibold">Debit:</span>
+                <span>{formatINR(metrics.khataDebit)}</span>
+              </span>
+              <span className="text-slate-300 dark:text-slate-600 font-normal">•</span>
+              <span className="text-emerald-500 font-bold flex items-center gap-0.5 whitespace-nowrap" title={`Credit / Received: ${formatINR(metrics.khataCredit)}`}>
+                <ArrowDown className="w-2.5 h-2.5 sm:w-3 sm:h-3 stroke-[2.5]" />
+                <span className="hidden md:inline text-[9px] uppercase font-semibold">Credit:</span>
+                <span>{formatINR(metrics.khataCredit)}</span>
+              </span>
+            </div>
+            <Link
+              href="/khata"
+              className="p-1 sm:px-1.5 sm:py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-all shrink-0 flex items-center gap-1"
+              title="Open Digital KhataBook"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline text-[10px] font-bold">Khata</span>
             </Link>
           </div>
         </div>
@@ -640,19 +655,25 @@ export default function DashboardPage() {
           <div className="text-lg sm:text-2xl font-black text-rose-600 dark:text-rose-400 truncate">
             {formatINR(metrics.currentMonthExpenses)}
           </div>
-          <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 gap-1">
-            <span className="truncate mr-1 font-semibold">
-              <span>WEEK: {formatINR(metrics.currentWeekExpenses)}</span>
-              <span className="mx-1 text-slate-300 dark:text-slate-600 font-normal">•</span>
-              <span>DAY: {formatINR(metrics.todayExpenses)}</span>
-            </span>
+          <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 gap-1">
+            <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 flex-wrap">
+              <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-0.5 whitespace-nowrap" title={`This Week: ${formatINR(metrics.currentWeekExpenses)}`}>
+                <span className="text-[9px] uppercase font-bold text-slate-400">W:</span>
+                <span>{formatINR(metrics.currentWeekExpenses)}</span>
+              </span>
+              <span className="text-slate-300 dark:text-slate-600 font-normal">•</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-0.5 whitespace-nowrap" title={`Today: ${formatINR(metrics.todayExpenses)}`}>
+                <span className="text-[9px] uppercase font-bold text-slate-400">D:</span>
+                <span>{formatINR(metrics.todayExpenses)}</span>
+              </span>
+            </div>
             <Link
               href="/expenses"
-              className="text-rose-600 dark:text-rose-400 hover:underline font-bold shrink-0 flex items-center gap-0.5"
-              title="Open Expense & Outflow Tracker"
+              className="p-1 sm:px-1.5 sm:py-0.5 rounded-lg bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-all shrink-0 flex items-center gap-1"
+              title="Open Expense Tracker"
             >
-              <span>Expenses</span>
-              <span className="text-[9px]">→</span>
+              <Receipt className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline text-[10px] font-bold">Expenses</span>
             </Link>
           </div>
         </div>
@@ -676,21 +697,38 @@ export default function DashboardPage() {
           }`}>
             {formatINR(metrics.netAmount)}
           </div>
-          <div className="flex items-center justify-between text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 mt-1 gap-1">
-            <span className="truncate font-semibold">
-              <span>KHATA: {formatINR(metrics.khataBase)}</span>
-              <span className="mx-1 text-slate-300 dark:text-slate-600 font-normal">•</span>
-              <span>EXP: {formatINR(metrics.currentMonthExpenses)}</span>
-              <span className="mx-1 text-slate-300 dark:text-slate-600 font-normal">•</span>
-              <span>INV: {formatINR(metrics.totalInvoiceAmount)}</span>
-            </span>
-            <span className={`text-[9px] sm:text-[10px] font-bold shrink-0 px-1.5 py-0.5 rounded-md ${
-              metrics.isNetPositive
-                ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60'
-                : 'text-rose-600 bg-rose-50 dark:bg-rose-950/60'
-            }`}>
-              {metrics.isNetPositive ? 'Net +' : 'Net -'}
-            </span>
+          <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 gap-1">
+            <div className="flex items-center gap-1 min-w-0 flex-wrap text-[9.5px] sm:text-[10px]">
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap" title={`Khata: ${formatINR(metrics.khataBase)}`}>
+                <span className="text-[8.5px] uppercase text-slate-400 font-semibold mr-0.5">K:</span>
+                {formatINR(metrics.khataBase)}
+              </span>
+              <span className="text-slate-300 dark:text-slate-600 font-normal">•</span>
+              <span className="text-rose-600 dark:text-rose-400 font-bold whitespace-nowrap" title={`Expenses: ${formatINR(metrics.currentMonthExpenses)}`}>
+                <span className="text-[8.5px] uppercase text-slate-400 font-semibold mr-0.5">E:</span>
+                {formatINR(metrics.currentMonthExpenses)}
+              </span>
+              <span className="text-slate-300 dark:text-slate-600 font-normal">•</span>
+              <span className="text-indigo-600 dark:text-indigo-400 font-bold whitespace-nowrap" title={`Invoices: ${formatINR(metrics.totalInvoiceAmount)}`}>
+                <span className="text-[8.5px] uppercase text-slate-400 font-semibold mr-0.5">I:</span>
+                {formatINR(metrics.totalInvoiceAmount)}
+              </span>
+            </div>
+            <div
+              className={`p-1 sm:px-1.5 sm:py-0.5 rounded-lg shrink-0 flex items-center gap-1 ${
+                metrics.isNetPositive
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400'
+              }`}
+              title={metrics.isNetPositive ? 'Net Positive (+)' : 'Net Negative (-)'}
+            >
+              {metrics.isNetPositive ? (
+                <TrendingUp className="w-3.5 h-3.5" />
+              ) : (
+                <TrendingDown className="w-3.5 h-3.5" />
+              )}
+              <span className="hidden sm:inline text-[10px] font-bold">{metrics.isNetPositive ? 'Net +' : 'Net -'}</span>
+            </div>
           </div>
         </div>
 
@@ -707,18 +745,18 @@ export default function DashboardPage() {
           <div className="text-lg sm:text-2xl font-black text-slate-900 dark:text-white truncate">
             {formatINR(metrics.totalOnlineCollections)}
           </div>
-          <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 gap-1">
-            <span className="truncate text-slate-500">
+          <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 gap-1">
+            <span className="truncate text-slate-500 font-semibold text-[9.5px] sm:text-[10.5px]">
               <span className="hidden sm:inline">Payment Collection Hub</span>
               <span className="sm:hidden">Collection Hub</span>
             </span>
             <Link
               href="/upi-collection"
-              className="text-cyan-600 dark:text-cyan-400 hover:underline font-bold shrink-0 text-[10px] sm:text-[11px]"
+              className="p-1 sm:px-1.5 sm:py-0.5 rounded-lg bg-cyan-50 dark:bg-cyan-950/50 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 transition-all shrink-0 flex items-center gap-1"
               title="Open Payment Collection Hub"
             >
-              <span className="hidden sm:inline">Collection Hub →</span>
-              <span className="sm:hidden">Hub →</span>
+              <CreditCard className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline text-[10px] font-bold">Hub</span>
             </Link>
           </div>
         </div>
