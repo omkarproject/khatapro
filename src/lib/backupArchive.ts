@@ -41,6 +41,7 @@ export interface FullBusinessData {
   notes?: any[];
   tasks?: any[];
   passwords?: any[];
+  authenticators?: any[];
   customerDrive?: { folders: any[]; files: any[] };
 }
 
@@ -79,6 +80,7 @@ export async function createBackupArchive(
   const notes = data.notes || [];
   const tasks = data.tasks || [];
   const passwords = data.passwords || [];
+  const authenticators = data.authenticators || [];
   const customerDrive = data.customerDrive || { folders: [], files: [] };
 
   const recordCounts = {
@@ -93,6 +95,7 @@ export async function createBackupArchive(
     notes: notes.length,
     tasks: tasks.length,
     passwords: passwords.length,
+    authenticators: authenticators.length,
     customerDriveFiles: (customerDrive.files || []).length,
   };
 
@@ -111,6 +114,7 @@ export async function createBackupArchive(
     'notes.json',
     'tasks.json',
     'passwords.json',
+    'authenticators.json',
     'customer_drive.json',
   ];
 
@@ -128,6 +132,7 @@ export async function createBackupArchive(
   zip.file('notes.json', JSON.stringify(notes, null, 2));
   zip.file('tasks.json', JSON.stringify(tasks, null, 2));
   zip.file('passwords.json', JSON.stringify(passwords, null, 2));
+  zip.file('authenticators.json', JSON.stringify(authenticators, null, 2));
   zip.file('customer_drive.json', JSON.stringify(customerDrive, null, 2));
 
   // Compute checksum across all module payloads
@@ -216,6 +221,7 @@ export async function parseBackupArchive(zipBuffer: Buffer): Promise<{
     notes: await readJson('notes.json', []),
     tasks: await readJson('tasks.json', []),
     passwords: await readJson('passwords.json', []),
+    authenticators: await readJson('authenticators.json', []),
     customerDrive: await readJson('customer_drive.json', { folders: [], files: [] }),
   };
 
@@ -286,6 +292,7 @@ export async function createMasterSystemBackupArchive(
     zip.file(`${userFolder}/notes.json`, JSON.stringify(d.notes || [], null, 2));
     zip.file(`${userFolder}/tasks.json`, JSON.stringify(d.tasks || [], null, 2));
     zip.file(`${userFolder}/passwords.json`, JSON.stringify(d.passwords || [], null, 2));
+    zip.file(`${userFolder}/authenticators.json`, JSON.stringify(d.authenticators || [], null, 2));
 
     merchantsSummary.push({
       userId: p.id,

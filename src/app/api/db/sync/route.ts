@@ -312,6 +312,22 @@ function passwordToDb(p: any, userId: string) {
   };
 }
 
+function authenticatorToDb(a: any, userId: string) {
+  return {
+    id: String(a.id),
+    user_id: userId,
+    issuer: a.issuer || '',
+    account_name: a.accountName || a.account_name || '',
+    secret: a.secret || '',
+    category: a.category || 'Other',
+    notes: a.notes || null,
+    period: Number(a.period) || 30,
+    digits: Number(a.digits) || 6,
+    created_at: a.createdAt || a.created_at || new Date().toISOString(),
+    updated_at: a.updatedAt || a.updated_at || new Date().toISOString(),
+  };
+}
+
 function customerDriveFolderToDb(f: any, userId: string) {
   return {
     id: String(f.id),
@@ -710,6 +726,21 @@ function passwordFromDb(row: any) {
   };
 }
 
+function authenticatorFromDb(row: any) {
+  return {
+    id: String(row.id),
+    issuer: row.issuer || '',
+    accountName: row.account_name || row.accountName || '',
+    secret: row.secret || '',
+    category: row.category || 'Other',
+    notes: row.notes || undefined,
+    period: Number(row.period) || 30,
+    digits: Number(row.digits) || 6,
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || row.created_at || new Date().toISOString(),
+  };
+}
+
 function customerDriveFolderFromDb(row: any) {
   return {
     id: row.id,
@@ -828,6 +859,7 @@ export async function GET(req: NextRequest) {
       sbNotes,
       sbTasks,
       sbPass,
+      sbAuth,
       sbDriveFld,
       sbDriveFile,
       sbSet,
@@ -846,6 +878,7 @@ export async function GET(req: NextRequest) {
       supabase.from('notes').select('*').eq('user_id', userId),
       supabase.from('tasks').select('*').eq('user_id', userId),
       supabase.from('passwords').select('*').eq('user_id', userId),
+      supabase.from('authenticators').select('*').eq('user_id', userId),
       supabase.from('customer_drive_folders').select('*').eq('user_id', userId),
       supabase.from('customer_drive_files').select('*').eq('user_id', userId),
       supabase.from('system_settings').select('*').eq('user_id', userId).maybeSingle(),
@@ -903,6 +936,28 @@ export async function GET(req: NextRequest) {
       websiteSupportEmail: globalBranding?.websiteSupportEmail !== undefined ? globalBranding.websiteSupportEmail : (sbSet.data.payment_settings?.websiteSupportEmail ?? ''),
     } : null;
 
+    let loadedAuthenticators: any[] = [];
+    if (sbAuth?.data && Array.isArray(sbAuth.data) && sbAuth.data.length > 0) {
+      loadedAuthenticators = sbAuth.data.map(authenticatorFromDb);
+    } else if (Array.isArray(sbSet?.data?.payment_settings?.authenticators) && sbSet.data.payment_settings.authenticators.length > 0) {
+      loadedAuthenticators = sbSet.data.payment_settings.authenticators;
+    }
+
+    let loadedNotes = (sbNotes?.data || []).map(noteFromDb);
+    if (loadedNotes.length === 0 && Array.isArray(sbSet?.data?.payment_settings?.notesBackup) && sbSet.data.payment_settings.notesBackup.length > 0) {
+      loadedNotes = sbSet.data.payment_settings.notesBackup;
+    }
+
+    let loadedTasks = (sbTasks?.data || []).map(taskFromDb);
+    if (loadedTasks.length === 0 && Array.isArray(sbSet?.data?.payment_settings?.tasksBackup) && sbSet.data.payment_settings.tasksBackup.length > 0) {
+      loadedTasks = sbSet.data.payment_settings.tasksBackup;
+    }
+
+    let loadedPasswords = (sbPass?.data || []).map(passwordFromDb);
+    if (loadedPasswords.length === 0 && Array.isArray(sbSet?.data?.payment_settings?.passwordsBackup) && sbSet.data.payment_settings.passwordsBackup.length > 0) {
+      loadedPasswords = sbSet.data.payment_settings.passwordsBackup;
+    }
+
     const finalData = {
       customers: (sbCust.data || []).map(customerFromDb),
       transactions: (sbTxn.data || []).map(transactionFromDb),
@@ -912,9 +967,10 @@ export async function GET(req: NextRequest) {
       savingsGoals: (sbSavings.data || []).map(savingsGoalFromDb),
       reminders: (sbRem.data || []).map(reminderFromDb),
       documents: (sbDoc.data || []).map(documentFromDb),
-      notes: (sbNotes.data || []).map(noteFromDb),
-      tasks: (sbTasks.data || []).map(taskFromDb),
-      passwords: (sbPass.data || []).map(passwordFromDb),
+      notes: loadedNotes,
+      tasks: loadedTasks,
+      passwords: loadedPasswords,
+      authenticators: loadedAuthenticators,
       customerDriveFolders: (sbDriveFld.data || []).map(customerDriveFolderFromDb),
       customerDriveFiles: (sbDriveFile.data || []).map(customerDriveFileFromDb),
       settings: finalSettings,
@@ -1477,6 +1533,15 @@ export async function POST(req: NextRequest) {
         promises.push(syncRowsWithDeletions('passwords', rows));
       }
 
+      if (Array.isArray(data.authenticators)) {
+        const rows = data.authenticators.filter((a: any) => a && a.id).map((a: any) => authenticatorToDb(a, userId));
+        promises.push(
+          syncRowsWithDeletions('authenticators', rows).catch((err) => {
+            console.warn('Sync authenticators table warning (may not exist yet):', err);
+          })
+        );
+      }
+
       if (Array.isArray(data.customerDriveFolders)) {
         const rows = data.customerDriveFolders.filter((f: any) => f && f.id).map((f: any) => customerDriveFolderToDb(f, userId));
         promises.push(syncRowsWithDeletions('customer_drive_folders', rows));
@@ -1502,6 +1567,12 @@ export async function POST(req: NextRequest) {
           currency: data.settings.currency || data.settings.paymentSettings?.currency || 'INR',
           language: data.settings.language || data.settings.paymentSettings?.language || 'en',
           gstin: data.settings.gstin || data.settings.paymentSettings?.gstin || '',
+          authenticators: Array.isArray(data.authenticators) 
+            ? data.authenticators 
+            : (data.settings?.paymentSettings?.authenticators || []),
+          notesBackup: Array.isArray(data.notes) ? data.notes : undefined,
+          tasksBackup: Array.isArray(data.tasks) ? data.tasks : undefined,
+          passwordsBackup: Array.isArray(data.passwords) ? data.passwords : undefined,
           businessLogo: logoToSave,
           websiteName: data.settings.websiteName || '',
           websiteLogo: data.settings.websiteLogo || '',

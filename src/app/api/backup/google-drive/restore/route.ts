@@ -44,12 +44,17 @@ export async function POST(req: NextRequest) {
     const restoredNotes = remapItems(data.notes);
     const restoredTasks = remapItems(data.tasks);
     const restoredPasswords = remapItems(data.passwords);
+    const restoredAuthenticators = remapItems(data.authenticators);
 
     // Remap settings
     const restoredSettings = {
       ...(data.settings || {}),
       userId: targetUserId,
       user_id: targetUserId,
+      paymentSettings: {
+        ...(data.settings?.paymentSettings || {}),
+        authenticators: restoredAuthenticators,
+      },
     };
 
     // Remap profile
@@ -84,6 +89,7 @@ export async function POST(req: NextRequest) {
         batchUpsert('notes', restoredNotes),
         batchUpsert('tasks', restoredTasks),
         batchUpsert('passwords', restoredPasswords),
+        batchUpsert('authenticators', restoredAuthenticators).catch(() => null),
       ]);
 
       await supabase.from('system_settings').upsert({
@@ -121,6 +127,7 @@ export async function POST(req: NextRequest) {
       notes: restoredNotes.length,
       tasks: restoredTasks.length,
       passwords: restoredPasswords.length,
+      authenticators: restoredAuthenticators.length,
     };
 
     return NextResponse.json({
@@ -140,6 +147,7 @@ export async function POST(req: NextRequest) {
         notes: restoredNotes,
         tasks: restoredTasks,
         passwords: restoredPasswords,
+        authenticators: restoredAuthenticators,
         settings: restoredSettings,
         profile: restoredProfile,
       },

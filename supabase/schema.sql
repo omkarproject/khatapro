@@ -271,6 +271,22 @@ CREATE TABLE IF NOT EXISTS public.passwords (
   PRIMARY KEY (id, user_id)
 );
 
+-- 13b. Authenticators (2FA TOTP Accounts) Table
+CREATE TABLE IF NOT EXISTS public.authenticators (
+  id TEXT NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  issuer TEXT NOT NULL,
+  account_name TEXT NOT NULL,
+  secret TEXT NOT NULL,
+  category TEXT DEFAULT 'Other',
+  notes TEXT,
+  period INT DEFAULT 30,
+  digits INT DEFAULT 6,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (id, user_id)
+);
+
 -- 14. Customer Drive Folders Table
 CREATE TABLE IF NOT EXISTS public.customer_drive_folders (
   id TEXT NOT NULL,
@@ -354,6 +370,7 @@ ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.passwords ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.authenticators ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customer_drive_folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customer_drive_files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.google_drive_tokens ENABLE ROW LEVEL SECURITY;
@@ -377,6 +394,7 @@ CREATE POLICY "documents_isolation" ON public.documents FOR ALL USING (auth.uid(
 CREATE POLICY "notes_isolation" ON public.notes FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "tasks_isolation" ON public.tasks FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "passwords_isolation" ON public.passwords FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "authenticators_isolation" ON public.authenticators FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "cust_folders_isolation" ON public.customer_drive_folders FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "cust_files_isolation" ON public.customer_drive_files FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "drive_tokens_isolation" ON public.google_drive_tokens FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
@@ -397,6 +415,7 @@ CREATE INDEX IF NOT EXISTS idx_documents_user_id ON public.documents(user_id);
 CREATE INDEX IF NOT EXISTS idx_notes_user_id ON public.notes(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON public.tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_passwords_user_id ON public.passwords(user_id);
+CREATE INDEX IF NOT EXISTS idx_authenticators_user_id ON public.authenticators(user_id);
 CREATE INDEX IF NOT EXISTS idx_drive_backups_user ON public.google_drive_backups(user_id, created_at DESC);
 
 -- ==========================================================

@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
         sbNotes,
         sbTasks,
         sbPass,
+        sbAuth,
       ] = await Promise.all([
         supabase.from('customers').select('*').eq('user_id', userId),
         supabase.from('transactions').select('*').eq('user_id', userId),
@@ -74,7 +75,12 @@ export async function POST(req: NextRequest) {
         supabase.from('notes').select('*').eq('user_id', userId),
         supabase.from('tasks').select('*').eq('user_id', userId),
         supabase.from('passwords').select('*').eq('user_id', userId),
+        supabase.from('authenticators').select('*').eq('user_id', userId),
       ]);
+
+      const loadedAuthenticators = (sbAuth?.data && Array.isArray(sbAuth.data) && sbAuth.data.length > 0)
+        ? sbAuth.data
+        : (sbSet?.data?.payment_settings?.authenticators || []);
 
       fullData = {
         profile: sbProfile.data || {},
@@ -90,6 +96,7 @@ export async function POST(req: NextRequest) {
         notes: sbNotes.data || [],
         tasks: sbTasks.data || [],
         passwords: sbPass.data || [],
+        authenticators: loadedAuthenticators,
       };
     }
 
