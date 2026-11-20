@@ -83,6 +83,7 @@ const DAILY_BUSINESS_MOTIVATIONS = [
 
 const CustomCashFlowTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
+    const rowData = payload[0]?.payload || {};
     return (
       <div className="bg-slate-900/95 backdrop-blur-md rounded-2xl border border-slate-700/60 p-3 shadow-2xl text-xs space-y-2 min-w-[210px]">
         <div className="font-bold text-white border-b border-slate-800 pb-1.5 flex items-center justify-between">
@@ -99,6 +100,21 @@ const CustomCashFlowTooltip = ({ active, payload, label }: any) => {
                 : item.name === 'NET AMOUNT'
                 ? '#6366F1'
                 : '#06B6D4';
+
+            // Always display the true raw rupee value from rowData
+            let realVal = 0;
+            if (item.name === 'KHATA') {
+              realVal = rowData.khata ?? item.value ?? 0;
+            } else if (item.name === 'EXPENSES') {
+              realVal = rowData.expenses ?? item.value ?? 0;
+            } else if (item.name === 'NET AMOUNT') {
+              realVal = rowData.netAmount ?? item.value ?? 0;
+            } else if (item.name === 'ONLINE COLLECTIONS') {
+              realVal = rowData.onlineCollections ?? item.value ?? 0;
+            } else {
+              realVal = Number(item.value || 0);
+            }
+
             return (
               <div key={item.name} className="flex items-center justify-between gap-3">
                 <span className="flex items-center gap-1.5 text-slate-300 font-semibold text-[11px]">
@@ -106,7 +122,7 @@ const CustomCashFlowTooltip = ({ active, payload, label }: any) => {
                   {item.name}:
                 </span>
                 <span className="font-mono font-bold text-white text-[11px]">
-                  ₹{Number(item.value || 0).toLocaleString('en-IN')}
+                  ₹{Number(realVal).toLocaleString('en-IN')}
                 </span>
               </div>
             );
@@ -366,7 +382,7 @@ export default function DashboardPage() {
             if (
               t.type === 'collection' ||
               t.type === 'income' ||
-              (t.type === 'debit' && (t.category === 'Payment Received' || t.note?.toLowerCase().includes('payment received')))
+              (t.type === 'debit' && (Boolean(t.customerId) || t.category === 'Payment Received' || t.note?.toLowerCase().includes('payment received')))
             ) {
               dayMap[day].khata += amt;
             }
@@ -438,6 +454,65 @@ export default function DashboardPage() {
       0
     );
   }, [cashFlowData]);
+
+  // Distinct visual curves projection for Cash Flow Velocity
+  // Ensures all 4 curves (KHATA, EXPENSES, NET AMOUNT, ONLINE COLLECTIONS) are distinctly visible in their respective colors
+  const displayCashFlowData = useMemo(() => {
+    const maxVal = maxCashFlowVal;
+    const baseOffset = maxVal === 0 ? 30 : Math.max(16, maxVal * 0.02);
+
+    return cashFlowData.map(d => {
+      const k = d.khata;
+      const exp = d.expenses;
+      const net = d.netAmount;
+      const oc = d.onlineCollections;
+
+      let kDisp = k;
+      let expDisp = exp;
+      let netDisp = net;
+      let ocDisp = oc;
+
+      if (maxVal === 0) {
+        // When all 4 are 0, tier them gently above baseline so every color curve and dot is clearly visible
+        kDisp = 36;
+        expDisp = 24;
+        netDisp = 12;
+        ocDisp = 0;
+      } else {
+        // When non-zero, check for overlapping / identical values on the same day
+        const items = [
+          { key: 'khata', val: k, priority: 4 },
+          { key: 'expenses', val: exp, priority: 3 },
+          { key: 'netAmount', val: net, priority: 2 },
+          { key: 'onlineCollections', val: oc, priority: 1 },
+        ];
+
+        // Sort items by value descending
+        items.sort((a, b) => b.val - a.val || b.priority - a.priority);
+
+        for (let i = 1; i < items.length; i++) {
+          if (Math.abs(items[i - 1].val - items[i].val) < baseOffset) {
+            items[i].val = Math.max(0, items[i - 1].val - baseOffset);
+          }
+        }
+
+        items.forEach(item => {
+          if (item.key === 'khata') kDisp = item.val;
+          if (item.key === 'expenses') expDisp = item.val;
+          if (item.key === 'netAmount') netDisp = item.val;
+          if (item.key === 'onlineCollections') ocDisp = item.val;
+        });
+      }
+
+      return {
+        ...d,
+        displayKhata: kDisp,
+        displayExpenses: expDisp,
+        displayNetAmount: netDisp,
+        displayOnlineCollections: ocDisp,
+      };
+    });
+  }, [cashFlowData, maxCashFlowVal]);
 
   // Top Customers by outstanding credit
   const topCreditors = useMemo(() => {
@@ -860,30 +935,31 @@ export default function DashboardPage() {
                       return `₹${val}`;
                     }}
                   />
-                  <Tooltip content={<CustomCashFlowTooltip />} />
+                  {/* cursor={false} removes the white/gray background block behind hovered bars */}
+                  <Tooltip content={<CustomCashFlowTooltip />} cursor={false} />
                   <Bar dataKey="khata" name="KHATA" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={14} />
                   <Bar dataKey="expenses" name="EXPENSES" fill="#F43F5E" radius={[4, 4, 0, 0]} maxBarSize={14} />
                   <Bar dataKey="netAmount" name="NET AMOUNT" fill="#6366F1" radius={[4, 4, 0, 0]} maxBarSize={14} />
                   <Bar dataKey="onlineCollections" name="ONLINE COLLECTIONS" fill="#06B6D4" radius={[4, 4, 0, 0]} maxBarSize={14} />
                 </BarChart>
               ) : (
-                /* 2. AREA / INDIVIDUAL METRIC CHART */
-                <AreaChart data={cashFlowData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                /* 2. AREA / INDIVIDUAL METRIC CHART - Distinct curves for each metric in its unique color */
+                <AreaChart data={displayCashFlowData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorKhata" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
+                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.18}/>
                       <stop offset="95%" stopColor="#10B981" stopOpacity={0.0}/>
                     </linearGradient>
                     <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#F43F5E" stopOpacity={0.3}/>
+                      <stop offset="5%" stopColor="#F43F5E" stopOpacity={0.18}/>
                       <stop offset="95%" stopColor="#F43F5E" stopOpacity={0.0}/>
                     </linearGradient>
                     <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#6366F1" stopOpacity={0.3}/>
+                      <stop offset="5%" stopColor="#6366F1" stopOpacity={0.18}/>
                       <stop offset="95%" stopColor="#6366F1" stopOpacity={0.0}/>
                     </linearGradient>
                     <linearGradient id="colorOnline" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.3}/>
+                      <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.18}/>
                       <stop offset="95%" stopColor="#06B6D4" stopOpacity={0.0}/>
                     </linearGradient>
                   </defs>
@@ -901,18 +977,18 @@ export default function DashboardPage() {
                       return `₹${val}`;
                     }}
                   />
-                  <Tooltip content={<CustomCashFlowTooltip />} />
+                  <Tooltip content={<CustomCashFlowTooltip />} cursor={{ stroke: 'rgba(148, 163, 184, 0.4)', strokeWidth: 1, strokeDasharray: '3 3' }} />
 
                   {(cashFlowTab === 'all' || cashFlowTab === 'khata') && (
                     <Area
                       type="monotone"
-                      dataKey="khata"
+                      dataKey={cashFlowTab === 'all' ? 'displayKhata' : 'khata'}
                       name="KHATA"
                       stroke="#10B981"
-                      strokeWidth={3}
+                      strokeWidth={2.5}
                       fillOpacity={1}
                       fill="url(#colorKhata)"
-                      dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#10B981', fill: '#fff' }}
+                      dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#10B981', fill: '#10B981' }}
                       activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#10B981' }}
                     />
                   )}
@@ -920,13 +996,13 @@ export default function DashboardPage() {
                   {(cashFlowTab === 'all' || cashFlowTab === 'expenses') && (
                     <Area
                       type="monotone"
-                      dataKey="expenses"
+                      dataKey={cashFlowTab === 'all' ? 'displayExpenses' : 'expenses'}
                       name="EXPENSES"
                       stroke="#F43F5E"
                       strokeWidth={2.5}
                       fillOpacity={1}
                       fill="url(#colorExpenses)"
-                      dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#F43F5E', fill: '#fff' }}
+                      dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#F43F5E', fill: '#F43F5E' }}
                       activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#F43F5E' }}
                     />
                   )}
@@ -934,14 +1010,13 @@ export default function DashboardPage() {
                   {(cashFlowTab === 'all' || cashFlowTab === 'net') && (
                     <Area
                       type="monotone"
-                      dataKey="netAmount"
+                      dataKey={cashFlowTab === 'all' ? 'displayNetAmount' : 'netAmount'}
                       name="NET AMOUNT"
                       stroke="#6366F1"
                       strokeWidth={2.5}
-                      strokeDasharray={cashFlowTab === 'all' ? '4 4' : undefined}
                       fillOpacity={1}
                       fill="url(#colorNet)"
-                      dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#6366F1', fill: '#fff' }}
+                      dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#6366F1', fill: '#6366F1' }}
                       activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#6366F1' }}
                     />
                   )}
@@ -949,13 +1024,13 @@ export default function DashboardPage() {
                   {(cashFlowTab === 'all' || cashFlowTab === 'online') && (
                     <Area
                       type="monotone"
-                      dataKey="onlineCollections"
+                      dataKey={cashFlowTab === 'all' ? 'displayOnlineCollections' : 'onlineCollections'}
                       name="ONLINE COLLECTIONS"
                       stroke="#06B6D4"
                       strokeWidth={2.5}
                       fillOpacity={1}
                       fill="url(#colorOnline)"
-                      dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#06B6D4', fill: '#fff' }}
+                      dot={{ r: 3.5, strokeWidth: 1.5, stroke: '#06B6D4', fill: '#06B6D4' }}
                       activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#06B6D4' }}
                     />
                   )}
