@@ -332,6 +332,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     }
     StorageService.initializeDefaults();
     StorageService.reconcileInvoiceStock();
+    StorageService.reconcileCustomerBalances();
     setProfileState(StorageService.getProfile());
     setCustomers(StorageService.getCustomers());
     setTransactions(StorageService.getTransactions());
@@ -739,6 +740,9 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
             StorageService.setTransactions(mergedTxns);
             setTransactions(mergedTxns);
           }
+
+          const reconciledCusts = StorageService.reconcileCustomerBalances();
+          setCustomers(reconciledCusts);
           if (Array.isArray(d.products)) {
             const merged = mergeEntities(StorageService.getProducts(), d.products, 'products');
             StorageService.setProducts(merged);

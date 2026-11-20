@@ -447,6 +447,7 @@ export const StorageService = {
 
     if (data.customers !== undefined) setLocalItem(STORAGE_KEYS.CUSTOMERS, mergeEntities(StorageService.getCustomers(), data.customers, 'customers'));
     if (data.transactions !== undefined) setLocalItem(STORAGE_KEYS.TRANSACTIONS, mergeEntities(StorageService.getTransactions(), data.transactions, 'transactions'));
+    StorageService.reconcileCustomerBalances();
     if (data.products !== undefined) setLocalItem(STORAGE_KEYS.PRODUCTS, mergeEntities(StorageService.getProducts(), data.products, 'products'));
     if (data.invoices !== undefined) setLocalItem(STORAGE_KEYS.INVOICES, mergeEntities(StorageService.getInvoices(), data.invoices, 'invoices'));
     if (data.expenses !== undefined) setLocalItem(STORAGE_KEYS.EXPENSES, mergeEntities(StorageService.getExpenses(), data.expenses, 'expenses'));
@@ -622,6 +623,7 @@ export const StorageService = {
       setLocalItem(STORAGE_KEYS.AUTHENTICATOR, []);
       localStorage.setItem(getScopedKey(STORAGE_KEYS.INITIALIZED), 'true');
     }
+    StorageService.reconcileCustomerBalances();
   },
 
   // Reset to clean user data
@@ -974,9 +976,42 @@ export const StorageService = {
     return updated;
   },
 
+  // Reconcile and calculate exact customer balances directly from active transactions
+  reconcileCustomerBalances: (): Customer[] => {
+    if (typeof window === 'undefined') return [];
+    const customers = getLocalItem<Customer[]>(STORAGE_KEYS.CUSTOMERS, []);
+    const transactions = getLocalItem<Transaction[]>(STORAGE_KEYS.TRANSACTIONS, []);
+
+    const balanceMap: Record<string, number> = {};
+    transactions.forEach(t => {
+      if (t.isDeleted || t.status === 'deleted' || !t.customerId) return;
+      if (!balanceMap[t.customerId]) balanceMap[t.customerId] = 0;
+      if (t.type === 'credit') {
+        balanceMap[t.customerId] += Number(t.amount) || 0;
+      } else if (t.type === 'debit' || t.type === 'collection') {
+        balanceMap[t.customerId] -= Number(t.amount) || 0;
+      }
+    });
+
+    let changed = false;
+    const updated = customers.map(c => {
+      const calculated = Math.round((balanceMap[c.id] || 0) * 100) / 100;
+      if (c.outstandingBalance !== calculated) {
+        changed = true;
+        return { ...c, outstandingBalance: calculated };
+      }
+      return c;
+    });
+
+    if (changed) {
+      setLocalItem(STORAGE_KEYS.CUSTOMERS, updated);
+    }
+    return updated;
+  },
+
   // Customers
   getCustomers: (): Customer[] => {
-    return getLocalItem(STORAGE_KEYS.CUSTOMERS, []);
+    return StorageService.reconcileCustomerBalances();
   },
   setCustomers: (customers: Customer[]): void => {
     setLocalItem(STORAGE_KEYS.CUSTOMERS, customers);

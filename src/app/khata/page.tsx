@@ -666,6 +666,21 @@ function KhataPageInner() {
     return dateBuckets;
   }, [visibleTransactions]);
 
+  // Exact customer balances derived directly from active transactions (Source of truth)
+  const customerBalances = useMemo(() => {
+    const map: Record<string, number> = {};
+    transactions.forEach(t => {
+      if (t.isDeleted || t.status === 'deleted' || !t.customerId) return;
+      if (!map[t.customerId]) map[t.customerId] = 0;
+      if (t.type === 'credit') {
+        map[t.customerId] += Number(t.amount) || 0;
+      } else if (t.type === 'debit' || t.type === 'collection') {
+        map[t.customerId] -= Number(t.amount) || 0;
+      }
+    });
+    return map;
+  }, [transactions]);
+
   // Filtered customer list
   const filteredCustomers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -678,11 +693,12 @@ function KhataPageInner() {
         (c.email && c.email.toLowerCase().includes(term)) ||
         (c.businessName && c.businessName.toLowerCase().includes(term));
 
-      if (filterType === 'credit') return matchSearch && c.outstandingBalance > 0;
-      if (filterType === 'debit') return matchSearch && c.outstandingBalance < 0;
+      const bal = customerBalances[c.id] ?? 0;
+      if (filterType === 'credit') return matchSearch && bal > 0;
+      if (filterType === 'debit') return matchSearch && bal < 0;
       return matchSearch;
     });
-  }, [customers, searchTerm, filterType]);
+  }, [customers, searchTerm, filterType, customerBalances]);
 
   // Group balances mapped by groupId for current user
   const groupBalances = useMemo(() => {
@@ -744,15 +760,8 @@ function KhataPageInner() {
       if (hasUserSpecificTxn) {
         res[grp.id] = Math.round((userGiven - userReceived) * 100) / 100;
       } else {
-        // Fallback for creator / general ledger if user has no specific split share: overall group net
-        let totalGiven = 0;
-        let totalReceived = 0;
-        gTxns.forEach(t => {
-          const isGot = t.type === 'debit' || t.type === 'collection';
-          if (isGot) totalReceived += t.amount;
-          else totalGiven += t.amount;
-        });
-        res[grp.id] = Math.round((totalGiven - totalReceived) * 100) / 100;
+        // User has 0 given and 0 received in this group -> personal balance is exactly 0
+        res[grp.id] = 0;
       }
     });
 
@@ -2721,9 +2730,10 @@ function KhataPageInner() {
       // 4. Prominent Net Due Banner (Row 10 merged A10:G10)
       const activeCurr = getActiveCurrency();
       const excelNumFmt = getExcelNumFmt(activeCurr.code);
-      const isDue = activeCustomer.outstandingBalance > 0;
-      const isAdvance = activeCustomer.outstandingBalance < 0;
-      const formattedDueBalance = formatMoney(Math.abs(activeCustomer.outstandingBalance));
+      const activeCustBal = customerBalances[activeCustomer.id] ?? 0;
+      const isDue = activeCustBal > 0;
+      const isAdvance = activeCustBal < 0;
+      const formattedDueBalance = formatMoney(Math.abs(activeCustBal));
       const dueStatusText = isDue
         ? `⚠️ TOTAL DUE AMOUNT PAYABLE: ${formattedDueBalance} (PAYMENT PENDING)`
         : isAdvance
@@ -2748,7 +2758,7 @@ function KhataPageInner() {
       worksheet.getRow(10).height = 28;
 
       // 5. Embedded UPI Payment Card & QR Code Section (Rows 12 to 19)
-      const upiAmount = Math.max(0, activeCustomer.outstandingBalance);
+      const upiAmount = Math.max(0, activeCustBal);
       const upiUri = buildUpiUri(
         settings.paymentSettings.upiId,
         settings.paymentSettings.payeeName,
@@ -3008,7 +3018,7 @@ function KhataPageInner() {
 
       worksheet.mergeCells(`E${currentRow}:G${currentRow}`);
       const finalVal = finalRow.getCell(5);
-      finalVal.value = convertCurrency(activeCustomer.outstandingBalance, 'INR', activeCurr.code);
+      finalVal.value = convertCurrency(activeCustBal, 'INR', activeCurr.code);
       finalVal.numFmt = excelNumFmt;
       finalVal.font = { name: 'Calibri', size: 13, bold: true, color: { argb: isDue ? RED_TEXT : GREEN_TEXT } };
       finalVal.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -3334,30 +3344,50 @@ function KhataPageInner() {
       ctx.strokeStyle = '#E2E8F0';
       ctx.stroke();
 
-      // --- TOP HEADER (Above QR): TOTAL DUE IN BOLD RED ---
+      // --- TOP HEADER (Above QR): TOTAL DUE (RED) OR SETTLED (EMERALD) ---
       const redBannerX = 40;
       const redBannerY = 44;
       const redBannerW = width - 80;
       const redBannerH = 100;
 
-      drawRoundRect(redBannerX, redBannerY, redBannerW, redBannerH, 16);
-      ctx.fillStyle = '#FEF2F2'; // Soft red-50
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#FECDD3'; // Red-200 border
-      ctx.stroke();
+      if (dueAmount > 0) {
+        drawRoundRect(redBannerX, redBannerY, redBannerW, redBannerH, 16);
+        ctx.fillStyle = '#FEF2F2'; // Soft red-50
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#FECDD3'; // Red-200 border
+        ctx.stroke();
 
-      // Top pill subtitle
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#EF4444'; // Red-500
-      ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText('OUTSTANDING DUE PAYMENT', width / 2, redBannerY + 34);
+        // Top pill subtitle
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#EF4444'; // Red-500
+        ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText('OUTSTANDING DUE PAYMENT', width / 2, redBannerY + 34);
 
-      // Total Due in BOLD RED
-      const formattedDue = formatINR(dueAmount);
-      ctx.fillStyle = '#DC2626'; // Deep Red-600
-      ctx.font = '900 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(`TOTAL DUE: ${formattedDue}`, width / 2, redBannerY + 76);
+        // Total Due in BOLD RED
+        const formattedDue = formatINR(dueAmount);
+        ctx.fillStyle = '#DC2626'; // Deep Red-600
+        ctx.font = '900 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText(`TOTAL DUE: ${formattedDue}`, width / 2, redBannerY + 76);
+      } else {
+        drawRoundRect(redBannerX, redBannerY, redBannerW, redBannerH, 16);
+        ctx.fillStyle = '#ECFDF5'; // Soft emerald-50
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#A7F3D0'; // Emerald-200 border
+        ctx.stroke();
+
+        // Top pill subtitle
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#059669'; // Emerald-600
+        ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText('ACCOUNT FULLY SETTLED', width / 2, redBannerY + 34);
+
+        // All Dues Cleared in BOLD EMERALD
+        ctx.fillStyle = '#047857'; // Deep Emerald-700
+        ctx.font = '900 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText('₹0 DUE (CLEARED)', width / 2, redBannerY + 76);
+      }
 
       // --- CENTER: QR CODE CONTAINER ---
       const qrContainerX = 110;
@@ -3427,10 +3457,9 @@ function KhataPageInner() {
         targetPhone = '91' + targetPhone;
       }
 
-      // Outstanding Due Balance
-      const numDue = activeCustomer.outstandingBalance !== 0 
-        ? Math.abs(activeCustomer.outstandingBalance) 
-        : 3000;
+      // Reconciled balance from transactions
+      const currentCustBal = customerBalances[activeCustomer.id] ?? 0;
+      const numDue = Math.max(0, currentCustBal);
       const formattedDue = formatINR(numDue);
 
       // Sender Business Profile & Official Phone (from Settings / Enterprise Profile)
@@ -3446,14 +3475,12 @@ function KhataPageInner() {
         `Payment from ${activeCustomer.name}`
       );
 
-      // Exact user requested message text format:
-      // Your balance of ₹3,000 is Due.
-      // Please pay at the earliest.
-      // —
-      // Business Name  (Official Phone Number)
-      const messageText = `Your balance of ${formattedDue} is Due.\nPlease pay at the earliest.\n—\n${businessName}  (${officialPhone})`;
+      // Real payment reminder with locked UPI link
+      const messageText = numDue > 0
+        ? `Your balance of ${formattedDue} is Due.\nPlease pay at the earliest.\n\n⚡ Direct UPI Link (Amount Locked):\n${upiUri}\n\n—\n${businessName}${officialPhone ? `  (${officialPhone})` : ''}`
+        : `All dues are cleared (₹0 Due) for ${activeCustomer.name}.\nThank you!\n\n—\n${businessName}${officialPhone ? `  (${officialPhone})` : ''}`;
 
-      // Generate the custom QR card image (Total Due on top in Red, QR in center, UPI ID below)
+      // Generate the custom QR card image (Total Due on top in Red or Settled in Emerald, QR in center, UPI ID below)
       const blob = await generateWhatsAppPaymentQrBlob({
         dueAmount: numDue,
         upiId,
@@ -3521,9 +3548,8 @@ function KhataPageInner() {
     setIsUniversalSharing(true);
 
     try {
-      const numDue = activeCustomer.outstandingBalance !== 0 
-        ? Math.abs(activeCustomer.outstandingBalance) 
-        : 3000;
+      const currentCustBal = customerBalances[activeCustomer.id] ?? 0;
+      const numDue = Math.max(0, currentCustBal);
       const formattedDue = formatINR(numDue);
 
       const businessName = (settings.businessName || profile?.businessName || currentUser?.businessName || 'SmartKhata Merchant').trim();
@@ -3538,7 +3564,9 @@ function KhataPageInner() {
         `Payment from ${activeCustomer.name}`
       );
 
-      const shareText = `Your balance of ${formattedDue} is Due.\nPlease pay at the earliest.\n—\n${businessName}  (${officialPhone})`;
+      const shareText = numDue > 0
+        ? `Your balance of ${formattedDue} is Due.\nPlease pay at the earliest.\n\n⚡ Direct UPI Link (Amount Locked):\n${upiUri}\n\n—\n${businessName}${officialPhone ? `  (${officialPhone})` : ''}`
+        : `All dues are cleared (₹0 Due) for ${activeCustomer.name}.\nThank you!\n\n—\n${businessName}${officialPhone ? `  (${officialPhone})` : ''}`;
 
       // Generate the custom QR card image
       const blob = await generateWhatsAppPaymentQrBlob({
@@ -3616,9 +3644,8 @@ function KhataPageInner() {
   // Download Payment QR Card from Universal Share
   const handleDownloadQrCard = async () => {
     if (!activeCustomer) return;
-    const numDue = activeCustomer.outstandingBalance !== 0 
-      ? Math.abs(activeCustomer.outstandingBalance) 
-      : 3000;
+    const currentCustBal = customerBalances[activeCustomer.id] ?? 0;
+    const numDue = Math.max(0, currentCustBal);
 
     const businessName = (settings.businessName || profile?.businessName || currentUser?.businessName || 'SmartKhata Merchant').trim();
     const officialPhone = (settings.businessPhone || profile?.phone || currentUser?.phone || '').trim();
@@ -3715,8 +3742,8 @@ function KhataPageInner() {
                     : filterType === 'all'
                     ? `All (${customers.filter(c => !c.isDeleted && c.status !== 'deleted').length + groups.length})`
                     : filterType === 'credit'
-                    ? `Due (${customers.filter(c => !c.isDeleted && c.status !== 'deleted' && c.outstandingBalance > 0).length + groups.filter(g => (groupBalances[g.id] || 0) > 0).length})`
-                    : `Advance (${customers.filter(c => !c.isDeleted && c.status !== 'deleted' && c.outstandingBalance < 0).length + groups.filter(g => (groupBalances[g.id] || 0) < 0).length})`}
+                    ? `Due (${customers.filter(c => !c.isDeleted && c.status !== 'deleted' && (customerBalances[c.id] || 0) > 0).length + groups.filter(g => (groupBalances[g.id] || 0) > 0).length})`
+                    : `Advance (${customers.filter(c => !c.isDeleted && c.status !== 'deleted' && (customerBalances[c.id] || 0) < 0).length + groups.filter(g => (groupBalances[g.id] || 0) < 0).length})`}
                 </h2>
                 {pinnedChatIds.length > 0 && (
                   <span
@@ -4096,15 +4123,22 @@ function KhataPageInner() {
                                 <span>PIN</span>
                               </button>
                             )}
-                            <div className={`text-xs font-bold font-mono ${
-                              cust.outstandingBalance > 0 ? 'text-rose-600' :
-                              cust.outstandingBalance < 0 ? 'text-emerald-600' : 'text-slate-400'
-                            }`}>
-                              {formatINR(Math.abs(cust.outstandingBalance))}
-                            </div>
-                          </div>
-                          <div className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">
-                            {cust.outstandingBalance > 0 ? 'Due' : cust.outstandingBalance < 0 ? 'Advance' : 'Settled'}
+                            {(() => {
+                              const custBal = customerBalances[cust.id] ?? 0;
+                              return (
+                                <>
+                                  <div className={`text-xs font-bold font-mono ${
+                                    custBal > 0 ? 'text-rose-600' :
+                                    custBal < 0 ? 'text-emerald-600' : 'text-slate-400'
+                                  }`}>
+                                    {formatINR(Math.abs(custBal))}
+                                  </div>
+                                  <div className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">
+                                    {custBal > 0 ? 'Due' : custBal < 0 ? 'Advance' : 'Settled'}
+                                  </div>
+                                </>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -5307,11 +5341,14 @@ function KhataPageInner() {
                                 </span>
                               );
                             })()
-                          ) : (
-                            <span className={activeCustomer?.outstandingBalance && activeCustomer.outstandingBalance < 0 ? 'text-emerald-500' : 'text-rose-500'}>
-                              ₹{Math.abs(activeCustomer?.outstandingBalance || 0).toLocaleString('en-IN')} {activeCustomer?.outstandingBalance && activeCustomer.outstandingBalance < 0 ? 'Advance' : 'Due'}
-                            </span>
-                          )}
+                          ) : (() => {
+                            const custBal = activeCustomer ? (customerBalances[activeCustomer.id] ?? 0) : 0;
+                            return (
+                              <span className={custBal > 0 ? 'text-rose-500' : custBal < 0 ? 'text-emerald-500' : 'text-slate-500 dark:text-slate-400'}>
+                                ₹{Math.abs(custBal).toLocaleString('en-IN')} {custBal > 0 ? 'Due' : custBal < 0 ? 'Advance' : 'Settled'}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -6274,6 +6311,7 @@ function KhataPageInner() {
                   const pageSummary = getPageSummary(pageTxns);
                   const startTxnNum = pageIdx * STATEMENT_PAGE_SIZE + 1;
                   const endTxnNum = pageIdx * STATEMENT_PAGE_SIZE + pageTxns.length;
+                  const statementCustomerBalance = customerBalances[activeCustomer.id] ?? 0;
 
                   return (
                     <div key={pageIdx}>
@@ -6372,32 +6410,32 @@ function KhataPageInner() {
 
                               {/* Outstanding Net Due Card */}
                               <div className={`sm:col-span-5 p-3 rounded-xl border flex flex-col justify-between ${
-                                activeCustomer.outstandingBalance > 0
+                                statementCustomerBalance > 0
                                   ? 'bg-rose-50/80 border-rose-200 text-rose-900'
-                                  : activeCustomer.outstandingBalance < 0
+                                  : statementCustomerBalance < 0
                                   ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
                                   : 'bg-slate-50 border-slate-200 text-slate-800'
                               }`}>
                                 <div className="text-[9px] font-bold uppercase tracking-wider opacity-75">
-                                  {activeCustomer.outstandingBalance > 0
+                                  {statementCustomerBalance > 0
                                     ? 'Total Due Amount'
-                                    : activeCustomer.outstandingBalance < 0
+                                    : statementCustomerBalance < 0
                                     ? 'Advance Credit'
                                     : 'Account Status'}
                                 </div>
                                 <div className={`text-xl font-black tracking-tight ${
-                                  activeCustomer.outstandingBalance > 0
+                                  statementCustomerBalance > 0
                                     ? 'text-rose-600'
-                                    : activeCustomer.outstandingBalance < 0
+                                    : statementCustomerBalance < 0
                                     ? 'text-emerald-600'
                                     : 'text-slate-800'
                                 }`}>
-                                  ₹{Math.abs(activeCustomer.outstandingBalance).toLocaleString('en-IN')}
+                                  ₹{Math.abs(statementCustomerBalance).toLocaleString('en-IN')}
                                 </div>
                                 <div className="text-[10px] font-bold opacity-80">
-                                  {activeCustomer.outstandingBalance > 0
+                                  {statementCustomerBalance > 0
                                     ? '⚠️ Payment Due by Customer'
-                                    : activeCustomer.outstandingBalance < 0
+                                    : statementCustomerBalance < 0
                                     ? '✓ Advance Paid (Surplus)'
                                     : '✓ All Dues Cleared'}
                                 </div>
@@ -6405,7 +6443,7 @@ function KhataPageInner() {
                             </div>
 
                             {/* Direct Scan & Pay UPI QR Section (If Due > 0) */}
-                            {activeCustomer.outstandingBalance > 0 && (
+                            {statementCustomerBalance > 0 && (
                               <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-r from-indigo-50/70 to-purple-50/70 border border-indigo-100 flex items-center justify-between gap-3">
                                 <div className="space-y-0.5 min-w-0">
                                   <div className="text-[11px] font-black text-indigo-900 uppercase tracking-wide flex items-center gap-1.5">
@@ -6427,7 +6465,7 @@ function KhataPageInner() {
                                         buildUpiUri(
                                           settings.paymentSettings.upiId,
                                           settings.paymentSettings.payeeName,
-                                          activeCustomer.outstandingBalance,
+                                          statementCustomerBalance,
                                           `Due settlement for ${activeCustomer.name}`
                                         ),
                                         140
@@ -6516,15 +6554,15 @@ function KhataPageInner() {
                                         Net Due Balance:
                                       </td>
                                       <td className={`py-2 px-3 text-right font-mono font-black text-xs ${
-                                        activeCustomer.outstandingBalance > 0
+                                        statementCustomerBalance > 0
                                           ? 'text-rose-600'
-                                          : activeCustomer.outstandingBalance < 0
+                                          : statementCustomerBalance < 0
                                           ? 'text-emerald-600'
                                           : 'text-slate-800'
                                       }`}>
-                                        ₹{Math.abs(activeCustomer.outstandingBalance).toLocaleString('en-IN')}
+                                        ₹{Math.abs(statementCustomerBalance).toLocaleString('en-IN')}
                                         <span className="text-[9px] font-normal block">
-                                          {activeCustomer.outstandingBalance > 0 ? '(Due to Pay)' : activeCustomer.outstandingBalance < 0 ? '(Advance)' : '(Settled)'}
+                                          {statementCustomerBalance > 0 ? '(Due to Pay)' : statementCustomerBalance < 0 ? '(Advance)' : '(Settled)'}
                                         </span>
                                       </td>
                                     </tr>
@@ -6607,21 +6645,21 @@ function KhataPageInner() {
                                       </td>
                                     </tr>
                                     <tr className={`border-t border-slate-300 ${
-                                      activeCustomer.outstandingBalance > 0 ? 'bg-rose-50' : 'bg-emerald-50'
+                                      statementCustomerBalance > 0 ? 'bg-rose-50' : 'bg-emerald-50'
                                     }`}>
                                       <td colSpan={3} className="py-2.5 px-3 text-right font-black uppercase text-xs text-slate-900">
                                         Final Net Due Balance (All Pages):
                                       </td>
                                       <td className={`py-2.5 px-3 text-right font-mono font-black text-sm ${
-                                        activeCustomer.outstandingBalance > 0
+                                        statementCustomerBalance > 0
                                           ? 'text-rose-600'
-                                          : activeCustomer.outstandingBalance < 0
+                                          : statementCustomerBalance < 0
                                           ? 'text-emerald-600'
                                           : 'text-slate-800'
                                       }`}>
-                                        ₹{Math.abs(activeCustomer.outstandingBalance).toLocaleString('en-IN')}
+                                        ₹{Math.abs(statementCustomerBalance).toLocaleString('en-IN')}
                                         <span className="text-[9.5px] font-bold block">
-                                          {activeCustomer.outstandingBalance > 0 ? '(Total Due to Pay)' : activeCustomer.outstandingBalance < 0 ? '(Total Advance)' : '(Settled)'}
+                                          {statementCustomerBalance > 0 ? '(Total Due to Pay)' : statementCustomerBalance < 0 ? '(Total Advance)' : '(Settled)'}
                                         </span>
                                       </td>
                                     </tr>
@@ -6666,9 +6704,8 @@ function KhataPageInner() {
 
       {/* ================= MODAL: UNIVERSAL SHARE OPTIONS (Windows / Android / Mac / iPhone) ================= */}
       {isUniversalShareModalOpen && activeCustomer && (() => {
-        const modalDueAmount = activeCustomer.outstandingBalance !== 0 
-          ? Math.abs(activeCustomer.outstandingBalance) 
-          : 3000;
+        const currentCustBal = customerBalances[activeCustomer.id] ?? 0;
+        const modalDueAmount = Math.max(0, currentCustBal);
         const modalFormattedDue = formatINR(modalDueAmount);
         const modalBusinessName = (settings.businessName || profile?.businessName || currentUser?.businessName || 'SmartKhata Merchant').trim();
         const modalOfficialPhone = (settings.businessPhone || profile?.phone || currentUser?.phone || '').trim();
@@ -6680,7 +6717,11 @@ function KhataPageInner() {
           modalDueAmount > 0 ? modalDueAmount : undefined,
           `Payment from ${activeCustomer.name}`
         );
-        const modalShareText = `Your balance of ${modalFormattedDue} is Due.\nPlease pay at the earliest.\n—\n${modalBusinessName}${modalOfficialPhone ? `  (${modalOfficialPhone})` : ''}`;
+        const modalShareText = modalDueAmount > 0
+          ? `Your balance of ${modalFormattedDue} is Due.\nPlease pay at the earliest.\n\n⚡ Direct UPI Link (Amount Locked):\n${modalUpiUri}\n\n—\n${modalBusinessName}${modalOfficialPhone ? `  (${modalOfficialPhone})` : ''}`
+          : currentCustBal < 0
+          ? `Advance balance of ${formatINR(Math.abs(currentCustBal))} available for ${activeCustomer.name}.\n—\n${modalBusinessName}${modalOfficialPhone ? `  (${modalOfficialPhone})` : ''}`
+          : `All dues are cleared (₹0 Due) for ${activeCustomer.name}.\nThank you!\n\n—\n${modalBusinessName}${modalOfficialPhone ? `  (${modalOfficialPhone})` : ''}`;
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
@@ -6697,7 +6738,13 @@ function KhataPageInner() {
                       Universal Share Options
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {activeCustomer.name} • <span className="font-bold text-rose-600 dark:text-rose-400">Due: {modalFormattedDue}</span>
+                      {activeCustomer.name} • {currentCustBal > 0 ? (
+                        <span className="font-bold text-rose-600 dark:text-rose-400">Due: {modalFormattedDue}</span>
+                      ) : currentCustBal < 0 ? (
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">Advance: {formatINR(Math.abs(currentCustBal))}</span>
+                      ) : (
+                        <span className="font-bold text-slate-500 dark:text-slate-400">Settled: ₹0 Due</span>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -6744,7 +6791,7 @@ function KhataPageInner() {
                       handleShareWhatsApp();
                       setIsUniversalShareModalOpen(false);
                     }}
-                    className="p-3 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/30 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/60 transition-all text-left flex items-start gap-3 group cursor-pointer shadow-xs active:scale-98"
+                    className="p-3.5 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/30 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/60 transition-all text-left flex items-start gap-3 group cursor-pointer shadow-xs active:scale-98"
                   >
                     <div className="w-10 h-10 rounded-xl bg-[#25D366] text-white flex items-center justify-center shrink-0 shadow-xs">
                       <Share2 className="w-5 h-5" />
@@ -6755,7 +6802,7 @@ function KhataPageInner() {
                         <span className="px-1.5 py-0.2 rounded-md bg-emerald-600 text-white text-[9px] font-bold">Fast</span>
                       </div>
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                        Direct chat send with QR card & due text
+                        Direct chat send with QR card & locked UPI link
                       </p>
                     </div>
                   </button>
@@ -6767,7 +6814,7 @@ function KhataPageInner() {
                       handleUniversalShare();
                       setIsUniversalShareModalOpen(false);
                     }}
-                    className="p-3 rounded-2xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 hover:bg-indigo-100/70 dark:hover:bg-indigo-950/60 transition-all text-left flex items-start gap-3 group cursor-pointer shadow-xs active:scale-98"
+                    className="p-3.5 rounded-2xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 hover:bg-indigo-100/70 dark:hover:bg-indigo-950/60 transition-all text-left flex items-start gap-3 group cursor-pointer shadow-xs active:scale-98"
                   >
                     <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
                       <Smartphone className="w-5 h-5" />
@@ -6779,90 +6826,6 @@ function KhataPageInner() {
                       </div>
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
                         Phone / OS native sheet (Telegram, Drive, etc.)
-                      </p>
-                    </div>
-                  </button>
-
-                  {/* 3. SMS / Text Message */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleSendSms(activeCustomer.phone, modalShareText);
-                      setIsUniversalShareModalOpen(false);
-                    }}
-                    className="p-3 rounded-2xl border border-sky-200 dark:border-sky-900/60 bg-sky-50/60 dark:bg-sky-950/30 hover:bg-sky-100/70 dark:hover:bg-sky-950/60 transition-all text-left flex items-start gap-3 group cursor-pointer shadow-xs active:scale-98"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                      <MessageSquare className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="text-xs font-bold text-slate-900 dark:text-white">SMS / Messages</span>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                        Open default SMS app with prefilled text
-                      </p>
-                    </div>
-                  </button>
-
-                  {/* 4. Email Reminder */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleSendEmail(
-                        activeCustomer.email || '',
-                        `Payment Due Reminder - ${activeCustomer.name}`,
-                        modalShareText
-                      );
-                      setIsUniversalShareModalOpen(false);
-                    }}
-                    className="p-3 rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/30 hover:bg-amber-100/70 dark:hover:bg-amber-950/60 transition-all text-left flex items-start gap-3 group cursor-pointer shadow-xs active:scale-98"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                      <Mail className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="text-xs font-bold text-slate-900 dark:text-white">Email</span>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                        Send via Outlook, Gmail, or Apple Mail
-                      </p>
-                    </div>
-                  </button>
-
-                  {/* 5. Download Payment QR Card */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleDownloadQrCard();
-                      setIsUniversalShareModalOpen(false);
-                    }}
-                    className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/90 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-left flex items-start gap-3 group cursor-pointer shadow-xs active:scale-98"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                      <Download className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="text-xs font-bold text-slate-900 dark:text-white">Download QR Card</span>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                        Official scannable PNG image card
-                      </p>
-                    </div>
-                  </button>
-
-                  {/* 6. Copy Message Text */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleCopyShareText(modalShareText);
-                      setIsUniversalShareModalOpen(false);
-                    }}
-                    className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/90 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-left flex items-start gap-3 group cursor-pointer shadow-xs active:scale-98"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-slate-700 text-white flex items-center justify-center shrink-0 shadow-xs">
-                      <Copy className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="text-xs font-bold text-slate-900 dark:text-white">Copy Message</span>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                        Copy reminder text to clipboard
                       </p>
                     </div>
                   </button>
@@ -6882,13 +6845,12 @@ function KhataPageInner() {
                     onClick={() => handleCopyUpiUri(modalUpiUri)}
                     className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
                   >
-                    <Copy className="w-3.5 h-3.5" />
+                    <Copy className="w-4 h-4" />
                     <span>Copy UPI Link</span>
                   </button>
                 </div>
 
               </div>
-
             </div>
           </div>
         );

@@ -34,17 +34,20 @@ export function formatDate(dateStr: string): string {
 }
 
 export function buildUpiUri(upiId: string, payeeName: string, amount?: number, note?: string): string {
-  const params = new URLSearchParams();
-  params.set('pa', upiId);
-  params.set('pn', payeeName);
-  params.set('cu', 'INR');
+  const cleanUpiId = (upiId || '').trim();
+  const cleanPayee = (payeeName || 'Merchant').trim();
+  const parts: string[] = [
+    `pa=${cleanUpiId}`,
+    `pn=${encodeURIComponent(cleanPayee)}`,
+    `cu=INR`,
+  ];
   if (amount && amount > 0) {
-    params.set('am', amount.toFixed(2));
+    parts.push(`am=${amount.toFixed(2)}`);
   }
   if (note) {
-    params.set('tn', note);
+    parts.push(`tn=${encodeURIComponent(note.trim())}`);
   }
-  return `upi://pay?${params.toString()}`;
+  return `upi://pay?${parts.join('&')}`;
 }
 
 export function getQrCodeUrl(upiUri: string, size = 300): string {
