@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Loading from '@/components/Loading';
 import QRCode from 'qrcode';
@@ -54,6 +55,57 @@ function PayRedirectContent() {
   const paymentNote = tn || 'Payment Settlement';
   const effectiveAmount = isNaN(am) ? 0 : am;
   const merchantLogo = logoParam || profile?.avatarUrl || currentUser?.avatarUrl || settings.businessLogo || '';
+
+  // Global website branding resolution (Website Name, Website Header Logo, Badge)
+  const [localBrand, setLocalBrand] = useState<any>(() => {
+    if (typeof window !== 'undefined') {
+      const init = (window as any).__INITIAL_BRANDING__;
+      const raw = localStorage.getItem('skp_global_branding');
+      return raw ? JSON.parse(raw) : (init || null);
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e.detail) setLocalBrand(e.detail);
+    };
+    window.addEventListener('skp_branding_updated', handler);
+    window.addEventListener('khatapro_branding_changed', handler);
+    return () => {
+      window.removeEventListener('skp_branding_updated', handler);
+      window.removeEventListener('khatapro_branding_changed', handler);
+    };
+  }, []);
+
+  const websiteLogo = (
+    settings.websiteLogo ||
+    localBrand?.websiteLogo ||
+    (typeof window !== 'undefined' ? localStorage.getItem('skp_brand_logo') || '' : '') ||
+    '/brand-logo.png'
+  ).trim();
+
+  const websiteName = (
+    settings.websiteName ||
+    localBrand?.websiteName ||
+    (typeof window !== 'undefined' ? localStorage.getItem('skp_brand_name') || '' : '') ||
+    'Smartkhata'
+  ).trim();
+
+  const websiteBadgeText = (
+    settings.websiteBadgeText !== undefined
+      ? settings.websiteBadgeText
+      : (localBrand?.websiteBadgeText !== undefined
+          ? localBrand.websiteBadgeText
+          : (typeof window !== 'undefined' ? (localStorage.getItem('skp_brand_badge') ?? 'ERP') : 'ERP'))
+  ).trim();
+
+  const websiteBadgeBg =
+    settings.websiteBadgeBg ||
+    localBrand?.websiteBadgeBg ||
+    (typeof window !== 'undefined' ? localStorage.getItem('skp_brand_badge_bg') || 'fintech-gradient-primary' : 'fintech-gradient-primary');
+
+  const [logoImgError, setLogoImgError] = useState(false);
 
   // Canonical UPI URIs
   const rawQrString = useMemo(() => {
@@ -244,7 +296,7 @@ function PayRedirectContent() {
           </div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-white">Payment Link Required</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Please use a valid SmartKhata payment link or scan the official QR code to proceed.
+            Please use a valid {websiteName} payment link or scan the official QR code to proceed.
           </p>
         </div>
       </div>
@@ -268,21 +320,53 @@ function PayRedirectContent() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-4 sm:p-6 md:p-8">
       {/* Header */}
       <header className="max-w-md w-full mx-auto flex items-center justify-between pb-4">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-indigo-600 flex items-center justify-center text-white shadow-sm font-bold text-base">
-            SK
-          </div>
+        <Link href="/" prefetch={true} className="flex items-center gap-2.5 group">
+          {!logoImgError && websiteLogo ? (
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl overflow-hidden shadow-md shadow-indigo-500/20 shrink-0 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center p-0.5 group-hover:scale-105 transition-transform">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={websiteLogo}
+                alt={websiteName || 'Website Logo'}
+                className="w-full h-full object-contain"
+                onError={() => {
+                  if (websiteLogo !== '/brand-logo.png') {
+                    const fallbackImg = new Image();
+                    fallbackImg.src = '/brand-logo.png';
+                    fallbackImg.onload = () => {
+                      const el = document.getElementById('pay-header-brand-logo') as HTMLImageElement;
+                      if (el) el.src = '/brand-logo.png';
+                    };
+                    fallbackImg.onerror = () => setLogoImgError(true);
+                  } else {
+                    setLogoImgError(true);
+                  }
+                }}
+                id="pay-header-brand-logo"
+              />
+            </div>
+          ) : (
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-emerald-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 font-black text-sm shrink-0">
+              {(websiteName || 'SK').slice(0, 2).toUpperCase()}
+            </div>
+          )}
           <div>
-            <h1 className="text-sm font-extrabold tracking-tight">SmartKhata Payments</h1>
-            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+            <div className="flex items-center gap-1.5 font-black tracking-tight text-slate-900 dark:text-white text-sm sm:text-base">
+              <span>{websiteName || 'Smartkhata'}</span>
+              {websiteBadgeText && (
+                <span className={`text-[7px] sm:text-[7.5px] px-1 py-[1px] rounded font-bold uppercase tracking-wider leading-none text-white shadow-xs ${websiteBadgeBg || 'fintech-gradient-primary'}`}>
+                  {websiteBadgeText}
+                </span>
+              )}
+            </div>
+            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">
               <ShieldCheck className="w-3 h-3" /> 100% Verified Merchant
             </p>
           </div>
-        </div>
+        </Link>
         <button
           type="button"
           onClick={handleCopyLink}
-          className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 flex items-center gap-1.5 transition-colors cursor-pointer"
+          className="text-xs font-semibold px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95"
         >
           {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
           <span>{copiedLink ? 'Link Copied' : 'Share'}</span>
@@ -401,7 +485,7 @@ function PayRedirectContent() {
 
       {/* Footer Info */}
       <footer className="max-w-md w-full mx-auto text-center pt-4 text-[11px] text-slate-400">
-        Powered by SmartKhata Fintech Enterprise Portal
+        Powered by {websiteName} Fintech Enterprise Portal
       </footer>
     </div>
   );

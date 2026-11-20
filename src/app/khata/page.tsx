@@ -6874,17 +6874,17 @@ function KhataPageInner() {
               <div className="p-5 space-y-4 overflow-y-auto">
                 
                 {/* Reminder Preview Box */}
-                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 space-y-2">
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 space-y-2 overflow-hidden">
                   <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     <span>Message Preview</span>
                     <span className="text-emerald-600 dark:text-emerald-400 font-mono text-[10px] font-bold">⚡ Ready to Share</span>
                   </div>
-                  <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 font-sans whitespace-pre-line leading-relaxed shadow-xs">
+                  <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 font-sans whitespace-pre-line leading-relaxed shadow-xs max-w-full break-all break-words [overflow-wrap:anywhere] overflow-x-hidden select-text">
                     {modalShareText}
                   </div>
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 px-1 pt-0.5 font-mono">
-                    <span>UPI ID: <strong className="text-slate-800 dark:text-white">{modalUpiId}</strong></span>
-                    <span>Payee: <strong className="text-slate-800 dark:text-white">{modalPayeeName}</strong></span>
+                  <div className="flex items-center justify-between flex-wrap gap-2 text-[11px] text-slate-500 px-1 pt-0.5 font-mono">
+                    <span className="truncate max-w-[48%]">UPI ID: <strong className="text-slate-800 dark:text-white">{modalUpiId}</strong></span>
+                    <span className="truncate max-w-[48%] text-right">Payee: <strong className="text-slate-800 dark:text-white">{modalPayeeName}</strong></span>
                   </div>
                 </div>
 
