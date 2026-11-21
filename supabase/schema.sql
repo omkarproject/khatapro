@@ -450,9 +450,14 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'name', 'Business Owner'),
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'business_name', 'SmartKhata Merchant'),
-    'super_admin'
+    CASE 
+      WHEN LOWER(NEW.email) = 'anantyadav8924@gmail.com' THEN 'super_admin'
+      ELSE COALESCE(NEW.raw_user_meta_data->>'role', 'merchant')
+    END
   )
-  ON CONFLICT (id) DO NOTHING;
+  ON CONFLICT (id) DO UPDATE
+  SET email = EXCLUDED.email,
+      role = CASE WHEN LOWER(EXCLUDED.email) = 'anantyadav8924@gmail.com' THEN 'super_admin' ELSE public.profiles.role END;
 
   INSERT INTO public.system_settings (user_id, business_name, business_email)
   VALUES (
@@ -470,4 +475,9 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+-- Ensure global_config table has base record
+INSERT INTO public.global_config (id, maintenance_mode, branding)
+VALUES ('global_config', '{"allowNewRegistrations": true}'::jsonb, '{}'::jsonb)
+ON CONFLICT (id) DO NOTHING;
 

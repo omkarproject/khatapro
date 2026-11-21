@@ -18,14 +18,21 @@ const DEFAULT_SUPABASE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 let browserClient: SupabaseClient | null = null;
 let serverAdminClient: SupabaseClient | null = null;
 
+export function resetSupabaseClients(): void {
+  browserClient = null;
+  serverAdminClient = null;
+}
+
 export function isSupabaseConfigured(): boolean {
-  return Boolean(DEFAULT_SUPABASE_URL && (DEFAULT_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ROLE_KEY));
+  const url = normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL);
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || DEFAULT_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ROLE_KEY;
+  return Boolean(url && key);
 }
 
 // Browser / Client-side Supabase client
 export function getSupabaseClient(customUrl?: string, customKey?: string): SupabaseClient | null {
-  const url = normalizeSupabaseUrl(customUrl || DEFAULT_SUPABASE_URL);
-  const key = customKey || DEFAULT_SUPABASE_ANON_KEY;
+  const url = normalizeSupabaseUrl(customUrl || process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL);
+  const key = customKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 
   if (!url || !key) {
     return null;
@@ -55,8 +62,8 @@ export function getSupabaseClient(customUrl?: string, customKey?: string): Supab
 
 // Server-side Admin Supabase client (Bypasses RLS for trusted operations like daily cron & recovery remapping)
 export function getSupabaseAdmin(customUrl?: string, customRoleKey?: string): SupabaseClient | null {
-  const url = normalizeSupabaseUrl(customUrl || DEFAULT_SUPABASE_URL);
-  const key = customRoleKey || DEFAULT_SUPABASE_ROLE_KEY || DEFAULT_SUPABASE_ANON_KEY;
+  const url = normalizeSupabaseUrl(customUrl || process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL);
+  const key = customRoleKey || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ROLE_KEY || DEFAULT_SUPABASE_ANON_KEY;
 
   if (!url || !key) {
     return null;

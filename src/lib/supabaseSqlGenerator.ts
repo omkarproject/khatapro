@@ -292,7 +292,23 @@ CREATE TABLE IF NOT EXISTS public.passwords (
   PRIMARY KEY (id, user_id)
 );
 
--- 2.14 Customer Drive Folders Table
+-- 2.14 Authenticators (2FA TOTP Accounts) Table
+CREATE TABLE IF NOT EXISTS public.authenticators (
+  id TEXT NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  issuer TEXT NOT NULL,
+  account_name TEXT NOT NULL,
+  secret TEXT NOT NULL,
+  category TEXT DEFAULT 'Other',
+  notes TEXT,
+  period INT DEFAULT 30,
+  digits INT DEFAULT 6,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (id, user_id)
+);
+
+-- 2.15 Customer Drive Folders Table
 CREATE TABLE IF NOT EXISTS public.customer_drive_folders (
   id TEXT NOT NULL,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -463,6 +479,11 @@ DO $$ BEGIN
 EXCEPTION WHEN OTHERS THEN NULL; END $$;
 
 DO $$ BEGIN
+  DROP POLICY IF EXISTS "authenticators_isolation" ON public.authenticators;
+  CREATE POLICY "authenticators_isolation" ON public.authenticators FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+
+DO $$ BEGIN
   DROP POLICY IF EXISTS "global_config_read" ON public.global_config;
   CREATE POLICY "global_config_read" ON public.global_config FOR SELECT USING (true);
 EXCEPTION WHEN OTHERS THEN NULL; END $$;
@@ -487,6 +508,7 @@ CREATE INDEX IF NOT EXISTS idx_documents_user_id ON public.documents(user_id);
 CREATE INDEX IF NOT EXISTS idx_notes_user_id ON public.notes(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON public.tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_passwords_user_id ON public.passwords(user_id);
+CREATE INDEX IF NOT EXISTS idx_authenticators_user_id ON public.authenticators(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_devices_user_id ON public.user_devices(user_id);
 
 -- ==========================================================
@@ -501,10 +523,14 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'name', 'Business Owner'),
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'business_name', 'SmartKhata Merchant'),
-    COALESCE(NEW.raw_user_meta_data->>'role', 'merchant')
+    CASE 
+      WHEN LOWER(NEW.email) = LOWER('${adminEmail}') THEN 'super_admin'
+      ELSE COALESCE(NEW.raw_user_meta_data->>'role', 'merchant')
+    END
   )
   ON CONFLICT (id) DO UPDATE
-  SET email = EXCLUDED.email;
+  SET email = EXCLUDED.email,
+      role = CASE WHEN LOWER(EXCLUDED.email) = LOWER('${adminEmail}') THEN 'super_admin' ELSE public.profiles.role END;
 
   INSERT INTO public.system_settings (user_id, business_name, business_email)
   VALUES (
@@ -524,14 +550,14 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
 -- ==========================================================
--- 6. PROVISION SUPER ADMIN ACCOUNT AUTOMATICALLY
+-- 6. PROVISION SUPER ADMIN ACCOUNT & INITIAL CONFIG
 -- User Name: ${adminName}
 -- Email: ${adminEmail}
 -- Role: super_admin
 -- ==========================================================
 DO $$
 DECLARE
-  v_user_id UUID := gen_random_uuid();
+  v_user_id UUID;
   v_email TEXT := '${adminEmail}';
   v_password TEXT := '${adminPassword}';
   v_name TEXT := '${adminName}';
@@ -551,51 +577,30 @@ BEGIN
         email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
         updated_at = NOW()
     WHERE id = v_user_id;
+
+    -- Ensure record exists in public.profiles with super_admin privileges
+    INSERT INTO public.profiles (id, name, email, role, business_name)
+    VALUES (v_user_id, v_name, v_email, 'super_admin', 'Admin Headquarters')
+    ON CONFLICT (id) DO UPDATE 
+    SET role = 'super_admin',
+        name = EXCLUDED.name,
+        email = EXCLUDED.email,
+        updated_at = NOW();
+
+    -- Ensure system settings record
+    INSERT INTO public.system_settings (user_id, business_name, business_email)
+    VALUES (v_user_id, 'Admin Headquarters', v_email)
+    ON CONFLICT (user_id) DO NOTHING;
+
+    RAISE NOTICE 'SUCCESS: Super Admin account (%) updated with super_admin role and password!', v_email;
   ELSE
-    INSERT INTO auth.users (
-      instance_id,
-      id,
-      aud,
-      role,
-      email,
-      encrypted_password,
-      email_confirmed_at,
-      raw_app_meta_data,
-      raw_user_meta_data,
-      created_at,
-      updated_at,
-      confirmation_token
-    ) VALUES (
-      '00000000-0000-0000-0000-000000000000',
-      v_user_id,
-      'authenticated',
-      'authenticated',
-      v_email,
-      v_encrypted_pw,
-      NOW(),
-      '{"provider":"email","providers":["email"]}'::jsonb,
-      jsonb_build_object('name', v_name, 'role', 'super_admin'),
-      NOW(),
-      NOW(),
-      ''
-    );
+    RAISE NOTICE 'SUCCESS: All operational tables, security policies, and triggers are ready! You can now register as % on the website and your account will automatically be created as Super Admin.', v_email;
   END IF;
 
-  -- Ensure record exists in public.profiles with super_admin privileges
-  INSERT INTO public.profiles (id, name, email, role, business_name)
-  VALUES (v_user_id, v_name, v_email, 'super_admin', 'Admin Headquarters')
-  ON CONFLICT (id) DO UPDATE 
-  SET role = 'super_admin',
-      name = EXCLUDED.name,
-      email = EXCLUDED.email,
-      updated_at = NOW();
-
-  -- Ensure system settings record
-  INSERT INTO public.system_settings (user_id, business_name, business_email)
-  VALUES (v_user_id, 'Admin Headquarters', v_email)
-  ON CONFLICT (user_id) DO NOTHING;
-
-  RAISE NOTICE 'SUCCESS: Database tables created and Super Admin (%) provisioned!', v_email;
+  -- Ensure global_config table has base record
+  INSERT INTO public.global_config (id, maintenance_mode, branding)
+  VALUES ('global_config', '{"allowNewRegistrations": true}'::jsonb, '{}'::jsonb)
+  ON CONFLICT (id) DO NOTHING;
 END $$;
 `;
 }

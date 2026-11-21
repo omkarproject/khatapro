@@ -4,7 +4,7 @@ import { getSupabaseAdmin, normalizeSupabaseUrl } from '@/lib/supabase';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const rawUrl = body.url?.trim() || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://axpbydzszykqwojamblh.supabase.co';
+    const rawUrl = body.url?.trim() || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://efpszmfgiutgrjpaopnj.supabase.co';
     const key = body.key?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     const url = normalizeSupabaseUrl(rawUrl);

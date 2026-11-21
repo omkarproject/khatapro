@@ -472,7 +472,7 @@ export default function SettingsPage() {
     }
   }, [settings.smtpSettings, settings.websiteName]);
 
-  const handleSaveSmtp = (e: React.FormEvent) => {
+  const handleSaveSmtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanSender = (smtpSenderName.trim() || settings.websiteName || 'AutoPrint Xerox Cloud').replace(/<[^>]+>/g, '').trim();
     const updated: SystemSettings = {
@@ -494,6 +494,42 @@ export default function SettingsPage() {
       },
     };
     updateSettings(updated);
+
+    try {
+      const res = await fetch('/api/admin/env-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target: 'smtp',
+          smtp: {
+            enabled: smtpEnabled,
+            host: smtpHost.trim(),
+            port: Number(smtpPort) || 587,
+            user: smtpUser.trim(),
+            pass: smtpPass.trim(),
+            from: cleanSender,
+            triggers: {
+              signupOtp: smtpTriggerSignup,
+              loginOtp: smtpTriggerLogin,
+              forgotPasswordOtp: smtpTriggerForgot,
+              welcomeEmail: smtpTriggerWelcome,
+            },
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        addToast(
+          smtpEnabled ? 'SMTP Saved & .env Updated! ✉️' : 'SMTP Disabled & .env Updated! ⚡',
+          'SMTP credentials .env file aur database me live sync ho gaye hain!',
+          'success'
+        );
+        return;
+      }
+    } catch (saveErr) {
+      console.warn('[SMTP Save] .env sync notice:', saveErr);
+    }
+
     addToast(
       smtpEnabled ? 'SMTP Settings Saved & Active! ✉️' : 'SMTP Settings Saved (Disabled)! ⚡',
       smtpEnabled
@@ -1026,9 +1062,9 @@ export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Backend Provider Settings State (Supabase Only)
-  const [supabaseUrl, setSupabaseUrl] = useState(settings.supabaseUrl || 'https://axpbydzszykqwojamblh.supabase.co');
-  const [supabaseAnonKey, setSupabaseAnonKey] = useState(settings.supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTIzNTcsImV4cCI6MjEwNzI4ODM1N30.MOkM9DqTFr5nB4mYj-Z3n9FEta1Pi0tSSJ0tTWxsxF0');
-  const [supabaseServiceRoleKey, setSupabaseServiceRoleKey] = useState(settings.supabaseServiceRoleKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTcxMjM1NywiZXhwIjoyMTA3Mjg4MzU3fQ.oUgYxGo6-WWyioLkhmPuldiCWf4pANvEl7vnPyNyyNs');
+  const [supabaseUrl, setSupabaseUrl] = useState(settings.supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://efpszmfgiutgrjpaopnj.supabase.co');
+  const [supabaseAnonKey, setSupabaseAnonKey] = useState(settings.supabaseAnonKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+  const [supabaseServiceRoleKey, setSupabaseServiceRoleKey] = useState(settings.supabaseServiceRoleKey || '');
 
   // Supabase Database SQL Generator Modal State
   const [showSqlSetupModal, setShowSqlSetupModal] = useState(false);
@@ -1037,6 +1073,34 @@ export default function SettingsPage() {
   const [sqlAdminPassword, setSqlAdminPassword] = useState('Admin@2026#');
   const [showSqlPassword, setShowSqlPassword] = useState(false);
   const [sqlCopied, setSqlCopied] = useState(false);
+
+  // Sync with live .env file on mount
+  useEffect(() => {
+    fetch('/api/admin/env-config')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          if (data.supabase?.url) setSupabaseUrl(data.supabase.url);
+          if (data.supabase?.anonKey) setSupabaseAnonKey(data.supabase.anonKey);
+          if (data.supabase?.serviceRoleKey) setSupabaseServiceRoleKey(data.supabase.serviceRoleKey);
+          if (data.googleDrive?.clientId) setDriveClientId(data.googleDrive.clientId);
+          if (data.googleDrive?.clientSecret) setDriveClientSecret(data.googleDrive.clientSecret);
+          if (data.googleDrive?.redirectUri) setDriveRedirectUri(data.googleDrive.redirectUri);
+          if (data.smtp) {
+            if (data.smtp.host) setSmtpHost(data.smtp.host);
+            if (data.smtp.port) setSmtpPort(data.smtp.port);
+            if (data.smtp.user) setSmtpUser(data.smtp.user);
+            if (data.smtp.pass) setSmtpPass(data.smtp.pass);
+            if (data.smtp.from) {
+              const cleanFrom = extractCleanSenderName(data.smtp.from, settings.websiteName);
+              if (cleanFrom) setSmtpSenderName(cleanFrom);
+            }
+            if (data.smtp.enabled !== undefined) setSmtpEnabled(data.smtp.enabled);
+          }
+        }
+      })
+      .catch((err) => console.warn('Could not load .env config:', err));
+  }, []);
 
   useEffect(() => {
     if (settings.supabaseUrl) setSupabaseUrl(settings.supabaseUrl);
@@ -1933,6 +1997,33 @@ export default function SettingsPage() {
       supabaseServiceRoleKey: supabaseServiceRoleKey.trim(),
     };
     updateSettings(updated);
+
+    try {
+      const res = await fetch('/api/admin/env-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target: 'supabase',
+          supabase: {
+            url: supabaseUrl.trim(),
+            anonKey: supabaseAnonKey.trim(),
+            serviceRoleKey: supabaseServiceRoleKey.trim(),
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        addToast(
+          'Supabase Saved & .env Updated! ⚡',
+          'Supabase Project URL, Anon Key, aur Service Role Key website aur .env file me live update ho gaye hain!',
+          'success'
+        );
+        return;
+      }
+    } catch (saveErr) {
+      console.warn('[Supabase Save] .env sync notice:', saveErr);
+    }
+
     addToast(
       'Supabase Database Saved! ⚡',
       'Supabase Project URL, Anon Key, aur Service Role Key website me live update ho gaye hain!',
@@ -1941,7 +2032,7 @@ export default function SettingsPage() {
   };
 
   // Handle Google Drive API Credentials Save
-  const handleSaveDriveApi = (e: React.FormEvent) => {
+  const handleSaveDriveApi = async (e: React.FormEvent) => {
     e.preventDefault();
     const updated: SystemSettings = {
       ...settings,
@@ -1955,6 +2046,34 @@ export default function SettingsPage() {
       },
     };
     updateSettings(updated);
+
+    try {
+      const res = await fetch('/api/admin/env-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target: 'google_drive',
+          googleDrive: {
+            enabled: driveEnabled,
+            clientId: driveClientId.trim(),
+            clientSecret: driveClientSecret.trim(),
+            redirectUri: driveRedirectUri.trim(),
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        addToast(
+          driveEnabled ? 'Google Drive Saved & .env Updated! ☁️' : 'Google Drive Settings & .env Updated! ⚡',
+          'Google Client ID aur Client Secret website aur .env file me live update ho gaye hain!',
+          'success'
+        );
+        return;
+      }
+    } catch (saveErr) {
+      console.warn('[Google Drive Save] .env sync notice:', saveErr);
+    }
+
     addToast(
       driveEnabled ? 'Google Drive API Saved & Enabled! ☁️' : 'Google Drive API Settings Saved! ⚡',
       driveEnabled
@@ -3432,11 +3551,11 @@ export default function SettingsPage() {
                 required
                 value={supabaseUrl}
                 onChange={(e) => setSupabaseUrl(e.target.value)}
-                placeholder="https://axpbydzszykqwojamblh.supabase.co"
+                placeholder="https://efpszmfgiutgrjpaopnj.supabase.co"
                 className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
               <p className="text-[10px] text-slate-400 mt-1">
-                Your Supabase project URL (e.g. <code>https://axpbydzszykqwojamblh.supabase.co</code>)
+                Your Supabase project URL (e.g. <code>https://efpszmfgiutgrjpaopnj.supabase.co</code>)
               </p>
             </div>
 
@@ -3659,12 +3778,12 @@ export default function SettingsPage() {
                     {sqlCopied ? (
                       <>
                         <CheckCircle2 className="w-4 h-4 text-white" />
-                        <span>Copied to Clipboard!</span>
+                        <span>Query Copied!</span>
                       </>
                     ) : (
                       <>
                         <Copy className="w-4 h-4" />
-                        <span>Copy SQL Query Command</span>
+                        <span>Copy Query</span>
                       </>
                     )}
                   </button>
@@ -6414,7 +6533,7 @@ export default function SettingsPage() {
                     </h5>
                   </div>
                   <p className="text-xs text-slate-600 dark:text-slate-400 pl-8 leading-relaxed">
-                    Visit <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-indigo-600 dark:text-indigo-400 font-semibold underline">supabase.com</a>, sign in with GitHub or Email, and open your project (e.g. <code className="font-mono">axpbydzszykqwojamblh</code>).
+                    Visit <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-indigo-600 dark:text-indigo-400 font-semibold underline">supabase.com</a>, sign in with GitHub or Email, and open your project (e.g. <code className="font-mono">efpszmfgiutgrjpaopnj</code>).
                   </p>
                 </div>
 
