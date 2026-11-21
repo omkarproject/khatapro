@@ -11,9 +11,9 @@ export function normalizeSupabaseUrl(rawUrl: string): string {
   return clean;
 }
 
-const DEFAULT_SUPABASE_URL = normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://axpbydzszykqwojamblh.supabase.co');
-const DEFAULT_SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTIzNTcsImV4cCI6MjEwNzI4ODM1N30.MOkM9DqTFr5nB4mYj-Z3n9FEta1Pi0tSSJ0tTWxsxF0';
-const DEFAULT_SUPABASE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTcxMjM1NywiZXhwIjoyMTA3Mjg4MzU3fQ.oUgYxGo6-WWyioLkhmPuldiCWf4pANvEl7vnPyNyyNs';
+const DEFAULT_SUPABASE_URL = normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://efpszmfgiutgrjpaopnj.supabase.co');
+const DEFAULT_SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmcHN6bWZnaXV0Z3JqcGFvcG5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUyMzUzOTUsImV4cCI6MjExMDgxMTM5NX0.wHV8FJiKhwkDB7vWYsnF2-wp35uB3HeluDKIWKdcea8';
+const DEFAULT_SUPABASE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmcHN6bWZnaXV0Z3JqcGFvcG5qIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5NTIzNTM5NSwiZXhwIjoyMTEwODExMzk1fQ.3Jgf6u4Uh4D4ktqNPr7TUMSs6aG7VJ9UxS-EA8RRiV0';
 
 let browserClient: SupabaseClient | null = null;
 let serverAdminClient: SupabaseClient | null = null;

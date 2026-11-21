@@ -249,9 +249,9 @@ export const getCleanDefaultSettings = (businessName: string = '', phone: string
 
   return {
     backendProvider: 'supabase',
-    supabaseUrl: 'https://axpbydzszykqwojamblh.supabase.co',
-    supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTIzNTcsImV4cCI6MjEwNzI4ODM1N30.MOkM9DqTFr5nB4mYj-Z3n9FEta1Pi0tSSJ0tTWxsxF0',
-    supabaseServiceRoleKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4cGJ5ZHpzenlrcXdvamFtYmxoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTcxMjM1NywiZXhwIjoyMTA3Mjg4MzU3fQ.oUgYxGo6-WWyioLkhmPuldiCWf4pANvEl7vnPyNyyNs',
+    supabaseUrl: 'https://efpszmfgiutgrjpaopnj.supabase.co',
+    supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmcHN6bWZnaXV0Z3JqcGFvcG5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUyMzUzOTUsImV4cCI6MjExMDgxMTM5NX0.wHV8FJiKhwkDB7vWYsnF2-wp35uB3HeluDKIWKdcea8',
+    supabaseServiceRoleKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmcHN6bWZnaXV0Z3JqcGFvcG5qIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5NTIzNTM5NSwiZXhwIjoyMTEwODExMzk1fQ.3Jgf6u4Uh4D4ktqNPr7TUMSs6aG7VJ9UxS-EA8RRiV0',
     googleDriveSettings: {
       enabled: true,
       clientId: '997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com',

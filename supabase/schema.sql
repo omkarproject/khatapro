@@ -349,7 +349,24 @@ CREATE TABLE IF NOT EXISTS public.global_config (
   id TEXT PRIMARY KEY DEFAULT 'global_config',
   maintenance_mode JSONB DEFAULT '{}'::jsonb,
   beta_testing_enabled BOOLEAN DEFAULT FALSE,
+  branding JSONB DEFAULT '{}'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 19. Active User Devices & Login Sessions Table
+CREATE TABLE IF NOT EXISTS public.user_devices (
+  id TEXT NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  device_name TEXT NOT NULL,
+  device_type TEXT DEFAULT 'desktop',
+  browser TEXT DEFAULT '',
+  os TEXT DEFAULT '',
+  ip TEXT DEFAULT '',
+  location TEXT DEFAULT '',
+  last_active TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  is_revoked BOOLEAN DEFAULT FALSE,
+  PRIMARY KEY (id, user_id)
 );
 
 -- ==========================================================
@@ -375,30 +392,32 @@ ALTER TABLE public.customer_drive_folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customer_drive_files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.google_drive_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.google_drive_backups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_devices ENABLE ROW LEVEL SECURITY;
 
 -- Global config can be read by anyone, written only by service role or authenticated admins
 ALTER TABLE public.global_config ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "global_config_read" ON public.global_config FOR SELECT USING (true);
 
 -- User-scoped policies
-CREATE POLICY "profiles_user_isolation" ON public.profiles FOR ALL USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
-CREATE POLICY "system_settings_isolation" ON public.system_settings FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "customers_isolation" ON public.customers FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "transactions_isolation" ON public.transactions FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "products_isolation" ON public.products FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "invoices_isolation" ON public.invoices FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "expenses_isolation" ON public.expenses FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "savings_goals_isolation" ON public.savings_goals FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "payment_reminders_isolation" ON public.payment_reminders FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "documents_isolation" ON public.documents FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "notes_isolation" ON public.notes FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "tasks_isolation" ON public.tasks FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "passwords_isolation" ON public.passwords FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "authenticators_isolation" ON public.authenticators FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "cust_folders_isolation" ON public.customer_drive_folders FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "cust_files_isolation" ON public.customer_drive_files FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "drive_tokens_isolation" ON public.google_drive_tokens FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "drive_backups_isolation" ON public.google_drive_backups FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "profiles_user_isolation" ON public.profiles FOR ALL USING (auth.uid() = id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = id OR auth.role() = 'service_role');
+CREATE POLICY "system_settings_isolation" ON public.system_settings FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "customers_isolation" ON public.customers FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "transactions_isolation" ON public.transactions FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "products_isolation" ON public.products FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "invoices_isolation" ON public.invoices FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "expenses_isolation" ON public.expenses FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "savings_goals_isolation" ON public.savings_goals FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "payment_reminders_isolation" ON public.payment_reminders FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "documents_isolation" ON public.documents FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "notes_isolation" ON public.notes FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "tasks_isolation" ON public.tasks FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "passwords_isolation" ON public.passwords FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "authenticators_isolation" ON public.authenticators FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "cust_folders_isolation" ON public.customer_drive_folders FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "cust_files_isolation" ON public.customer_drive_files FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "drive_tokens_isolation" ON public.google_drive_tokens FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "drive_backups_isolation" ON public.google_drive_backups FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY "user_devices_isolation" ON public.user_devices FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
 
 -- ==========================================================
 -- INDEXES FOR MAXIMUM QUERY PERFORMANCE
@@ -416,6 +435,7 @@ CREATE INDEX IF NOT EXISTS idx_notes_user_id ON public.notes(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON public.tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_passwords_user_id ON public.passwords(user_id);
 CREATE INDEX IF NOT EXISTS idx_authenticators_user_id ON public.authenticators(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_devices_user_id ON public.user_devices(user_id);
 CREATE INDEX IF NOT EXISTS idx_drive_backups_user ON public.google_drive_backups(user_id, created_at DESC);
 
 -- ==========================================================
@@ -450,3 +470,77 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+-- ==========================================================
+-- PROVISION SUPER ADMIN ACCOUNT AUTOMATICALLY
+-- User: anantyadav8924@gmail.com
+-- ==========================================================
+DO $$
+DECLARE
+  v_user_id UUID := gen_random_uuid();
+  v_email TEXT := 'anantyadav8924@gmail.com';
+  v_password TEXT := 'Khatapro@8924';
+  v_name TEXT := 'Anant Kumar Yadav';
+  v_encrypted_pw TEXT;
+BEGIN
+  -- Generate secure bcrypt hash with pgcrypto
+  v_encrypted_pw := crypt(v_password, gen_salt('bf'));
+
+  -- Check if user already exists in auth.users
+  IF EXISTS (SELECT 1 FROM auth.users WHERE email = v_email) THEN
+    SELECT id INTO v_user_id FROM auth.users WHERE email = v_email;
+
+    UPDATE auth.users 
+    SET encrypted_password = v_encrypted_pw,
+        raw_user_meta_data = jsonb_build_object('name', v_name, 'role', 'super_admin'),
+        raw_app_meta_data = '{"provider":"email","providers":["email"]}'::jsonb,
+        email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
+        updated_at = NOW()
+    WHERE id = v_user_id;
+  ELSE
+    INSERT INTO auth.users (
+      instance_id,
+      id,
+      aud,
+      role,
+      email,
+      encrypted_password,
+      email_confirmed_at,
+      raw_app_meta_data,
+      raw_user_meta_data,
+      created_at,
+      updated_at,
+      confirmation_token
+    ) VALUES (
+      '00000000-0000-0000-0000-000000000000',
+      v_user_id,
+      'authenticated',
+      'authenticated',
+      v_email,
+      v_encrypted_pw,
+      NOW(),
+      '{"provider":"email","providers":["email"]}'::jsonb,
+      jsonb_build_object('name', v_name, 'role', 'super_admin'),
+      NOW(),
+      NOW(),
+      ''
+    );
+  END IF;
+
+  -- Ensure record exists in public.profiles with super_admin privileges
+  INSERT INTO public.profiles (id, name, email, role, business_name)
+  VALUES (v_user_id, v_name, v_email, 'super_admin', 'Admin Headquarters')
+  ON CONFLICT (id) DO UPDATE 
+  SET role = 'super_admin',
+      name = EXCLUDED.name,
+      email = EXCLUDED.email,
+      updated_at = NOW();
+
+  -- Ensure system settings record
+  INSERT INTO public.system_settings (user_id, business_name, business_email)
+  VALUES (v_user_id, 'Admin Headquarters', v_email)
+  ON CONFLICT (user_id) DO NOTHING;
+
+  RAISE NOTICE 'SUCCESS: Database tables created and Super Admin (%) provisioned!', v_email;
+END $$;
+
