@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
-import { formatINR, formatDate } from '@/lib/utils';
+import { formatINR, formatDate, isOnlineCollectionTxn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
 import QuickAddRecordModal from '@/components/QuickAddRecordModal';
 import {
@@ -311,22 +311,7 @@ export default function DashboardPage() {
     // --- 5. ONLINE COLLECTIONS (Payment Collection Hub Only) ---
     // Count only transactions recorded via Payment Collection Hub ("Record in Khata") or customer payment link!
     const totalOnlineCollections = transactions
-      .filter(
-        t =>
-          !t.isDeleted &&
-          t.status !== 'deleted' &&
-          (
-            t.type === 'collection' ||
-            t.category === 'Online Payment Collection' ||
-            t.category === 'UPI Direct Collection' ||
-            t.category === 'Cashfree Payment Gateway' ||
-            t.category === 'Cashfree PG' ||
-            t.category === 'Razorpay Payment Gateway' ||
-            t.category === 'Razorpay PG' ||
-            (t.referenceNo && (t.referenceNo.startsWith('CF_') || t.referenceNo.startsWith('pay_') || t.referenceNo.startsWith('UPI-') || t.referenceNo.startsWith('rzp_'))) ||
-            (t.note && (t.note.toLowerCase().includes('collected via') || t.note.toLowerCase().includes('online payment')))
-          )
-      )
+      .filter(isOnlineCollectionTxn)
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
     // Total Savings
@@ -391,17 +376,7 @@ export default function DashboardPage() {
             }
 
             // Online Collections: transactions from Payment Collection Hub or payment link
-            if (
-              t.type === 'collection' ||
-              t.category === 'Online Payment Collection' ||
-              t.category === 'UPI Direct Collection' ||
-              t.category === 'Cashfree Payment Gateway' ||
-              t.category === 'Cashfree PG' ||
-              t.category === 'Razorpay Payment Gateway' ||
-              t.category === 'Razorpay PG' ||
-              (t.referenceNo && (t.referenceNo.startsWith('CF_') || t.referenceNo.startsWith('pay_') || t.referenceNo.startsWith('UPI-') || t.referenceNo.startsWith('rzp_'))) ||
-              (t.note && (t.note.toLowerCase().includes('collected via') || t.note.toLowerCase().includes('online payment')))
-            ) {
+            if (isOnlineCollectionTxn(t)) {
               dayMap[day].onlineCollections += amt;
             }
           }

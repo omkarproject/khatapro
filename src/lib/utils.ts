@@ -288,3 +288,189 @@ export function openWhatsApp(phone?: string, text?: string): void {
     triggerAnchor(waWebUrl);
   }
 }
+
+/**
+ * Checks whether a transaction represents an online payment collection
+ * (Cashfree PG, Razorpay PG, UPI PG, Default UPI & QR, or Payment Link).
+ */
+export function isOnlineCollectionTxn(txn: any): boolean {
+  if (!txn || txn.isDeleted || txn.status === 'deleted') return false;
+
+  // 1. Explicit collection type from Hub or Modal
+  if (txn.type === 'collection') return true;
+
+  // 2. ID prefix check
+  const id = String(txn.id || '').toLowerCase();
+  if (id.startsWith('txn_online_') || id.startsWith('col_') || id.startsWith('pay_')) {
+    return true;
+  }
+
+  // 3. Tags check
+  const tags = Array.isArray(txn.tags) ? txn.tags : [];
+  if (
+    tags.some((tag: string) =>
+      typeof tag === 'string' &&
+      (tag === 'online_payment' ||
+        tag.includes('gateway') ||
+        tag.includes('cashfree') ||
+        tag.includes('razorpay') ||
+        tag.includes('upi_collection'))
+    )
+  ) {
+    return true;
+  }
+
+  // 4. Category matching online collection / gateways
+  const cat = (txn.category || '').toLowerCase();
+  if (
+    cat.includes('collection') ||
+    cat.includes('gateway') ||
+    cat.includes('cashfree') ||
+    cat.includes('razorpay') ||
+    cat.includes('upi direct') ||
+    cat.includes('payment link') ||
+    cat === 'online payment collection' ||
+    cat === 'upi direct collection'
+  ) {
+    return true;
+  }
+
+  // 5. Note / Description matching online checkout or gateway settlement
+  const note = (txn.note || txn.description || '').toLowerCase();
+  if (
+    note.includes('via cashfree') ||
+    note.includes('via razorpay') ||
+    note.includes('via upi') ||
+    note.includes('collected via') ||
+    note.includes('online payment') ||
+    note.includes('online checkout') ||
+    note.includes('bank ref / utr') ||
+    note.includes('bank ref') ||
+    note.includes('payment link') ||
+    note.includes('settled receipt') ||
+    note.includes('shop upi qr')
+  ) {
+    return true;
+  }
+
+  // 6. Reference number prefix matching online payment gateways
+  const ref = (txn.referenceNo || txn.bill_number || '').toLowerCase();
+  if (
+    ref.startsWith('cf_') ||
+    ref.startsWith('pay_') ||
+    ref.startsWith('upi-') ||
+    ref.startsWith('rzp_') ||
+    ref.startsWith('col_') ||
+    ref.startsWith('order_')
+  ) {
+    return true;
+  }
+
+  // 7. Payment Received / got / debit with UPI paymentMode or valid numeric UTR / reference number
+  if (
+    (cat === 'payment received' || txn.type === 'debit' || txn.type === 'got') &&
+    (txn.paymentMode === 'upi' || txn.payment_mode === 'upi' || (ref && ref.length >= 6 && ref !== 'n/a'))
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Extracts the real Bank Reference ID / UTR (e.g. 669102397152) from transaction
+ */
+export function extractBankRef(txn: any): string {
+  if (!txn) return 'N/A';
+
+  // 1. Check referenceNo
+  const ref = txn.referenceNo;
+  if (ref && typeof ref === 'string' && ref.trim() && ref.trim() !== 'N/A' && ref.trim() !== 'undefined' && ref.trim() !== 'null') {
+    return ref.trim();
+  }
+
+  // 2. Check bill_number
+  const billNum = txn.bill_number;
+  if (billNum && typeof billNum === 'string' && billNum.trim() && billNum.trim() !== 'N/A' && billNum.trim() !== 'undefined') {
+    return billNum.trim();
+  }
+
+  // 3. Try to extract from note/description: e.g. [Bank Ref / UTR: 669102397152] or UTR: 669102397152
+  const note = txn.note || txn.description || '';
+  const match = note.match(/(?:Bank Ref \/ UTR|Bank Ref|UTR|Ref ID|Ref No|Reference)[:\s]+([A-Za-z0-9_-]+)/i);
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+
+  // 4. Check attachments for metaEnvelope
+  if (Array.isArray(txn.attachments)) {
+    for (const att of txn.attachments) {
+      try {
+        const parsed = typeof att === 'string' ? JSON.parse(att) : att;
+        if (parsed && parsed.__sk_meta && parsed.referenceNo) {
+          return String(parsed.referenceNo).trim();
+        }
+      } catch {}
+    }
+  }
+
+  return 'N/A';
+}
+
+/**
+ * Identifies the payment gateway used and returns badge information
+ */
+export function getGatewayModeInfo(txn: any): { label: string; badgeClass: string } {
+  if (!txn) {
+    return {
+      label: 'Default UPI & QR',
+      badgeClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800',
+    };
+  }
+
+  const cat = (txn.category || '').toLowerCase();
+  const note = (txn.note || txn.description || '').toLowerCase();
+  const ref = (txn.referenceNo || txn.bill_number || '').toLowerCase();
+  const tags = Array.isArray(txn.tags) ? txn.tags.join(' ').toLowerCase() : '';
+
+  if (cat.includes('cashfree') || note.includes('cashfree') || ref.startsWith('cf_') || tags.includes('cashfree')) {
+    return {
+      label: 'Cashfree PG',
+      badgeClass: 'bg-purple-100 text-purple-700 dark:bg-purple-950/70 dark:text-purple-300 border border-purple-200 dark:border-purple-800',
+    };
+  }
+
+  if (cat.includes('razorpay') || note.includes('razorpay') || ref.startsWith('rzp_') || tags.includes('razorpay')) {
+    return {
+      label: 'Razorpay PG',
+      badgeClass: 'bg-blue-100 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300 border border-blue-200 dark:border-blue-800',
+    };
+  }
+
+  if (cat.includes('dynamic') || note.includes('upi pg') || note.includes('dynamic') || tags.includes('dynamic') || tags.includes('upi_pg')) {
+    return {
+      label: 'UPI PG (Dynamic)',
+      badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800',
+    };
+  }
+
+  if (cat.includes('upi direct') || note.includes('shop upi qr') || note.includes('default upi') || note.includes('standee') || cat.includes('default upi')) {
+    return {
+      label: 'Default UPI & QR',
+      badgeClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800',
+    };
+  }
+
+  if (txn.paymentMode === 'upi' || txn.payment_mode === 'upi') {
+    return {
+      label: 'UPI PG (Dynamic)',
+      badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800',
+    };
+  }
+
+  const fallback = txn.paymentMode || txn.category || 'Online';
+  return {
+    label: fallback.toUpperCase(),
+    badgeClass: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800',
+  };
+}

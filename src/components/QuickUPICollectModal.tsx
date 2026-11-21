@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
-import { formatINR, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
+import { formatINR, buildUpiUri, getQrCodeUrl, openWhatsApp, isOnlineCollectionTxn, getGatewayModeInfo, extractBankRef } from '@/lib/utils';
 import { downloadBrandedLockedQr } from '@/lib/qrCardGenerator';
 import { isGatewayActive } from '@/types';
 import {
@@ -525,43 +525,6 @@ export default function QuickUPICollectModal() {
     }, 1500);
   };
 
-  // Filter only actual payment collections (Payment Collection Hub or Payment Link)
-  const isOnlineCollectionTxn = (txn: any) => {
-    if (!txn || txn.isDeleted || txn.status === 'deleted') return false;
-    if (txn.type === 'collection') return true;
-    const cat = (txn.category || '').toLowerCase();
-    if (
-      cat.includes('collection') ||
-      cat.includes('gateway') ||
-      cat.includes('cashfree') ||
-      cat.includes('razorpay') ||
-      cat.includes('upi direct') ||
-      cat.includes('payment link')
-    ) {
-      return true;
-    }
-    const ref = (txn.referenceNo || '').toLowerCase();
-    if (
-      ref.startsWith('cf_') ||
-      ref.startsWith('pay_') ||
-      ref.startsWith('upi-') ||
-      ref.startsWith('rzp_') ||
-      ref.startsWith('col_')
-    ) {
-      return true;
-    }
-    const noteText = (txn.note || '').toLowerCase();
-    if (
-      noteText.includes('collected via') ||
-      noteText.includes('payment link') ||
-      noteText.includes('online collection') ||
-      noteText.includes('shop upi qr')
-    ) {
-      return true;
-    }
-    return false;
-  };
-
   const collectionHistoryTransactions = useMemo(() => {
     return (transactions || []).filter(isOnlineCollectionTxn);
   }, [transactions]);
@@ -825,6 +788,9 @@ export default function QuickUPICollectModal() {
                 ) : (
                   filteredTransactions.map((txn) => {
                     const isCollection = true;
+                    const custName = txn.customerName || (txn.customerId ? customers.find(c => c.id === txn.customerId)?.name : '') || 'Customer';
+                    const gwInfo = getGatewayModeInfo(txn);
+                    const refId = extractBankRef(txn);
                     return (
                       <div
                         key={txn.id}
@@ -839,7 +805,7 @@ export default function QuickUPICollectModal() {
                           </div>
                           <div className="min-w-0">
                             <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                              {txn.customerName || 'Customer'}
+                              {custName}
                             </div>
                             <div className="text-[10px] text-slate-400 flex items-center gap-1.5 truncate">
                               <span>
@@ -850,7 +816,15 @@ export default function QuickUPICollectModal() {
                                 })()}
                               </span>
                               <span>•</span>
-                              <span>{txn.paymentMode || txn.category}</span>
+                              <span className="font-semibold text-slate-700 dark:text-slate-200">{gwInfo.label}</span>
+                              {refId !== 'N/A' && (
+                                <>
+                                  <span>•</span>
+                                  <span className="font-mono text-[9px] bg-slate-100 dark:bg-slate-700/60 px-1 py-0.2 rounded text-slate-600 dark:text-slate-300">
+                                    #{refId}
+                                  </span>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>

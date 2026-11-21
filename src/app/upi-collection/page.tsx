@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
-import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
+import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp, isOnlineCollectionTxn, getGatewayModeInfo, extractBankRef } from '@/lib/utils';
 import { downloadBrandedLockedQr } from '@/lib/qrCardGenerator';
 import { getActiveCurrency, t } from '@/lib/i18n';
 import { isGatewayActive } from '@/types';
@@ -838,9 +838,7 @@ export default function UpiCollectionPage() {
 
   // Filter collection transactions for ledger (exclude deleted)
   const collectionTransactions = useMemo(() => {
-    return transactions.filter(
-      t => !t.isDeleted && t.status !== 'deleted' && (t.type === 'collection' || t.type === 'income' || t.type === 'credit')
-    );
+    return transactions.filter(isOnlineCollectionTxn);
   }, [transactions]);
 
   const totalCollected = collectionTransactions.reduce((acc, t) => acc + t.amount, 0);
@@ -1993,55 +1991,60 @@ export default function UpiCollectionPage() {
                       </td>
                     </tr>
                   ) : (
-                    collectionTransactions.map((t) => (
-                      <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
-                        <td className="py-3 px-3 text-slate-500 font-mono">
-                          {formatDate(t.date)}
-                        </td>
-                        <td className="py-3 px-3 font-semibold text-slate-900 dark:text-white">
-                          {t.customerName || 'Customer'}
-                        </td>
-                        <td className="py-3 px-3">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            (t.category || '').toLowerCase().includes('cashfree')
-                              ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
-                              : (t.category || '').toLowerCase().includes('razorpay')
-                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                              : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-                          }`}>
-                            {(t.category || '').toLowerCase().includes('cashfree') ? 'CASHFREE' : (t.category || '').toLowerCase().includes('razorpay') ? 'RAZORPAY' : (t.paymentMode?.toUpperCase() || 'UPI')}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 font-mono text-slate-400">
-                          {t.referenceNo || 'N/A'}
-                        </td>
-                        <td className="py-3 px-3 text-slate-500">
-                          {t.note || '-'}
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono font-bold text-emerald-600">
-                          +{formatINR(t.amount)}
-                        </td>
-                        <td className="py-3 px-3 text-center">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
-                            Settled
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (confirm(`Delete collection record of ${formatINR(t.amount)}?`)) {
-                                await hardDeleteTransaction(t.id);
-                              }
-                            }}
-                            title="Delete Record"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                    collectionTransactions.map((t) => {
+                      const custName = t.customerName || (t.customerId ? customers.find(c => c.id === t.customerId)?.name : '') || 'Customer';
+                      const gwInfo = getGatewayModeInfo(t);
+                      const refId = extractBankRef(t);
+                      return (
+                        <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                          <td className="py-3 px-3 text-slate-500 font-mono">
+                            {formatDate(t.date)}
+                          </td>
+                          <td className="py-3 px-3 font-semibold text-slate-900 dark:text-white">
+                            {custName}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${gwInfo.badgeClass}`}>
+                              {gwInfo.label}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 font-mono text-xs">
+                            {refId !== 'N/A' ? (
+                              <span className="font-semibold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                                {refId}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">N/A</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-slate-500 max-w-xs truncate" title={t.note || ''}>
+                            {t.note || '-'}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono font-bold text-emerald-600">
+                            +{formatINR(t.amount)}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+                              Settled
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (confirm(`Delete collection record of ${formatINR(t.amount)}?`)) {
+                                  await hardDeleteTransaction(t.id);
+                                }
+                              }}
+                              title="Delete Record"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -2054,63 +2057,62 @@ export default function UpiCollectionPage() {
                   No payment collections recorded yet.
                 </div>
               ) : (
-                collectionTransactions.map((t) => (
-                  <div
-                    key={t.id}
-                    className="p-3.5 rounded-2xl bg-white dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 shadow-xs space-y-2.5"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                          {t.customerName || 'Customer'}
+                collectionTransactions.map((t) => {
+                  const custName = t.customerName || (t.customerId ? customers.find(c => c.id === t.customerId)?.name : '') || 'Customer';
+                  const gwInfo = getGatewayModeInfo(t);
+                  const refId = extractBankRef(t);
+                  return (
+                    <div
+                      key={t.id}
+                      className="p-3.5 rounded-2xl bg-white dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 shadow-xs space-y-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                            {custName}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                            {formatDate(t.date)}
+                          </div>
                         </div>
-                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                          {formatDate(t.date)}
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <div className="text-sm font-mono font-black text-emerald-600 dark:text-emerald-400">
-                          +{formatINR(t.amount)}
-                        </div>
-                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 inline-block mt-0.5">
-                          Settled
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          (t.category || '').toLowerCase().includes('cashfree')
-                            ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
-                            : (t.category || '').toLowerCase().includes('razorpay')
-                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                            : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-                        }`}>
-                          {(t.category || '').toLowerCase().includes('cashfree') ? 'CASHFREE' : (t.category || '').toLowerCase().includes('razorpay') ? 'RAZORPAY' : (t.paymentMode?.toUpperCase() || 'UPI')}
-                        </span>
-                        {t.referenceNo && (
-                          <span className="font-mono text-[10px] text-slate-400 truncate max-w-[120px]">
-                            #{t.referenceNo}
+                        <div className="text-right shrink-0">
+                          <div className="text-sm font-mono font-black text-emerald-600 dark:text-emerald-400">
+                            +{formatINR(t.amount)}
+                          </div>
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 inline-block mt-0.5">
+                            Settled
                           </span>
-                        )}
+                        </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (confirm(`Delete collection record of ${formatINR(t.amount)}?`)) {
-                            await hardDeleteTransaction(t.id);
-                          }
-                        }}
-                        title="Delete Record"
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${gwInfo.badgeClass}`}>
+                            {gwInfo.label}
+                          </span>
+                          {refId !== 'N/A' && (
+                            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                              #{refId}
+                            </span>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (confirm(`Delete collection record of ${formatINR(t.amount)}?`)) {
+                              await hardDeleteTransaction(t.id);
+                            }
+                          }}
+                          title="Delete Record"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
