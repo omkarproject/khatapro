@@ -467,6 +467,7 @@ export interface TwoFactorAuthConfig {
 export interface PaymentSettings {
   collectionMode?: PaymentCollectionMode;
   enabledGateways?: EnabledPaymentGateways;
+  verifiedGateways?: { [key: string]: boolean };
   twoFactorAuth?: TwoFactorAuthConfig;
   upiId: string;
   payeeName: string;

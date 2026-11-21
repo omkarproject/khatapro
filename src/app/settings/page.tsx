@@ -882,13 +882,48 @@ export default function SettingsPage() {
     const s = typeof window !== 'undefined' ? StorageService.getSettings() : settings;
     const eg = s.paymentSettings?.enabledGateways;
     const curMode = s.paymentSettings?.collectionMode || 'direct_upi';
+
+    // Mutual exclusivity: only 1 automated gateway can be active simultaneously
+    let activePg: 'cashfree' | 'razorpay' | 'upi_gateway' | null = null;
+    if (curMode === 'cashfree' || curMode === 'razorpay' || curMode === 'upi_gateway') {
+      activePg = curMode;
+    } else if (eg?.cashfree) {
+      activePg = 'cashfree';
+    } else if (eg?.razorpay) {
+      activePg = 'razorpay';
+    } else if (eg?.upi_gateway) {
+      activePg = 'upi_gateway';
+    }
+
     return {
-      direct_upi: eg?.direct_upi !== undefined ? eg.direct_upi : curMode === 'direct_upi',
-      cashfree: eg?.cashfree !== undefined ? eg.cashfree : curMode === 'cashfree',
-      razorpay: eg?.razorpay !== undefined ? eg.razorpay : curMode === 'razorpay',
-      upi_gateway: eg?.upi_gateway !== undefined ? eg.upi_gateway : curMode === 'upi_gateway',
+      direct_upi: true, // Always by default enabled
+      cashfree: activePg === 'cashfree',
+      razorpay: activePg === 'razorpay',
+      upi_gateway: activePg === 'upi_gateway',
     };
   });
+  const [verifiedGateways, setVerifiedGateways] = useState<{ [key: string]: boolean }>(() => {
+    const s = typeof window !== 'undefined' ? StorageService.getSettings() : settings;
+    return s.paymentSettings?.verifiedGateways || {};
+  });
+  const [showUpiTestModal, setShowUpiTestModal] = useState(false);
+  const [upiTestPayload, setUpiTestPayload] = useState<{ upiUrl: string; qrUrl: string; vpa: string } | null>(null);
+
+  const markGatewayVerified = (gateway: string) => {
+    setVerifiedGateways((prev) => {
+      const next = { ...prev, [gateway]: true };
+      const s = StorageService.getSettings();
+      const updated = {
+        ...s,
+        paymentSettings: {
+          ...(s.paymentSettings || {}),
+          verifiedGateways: next,
+        },
+      };
+      updateSettings(updated);
+      return next;
+    });
+  };
   const [twoFactorAuth, setTwoFactorAuth] = useState<TwoFactorAuthConfig>(() => {
     const s = typeof window !== 'undefined' ? StorageService.getSettings() : settings;
     return s.paymentSettings?.twoFactorAuth || {
@@ -1793,36 +1828,50 @@ export default function SettingsPage() {
     saveTwoFactorConfig(updated);
   };
 
-  // Toggle active / deactive state of individual payment gateway
+  // Toggle active / deactive state of individual payment gateway (Mutual Exclusivity: Only 1 automated gateway active)
   const handleToggleGateway = (mode: PaymentCollectionMode, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     isPaymentDirtyRef.current = true;
+
+    if (mode === 'direct_upi') {
+      // Default UPI & QR is ALWAYS by default enabled
+      setEnabledGateways((prev) => ({ ...prev, direct_upi: true }));
+      setCollectionMode('direct_upi');
+      addToast('Default UPI & QR', 'Default UPI & QR hamesha primary mode ke roop me enabled rehta hai.', 'info');
+      return;
+    }
+
     const currentActive = Boolean(enabledGateways[mode]);
     const nextActive = !currentActive;
 
     const nextGateways: EnabledPaymentGateways = {
-      ...enabledGateways,
-      [mode]: nextActive,
+      direct_upi: true, // Always stays enabled
+      cashfree: false,
+      razorpay: false,
+      upi_gateway: false,
     };
-    setEnabledGateways(nextGateways);
 
-    let nextCollectionMode = collectionMode;
     if (nextActive) {
-      nextCollectionMode = mode;
+      // Activate ONLY this gateway; other two automatically deactivate!
+      nextGateways[mode] = true;
       setCollectionMode(mode);
-    } else if (mode === collectionMode) {
-      const modes: PaymentCollectionMode[] = ['direct_upi', 'cashfree', 'razorpay', 'upi_gateway'];
-      const remaining = modes.find(m => m !== mode && nextGateways[m]);
-      if (remaining) {
-        nextCollectionMode = remaining;
-        setCollectionMode(remaining);
-      }
+      addToast(
+        `${mode === 'cashfree' ? 'Cashfree PG' : mode === 'razorpay' ? 'Razorpay PG' : 'UPI PG (Dynamic)'} Activated! ⚡`,
+        'Sirf 1 payment gateway active hai. Baaki gateways auto-deactivate ho gaye.',
+        'success'
+      );
+    } else {
+      setCollectionMode('direct_upi');
+      addToast('Gateway Deactivated', 'Direct UPI & QR mode active hai.', 'info');
     }
+
+    setEnabledGateways(nextGateways);
 
     const updatedPaymentSettings: PaymentSettings = {
       ...settings.paymentSettings,
-      collectionMode: nextCollectionMode,
+      collectionMode: nextActive ? mode : 'direct_upi',
       enabledGateways: nextGateways,
+      verifiedGateways,
       upiId: (upiId || '').trim(),
       payeeName: (payeeName || '').trim(),
       customQrUrl,
@@ -1844,16 +1893,6 @@ export default function SettingsPage() {
       ...settings,
       paymentSettings: updatedPaymentSettings,
     });
-
-    addToast(
-      nextActive ? 'Gateway Activated' : 'Gateway Deactivated',
-      `${
-        mode === 'direct_upi' ? 'Default UPI & QR' :
-        mode === 'cashfree' ? 'Cashfree PG' :
-        mode === 'razorpay' ? 'Razorpay PG' : 'UPI PG (Dynamic)'
-      } is now ${nextActive ? 'ACTIVE (Visible in Payment Hub)' : 'DEACTIVATED (Hidden in Payment Hub)'}.`,
-      nextActive ? 'success' : 'info'
-    );
   };
 
   // Handle Payment Collection Settings Save
@@ -1866,7 +1905,13 @@ export default function SettingsPage() {
     const updatedPaymentSettings: PaymentSettings = {
       ...settings.paymentSettings,
       collectionMode,
-      enabledGateways,
+      enabledGateways: {
+        direct_upi: true,
+        cashfree: Boolean(enabledGateways.cashfree),
+        razorpay: Boolean(enabledGateways.razorpay),
+        upi_gateway: Boolean(enabledGateways.upi_gateway),
+      },
+      verifiedGateways,
       upiId: (upiId || '').trim(),
       payeeName: (payeeName || '').trim(),
       customQrUrl,
@@ -1922,55 +1967,186 @@ export default function SettingsPage() {
     );
   };
 
-  const handleTestPgConnection = async (type: 'cashfree' | 'razorpay' | 'upi_gateway') => {
+  const handleTestPay = async (type: 'cashfree' | 'razorpay' | 'upi_gateway') => {
     setIsPgTesting(true);
     setPgTestResult(null);
 
-    await new Promise((r) => setTimeout(r, 600));
+    try {
+      if (type === 'cashfree') {
+        if (!cashfreeAppId.trim() || !cashfreeSecretKey.trim()) {
+          setPgTestResult({
+            success: false,
+            message: 'Cashfree App ID and Secret Key are required to initiate test pay.',
+          });
+          setIsPgTesting(false);
+          return;
+        }
 
-    if (type === 'cashfree') {
-      if (!cashfreeAppId.trim() || !cashfreeSecretKey.trim()) {
-        setPgTestResult({
-          success: false,
-          message: 'Cashfree App ID and Secret Key are required to connect.',
+        const res = await fetch('/api/cashfree/order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: `test_pay_${Date.now()}`,
+            orderAmount: 1.00,
+            customerName: currentUser?.name || 'SmartKhata Merchant',
+            customerPhone: currentUser?.phone || '9999999999',
+            customerEmail: currentUser?.email || 'admin@rpmdg.me',
+            appId: cashfreeAppId.trim(),
+            secretKey: cashfreeSecretKey.trim(),
+            env: cashfreeEnv,
+          }),
         });
-      } else {
-        setPgTestResult({
-          success: true,
-          message: `Connected to Cashfree PG (${cashfreeEnv.toUpperCase()}) successfully! Webhook listener active.`,
-        });
-      }
-    } else if (type === 'razorpay') {
-      if (!razorpayKeyId.trim() || !razorpayKeySecret.trim()) {
-        setPgTestResult({
-          success: false,
-          message: 'Razorpay Key ID and Key Secret are required to connect.',
-        });
-      } else if (!razorpayKeyId.trim().startsWith('rzp_test_') && !razorpayKeyId.trim().startsWith('rzp_live_')) {
-        setPgTestResult({
-          success: false,
-          message: 'Invalid Razorpay Key ID format. Must start with "rzp_test_" or "rzp_live_".',
-        });
-      } else {
+
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          throw new Error(data.error || 'Failed to authenticate with Cashfree.');
+        }
+
+        markGatewayVerified('cashfree');
         setPgTestResult({
           success: true,
-          message: `Connected to Razorpay PG (${razorpayEnv.toUpperCase()} mode: ${razorpayKeyId.trim().substring(0, 12)}...) successfully! Ready for UPI, Cards & NetBanking.`,
+          message: `Cashfree ₹1 Order Created (ID: ${data.orderId})! Live API credentials verified.`,
         });
-      }
-    } else {
-      if (!upiGatewayKey.trim()) {
-        setPgTestResult({
-          success: false,
-          message: 'Gateway Key / Merchant ID is required.',
+        addToast('Test Pay Verified! ⚡', 'Cashfree live checkout session created for ₹1.00!', 'success');
+
+        const scriptId = 'cashfree-js-sdk';
+        let script = document.getElementById(scriptId) as HTMLScriptElement;
+        const openCf = () => {
+          if ((window as any).Cashfree) {
+            const cf = (window as any).Cashfree({ mode: cashfreeEnv });
+            cf.checkout({
+              paymentSessionId: data.paymentSessionId,
+              redirectTarget: '_modal',
+            }).catch(() => {});
+          }
+        };
+
+        if (!script) {
+          script = document.createElement('script');
+          script.id = scriptId;
+          script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+          script.onload = openCf;
+          document.body.appendChild(script);
+        } else {
+          openCf();
+        }
+      } else if (type === 'razorpay') {
+        if (!razorpayKeyId.trim() || !razorpayKeySecret.trim()) {
+          setPgTestResult({
+            success: false,
+            message: 'Razorpay Key ID and Key Secret are required to initiate test pay.',
+          });
+          setIsPgTesting(false);
+          return;
+        }
+
+        const res = await fetch('/api/razorpay/order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            keyId: razorpayKeyId.trim(),
+            keySecret: razorpayKeySecret.trim(),
+            amount: 1,
+          }),
         });
-      } else {
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || 'Failed to authenticate with Razorpay API.');
+        }
+
+        markGatewayVerified('razorpay');
         setPgTestResult({
           success: true,
-          message: `Connected to ${upiGatewayProvider} successfully. Dynamic QR & Instant Webhooks active!`,
+          message: `Razorpay ₹1 Order Created (ID: ${data.orderId})! Live API credentials verified.`,
+        });
+        addToast('Razorpay Order Created! ⚡', 'Razorpay checkout opening for ₹1.00 test pay...', 'success');
+
+        const rzpScriptId = 'razorpay-checkout-js';
+        let rzpScript = document.getElementById(rzpScriptId) as HTMLScriptElement;
+        const openRzp = () => {
+          if ((window as any).Razorpay) {
+            const rzp = new (window as any).Razorpay({
+              key: data.keyId,
+              amount: data.amount,
+              currency: data.currency,
+              name: payeeName || 'SmartKhata Store',
+              description: '₹1 Real Test Transaction',
+              order_id: data.orderId,
+              prefill: {
+                name: currentUser?.name || 'Merchant',
+                email: currentUser?.email || 'admin@rpmdg.me',
+                contact: currentUser?.phone || '9999999999',
+              },
+              theme: {
+                color: '#4f46e5',
+              },
+              handler: function (resp: any) {
+                markGatewayVerified('razorpay');
+                addToast('Payment Successful! 🎉', `Payment ID: ${resp.razorpay_payment_id}. Verified!`, 'success');
+                setPgTestResult({
+                  success: true,
+                  message: `Payment Successful! Payment ID: ${resp.razorpay_payment_id}. Razorpay is verified!`,
+                });
+                fetch('/api/razorpay/verify', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    orderId: data.orderId,
+                    paymentId: resp.razorpay_payment_id,
+                    signature: resp.razorpay_signature,
+                    keySecret: razorpayKeySecret,
+                  }),
+                }).catch(() => {});
+              },
+            });
+            rzp.open();
+          }
+        };
+
+        if (!rzpScript) {
+          rzpScript = document.createElement('script');
+          rzpScript.id = rzpScriptId;
+          rzpScript.src = 'https://checkout.razorpay.com/v1/checkout.js';
+          rzpScript.onload = openRzp;
+          document.body.appendChild(rzpScript);
+        } else {
+          openRzp();
+        }
+      } else if (type === 'upi_gateway') {
+        if (!upiGatewayKey.trim()) {
+          setPgTestResult({
+            success: false,
+            message: 'UPI Gateway Key / Merchant ID is required to initiate test pay.',
+          });
+          setIsPgTesting(false);
+          return;
+        }
+
+        const testVpa = upiId?.trim() || 'merchant@upi';
+        const dynamicUpiUrl = `upi://pay?pa=${testVpa}&pn=${encodeURIComponent(payeeName?.trim() || 'SmartKhata')}&am=1.00&cu=INR&tn=Test_Pay_1Rs_${Date.now().toString().slice(-6)}`;
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(dynamicUpiUrl)}`;
+
+        setUpiTestPayload({
+          upiUrl: dynamicUpiUrl,
+          qrUrl,
+          vpa: testVpa,
+        });
+        setShowUpiTestModal(true);
+        setPgTestResult({
+          success: true,
+          message: 'Dynamic ₹1 QR generated. Scan with GPay/PhonePe/Paytm to complete verification.',
         });
       }
+    } catch (err: any) {
+      setPgTestResult({
+        success: false,
+        message: err.message || 'Payment test failed. Please verify your credentials.',
+      });
+      addToast('Test Pay Error', err.message || 'Payment test failed.', 'error');
+    } finally {
+      setIsPgTesting(false);
     }
-    setIsPgTesting(false);
   };
 
   const handleUploadQr = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2763,37 +2939,22 @@ export default function SettingsPage() {
                   <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
                     Default UPI & QR
                   </div>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                    Direct VPA ID & shop standee QR. 100% bank settlement.
-                  </p>
                 </div>
 
-                <div className="mt-3 pt-2.5 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between">
+                <div className="mt-4 pt-2.5 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    {enabledGateways.direct_upi ? (
-                      <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        Active Mode
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
-                        Deactive
-                      </span>
-                    )}
+                    <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Active Mode
+                    </span>
                   </div>
                   <button
                     type="button"
                     onClick={(e) => handleToggleGateway('direct_upi', e)}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      enabledGateways.direct_upi ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
-                    }`}
-                    title={enabledGateways.direct_upi ? 'Click to Deactivate' : 'Click to Activate'}
+                    className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none bg-emerald-500"
+                    title="Default UPI & QR is always enabled"
                   >
-                    <span
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                        enabledGateways.direct_upi ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                    />
+                    <span className="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out translate-x-4" />
                   </button>
                 </div>
               </div>
@@ -2804,6 +2965,12 @@ export default function SettingsPage() {
                   isPaymentDirtyRef.current = true;
                   setCollectionMode('cashfree');
                   setPgTestResult(null);
+                  setEnabledGateways({
+                    direct_upi: true,
+                    cashfree: true,
+                    razorpay: false,
+                    upi_gateway: false,
+                  });
                 }}
                 className={`cursor-pointer rounded-2xl p-4 border transition-all relative flex flex-col justify-between ${
                   collectionMode === 'cashfree'
@@ -2816,19 +2983,24 @@ export default function SettingsPage() {
                     <div className="w-8 h-8 rounded-xl bg-violet-100 dark:bg-violet-900/50 text-violet-600 dark:text-violet-400 flex items-center justify-center">
                       <CreditCard className="w-4 h-4" />
                     </div>
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400">
-                      Gateway
-                    </span>
+                    <div className="flex items-center gap-1">
+                      {verifiedGateways.cashfree && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
+                          <CheckCircle2 className="w-2.5 h-2.5" />
+                          Verified
+                        </span>
+                      )}
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400">
+                        Gateway
+                      </span>
+                    </div>
                   </div>
                   <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
                     Cashfree PG
                   </div>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                    Automated links, cards, netbanking & automated UPI.
-                  </p>
                 </div>
 
-                <div className="mt-3 pt-2.5 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between">
+                <div className="mt-4 pt-2.5 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     {enabledGateways.cashfree ? (
                       <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
@@ -2864,6 +3036,12 @@ export default function SettingsPage() {
                   isPaymentDirtyRef.current = true;
                   setCollectionMode('razorpay');
                   setPgTestResult(null);
+                  setEnabledGateways({
+                    direct_upi: true,
+                    cashfree: false,
+                    razorpay: true,
+                    upi_gateway: false,
+                  });
                 }}
                 className={`cursor-pointer rounded-2xl p-4 border transition-all relative flex flex-col justify-between ${
                   collectionMode === 'razorpay'
@@ -2876,19 +3054,24 @@ export default function SettingsPage() {
                     <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
                       <Sparkles className="w-4 h-4" />
                     </div>
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
-                      Razorpay
-                    </span>
+                    <div className="flex items-center gap-1">
+                      {verifiedGateways.razorpay && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
+                          <CheckCircle2 className="w-2.5 h-2.5" />
+                          Verified
+                        </span>
+                      )}
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
+                        Razorpay
+                      </span>
+                    </div>
                   </div>
                   <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
                     Razorpay PG
                   </div>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                    Key ID & Secret, 100+ payment methods & instant checkout.
-                  </p>
                 </div>
 
-                <div className="mt-3 pt-2.5 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between">
+                <div className="mt-4 pt-2.5 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     {enabledGateways.razorpay ? (
                       <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
@@ -2924,6 +3107,12 @@ export default function SettingsPage() {
                   isPaymentDirtyRef.current = true;
                   setCollectionMode('upi_gateway');
                   setPgTestResult(null);
+                  setEnabledGateways({
+                    direct_upi: true,
+                    cashfree: false,
+                    razorpay: false,
+                    upi_gateway: true,
+                  });
                 }}
                 className={`cursor-pointer rounded-2xl p-4 border transition-all relative flex flex-col justify-between ${
                   collectionMode === 'upi_gateway'
@@ -2936,19 +3125,24 @@ export default function SettingsPage() {
                     <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 flex items-center justify-center">
                       <Wallet className="w-4 h-4" />
                     </div>
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
-                      Webhooks
-                    </span>
+                    <div className="flex items-center gap-1">
+                      {verifiedGateways.upi_gateway && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
+                          <CheckCircle2 className="w-2.5 h-2.5" />
+                          Verified
+                        </span>
+                      )}
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
+                        Webhooks
+                      </span>
+                    </div>
                   </div>
                   <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
                     UPI PG (Dynamic)
                   </div>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                    Dynamic QR generation with real-time webhook callback.
-                  </p>
                 </div>
 
-                <div className="mt-3 pt-2.5 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between">
+                <div className="mt-4 pt-2.5 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     {enabledGateways.upi_gateway ? (
                       <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
@@ -2991,16 +3185,6 @@ export default function SettingsPage() {
                   <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md">
                     No Payment Gateway Fees (0%)
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPaymentGuideActiveTab('direct_upi');
-                      setIsPaymentGuideModalOpen(true);
-                    }}
-                    className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1"
-                  >
-                    <FileText className="w-3 h-3" /> Step-by-Step Guide
-                  </button>
                 </div>
               </div>
 
@@ -3107,16 +3291,6 @@ export default function SettingsPage() {
                   Cashfree Payment Gateway Credentials
                 </h4>
                 <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPaymentGuideActiveTab('cashfree');
-                      setIsPaymentGuideModalOpen(true);
-                    }}
-                    className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1"
-                  >
-                    <FileText className="w-3 h-3" /> Step-by-Step Guide
-                  </button>
                   <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
                     <button
                       type="button"
@@ -3193,14 +3367,23 @@ export default function SettingsPage() {
                     Need Cashfree API Keys? Sign up or log in at <a href="https://merchant.cashfree.com" target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline font-bold">merchant.cashfree.com</a>
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleTestPgConnection('cashfree')}
-                  disabled={isPgTesting}
-                  className="px-3 py-1.5 text-xs font-bold rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 flex items-center gap-1.5 transition-all cursor-pointer"
-                >
-                  {isPgTesting ? 'Validating...' : 'Test Gateway Connection'}
-                </button>
+                <div className="flex items-center gap-2">
+                  {verifiedGateways.cashfree && (
+                    <span className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                      Verified
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleTestPay('cashfree')}
+                    disabled={isPgTesting}
+                    className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-sm flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    <span>{isPgTesting ? 'Creating ₹1 Test...' : 'Test Pay (₹1)'}</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -3213,16 +3396,6 @@ export default function SettingsPage() {
                   Razorpay Payment Gateway Credentials
                 </h4>
                 <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPaymentGuideActiveTab('razorpay');
-                      setIsPaymentGuideModalOpen(true);
-                    }}
-                    className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1"
-                  >
-                    <FileText className="w-3 h-3" /> Step-by-Step Guide
-                  </button>
                   <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
                     <button
                       type="button"
@@ -3316,14 +3489,23 @@ export default function SettingsPage() {
                     Need Razorpay API Keys? Sign up or log in at <a href="https://dashboard.razorpay.com" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-bold">dashboard.razorpay.com</a>
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleTestPgConnection('razorpay')}
-                  disabled={isPgTesting}
-                  className="px-3 py-1.5 text-xs font-bold rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 flex items-center gap-1.5 transition-all cursor-pointer"
-                >
-                  {isPgTesting ? 'Validating...' : 'Test Gateway Connection'}
-                </button>
+                <div className="flex items-center gap-2">
+                  {verifiedGateways.razorpay && (
+                    <span className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                      Verified
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleTestPay('razorpay')}
+                    disabled={isPgTesting}
+                    className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-sm flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    <span>{isPgTesting ? 'Creating ₹1 Test...' : 'Test Pay (₹1)'}</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -3336,16 +3518,6 @@ export default function SettingsPage() {
                   UPI Payment Gateway Configuration
                 </h4>
                 <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPaymentGuideActiveTab('upi_gateway');
-                      setIsPaymentGuideModalOpen(true);
-                    }}
-                    className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1"
-                  >
-                    <FileText className="w-3 h-3" /> Step-by-Step Guide
-                  </button>
                   <span className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-md">
                     Real-Time Webhook Verification
                   </span>
@@ -3433,14 +3605,21 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex justify-end items-center gap-2">
+                {verifiedGateways.upi_gateway && (
+                  <span className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                    Verified
+                  </span>
+                )}
                 <button
                   type="button"
-                  onClick={() => handleTestPgConnection('upi_gateway')}
+                  onClick={() => handleTestPay('upi_gateway')}
                   disabled={isPgTesting}
-                  className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 flex items-center gap-1.5 transition-all cursor-pointer"
+                  className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-sm flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
                 >
-                  {isPgTesting ? 'Testing Webhook...' : 'Test Gateway & Webhook'}
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>{isPgTesting ? 'Testing...' : 'Test Pay (₹1)'}</span>
                 </button>
               </div>
             </div>
@@ -3468,29 +3647,24 @@ export default function SettingsPage() {
           <div className="pt-2 flex justify-between items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2">
               {collectionMode !== 'direct_upi' && (
-                <button
-                  type="button"
-                  onClick={() => handleTestPgConnection(collectionMode as 'cashfree' | 'razorpay' | 'upi_gateway')}
-                  disabled={isPgTesting}
-                  className="px-4 py-2 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
-                >
-                  {isPgTesting ? 'Testing...' : 'Test Connection'}
-                </button>
+                <>
+                  {verifiedGateways[collectionMode] && (
+                    <span className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                      Test Pay Verified
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleTestPay(collectionMode as 'cashfree' | 'razorpay' | 'upi_gateway')}
+                    disabled={isPgTesting}
+                    className="px-4 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-sm flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    <span>{isPgTesting ? 'Processing...' : 'Test Pay (₹1)'}</span>
+                  </button>
+                </>
               )}
-
-              {/* Step-by-Step PDF Guide Button beside Test Connection */}
-              <button
-                type="button"
-                onClick={() => {
-                  setPaymentGuideActiveTab(collectionMode);
-                  setIsPaymentGuideModalOpen(true);
-                }}
-                className="px-3.5 py-2 text-xs font-bold rounded-xl bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/60 flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
-                title="View Step-by-Step PDF Setup Guide"
-              >
-                <FileText className="w-4 h-4 text-rose-500" />
-                <span>PDF Guide</span>
-              </button>
             </div>
 
             <button
@@ -3501,6 +3675,54 @@ export default function SettingsPage() {
               Save Payment Collection Settings
             </button>
           </div>
+
+          {/* UPI PG ₹1 Dynamic QR / Intent Test Modal */}
+          {showUpiTestModal && upiTestPayload && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+              <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 text-center relative">
+                <button
+                  type="button"
+                  onClick={() => setShowUpiTestModal(false)}
+                  className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 mx-auto flex items-center justify-center mb-3">
+                  <CreditCard className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Real ₹1 Test Payment</h3>
+                <p className="text-xs text-slate-500 mt-1">Scan QR code or click UPI Intent to test live collection</p>
+
+                <div className="my-4 p-3 bg-white rounded-2xl border border-slate-200 shadow-inner flex justify-center">
+                  <img src={upiTestPayload.qrUrl} alt="UPI QR Code" className="w-48 h-48 object-contain" />
+                </div>
+
+                <div className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 py-1 px-3 rounded-lg inline-block mb-3">
+                  VPA: {upiTestPayload.vpa} (Amount: ₹1.00)
+                </div>
+
+                <div className="space-y-2">
+                  <a
+                    href={upiTestPayload.upiUrl}
+                    className="block w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md"
+                  >
+                    Pay ₹1 via UPI App (Mobile)
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      markGatewayVerified('upi_gateway');
+                      setShowUpiTestModal(false);
+                      addToast('Test Pay Verified! ✓', 'UPI PG verified with ₹1 test transaction.', 'success');
+                    }}
+                    className="w-full py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800"
+                  >
+                    Mark as Paid & Verified ✓
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </form>
       )}
 

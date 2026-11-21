@@ -13,12 +13,12 @@ export async function POST(req: NextRequest) {
     let finalSecretKey = (secretKey || serverConfig.secretKey || process.env.CASHFREE_SECRET_KEY || '').trim();
     let finalEnv = (env || serverConfig.env || process.env.CASHFREE_ENV || 'production') as 'sandbox' | 'production';
 
-    // Fallback: fetch from Supabase settings if credentials not passed by client
+    // Fallback: fetch from Supabase system_settings if credentials not passed by client
     if ((!finalAppId || !finalSecretKey) && isSupabaseConfigured()) {
       try {
         const supabase = getSupabaseAdmin();
         if (supabase) {
-          const { data: setRow } = await supabase.from('settings').select('payment_settings').limit(1).maybeSingle();
+          const { data: setRow } = await supabase.from('system_settings').select('payment_settings').limit(1).maybeSingle();
           if (setRow?.payment_settings) {
             if (!finalAppId && setRow.payment_settings.cashfreeAppId) {
               finalAppId = setRow.payment_settings.cashfreeAppId.trim();
