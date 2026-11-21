@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { formatINR, openWhatsApp } from '@/lib/utils';
+import { formatINR, openWhatsApp, formatTransactionNote } from '@/lib/utils';
 import {
   X,
   CheckCircle2,
@@ -144,8 +144,8 @@ export default function PaymentDetailsModal() {
               <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400 block">
                 Payment Description / Note
               </span>
-              <p className="text-slate-700 dark:text-slate-300 font-medium">
-                {txn.note}
+              <p className="text-slate-700 dark:text-slate-300 font-medium whitespace-pre-line font-mono text-[11px] leading-relaxed">
+                {formatTransactionNote(txn)}
               </p>
             </div>
           )}

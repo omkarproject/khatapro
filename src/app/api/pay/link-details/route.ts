@@ -116,10 +116,38 @@ export async function GET(req: NextRequest) {
             }
           }
 
+          let receiptNo = '';
+          if (Array.isArray(match.attachments)) {
+            for (const att of match.attachments) {
+              try {
+                const parsed = JSON.parse(att);
+                if (parsed.__sk_meta && parsed.receiptNo) {
+                  receiptNo = parsed.receiptNo;
+                  break;
+                }
+              } catch {}
+            }
+          }
+          if (!receiptNo) {
+            const yr = new Date(match.created_at || match.date).getFullYear() || new Date().getFullYear();
+            const refPart = (match.bill_number || match.id).slice(-6);
+            receiptNo = `SKP-REC-${yr}-${refPart}`;
+          }
+
+          // If payment was completed more than 5 minutes ago, link is permanently expired/destroyed
+          const txnTime = new Date(match.created_at || match.date).getTime();
+          const elapsedMs = Date.now() - txnTime;
+          if (elapsedMs > 5 * 60 * 1000) {
+            return NextResponse.json({
+              isExpiredAfter1Week: true,
+              redirectUrl: '/',
+            });
+          }
+
           return NextResponse.json({
             isPaid: true,
             receipt: {
-              receiptNo: `SKP-REC-${match.bill_number || match.id}`,
+              receiptNo: receiptNo,
               amount: Number(match.amount),
               payeeName: match.created_by || businessName,
               payeeUpi: upiId,

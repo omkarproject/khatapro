@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
-import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp, isOnlineCollectionTxn, getGatewayModeInfo, extractBankRef } from '@/lib/utils';
+import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp, isOnlineCollectionTxn, getGatewayModeInfo, extractBankRef, formatTransactionNote } from '@/lib/utils';
 import { downloadBrandedLockedQr } from '@/lib/qrCardGenerator';
 import { getActiveCurrency, t } from '@/lib/i18n';
 import { isGatewayActive } from '@/types';
@@ -2017,8 +2017,8 @@ export default function UpiCollectionPage() {
                               <span className="text-slate-400">N/A</span>
                             )}
                           </td>
-                          <td className="py-3 px-3 text-slate-500 max-w-xs truncate" title={t.note || ''}>
-                            {t.note || '-'}
+                          <td className="py-3 px-3 text-slate-700 dark:text-slate-200 max-w-sm text-xs font-mono whitespace-pre-line leading-relaxed" title={formatTransactionNote(t)}>
+                            {formatTransactionNote(t)}
                           </td>
                           <td className="py-3 px-3 text-right font-mono font-bold text-emerald-600">
                             +{formatINR(t.amount)}
@@ -2084,6 +2084,12 @@ export default function UpiCollectionPage() {
                           </span>
                         </div>
                       </div>
+
+                      {t.note && (
+                        <div className="text-[11px] text-slate-700 dark:text-slate-300 font-mono whitespace-pre-line bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/80 leading-relaxed">
+                          {formatTransactionNote(t)}
+                        </div>
+                      )}
 
                       <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">
                         <div className="flex items-center gap-1.5 flex-wrap">

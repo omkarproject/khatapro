@@ -474,3 +474,53 @@ export function getGatewayModeInfo(txn: any): { label: string; badgeClass: strin
     badgeClass: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800',
   };
 }
+
+/**
+ * Formats a transaction note to the clean requested format:
+ * Cashfree - Bank Ref / UTR: 669103103383
+ * Receipt ID: SKP-REC-2026-310179
+ */
+export function formatTransactionNote(noteOrTxn: any): string {
+  const note = typeof noteOrTxn === 'string' ? noteOrTxn : (noteOrTxn?.note || noteOrTxn?.description || '');
+  if (!note) return '-';
+
+  // If already formatted with "Receipt ID:" or "Receipt id-", return cleanly
+  if (note.includes('Receipt ID:') || note.includes('Receipt id-') || note.includes('Receipt ID-')) {
+    return note;
+  }
+
+  // Check if it matches: Payment Received via Cashfree Official PG [Bank Ref / UTR: 669103103383]
+  const match = note.match(/Payment Received via\s+([A-Za-z0-9\s]+?)\s*(?:Official PG|PG)?\s*\[(?:Bank Ref \/ UTR|Bank Ref|UTR|Ref ID)[:\s]+([A-Za-z0-9_-]+)\]/i);
+  if (match) {
+    let gw = match[1].trim();
+    if (gw.toLowerCase().includes('cashfree')) gw = 'Cashfree';
+    else if (gw.toLowerCase().includes('razorpay')) gw = 'Razorpay';
+    else if (gw.toLowerCase().includes('upi')) gw = 'UPI PG';
+    const utr = match[2].trim();
+
+    let receiptNo = '';
+    if (typeof noteOrTxn === 'object') {
+      receiptNo = noteOrTxn.receiptNo || noteOrTxn.receipt_no;
+      if (!receiptNo && Array.isArray(noteOrTxn.attachments)) {
+        for (const att of noteOrTxn.attachments) {
+          try {
+            const parsed = typeof att === 'string' ? JSON.parse(att) : att;
+            if (parsed && parsed.__sk_meta && parsed.receiptNo) {
+              receiptNo = parsed.receiptNo;
+              break;
+            }
+          } catch {}
+        }
+      }
+    }
+    if (!receiptNo) {
+      const year = new Date().getFullYear();
+      const hash = utr ? utr.slice(-6) : '310179';
+      receiptNo = `SKP-REC-${year}-${hash}`;
+    }
+
+    return `${gw} - Bank Ref / UTR: ${utr}\nReceipt ID: ${receiptNo}`;
+  }
+
+  return note;
+}

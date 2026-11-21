@@ -4,7 +4,7 @@ import React, { useState, useMemo, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import Loading from '@/components/Loading';
-import { formatINR, formatDate, buildUpiUri, buildRawUpiQrString, getQrCodeUrl, openWhatsApp, encodePayToken } from '@/lib/utils';
+import { formatINR, formatDate, buildUpiUri, buildRawUpiQrString, getQrCodeUrl, openWhatsApp, encodePayToken, formatTransactionNote } from '@/lib/utils';
 import { getActiveCurrency, t } from '@/lib/i18n';
 import { convertCurrency, getExcelNumFmt, formatMoney } from '@/lib/currencyService';
 import { Customer, Transaction, TransactionType, PaymentReminder, KhataGroup, KhataGroupNotification, TransactionSplitMember, TransactionEditAudit, KhataGroupJoinRequest, KhataGroupBlockedMerchant } from '@/types';
@@ -5249,8 +5249,8 @@ function KhataPageInner() {
 
                                   {/* Note Text (e.g. "bhopal jana tha isliye liya" or "Sumant Admission Diploma...") */}
                                   {t.note && (
-                                    <div className="text-[13px] text-slate-700 dark:text-slate-300 px-0.5 pt-0.5 leading-snug">
-                                      {t.note}
+                                    <div className="text-[13px] text-slate-700 dark:text-slate-300 px-0.5 pt-0.5 leading-snug whitespace-pre-line font-medium">
+                                      {formatTransactionNote(t)}
                                     </div>
                                   )}
 

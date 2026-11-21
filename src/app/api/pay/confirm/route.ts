@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
       payeeName,
       gateway,
       referenceNo,
+      receiptNo,
       note,
       receiptUrl,
       userId: passedUserId,
@@ -115,6 +116,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const finalReceiptNo = receiptNo || `SKP-REC-${new Date().getFullYear()}-${finalRef.slice(-6)}`;
+    let cleanGw = 'Cashfree';
+    if (gatewayName.toLowerCase().includes('razorpay')) cleanGw = 'Razorpay';
+    else if (gatewayName.toLowerCase().includes('upi')) cleanGw = 'UPI PG';
+    else if (gatewayName.toLowerCase().includes('direct')) cleanGw = 'Default UPI';
+    const finalNote = note || `${cleanGw} - Bank Ref / UTR: ${finalRef}\nReceipt ID: ${finalReceiptNo}`;
+
     // Build attachments array with rich metadata envelope
     const metaEnvelope = {
       __sk_meta: true,
@@ -122,6 +130,7 @@ export async function POST(req: NextRequest) {
       customerName: customerName || '',
       createdBy: payeeName || 'SmartKhata Online Checkout',
       referenceNo: finalRef,
+      receiptNo: finalReceiptNo,
       paymentToken: paymentToken || '',
       tokenTimestamp: tokenTimestamp || 0,
       tags: ['online_payment', 'received', `gw:${gatewayName}`],
@@ -146,7 +155,7 @@ export async function POST(req: NextRequest) {
       type: 'got', // 'got' satisfies PostgreSQL check constraint (type IN ('give', 'got'))
       amount: numAmount,
       date: nowIso.split('T')[0],
-      description: note || `Payment Received via ${gatewayName} [Bank Ref / UTR: ${finalRef}]`,
+      description: finalNote,
       category: 'Payment Received',
       payment_mode: gatewayName.toLowerCase().includes('card') ? 'card' : 'upi',
       bill_number: finalRef,

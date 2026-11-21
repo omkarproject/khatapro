@@ -230,7 +230,51 @@ function PayRedirectContent() {
 
   const [isDownloadingReceipt, setIsDownloadingReceipt] = useState(false);
   const [isLinkExpired, setIsLinkExpired] = useState(false);
+  const [redirectCountdown, setRedirectCountdown] = useState<number>(10);
   const isPaymentHandledRef = useRef(false);
+  const isDestroyedCheckedRef = useRef(false);
+
+  // Link Destruction Check: If this link was already completed & destroyed, redirect immediately to prevent repeated loading
+  useEffect(() => {
+    if (typeof window === 'undefined' || isDestroyedCheckedRef.current) return;
+    isDestroyedCheckedRef.current = true;
+    const cid = pathCustomerId || decodedToken?.cid || searchParams?.get('cid');
+    const pid = pathPid || (decodedToken?.timestamp ? String(decodedToken.timestamp) : '') || searchParams?.get('pid');
+    if (cid && pid) {
+      const destroyedKey = `sk_link_destroyed_${cid}_${pid}`;
+      try {
+        if (localStorage.getItem(destroyedKey) === 'true') {
+          window.location.replace('/');
+          return;
+        }
+      } catch {}
+    }
+  }, [pathCustomerId, pathPid, decodedToken, searchParams]);
+
+  // 10s Countdown Auto-Redirect when payment is settled/completed
+  useEffect(() => {
+    if (!paymentSuccess && !isLinkExpired) return;
+
+    const cid = pathCustomerId || decodedToken?.cid || searchParams?.get('cid');
+    const pid = pathPid || (decodedToken?.timestamp ? String(decodedToken.timestamp) : '') || searchParams?.get('pid');
+    const destroyedKey = cid && pid ? `sk_link_destroyed_${cid}_${pid}` : '';
+
+    const interval = setInterval(() => {
+      setRedirectCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          if (destroyedKey) {
+            try { localStorage.setItem(destroyedKey, 'true'); } catch {}
+          }
+          window.location.replace('/');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [paymentSuccess, isLinkExpired, pathCustomerId, pathPid, decodedToken, searchParams]);
 
   // If invoice ID is provided, route directly to invoice pay portal
   useEffect(() => {
@@ -647,7 +691,6 @@ function PayRedirectContent() {
         ['Receipt ID', data.receiptNo, false],
         ['Payment Date & Time', data.dateTime, false],
         ['Bank Ref / UTR No', data.referenceNo, true], // Real Bank UTR Highlighted!
-        ['Gateway Payment ID', data.gatewayTxnId || data.referenceNo, false],
         ['Paid To (Merchant)', data.payeeName, false],
         ['Merchant UPI ID', data.payeeUpi, false],
         ['Paid By (Customer)', `${data.customerName}${data.customerPhone ? ` (${data.customerPhone})` : ''}`, false],
@@ -711,12 +754,18 @@ function PayRedirectContent() {
 
     setIsProcessingPayment(true);
     const finalTxnId = (customTxnId || '').trim() || `TXN_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
-    const finalReceiptNo = `SKP-REC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(100000 + Math.random() * 900000)}`;
+    const finalReceiptNo = `SKP-REC-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
     const nowIso = new Date().toISOString();
     const formattedDateTime = new Date().toLocaleString('en-IN', {
       dateStyle: 'medium',
       timeStyle: 'short',
     });
+
+    let cleanGwName = 'Cashfree';
+    if (gatewayName.toLowerCase().includes('razorpay')) cleanGwName = 'Razorpay';
+    else if (gatewayName.toLowerCase().includes('upi')) cleanGwName = 'UPI PG';
+    else if (gatewayName.toLowerCase().includes('direct')) cleanGwName = 'Default UPI';
+    const cleanPaymentNote = `${cleanGwName} - Bank Ref / UTR: ${finalTxnId}\nReceipt ID: ${finalReceiptNo}`;
 
     const newReceipt = {
       receiptNo: finalReceiptNo,
@@ -768,7 +817,7 @@ function PayRedirectContent() {
       amount: effectiveAmount,
       date: nowIso,
       category: 'Payment Received',
-      note: `Payment Received via ${gatewayName} [Bank Ref / UTR: ${finalTxnId}]`,
+      note: cleanPaymentNote,
       paymentMode: gatewayName.toLowerCase().includes('card') ? 'card' : 'upi',
       referenceNo: finalTxnId,
       attachments: receiptImgUrl ? [receiptAttachment] : [],
@@ -824,8 +873,9 @@ function PayRedirectContent() {
           payeeName: merchantBusinessName || payeeName,
           gateway: gatewayName,
           referenceNo: finalTxnId,
+          receiptNo: finalReceiptNo,
           txnId: onlineTxnId, // Exact match to avoid duplicate row
-          note: `Payment Received via ${gatewayName} [Bank Ref / UTR: ${finalTxnId}]`,
+          note: cleanPaymentNote,
           receiptUrl: receiptImgUrl,
           paymentToken: pathPid || pParam || '',
           tokenTimestamp: (pathPid ? (Number(pathPid) > 1000000000 && Number(pathPid) < 9999999999 ? Number(pathPid) * 1000 : Number(pathPid)) : (decodedToken?.timestamp || 0)),
@@ -1127,29 +1177,30 @@ function PayRedirectContent() {
               )}
             </div>
           </Link>
-          <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 px-2.5 py-1 rounded-full">
-            Link Closed
+          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-full flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Settled &amp; Verified
           </span>
         </header>
 
-        {/* 404 Expired Card */}
+        {/* Payment Successfully Completed Card */}
         <main className="w-full my-auto bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 shadow-xl p-5 space-y-4 text-center">
           
           <div className="relative">
-            <div className="w-16 h-16 rounded-3xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 mx-auto flex items-center justify-center shadow-lg shadow-rose-500/20 border border-rose-200 dark:border-rose-900/60">
-              <Lock className="w-8 h-8 stroke-[2.2]" />
+            <div className="w-16 h-16 rounded-3xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center shadow-lg shadow-emerald-500/20 border border-emerald-200 dark:border-emerald-800 animate-in zoom-in-95">
+              <CheckCircle2 className="w-9 h-9 stroke-[2.2]" />
             </div>
-            <div className="mt-3 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-black">
-              <span>🔴 404 — PAYMENT LINK EXPIRED</span>
+            <div className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-black">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>PAYMENT COMPLETED SUCCESSFULLY</span>
             </div>
           </div>
 
           <div className="space-y-1">
             <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
-              Payment Link Expired
+              Payment Settled Successfully
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs mx-auto">
-              Yeh payment link pehle hi 100% settle ho chuka hai aur ab expire ho gaya hai. Dobara duplicate payment karne se rokne ke liye yeh link deactivate kar diya gaya hai.
+              Aapka payment 100% verify aur settle ho chuka hai. Yeh receipt aap download kar sakte hain. Dobara payment se rokne ke liye yeh link close ho gaya hai.
             </p>
           </div>
 
@@ -1172,11 +1223,11 @@ function PayRedirectContent() {
                   {receiptData.referenceNo}
                 </span>
               </div>
-              {receiptData.gatewayTxnId && receiptData.gatewayTxnId !== receiptData.referenceNo && (
+              {receiptData.receiptNo && (
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Gateway Ref:</span>
-                  <span className="font-mono text-slate-500 dark:text-slate-400 text-[11px] truncate max-w-[180px]">
-                    {receiptData.gatewayTxnId}
+                  <span className="text-slate-400">Receipt ID:</span>
+                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200 text-[11px] truncate max-w-[180px]">
+                    {receiptData.receiptNo}
                   </span>
                 </div>
               )}
@@ -1227,6 +1278,15 @@ function PayRedirectContent() {
             >
               Back to Home
             </Link>
+
+            {/* Auto Redirect Countdown (10 seconds) */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 flex items-center justify-center gap-1.5 font-medium">
+              <Clock className="w-3.5 h-3.5 text-emerald-500 animate-spin" style={{ animationDuration: '4s' }} />
+              <span>
+                Redirecting to official website in{' '}
+                <strong className="text-emerald-600 dark:text-emerald-400 font-mono font-bold text-xs">{redirectCountdown}s</strong>...
+              </span>
+            </div>
           </div>
 
         </main>
