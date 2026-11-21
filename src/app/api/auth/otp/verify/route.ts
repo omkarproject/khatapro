@@ -69,16 +69,40 @@ export async function POST(req: NextRequest) {
     }
 
     if (!isCodeValid) {
-      // System Owner / Super Admin verification bypass
-      if (cleanEmail === 'anantyadav8924@gmail.com') {
+      // 1. Check local in-memory OTP store
+      const localCheck = verifyLocalOtp(cleanEmail, purpose as any, cleanCode);
+      if (localCheck.valid) {
         isCodeValid = true;
+        storedRecord = localCheck.record;
       } else {
-        const localCheck = verifyLocalOtp(cleanEmail, purpose as any, cleanCode);
-        if (localCheck.valid) {
-          isCodeValid = true;
-          storedRecord = localCheck.record;
-        } else {
-          // Try verifying with Supabase verifyOtp (supports 6 to 8 digit email tokens)
+        // 2. Dual-check database persistence in Supabase global_config (for multi-container serverless on Vercel)
+        try {
+          const { data: gc } = await supabase.from('global_config').select('maintenance_mode').eq('id', 'global_config').maybeSingle();
+          const currentMaint = (gc && typeof gc.maintenance_mode === 'object' && gc.maintenance_mode !== null) ? { ...gc.maintenance_mode } : {};
+          const pendingOtps = { ...(currentMaint.pending_otps || {}) };
+          const otpKey = `${cleanEmail}:${purpose}`;
+          const dbRecord = pendingOtps[otpKey];
+          if (dbRecord && String(dbRecord.code).trim() === cleanCode) {
+            if (Date.now() <= dbRecord.expiresAt) {
+              isCodeValid = true;
+              storedRecord = dbRecord;
+              // Clean up consumed OTP
+              delete pendingOtps[otpKey];
+              currentMaint.pending_otps = pendingOtps;
+              await supabase.from('global_config').upsert({ id: 'global_config', maintenance_mode: currentMaint, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+            } else {
+              return NextResponse.json({
+                success: false,
+                message: 'Verification code has expired. Please click Resend OTP to get a new code.',
+              }, { status: 400 });
+            }
+          }
+        } catch (dbErr) {
+          console.warn('[OTP Verify] DB OTP check note:', dbErr);
+        }
+
+        // 3. Try verifying with Supabase verifyOtp fallback (supports 6 to 8 digit email tokens)
+        if (!isCodeValid) {
           try {
             const otpType = purpose === 'forgot_password' ? 'recovery' : 'email';
             const { data: sbVerifyData, error: sbVerifyErr } = await supabase.auth.verifyOtp({
@@ -90,20 +114,19 @@ export async function POST(req: NextRequest) {
             if (!sbVerifyErr && sbVerifyData?.user) {
               isCodeValid = true;
               sbVerifiedUser = sbVerifyData.user;
-              // Retrieve metadata from local in-memory OTP store if available
               storedRecord = getOtp(cleanEmail, purpose as any);
             }
           } catch (err) {
             console.warn('Supabase verifyOtp check error:', err);
           }
         }
+      }
 
-        if (!isCodeValid) {
-          return NextResponse.json({
-            success: false,
-            message: localCheck.message || 'Invalid or expired verification code. Please check your email and try again.',
-          }, { status: 400 });
-        }
+      if (!isCodeValid) {
+        return NextResponse.json({
+          success: false,
+          message: 'Invalid or expired verification code. Please check your email and try again.',
+        }, { status: 400 });
       }
     }
 

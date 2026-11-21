@@ -250,250 +250,80 @@ export interface OtpEmailTemplateParams {
  * Automatically synchronizes with Website Identity & Branding ("Brand Display Name *" and "Badge Text")
  */
 export function generateOtpEmailHtml(params: OtpEmailTemplateParams): { subject: string; html: string; text: string } {
-  const { otp, purpose, brandName = 'KhataPro', badgeText: customBadgeText, brandLogo, logoImgTag: customLogoImgTag, recipientEmail, recipientName } = params;
-  const cleanBrandName = brandName.trim() || 'KhataPro';
-  const cleanBadgeText = customBadgeText?.trim() || '';
+  const { otp, purpose, brandName = 'SmartKhata', recipientEmail, recipientName } = params;
+  const cleanBrandName = (brandName || 'SmartKhata').replace(/[^a-zA-Z0-9\s.-]/g, '').trim() || 'SmartKhata';
 
-  // Resolve logo image tag: use custom provided tag or resolve from brandLogo
-  const effectiveLogoTag = customLogoImgTag !== undefined 
-    ? customLogoImgTag 
-    : (brandLogo ? resolveEmailLogo(brandLogo, cleanBrandName).imgTag : '');
-
-  let title = 'Your Verification Code';
-  let badgeText = 'Verification OTP';
-  let badgeColor = '#4f46e5'; // Indigo
-  let introMessage = 'Use the 6-digit verification code below to complete your authentication request.';
-  let subject = `${otp} is your ${cleanBrandName} verification code`;
+  let title = 'Verification Code';
+  let introMessage = 'Use the verification code below to complete your authentication:';
+  let subject = `${cleanBrandName}: ${otp} is your verification code`;
 
   if (purpose === 'signup') {
-    title = 'Welcome! Verify Your New Account';
-    badgeText = 'Account Signup';
-    badgeColor = '#059669'; // Emerald
-    introMessage = `Hello${recipientName ? ' ' + recipientName : ''}, welcome to ${cleanBrandName}! Please enter this one-time code to verify your email and activate your business ledger vault.`;
-    subject = `${otp} is your ${cleanBrandName} account verification code`;
+    title = 'Verify Your Email Address';
+    introMessage = `Welcome${recipientName ? ' ' + recipientName : ''}! Please enter the one-time verification code below to activate your account:`;
+    subject = `${cleanBrandName}: ${otp} is your account verification code`;
   } else if (purpose === 'login') {
-    title = 'Login Security Verification';
-    badgeText = 'Secure Sign-In';
-    badgeColor = '#4f46e5'; // Indigo
-    introMessage = `A login attempt was initiated for your account (${recipientEmail}). Enter the code below to complete your sign-in.`;
-    subject = `${otp} is your ${cleanBrandName} login security code`;
+    title = 'Sign-In Security Verification';
+    introMessage = `A sign-in attempt was initiated for your account (${recipientEmail}). Enter the verification code below to proceed:`;
+    subject = `${cleanBrandName}: ${otp} is your sign-in verification code`;
   } else if (purpose === 'forgot_password') {
     title = 'Password Reset Request';
-    badgeText = 'Account Recovery';
-    badgeColor = '#e11d48'; // Rose
-    introMessage = `We received a request to reset the password for your ${cleanBrandName} account. Enter this code to set up a new password.`;
-    subject = `${otp} is your ${cleanBrandName} password reset code`;
+    introMessage = `We received a request to reset your password for ${cleanBrandName}. Enter the verification code below to set up a new password:`;
+    subject = `${cleanBrandName}: ${otp} is your password reset code`;
   } else if (purpose === 'resend') {
     title = 'New Verification Code';
-    badgeText = 'Resent Code';
-    badgeColor = '#d97706'; // Amber
-    introMessage = `Here is your requested new verification code. All previous codes have been invalidated.`;
-    subject = `${otp} is your new ${cleanBrandName} verification code`;
+    introMessage = 'Here is your new one-time verification code:';
+    subject = `${cleanBrandName}: ${otp} is your new verification code`;
   }
 
-  const html = `
-<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      background-color: #0b0f19;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      color: #e2e8f0;
-      -webkit-font-smoothing: antialiased;
-    }
-    .wrapper {
-      width: 100%;
-      background-color: #0b0f19;
-      padding: 40px 15px;
-      box-sizing: border-box;
-    }
-    .container {
-      max-width: 540px;
-      margin: 0 auto;
-      background: linear-gradient(180deg, #161e2e 0%, #0f172a 100%);
-      border-radius: 24px;
-      border: 1px solid #1e293b;
-      overflow: hidden;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
-    }
-    .header-bar {
-      height: 6px;
-      background: linear-gradient(90deg, #4f46e5 0%, #06b6d4 50%, #10b981 100%);
-    }
-    .content {
-      padding: 36px 32px 32px;
-      text-align: center;
-    }
-    .brand-logo-area {
-      margin-bottom: 24px;
-    }
-    .brand-header-row {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    .brand-name {
-      font-size: 22px;
-      font-weight: 800;
-      color: #ffffff;
-      letter-spacing: -0.5px;
-      display: inline-block;
-      vertical-align: middle;
-    }
-    .brand-badge-tag {
-      display: inline-block;
-      vertical-align: middle;
-      padding: 3px 10px;
-      font-size: 11px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      border-radius: 9999px;
-      background: rgba(99, 102, 241, 0.2);
-      color: #a5b4fc;
-      border: 1px solid rgba(165, 180, 252, 0.35);
-    }
-    .badge {
-      display: inline-block;
-      padding: 6px 14px;
-      border-radius: 9999px;
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      background-color: ${badgeColor}22;
-      color: ${badgeColor};
-      border: 1px solid ${badgeColor}44;
-      margin-bottom: 20px;
-    }
-    .title {
-      font-size: 24px;
-      font-weight: 700;
-      color: #ffffff;
-      margin: 0 0 12px 0;
-      line-height: 1.3;
-    }
-    .description {
-      font-size: 14px;
-      line-height: 1.6;
-      color: #94a3b8;
-      margin: 0 0 28px 0;
-    }
-    .otp-box-wrapper {
-      background: #090d16;
-      border: 1px solid #1e293b;
-      border-radius: 16px;
-      padding: 24px 20px;
-      margin: 0 auto 20px auto;
-      text-align: center;
-      max-width: 380px;
-    }
-    .otp-label {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #64748b;
-      margin-bottom: 10px;
-      font-weight: 600;
-    }
-    .otp-code {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      font-size: 40px;
-      font-weight: 800;
-      letter-spacing: 8px;
-      color: #38bdf8;
-      text-indent: 8px;
-    }
-    .expiry-note {
-      font-size: 12px;
-      color: #eab308;
-      margin-bottom: 28px;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .security-notice {
-      background-color: rgba(30, 41, 59, 0.5);
-      border-radius: 12px;
-      padding: 14px 18px;
-      font-size: 12px;
-      line-height: 1.5;
-      color: #94a3b8;
-      text-align: left;
-      border-left: 3px solid #6366f1;
-    }
-    .footer {
-      border-top: 1px solid #1e293b;
-      padding: 24px 32px;
-      background-color: #0b1120;
-      text-align: center;
-      font-size: 11px;
-      color: #475569;
-    }
-    .footer a {
-      color: #6366f1;
-      text-decoration: none;
-    }
-  </style>
 </head>
-<body>
-  <!-- Preheader text to optimize email deliverability and avoid spam classification -->
-  <div style="display:none;font-size:1px;color:#0b0f19;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
-    ${otp} is your ${cleanBrandName} verification code. Valid for 10 minutes. Do not share this code with anyone.&#847; &zwnj; &nbsp; &#8199;
+<body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
+  <div style="display: none; font-size: 1px; color: #f8fafc; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden;">
+    ${otp} is your ${cleanBrandName} verification code.
   </div>
-  <div class="wrapper">
-    <div class="container">
-      <div class="header-bar"></div>
-      
-      <div class="content">
-        <div class="brand-logo-area">
-          ${effectiveLogoTag}
-          <div class="brand-header-row">
-            <span class="brand-name">⚡ ${cleanBrandName}</span>
-            ${cleanBadgeText ? `<span class="brand-badge-tag">${cleanBadgeText}</span>` : ''}
-          </div>
-        </div>
-
-        <div>
-          <span class="badge">${badgeText}</span>
-        </div>
-
-        <h1 class="title">${title}</h1>
-        <p class="description">${introMessage}</p>
-
-        <div class="otp-box-wrapper">
-          <div class="otp-label">Your One-Time Password</div>
-          <div class="otp-code">${otp}</div>
-        </div>
-
-        <div class="expiry-note">
-          ⏱️ Valid for 10 minutes only
-        </div>
-
-        <div class="security-notice">
-          🛡️ <strong>Security Tip:</strong> Never share this code with anyone. ${cleanBrandName} employees or support agents will never ask for your verification code or password. If you did not make this request, please ignore this email.
-        </div>
-      </div>
-
-      <div class="footer">
-        &copy; ${new Date().getFullYear()} ${cleanBrandName}${cleanBadgeText ? ' &bull; ' + cleanBadgeText : ''}. All rights reserved.<br>
-        Autonomous Financial Operating System &bull; High-Security Authentication
-      </div>
-    </div>
-  </div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; padding: 32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 480px; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+          <tr>
+            <td style="padding: 32px 28px 20px 28px; text-align: left;">
+              <div style="font-size: 20px; font-weight: 700; color: #0f172a; margin-bottom: 20px; letter-spacing: -0.3px;">
+                ${cleanBrandName}
+              </div>
+              <h2 style="font-size: 17px; font-weight: 600; color: #1e293b; margin: 0 0 10px 0;">
+                ${title}
+              </h2>
+              <p style="font-size: 14px; color: #475569; line-height: 1.5; margin: 0 0 20px 0;">
+                ${introMessage}
+              </p>
+              <div style="background-color: #f1f5f9; border-radius: 8px; border: 1px solid #cbd5e1; padding: 18px; text-align: center; margin: 20px 0;">
+                <span style="font-family: 'Courier New', Courier, monospace; font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #0f172a; display: inline-block;">
+                  ${otp}
+                </span>
+              </div>
+              <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin: 20px 0 0 0;">
+                This code will expire in 10 minutes. If you did not request this verification, no action is required.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 16px 28px 24px 28px; border-top: 1px solid #f1f5f9; text-align: left; font-size: 12px; color: #94a3b8;">
+              &copy; ${new Date().getFullYear()} ${cleanBrandName}. All rights reserved.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
-</html>
-  `;
+</html>`;
 
-  const text = `[${cleanBrandName}] ${title}\n\n${introMessage}\n\nYOUR VERIFICATION CODE: ${otp}\n\nThis code will expire in 10 minutes.\n\nSecurity Notice: Never share this OTP with anyone. If you did not request this code, please ignore this email.`;
+  const text = `${cleanBrandName} - ${title}\n\n${introMessage}\n\nVERIFICATION CODE: ${otp}\n\nThis code will expire in 10 minutes.\nIf you did not request this verification code, please ignore this email.`;
 
   return { subject, html, text };
 }
@@ -589,14 +419,9 @@ export async function sendOtpEmailDirect(params: {
         to: params.to,
       },
       headers: {
-        'X-Priority': '1',
-        'X-MSMail-Priority': 'High',
-        'Importance': 'High',
         'Auto-Submitted': 'auto-generated',
         'X-Auto-Response-Suppress': 'All',
-        'List-Unsubscribe': `<mailto:${senderEmail}?subject=unsubscribe>`,
       },
-      attachments: logoAttachments.length > 0 ? logoAttachments : undefined,
     });
 
     console.log(`[SMTP Mailer] OTP dispatched to ${params.to} using live brand "${finalBrandName}" | MessageId: ${info.messageId}`);
@@ -961,14 +786,9 @@ export async function sendWelcomeEmailDirect(params: {
         to: params.to,
       },
       headers: {
-        'X-Priority': '1',
-        'X-MSMail-Priority': 'High',
-        'Importance': 'High',
         'Auto-Submitted': 'auto-generated',
         'X-Auto-Response-Suppress': 'All',
-        'List-Unsubscribe': `<mailto:${senderEmail}?subject=unsubscribe>`,
       },
-      attachments: logoAttachments.length > 0 ? logoAttachments : undefined,
     });
 
     console.log(`[WelcomeEmail] Welcome email delivered to ${params.to} | MessageId: ${info.messageId}`);

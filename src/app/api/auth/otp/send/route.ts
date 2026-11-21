@@ -97,6 +97,22 @@ export async function POST(req: NextRequest) {
         password,
       });
 
+      // Dual-persist OTP to Supabase global_config for cross-container serverless verification
+      try {
+        const { data: gc } = await supabase.from('global_config').select('maintenance_mode').eq('id', 'global_config').maybeSingle();
+        const currentMaint = (gc && typeof gc.maintenance_mode === 'object' && gc.maintenance_mode !== null) ? { ...gc.maintenance_mode } : {};
+        const pendingOtps = { ...(currentMaint.pending_otps || {}) };
+        pendingOtps[`${cleanEmail}:login`] = {
+          code,
+          expiresAt: Date.now() + 10 * 60 * 1000,
+          metadata: { password },
+        };
+        currentMaint.pending_otps = pendingOtps;
+        await supabase.from('global_config').upsert({ id: 'global_config', maintenance_mode: currentMaint, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+      } catch (persistErr) {
+        console.warn('[OTP Send] Global config persist note:', persistErr);
+      }
+
       console.log(`[SmartKhata OTP] Purpose: LOGIN | Email: ${cleanEmail} | Code: ${code}`);
 
       // Dispatch OTP email
@@ -134,7 +150,7 @@ export async function POST(req: NextRequest) {
     // =========================================================================
 
     // Check if new registrations are disabled
-    if (purpose === 'signup' && cleanEmail !== 'anantyadav8924@gmail.com') {
+    if (purpose === 'signup') {
       const { data: configData } = await supabase
         .from('global_config')
         .select('maintenance_mode')
@@ -149,15 +165,6 @@ export async function POST(req: NextRequest) {
           message: 'New merchant registrations are temporarily disabled by the system administrator. Please contact support.',
         }, { status: 403 });
       }
-    }
-
-    // System Owner / Super Admin direct signup bypass (never block system owner on email OTP)
-    if (purpose === 'signup' && cleanEmail === 'anantyadav8924@gmail.com') {
-      return NextResponse.json({
-        success: true,
-        skipped: true,
-        message: 'System Owner account detected. Direct registration enabled.',
-      });
     }
 
     // Check if SMTP OTP verification is enabled by administrator
@@ -248,6 +255,27 @@ export async function POST(req: NextRequest) {
       phone: phone?.trim(),
       password,
     });
+
+    // Dual-persist OTP to Supabase global_config for cross-container serverless verification
+    try {
+      const { data: gc } = await supabase.from('global_config').select('maintenance_mode').eq('id', 'global_config').maybeSingle();
+      const currentMaint = (gc && typeof gc.maintenance_mode === 'object' && gc.maintenance_mode !== null) ? { ...gc.maintenance_mode } : {};
+      const pendingOtps = { ...(currentMaint.pending_otps || {}) };
+      pendingOtps[`${cleanEmail}:${purpose}`] = {
+        code,
+        expiresAt: Date.now() + 10 * 60 * 1000,
+        metadata: {
+          name: name?.trim(),
+          businessName: businessName?.trim(),
+          phone: phone?.trim(),
+          password,
+        },
+      };
+      currentMaint.pending_otps = pendingOtps;
+      await supabase.from('global_config').upsert({ id: 'global_config', maintenance_mode: currentMaint, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+    } catch (persistErr) {
+      console.warn('[OTP Send] Global config persist note:', persistErr);
+    }
 
     console.log(`[SmartKhata OTP] Purpose: ${purpose.toUpperCase()} | Email: ${cleanEmail} | Code: ${code}`);
 
