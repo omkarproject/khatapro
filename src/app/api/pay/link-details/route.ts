@@ -103,21 +103,36 @@ export async function GET(req: NextRequest) {
 
         if (txns && txns.length > 0) {
           const match = txns[0];
+          let receiptImgUrl = '';
+          if (Array.isArray(match.attachments)) {
+            for (const att of match.attachments) {
+              try {
+                const parsed = JSON.parse(att);
+                if (parsed.url && !parsed.__sk_meta) {
+                  receiptImgUrl = parsed.url;
+                  break;
+                }
+              } catch {}
+            }
+          }
+
           return NextResponse.json({
             isPaid: true,
             receipt: {
-              receiptNo: match.bill_number || `SKP-REC-${match.id}`,
+              receiptNo: `SKP-REC-${match.bill_number || match.id}`,
               amount: Number(match.amount),
               payeeName: match.created_by || businessName,
               payeeUpi: upiId,
               customerName: customer.name,
               customerPhone: customer.phone || '',
+              customerEmail: customer.email || '',
               dateTime: new Date(match.created_at || match.date).toLocaleString('en-IN', {
                 dateStyle: 'medium',
                 timeStyle: 'short',
               }),
               paymentMode: match.payment_mode ? match.payment_mode.toUpperCase() : 'ONLINE GATEWAY',
               referenceNo: match.bill_number || match.id,
+              receiptDataUrl: receiptImgUrl || undefined,
               isRealSettlement: true,
             },
           });
@@ -131,6 +146,7 @@ export async function GET(req: NextRequest) {
         id: customer.id,
         name: customer.name,
         phone: customer.phone || '',
+        email: customer.email || '',
         dueAmount: Number(customer.outstanding_balance) || 0,
       },
       merchant: {

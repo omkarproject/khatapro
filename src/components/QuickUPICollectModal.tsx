@@ -344,7 +344,7 @@ export default function QuickUPICollectModal() {
           orderAmount: numAmount,
           customerName: customerDisplayName,
           customerPhone: customerPhone || '9820111223',
-          customerEmail: settings.businessEmail || profile.email || currentUser?.email || 'customer@smartkhatapro.in',
+          customerEmail: currentCust?.email || settings.businessEmail || profile.email || currentUser?.email || 'anantyadav8925@gmail.com',
           appId: appId || undefined,
           secretKey: secretKey || undefined,
           env,

@@ -76,10 +76,18 @@ export async function POST(req: NextRequest) {
       : null;
 
     if (successfulPayment) {
+      const bankRef =
+        (successfulPayment.bank_reference ? String(successfulPayment.bank_reference).trim() : '') ||
+        (successfulPayment.payment_method?.upi?.channel_reference_id ? String(successfulPayment.payment_method.upi.channel_reference_id).trim() : '') ||
+        (successfulPayment.payment_method?.card?.channel_reference_id ? String(successfulPayment.payment_method.card.channel_reference_id).trim() : '') ||
+        (successfulPayment.payment_method?.netbanking?.channel_reference_id ? String(successfulPayment.payment_method.netbanking.channel_reference_id).trim() : '') ||
+        (successfulPayment.cf_payment_id ? String(successfulPayment.cf_payment_id).trim() : '');
+
       return NextResponse.json({
         success: true,
         paymentStatus: 'SUCCESS',
-        cfPaymentId: successfulPayment.cf_payment_id,
+        cfPaymentId: successfulPayment.cf_payment_id ? String(successfulPayment.cf_payment_id) : '',
+        bankReference: bankRef,
         paymentMethod: successfulPayment.payment_method,
         paymentAmount: successfulPayment.payment_amount,
         paymentTime: successfulPayment.payment_time,

@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
       note,
       receiptUrl,
       userId: passedUserId,
+      txnId: passedTxnId,
       paymentToken,
       tokenTimestamp,
     } = body;
@@ -86,10 +87,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, message: 'No target merchant user found' });
     }
 
-    const txnId = `txn_online_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const nowIso = new Date().toISOString();
     const finalRef = referenceNo || `TXN_${Date.now()}`;
     const gatewayName = gateway || 'Online Gateway';
+    const txnId = passedTxnId || `txn_online_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const nowIso = new Date().toISOString();
+
+    // Idempotency: prevent recording the same transaction twice by referenceNo / UTR or txnId
+    if (finalRef || passedTxnId) {
+      const orConds: string[] = [];
+      if (finalRef) orConds.push(`bill_number.eq.${finalRef}`);
+      if (passedTxnId) orConds.push(`id.eq.${passedTxnId}`);
+
+      const { data: existingTxns } = await supabase
+        .from('transactions')
+        .select('id, amount, bill_number')
+        .eq('user_id', merchantUserId)
+        .or(orConds.join(','))
+        .limit(1);
+
+      if (existingTxns && existingTxns.length > 0) {
+        return NextResponse.json({
+          success: true,
+          alreadyRecorded: true,
+          message: 'Transaction already recorded in Supabase (idempotent)',
+          id: existingTxns[0].id,
+        });
+      }
+    }
 
     // Build attachments array with rich metadata envelope
     const metaEnvelope = {
@@ -107,7 +131,7 @@ export async function POST(req: NextRequest) {
       name: `Payment_Receipt_${finalRef}.png`,
       url: receiptUrl,
       size: 'Settled Receipt',
-      type: 'image/png',
+      type: 'image',
     }) : null;
 
     const attachments = receiptAttachment

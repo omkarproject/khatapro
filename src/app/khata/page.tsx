@@ -1613,28 +1613,39 @@ function KhataPageInner() {
     setEntryDate(txn.date ? txn.date.split('T')[0] : new Date().toISOString().split('T')[0]);
 
     // Parse attachments
-    const parsedAttachments: AttachedBill[] = (txn.attachments || []).map((att, idx) => {
+    const parsedAttachments: AttachedBill[] = (txn.attachments || []).flatMap((att, idx) => {
       try {
         const obj = JSON.parse(att);
+        if (obj.__sk_meta) return [];
         let resolvedUrl = obj.url;
         if (!resolvedUrl && obj.driveFileId) {
           resolvedUrl = `/api/backup/google-drive/view-file?fileId=${obj.driveFileId}`;
         }
         if (resolvedUrl) {
-          return {
-            ...obj,
-            url: resolvedUrl,
-          };
+          const isPdf =
+            obj.type === 'pdf' ||
+            obj.type === 'application/pdf' ||
+            (obj.name && String(obj.name).toLowerCase().endsWith('.pdf')) ||
+            String(resolvedUrl).startsWith('data:application/pdf');
+          return [{
+            id: String(obj.id || `att_${idx}`),
+            name: String(obj.name || (isPdf ? `Invoice_Bill_${idx + 1}.pdf` : `Bill_Photo_${idx + 1}.png`)),
+            url: String(resolvedUrl),
+            type: (isPdf ? 'pdf' : 'image') as 'image' | 'pdf',
+            size: obj.size ? String(obj.size) : (isPdf ? 'PDF Document' : 'Photo'),
+            driveFileId: obj.driveFileId ? String(obj.driveFileId) : undefined,
+          }];
         }
       } catch {}
+      if (typeof att === 'string' && att.includes('__sk_meta')) return [];
       const isPdf = att.toLowerCase().includes('.pdf') || att.startsWith('data:application/pdf');
-      return {
+      return [{
         id: `att_${idx}`,
         url: att,
         name: isPdf ? `Invoice_Bill_${idx + 1}.pdf` : `Bill_Photo_${idx + 1}.jpg`,
-        type: isPdf ? 'pdf' : 'image',
+        type: (isPdf ? 'pdf' : 'image') as 'image' | 'pdf',
         size: isPdf ? 'PDF Document' : 'Photo',
-      };
+      }];
     });
     setEntryAttachments(parsedAttachments);
 
@@ -5117,29 +5128,42 @@ function KhataPageInner() {
                                   {t.attachments && t.attachments.length > 0 ? (
                                     <div className="space-y-1.5 my-1">
                                       {(() => {
-                                        const parsedList: AttachedBill[] = (t.attachments || []).map((raw, idx) => {
+                                        const parsedList: AttachedBill[] = (t.attachments || []).flatMap((raw, idx) => {
                                           try {
                                             const obj = JSON.parse(raw);
+                                            if (obj.__sk_meta) return [];
                                             let resolvedUrl = obj.url;
                                             if (!resolvedUrl && obj.driveFileId) {
                                               resolvedUrl = `/api/backup/google-drive/view-file?fileId=${obj.driveFileId}`;
                                             }
                                             if (resolvedUrl) {
-                                              return {
-                                                ...obj,
-                                                url: resolvedUrl,
-                                              };
+                                              const isPdf =
+                                                obj.type === 'pdf' ||
+                                                obj.type === 'application/pdf' ||
+                                                (obj.name && String(obj.name).toLowerCase().endsWith('.pdf')) ||
+                                                String(resolvedUrl).startsWith('data:application/pdf');
+                                              return [{
+                                                id: String(obj.id || `att_${idx}`),
+                                                name: String(obj.name || (isPdf ? `Invoice_Bill_${idx + 1}.pdf` : `Payment_Receipt_${idx + 1}.png`)),
+                                                url: String(resolvedUrl),
+                                                type: (isPdf ? 'pdf' : 'image') as 'image' | 'pdf',
+                                                size: obj.size ? String(obj.size) : (isPdf ? 'PDF Document' : 'Settled Receipt'),
+                                                driveFileId: obj.driveFileId ? String(obj.driveFileId) : undefined,
+                                              }];
                                             }
                                           } catch {}
+                                          if (typeof raw === 'string' && raw.includes('__sk_meta')) return [];
                                           const isPdf = raw.toLowerCase().includes('.pdf') || raw.startsWith('data:application/pdf');
-                                          return {
+                                          return [{
                                             id: `att_${idx}`,
                                             url: raw,
                                             name: isPdf ? `Invoice_Bill_${idx + 1}.pdf` : `Bill_Photo_${idx + 1}.jpg`,
-                                            type: isPdf ? 'pdf' : 'image',
+                                            type: (isPdf ? 'pdf' : 'image') as 'image' | 'pdf',
                                             size: isPdf ? 'PDF Document' : 'Photo',
-                                          };
+                                          }];
                                         });
+
+                                        if (parsedList.length === 0) return null;
 
                                         const firstItem = parsedList[0];
                                         const totalCount = parsedList.length;
@@ -6212,7 +6236,7 @@ function KhataPageInner() {
 
                     {/* Current Item Content */}
                     <div className="w-full h-full flex items-center justify-center p-2">
-                      {currentItem.type === 'image' ? (
+                      {currentItem.type === 'image' || currentItem.type?.startsWith('image') || currentItem.url.startsWith('data:image') || (currentItem.name && currentItem.name.match(/\.(png|jpe?g|webp|gif)$/i)) ? (
                         <div className="relative flex items-center justify-center min-h-[220px] w-full">
                           <img
                             src={currentItem.url}

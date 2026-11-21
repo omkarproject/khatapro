@@ -52,7 +52,7 @@ function PayRedirectContent() {
   }, [pParam]);
 
   const [fetchedDetails, setFetchedDetails] = useState<{
-    customer?: { id: string; name: string; phone: string; dueAmount: number };
+    customer?: { id: string; name: string; phone: string; email?: string; dueAmount: number };
     merchant?: { businessName: string; officialPhone: string; upiId: string };
     paymentSettings?: {
       activeGateway: string;
@@ -220,14 +220,17 @@ function PayRedirectContent() {
     payeeUpi: string;
     customerName: string;
     customerPhone: string;
+    customerEmail?: string;
     dateTime: string;
     paymentMode: string;
     referenceNo: string;
+    gatewayTxnId?: string;
     receiptDataUrl?: string;
   } | null>(null);
 
   const [isDownloadingReceipt, setIsDownloadingReceipt] = useState(false);
   const [isLinkExpired, setIsLinkExpired] = useState(false);
+  const isPaymentHandledRef = useRef(false);
 
   // If invoice ID is provided, route directly to invoice pay portal
   useEffect(() => {
@@ -239,6 +242,11 @@ function PayRedirectContent() {
   const targetCustomerId = pathCustomerId || matchedCustomer?.id || cidParam || 'cust_online_checkout';
   const targetCustomerName = fetchedDetails?.customer?.name || matchedCustomer?.name || cnParam || 'Customer';
   const targetCustomerPhone = fetchedDetails?.customer?.phone || matchedCustomer?.phone || cphoneParam || '';
+  const targetCustomerEmail =
+    fetchedDetails?.customer?.email ||
+    matchedCustomer?.email ||
+    searchParams?.get('email') ||
+    '';
 
   // Payee & Business info
   const payeeUpiId = pa || fetchedDetails?.merchant?.upiId || settings.paymentSettings?.upiId || '';
@@ -530,132 +538,163 @@ function PayRedirectContent() {
     } catch {}
   };
 
-  // Helper function: Generate high-resolution Receipt image data URL
+  // Helper function: Generate high-resolution Classic White & Clean Receipt image data URL
   const generateReceiptCanvasBlob = async (data: {
     receiptNo: string;
     amount: number;
+    dueAmount?: number;
+    gatewayFee?: number;
     payeeName: string;
     payeeUpi: string;
     customerName: string;
     customerPhone: string;
+    customerEmail?: string;
     dateTime: string;
     paymentMode: string;
     referenceNo: string;
+    gatewayTxnId?: string;
   }): Promise<string> => {
     try {
       const canvas = document.createElement('canvas');
-      const w = 640;
-      const h = 760;
+      const w = 680;
+      const h = 880;
       canvas.width = w;
       canvas.height = h;
       const ctx = canvas.getContext('2d');
       if (!ctx) return '';
 
-      // Background
-      ctx.fillStyle = '#0f172a'; // dark navy
+      // Outer Page Background (Subtle Clean Frame)
+      ctx.fillStyle = '#f8fafc';
       ctx.fillRect(0, 0, w, h);
 
-      // Gradient Header Bar
-      const grad = ctx.createLinearGradient(0, 0, w, 0);
-      grad.addColorStop(0, '#10b981');
-      grad.addColorStop(0.5, '#6366f1');
-      grad.addColorStop(1, '#06b6d4');
+      // Main White Receipt Card
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.roundRect(20, 20, w - 40, h - 40, 20);
+      ctx.fill();
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Top Emerald Brand Bar
+      const grad = ctx.createLinearGradient(20, 0, w - 20, 0);
+      grad.addColorStop(0, '#059669');
+      grad.addColorStop(0.5, '#10b981');
+      grad.addColorStop(1, '#0284c7');
       ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, 8);
-
-      // Inner Card
-      ctx.fillStyle = '#1e293b';
       ctx.beginPath();
-      ctx.roundRect(24, 30, w - 48, h - 60, 24);
+      ctx.roundRect(20, 20, w - 40, 8, [20, 20, 0, 0]);
       ctx.fill();
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
 
-      // Header Branding
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(websiteName || 'Smartkhata', 50, 75);
-
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText('OFFICIAL DIGITAL PAYMENT RECEIPT', 50, 96);
-
-      // Verified Badge Right
-      ctx.fillStyle = '#065f46';
-      ctx.beginPath();
-      ctx.roundRect(w - 180, 58, 130, 28, 14);
-      ctx.fill();
-      ctx.fillStyle = '#34d399';
-      ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText('✔ 100% VERIFIED', w - 168, 76);
-
-      // Divider line
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(50, 120);
-      ctx.lineTo(w - 50, 120);
-      ctx.stroke();
-
-      // Amount Box
+      // Header Branding: Merchant Business Name & Title
       ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText(data.payeeName || websiteName || 'SmartKhata Merchant', 48, 68);
+
+      ctx.fillStyle = '#64748b';
+      ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText('OFFICIAL DIGITAL PAYMENT RECEIPT • TAX INVOICE', 48, 88);
+
+      // Verified Badge (Top Right)
+      ctx.fillStyle = '#ecfdf5';
       ctx.beginPath();
-      ctx.roundRect(50, 140, w - 100, 100, 18);
+      ctx.roundRect(w - 180, 50, 132, 28, 14);
       ctx.fill();
-      ctx.strokeStyle = '#10b981';
+      ctx.strokeStyle = '#a7f3d0';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = '#059669';
+      ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText('✔ 100% VERIFIED', w - 166, 68);
+
+      // Horizontal Divider
+      ctx.strokeStyle = '#f1f5f9';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(48, 108);
+      ctx.lineTo(w - 48, 108);
+      ctx.stroke();
+
+      // Big Amount Settled Box (Emerald tint)
+      ctx.fillStyle = '#f0fdf4';
+      ctx.beginPath();
+      ctx.roundRect(48, 126, w - 96, 105, 16);
+      ctx.fill();
+      ctx.strokeStyle = '#86efac';
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      ctx.fillStyle = '#10b981';
-      ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText('AMOUNT SETTLED & PAID', 74, 172);
+      ctx.fillStyle = '#15803d';
+      ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText('TOTAL AMOUNT SETTLED & PAID', 72, 156);
 
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'black 38px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(formatINR(data.amount), 74, 218);
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText(formatINR(data.amount), 72, 200);
 
-      // Key-Value rows
-      const rows = [
-        ['Receipt ID', data.receiptNo],
-        ['Date & Time', data.dateTime],
-        ['Paid To (Merchant)', data.payeeName],
-        ['Merchant UPI ID', data.payeeUpi],
-        ['Paid By (Customer)', data.customerName + (data.customerPhone ? ` (${data.customerPhone})` : '')],
-        ['Payment Method', data.paymentMode],
-        ['Transaction Reference', data.referenceNo],
-        ['Settlement Status', 'SETTLED & RECORDED (PAID)'],
+      // Breakdown note inside amount box
+      const duePart = data.dueAmount !== undefined ? `Due Amount: ${formatINR(data.dueAmount)}` : '';
+      const feePart = data.gatewayFee && data.gatewayFee > 0 ? `  •  PG Convenience Fee (2%): ${formatINR(data.gatewayFee)}` : '';
+      if (duePart) {
+        ctx.fillStyle = '#166534';
+        ctx.font = '500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText(`${duePart}${feePart}`, 72, 222);
+      }
+
+      // Details Rows (Table style)
+      const rows: [string, string, boolean][] = [
+        ['Receipt ID', data.receiptNo, false],
+        ['Payment Date & Time', data.dateTime, false],
+        ['Bank Ref / UTR No', data.referenceNo, true], // Real Bank UTR Highlighted!
+        ['Gateway Payment ID', data.gatewayTxnId || data.referenceNo, false],
+        ['Paid To (Merchant)', data.payeeName, false],
+        ['Merchant UPI ID', data.payeeUpi, false],
+        ['Paid By (Customer)', `${data.customerName}${data.customerPhone ? ` (${data.customerPhone})` : ''}`, false],
+        ['Customer Email', data.customerEmail || 'anantyadav8925@gmail.com', false],
+        ['Payment Method', data.paymentMode, false],
+        ['Settlement Status', 'COMPLETED & RECORDED', true],
       ];
 
-      let startY = 275;
-      rows.forEach(([label, val]) => {
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.fillText(label, 50, startY);
+      let startY = 268;
+      rows.forEach(([label, val, isHighlight]) => {
+        // Label (left)
+        ctx.fillStyle = '#64748b';
+        ctx.font = '500 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText(label, 48, startY);
 
-        ctx.fillStyle = label === 'Settlement Status' ? '#34d399' : '#f8fafc';
-        ctx.font = label === 'Settlement Status' ? 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' : '600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        // Value (right)
+        if (label === 'Settlement Status') {
+          ctx.fillStyle = '#059669';
+          ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        } else if (isHighlight) {
+          ctx.fillStyle = '#0f172a';
+          ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        } else {
+          ctx.fillStyle = '#1e293b';
+          ctx.font = '600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        }
         ctx.textAlign = 'right';
-        ctx.fillText(val, w - 50, startY);
+        ctx.fillText(val, w - 48, startY);
         ctx.textAlign = 'left';
 
-        // light separator
-        ctx.strokeStyle = '#1e293b';
+        // Row Separator
+        ctx.strokeStyle = '#f1f5f9';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(50, startY + 10);
-        ctx.lineTo(w - 50, startY + 10);
+        ctx.moveTo(48, startY + 12);
+        ctx.lineTo(w - 48, startY + 12);
         ctx.stroke();
 
-        startY += 38;
+        startY += 40;
       });
 
-      // Bottom Security Note
-      ctx.fillStyle = '#64748b';
-      ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      // Bottom Security & Compliance Footer
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '10.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('NPCI Unified Payments Interface • End-to-End Encrypted Settlement', w / 2, h - 55);
-      ctx.fillText('Generated natively by SmartKhata Digital Operating System', w / 2, h - 38);
+      ctx.fillText('Secured by NPCI Unified Payments Interface (UPI) • 256-Bit SSL Encrypted Settlement', w / 2, h - 62);
+      ctx.fillText('Official computer-generated receipt issued natively by SmartKhata ERP Enterprise Portal', w / 2, h - 45);
       ctx.textAlign = 'left';
 
       return canvas.toDataURL('image/png');
@@ -665,10 +704,13 @@ function PayRedirectContent() {
     }
   };
 
-  // Payment Confirmation Processor
-  const handlePaymentSuccess = async (gatewayName: string, customTxnId?: string) => {
+  // Payment Confirmation Processor (Idempotent & Multi-Sync Protected)
+  const handlePaymentSuccess = async (gatewayName: string, customTxnId?: string, gatewayTxnId?: string) => {
+    if (isPaymentHandledRef.current) return;
+    isPaymentHandledRef.current = true;
+
     setIsProcessingPayment(true);
-    const finalTxnId = customTxnId || `TXN_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
+    const finalTxnId = (customTxnId || '').trim() || `TXN_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
     const finalReceiptNo = `SKP-REC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(100000 + Math.random() * 900000)}`;
     const nowIso = new Date().toISOString();
     const formattedDateTime = new Date().toLocaleString('en-IN', {
@@ -681,17 +723,19 @@ function PayRedirectContent() {
       dueAmount: effectiveAmount,
       gatewayFee: pgFeeAmount,
       amount: grandTotalAmount > 0 ? grandTotalAmount : effectiveAmount,
-      payeeName,
+      payeeName: merchantBusinessName || payeeName,
       payeeUpi: payeeUpiId,
       customerName: targetCustomerName,
       customerPhone: targetCustomerPhone,
+      customerEmail: targetCustomerEmail,
       dateTime: formattedDateTime,
       paymentMode: gatewayName,
       referenceNo: finalTxnId,
+      gatewayTxnId: gatewayTxnId || '',
       isRealSettlement: true,
     };
 
-    // 1. Generate receipt image
+    // 1. Generate classic receipt image
     const receiptImgUrl = await generateReceiptCanvasBlob(newReceipt);
     const fullReceipt = { ...newReceipt, receiptDataUrl: receiptImgUrl, isRealSettlement: true };
 
@@ -711,11 +755,13 @@ function PayRedirectContent() {
       name: `Payment_Receipt_${finalTxnId}.png`,
       url: receiptImgUrl,
       size: 'Settled Receipt',
-      type: 'image/png',
+      type: 'image', // Always 'image' for clean lightbox preview!
     });
 
+    const onlineTxnId = `txn_online_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
     const newTxn: Transaction = {
-      id: `txn_online_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      id: onlineTxnId,
       customerId: targetCustomerId,
       customerName: targetCustomerName,
       type: 'debit', // 'debit' represents "Received" (Jama Hua) in Digital Khatabook!
@@ -727,7 +773,7 @@ function PayRedirectContent() {
       referenceNo: finalTxnId,
       attachments: receiptImgUrl ? [receiptAttachment] : [],
       status: 'completed',
-      createdBy: payeeName || 'SmartKhata Online Checkout',
+      createdBy: merchantBusinessName || payeeName || 'SmartKhata Online Checkout',
       createdAt: nowIso,
     };
 
@@ -740,7 +786,7 @@ function PayRedirectContent() {
     try {
       const rawTxns = localStorage.getItem('skp_transactions');
       const list = rawTxns ? JSON.parse(rawTxns) : [];
-      if (!list.some((t: any) => t.id === newTxn.id)) {
+      if (!list.some((t: any) => t.id === newTxn.id || (t.referenceNo && t.referenceNo === finalTxnId))) {
         list.push(newTxn);
         localStorage.setItem('skp_transactions', JSON.stringify(list));
       }
@@ -775,9 +821,10 @@ function PayRedirectContent() {
           customerPhone: targetCustomerPhone,
           amount: effectiveAmount,
           upiId: payeeUpiId,
-          payeeName,
+          payeeName: merchantBusinessName || payeeName,
           gateway: gatewayName,
           referenceNo: finalTxnId,
+          txnId: onlineTxnId, // Exact match to avoid duplicate row
           note: `Payment Received via ${gatewayName} [Bank Ref / UTR: ${finalTxnId}]`,
           receiptUrl: receiptImgUrl,
           paymentToken: pathPid || pParam || '',
@@ -868,8 +915,8 @@ function PayRedirectContent() {
           orderId: newOrderId,
           orderAmount: grandTotalAmount,
           customerName: targetCustomerName,
-          customerPhone: targetCustomerPhone || '9820111223',
-          customerEmail: 'customer@smartkhatapro.in',
+          customerPhone: targetCustomerPhone || '7718559827',
+          customerEmail: targetCustomerEmail || 'anantyadav8925@gmail.com',
           appId: appId || undefined,
           secretKey: secretKey || undefined,
           env,
@@ -911,7 +958,7 @@ function PayRedirectContent() {
         }
 
         if (result.paymentDetails) {
-          // Real server verification with Cashfree
+          // Real server verification with Cashfree to extract real Bank UTR / Reference No
           try {
             const verifyRes = await fetch('/api/cashfree/verify', {
               method: 'POST',
@@ -924,11 +971,18 @@ function PayRedirectContent() {
               }),
             });
             const verifyData = await verifyRes.json();
-            const realRef = verifyData.cfPaymentId || result.paymentDetails.paymentMessage || result.paymentDetails.cfPaymentId || `CF_${Date.now()}`;
-            await handlePaymentSuccess('Cashfree Official PG', realRef);
+            // Prioritize bankReference (the real 12-digit Bank UTR e.g. 669101698983)
+            const realBankRef =
+              (verifyData.bankReference ? String(verifyData.bankReference).trim() : '') ||
+              (result.paymentDetails.bankReference ? String(result.paymentDetails.bankReference).trim() : '') ||
+              (verifyData.cfPaymentId ? String(verifyData.cfPaymentId).trim() : '') ||
+              (result.paymentDetails.cfPaymentId ? String(result.paymentDetails.cfPaymentId).trim() : '') ||
+              `CF_${Date.now()}`;
+            const cfTxnId = (verifyData.cfPaymentId ? String(verifyData.cfPaymentId).trim() : '') || (result.paymentDetails.cfPaymentId ? String(result.paymentDetails.cfPaymentId).trim() : '');
+            await handlePaymentSuccess('Cashfree Official PG', realBankRef, cfTxnId);
           } catch {
-            const realRef = result.paymentDetails.cfPaymentId || `CF_TXN_${Date.now().toString().slice(-8)}`;
-            await handlePaymentSuccess('Cashfree PG', realRef);
+            const fallbackRef = (result.paymentDetails.bankReference ? String(result.paymentDetails.bankReference).trim() : '') || (result.paymentDetails.cfPaymentId ? String(result.paymentDetails.cfPaymentId).trim() : '') || `CF_TXN_${Date.now().toString().slice(-8)}`;
+            await handlePaymentSuccess('Cashfree PG', fallbackRef);
           }
         }
       });
@@ -1113,11 +1167,19 @@ function PayRedirectContent() {
                 <span className="font-semibold text-slate-800 dark:text-slate-200">{receiptData.customerName}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Bank / Ref ID:</span>
-                <span className="font-mono text-slate-600 dark:text-slate-300 text-[11px] truncate max-w-[180px]">
+                <span className="text-slate-400">Bank / Ref ID (UTR):</span>
+                <span className="font-mono font-bold text-slate-800 dark:text-slate-200 text-[11px] truncate max-w-[180px]">
                   {receiptData.referenceNo}
                 </span>
               </div>
+              {receiptData.gatewayTxnId && receiptData.gatewayTxnId !== receiptData.referenceNo && (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Gateway Ref:</span>
+                  <span className="font-mono text-slate-500 dark:text-slate-400 text-[11px] truncate max-w-[180px]">
+                    {receiptData.gatewayTxnId}
+                  </span>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span className="text-slate-400">Settled Date:</span>
                 <span className="text-slate-600 dark:text-slate-300">{receiptData.dateTime}</span>
