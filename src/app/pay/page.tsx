@@ -243,6 +243,18 @@ function PayRedirectContent() {
   // Payee & Business info
   const payeeUpiId = pa || fetchedDetails?.merchant?.upiId || settings.paymentSettings?.upiId || '';
   const payeeName = pn || fetchedDetails?.merchant?.businessName || settings.paymentSettings?.payeeName || settings.businessName || profile?.businessName || 'SmartKhata Merchant';
+  
+  const merchantBusinessName = useMemo(() => {
+    return (
+      fetchedDetails?.merchant?.businessName ||
+      settings.businessName ||
+      profile?.businessName ||
+      currentUser?.businessName ||
+      (pn && pn !== 'SmartKhata Merchant' ? pn : '') ||
+      'SmartKhata'
+    ).trim();
+  }, [fetchedDetails, settings.businessName, profile?.businessName, currentUser?.businessName, pn]);
+
   const paymentNote = tn || (targetCustomerName ? `Payment from ${targetCustomerName}` : 'Payment Settlement');
   const effectiveAmount = isNaN(am) ? 0 : am;
   const merchantLogo = logoParam || profile?.avatarUrl || currentUser?.avatarUrl || settings.businessLogo || '';
@@ -1310,10 +1322,15 @@ function PayRedirectContent() {
     );
   }
 
-  // REGULAR DIRECT UPI & PAYMENT GATEWAY VIEW (Zero Scroll, Fits Entirely in Screen)
+  // REGULAR PAYMENT GATEWAY CHECKOUT VIEW (Mobile & Desktop Modern Responsive, Zero-Scroll)
   return (
-    <div className="h-screen sm:min-h-screen sm:h-auto max-h-screen sm:max-h-none overflow-hidden sm:overflow-y-auto flex flex-col justify-between p-2.5 sm:p-4 max-w-md w-full mx-auto text-slate-900 dark:text-slate-100">
-      
+    <div className="min-h-screen flex flex-col justify-between p-3 sm:p-5 max-w-md w-full mx-auto text-slate-900 dark:text-slate-100 relative selection:bg-emerald-500 selection:text-white">
+      {/* Decorative ambient background glows */}
+      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-80 sm:w-96 h-80 sm:h-96 bg-gradient-to-tr from-emerald-500/15 via-teal-500/10 to-indigo-500/15 blur-3xl rounded-full" />
+        <div className="absolute -bottom-32 left-1/2 -translate-x-1/2 w-80 sm:w-96 h-80 sm:h-96 bg-gradient-to-br from-indigo-500/15 via-purple-500/10 to-emerald-500/15 blur-3xl rounded-full" />
+      </div>
+
       {/* Header */}
       <header className="w-full flex items-center justify-between pb-2 shrink-0">
         <Link href="/" prefetch={true} className="flex items-center gap-2 group">
@@ -1361,40 +1378,65 @@ function PayRedirectContent() {
         <button
           type="button"
           onClick={handleCopyLink}
-          className="text-[11px] font-semibold px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1 transition-colors cursor-pointer shadow-xs active:scale-95"
+          className="text-[11px] font-semibold px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1 transition-colors cursor-pointer shadow-xs active:scale-95"
         >
           {copiedLink ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
           <span>{copiedLink ? 'Copied' : 'Share'}</span>
         </button>
       </header>
 
-      {/* Main Payment Card (Compact, Responsive, Fits on 1 screen) */}
-      <main className="w-full my-auto bg-white dark:bg-slate-900 rounded-[24px] sm:rounded-[28px] border border-slate-200 dark:border-slate-800 shadow-xl p-3.5 sm:p-4 space-y-2.5 sm:space-y-3">
+      {/* Main Payment Card (Modern, Animated, Responsive) */}
+      <main className="w-full my-auto bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-[28px] border border-slate-200/90 dark:border-slate-800 shadow-2xl shadow-slate-200/50 dark:shadow-black/40 p-4 sm:p-5 space-y-3 sm:space-y-3.5 animate-in fade-in zoom-in-95 duration-200">
         
-        {/* Merchant Banner */}
-        <div className="text-center space-y-0.5">
-          <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900/60 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold">
-            <CheckCircle2 className="w-3 h-3" />
+        {/* Merchant & Business Header */}
+        <div className="text-center space-y-1.5">
+          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/90 dark:border-emerald-800/80 text-emerald-700 dark:text-emerald-300 text-[10px] sm:text-[11px] font-bold shadow-xs">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
             <span>Official Checkout Portal</span>
           </div>
-          <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight truncate">
-            {payeeName}
-          </h2>
-          <div className="flex items-center justify-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
-            <span className="font-mono">{payeeUpiId}</span>
-            <button
-              type="button"
-              onClick={handleCopyUpi}
-              className="p-0.5 text-slate-400 hover:text-emerald-600 transition-colors"
-              title="Copy UPI ID"
-            >
-              {copiedUpi ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-            </button>
+
+          {/* Business Name * Display */}
+          <div className="space-y-0.5 pt-0.5">
+            <div className="flex items-center justify-center gap-1 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              <Building2 className="w-3 h-3 text-slate-400" />
+              <span>Business Name *</span>
+            </div>
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center justify-center gap-1.5 flex-wrap">
+              <span>{merchantBusinessName}</span>
+              <span className="inline-flex items-center p-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400" title="100% Verified Merchant">
+                <CheckCircle2 className="w-4 h-4 fill-emerald-500 text-white" />
+              </span>
+            </h1>
+            {payeeName && payeeName !== merchantBusinessName && (
+              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                Payee: <span className="text-slate-700 dark:text-slate-200">{payeeName}</span>
+              </p>
+            )}
           </div>
+
+          {/* UPI ID Pill with Copy */}
+          {payeeUpiId && (
+            <div className="flex items-center justify-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+              <div className="inline-flex items-center gap-1.5 bg-slate-100/80 dark:bg-slate-800/80 px-2.5 py-0.5 rounded-lg border border-slate-200/80 dark:border-slate-700/70 text-[11px]">
+                <span className="font-mono text-slate-700 dark:text-slate-200">{payeeUpiId}</span>
+                <button
+                  type="button"
+                  onClick={handleCopyUpi}
+                  className="p-0.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors ml-0.5 cursor-pointer active:scale-90"
+                  title="Copy UPI ID"
+                >
+                  {copiedUpi ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Transaction Due & Payment Gateway Breakdown Card */}
-        <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/90 dark:border-slate-700/80 space-y-1.5 text-xs shadow-xs">
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50/90 dark:bg-slate-800/60 border border-slate-200/90 dark:border-slate-700/80 space-y-2 text-xs shadow-xs">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span>Customer Name:</span>
             <span className="font-bold text-slate-900 dark:text-white">{targetCustomerName}</span>
@@ -1412,9 +1454,9 @@ function PayRedirectContent() {
           </div>
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span>Payment Method:</span>
-            <span className="font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-              <CreditCard className="w-3 h-3" />
-              {activeGateway === 'cashfree' ? 'Cashfree PG' : activeGateway === 'razorpay' ? 'Razorpay PG' : activeGateway === 'upi_gateway' ? 'UPI PG (Dynamic)' : 'Default UPI & QR'}
+            <span className="font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+              <CreditCard className="w-3.5 h-3.5" />
+              {activeGateway === 'cashfree' ? 'Cashfree PG' : activeGateway === 'razorpay' ? 'Razorpay PG' : activeGateway === 'upi_gateway' ? 'UPI PG (Dynamic)' : 'Online Payment Gateway'}
             </span>
           </div>
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
@@ -1423,102 +1465,71 @@ function PayRedirectContent() {
               {isPgFeeChargeable ? `+ ${formatINR(pgFeeAmount)} (2% PG Fee)` : `₹0.00 (0% Free)`}
             </span>
           </div>
-          <div className="pt-2 border-t border-slate-200/80 dark:border-slate-700 flex items-center justify-between">
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-700/90 flex items-center justify-between">
             <span className="text-[11px] font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">Grand Total Amount:</span>
-            <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-sans tracking-tight">
+            <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-sans tracking-tight">
               {formatINR(grandTotalAmount)}
             </span>
           </div>
         </div>
 
-        {/* PRIMARY "PAY NOW" BUTTON */}
+        {/* Multi-Channel Gateway Trust Notice */}
+        <div className="px-3 py-2 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100/80 dark:border-indigo-900/50 flex items-center justify-center gap-2 text-center">
+          <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          <p className="text-[10.5px] text-indigo-950 dark:text-indigo-200 font-medium">
+            Pay with <strong>UPI (GPay / PhonePe / Paytm)</strong>, <strong>Cards</strong>, or <strong>Netbanking</strong>
+          </p>
+        </div>
+
+        {/* PRIMARY "PAY NOW" BUTTON WITH MODERN PULSE & SHIMMER */}
         <button
           type="button"
           onClick={handlePayNow}
           disabled={isCfLoading}
-          className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 active:scale-98 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-75"
+          className="w-full py-3.5 sm:py-4 px-5 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 active:scale-98 text-white font-black text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-xl shadow-emerald-600/30 hover:shadow-emerald-600/40 transition-all duration-200 cursor-pointer disabled:opacity-75 relative overflow-hidden group"
         >
+          <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
           {isCfLoading ? (
             <>
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              <span>Connecting Gateway...</span>
+              <RefreshCw className="w-5 h-5 animate-spin" />
+              <span>Connecting Payment Gateway...</span>
             </>
           ) : (
             <>
-              <Zap className="w-4 h-4 fill-white shrink-0" />
+              <Zap className="w-5 h-5 fill-white shrink-0 animate-pulse" />
               <span>PAY NOW • {formatINR(grandTotalAmount)}</span>
+              <ArrowRight className="w-4 h-4 ml-0.5 group-hover:translate-x-1 transition-transform" />
             </>
           )}
         </button>
 
-        {/* QR Code Container (Compact ~130px) */}
-        <div className="bg-slate-50 dark:bg-slate-800/50 p-2 sm:p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 flex flex-col items-center justify-center text-center space-y-1.5">
-          <div className="p-2 bg-white rounded-xl shadow-xs border border-slate-200/80 inline-block">
-            {isGeneratingQr ? (
-              <div className="w-[125px] h-[125px] flex items-center justify-center text-[10px] text-slate-400">
-                Generating QR...
-              </div>
-            ) : qrDataUrl ? (
-              <img
-                src={qrDataUrl}
-                alt="Payment QR"
-                className="w-[125px] h-[125px] object-contain rounded-lg"
-              />
-            ) : (
-              <div className="w-[125px] h-[125px] flex items-center justify-center text-[10px] text-slate-400">
-                QR Unavailable
-              </div>
-            )}
+        {/* Trust Badges */}
+        <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+          <div className="flex items-center gap-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span className="font-medium">Instant Bank Settlement</span>
           </div>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-            Scan with <strong className="text-slate-700 dark:text-slate-200">GPay, PhonePe, Paytm</strong> or any UPI app
-          </p>
-        </div>
-
-        {/* Quick App Specific Buttons */}
-        <div className="grid grid-cols-4 gap-1.5">
-          <a
-            href={standardUpiUri}
-            className="py-1.5 px-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-center text-xs font-black text-emerald-700 dark:text-emerald-300 flex items-center justify-center gap-1 transition-all"
-            title="Open UPI Intent"
-          >
-            <span>UPI Intent</span>
-          </a>
-          <a
-            href={gpayUri}
-            className="py-1.5 px-1 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-center text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 transition-all"
-          >
-            <span className="text-emerald-600 font-black text-xs">GPay</span>
-          </a>
-          <a
-            href={phonepeUri}
-            className="py-1.5 px-1 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-center text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 transition-all"
-          >
-            <span className="text-indigo-600 font-black text-xs">PhonePe</span>
-          </a>
-          <a
-            href={paytmUri}
-            className="py-1.5 px-1 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-center text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 transition-all"
-          >
-            <span className="text-cyan-600 font-black text-xs">Paytm</span>
-          </a>
+          <div className="flex items-center gap-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60">
+            <Lock className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            <span className="font-medium">256-Bit SSL Encrypted</span>
+          </div>
         </div>
 
         {/* WhatsApp Support Link at bottom */}
-        <div className="pt-1 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px]">
+        <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10.5px]">
           <span className="text-slate-400 flex items-center gap-1">
-            <Shield className="w-3 h-3 text-emerald-500" />
+            <Shield className="w-3.5 h-3.5 text-emerald-500" />
             100% Encrypted Payment
           </span>
           <a
             href={`https://wa.me/${cleanWaNumber}?text=${encodeURIComponent(
-              `Hello ${payeeName}, I am on the payment checkout page for ${targetCustomerName} (Amount: ${formatINR(grandTotalAmount)}). I need assistance:`
+              `Hello ${merchantBusinessName || payeeName}, I am on the payment checkout page for ${targetCustomerName} (Amount: ${formatINR(grandTotalAmount)}). I need assistance:`
             )}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1"
           >
-            <MessageSquare className="w-3 h-3 fill-emerald-500 text-emerald-500" />
+            <MessageSquare className="w-3.5 h-3.5 fill-emerald-500 text-emerald-500" />
             <span>WhatsApp Support</span>
           </a>
         </div>
@@ -1526,8 +1537,8 @@ function PayRedirectContent() {
       </main>
 
       {/* Footer Info */}
-      <footer className="w-full text-center py-1 text-[10px] text-slate-400 shrink-0">
-        Powered by {websiteName} Fintech Enterprise Portal
+      <footer className="w-full text-center py-2 text-[10px] text-slate-400 shrink-0">
+        Powered by {websiteName} Fintech Enterprise Portal • Secure Gateway
       </footer>
 
       {/* ONLINE PAYMENT GATEWAY POPUP MODAL */}
