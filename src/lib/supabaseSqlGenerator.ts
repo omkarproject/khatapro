@@ -391,6 +391,43 @@ CREATE TABLE IF NOT EXISTS public.user_devices (
 );
 
 -- ==========================================================
+-- 2.20 Schema Upgrades & Alignment for Existing Deployments
+-- ==========================================================
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_type_check') THEN
+    ALTER TABLE public.transactions DROP CONSTRAINT transactions_type_check;
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS customer_name TEXT DEFAULT '';
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS created_by TEXT DEFAULT '';
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS reference_no TEXT DEFAULT '';
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS bill_number TEXT DEFAULT '';
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS note TEXT DEFAULT '';
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS attachments TEXT[] DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS invoice_id TEXT;
+
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS images TEXT[] DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS image_url TEXT DEFAULT '';
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS min_stock_alert NUMERIC DEFAULT 0;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS min_stock NUMERIC DEFAULT 0;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS invoice_date TEXT;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS issue_date TEXT;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS grand_total NUMERIC DEFAULT 0;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS total NUMERIC DEFAULT 0;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'unpaid';
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS total_tax NUMERIC DEFAULT 0;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS tax_amount NUMERIC DEFAULT 0;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS discount_amount NUMERIC DEFAULT 0;
+
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS completed BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS is_completed BOOLEAN DEFAULT FALSE;
+
+-- ==========================================================
 -- 3. ENABLE ROW LEVEL SECURITY (RLS) POLICIES
 -- ==========================================================
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;

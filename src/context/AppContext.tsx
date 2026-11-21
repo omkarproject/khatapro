@@ -689,12 +689,12 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
               }
             });
 
-            // 4. Preserve ONLY very recent local creations (< 45s) that haven't been pushed to cloud yet.
-            // Older items missing from cloud were deleted on another device -> DO NOT KEEP!
+            // 4. Safely preserve all active local records that haven't been pushed to cloud or are pending sync.
+            // Never delete local items just because of elapsed time! Only discard if explicitly deleted.
             localMap.forEach((localItem, id) => {
               if (!incomingMap.has(id)) {
-                const createdTime = new Date((localItem as any).createdAt || (localItem as any).date || 0).getTime();
-                if (createdTime > 0 && (now - createdTime) < 45000) {
+                const isLocalDeleted = (localItem as any).isDeleted || (localItem as any).status === 'deleted';
+                if (!isLocalDeleted && !deletedIds.has(id)) {
                   resultMap.set(id, localItem);
                 }
               }

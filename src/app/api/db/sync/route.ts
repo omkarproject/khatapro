@@ -47,13 +47,50 @@ function customerToDb(c: any, userId: string) {
   };
 }
 
+function parseFileSizeToBytes(size: any): number {
+  if (typeof size === 'number' && !isNaN(size)) return Math.round(size);
+  if (!size) return 1024;
+  const s = String(size).toUpperCase().trim();
+  const num = parseFloat(s) || 1;
+  if (s.includes('GB')) return Math.round(num * 1024 * 1024 * 1024);
+  if (s.includes('MB')) return Math.round(num * 1024 * 1024);
+  if (s.includes('KB')) return Math.round(num * 1024);
+  return Math.round(num);
+}
+
 function transactionToDb(t: any, userId: string) {
+  // Map frontend types to Postgres check constraint: type IN ('give', 'got')
+  const dbType = (t.type === 'debit' || t.type === 'received' || t.type === 'income' || t.type === 'collection' || t.type === 'got') ? 'got' : 'give';
+
+  const baseTags = Array.isArray(t.tags) ? [...t.tags] : [];
+  if (t.groupId) baseTags.push(`__grp_id:${t.groupId}`);
+  if (t.groupName) baseTags.push(`__grp_name:${encodeURIComponent(t.groupName)}`);
+  if (Array.isArray(t.splitMembers) && t.splitMembers.length > 0) baseTags.push(`__grp_split:${JSON.stringify(t.splitMembers)}`);
+  if (Array.isArray(t.editHistory) && t.editHistory.length > 0) baseTags.push(`__grp_edits:${JSON.stringify(t.editHistory)}`);
+  if (t.isDeleted || t.status === 'deleted') {
+    baseTags.push('__is_deleted:true');
+    if (t.deletedAt) baseTags.push(`__del_at:${t.deletedAt}`);
+    if (t.deletedBy) baseTags.push(`__del_by:${encodeURIComponent(t.deletedBy)}`);
+  }
+
+  // Meta envelope to preserve frontend metadata safely across schema variations
+  const metaObj = {
+    __sk_meta: true,
+    origType: t.type || (dbType === 'give' ? 'credit' : 'debit'),
+    customerName: t.customerName || '',
+    createdBy: t.createdBy || '',
+    referenceNo: t.referenceNo || '',
+    tags: baseTags,
+  };
+
   // Strip large base64 data URLs from attachments so database strictly holds metadata records
   const sanitizedAttachments = (t.attachments || []).map((att: any) => {
     let obj: any = null;
     if (typeof att === 'object' && att !== null) {
+      if (att.__sk_meta) return null;
       obj = att;
     } else if (typeof att === 'string') {
+      if (att.includes('__sk_meta')) return null;
       try {
         obj = JSON.parse(att);
       } catch {
@@ -79,47 +116,32 @@ function transactionToDb(t: any, userId: string) {
     return '';
   }).filter(Boolean);
 
-  const baseTags = Array.isArray(t.tags) ? [...t.tags] : [];
-  if (t.groupId) {
-    baseTags.push(`__grp_id:${t.groupId}`);
-  }
-  if (t.groupName) {
-    baseTags.push(`__grp_name:${encodeURIComponent(t.groupName)}`);
-  }
-  if (Array.isArray(t.splitMembers) && t.splitMembers.length > 0) {
-    baseTags.push(`__grp_split:${JSON.stringify(t.splitMembers)}`);
-  }
-  if (Array.isArray(t.editHistory) && t.editHistory.length > 0) {
-    baseTags.push(`__grp_edits:${JSON.stringify(t.editHistory)}`);
-  }
-  if (t.isDeleted || t.status === 'deleted') {
-    baseTags.push('__is_deleted:true');
-    if (t.deletedAt) baseTags.push(`__del_at:${t.deletedAt}`);
-    if (t.deletedBy) baseTags.push(`__del_by:${encodeURIComponent(t.deletedBy)}`);
-  }
+  sanitizedAttachments.push(JSON.stringify(metaObj));
 
   return {
     id: String(t.id),
     user_id: userId,
-    type: t.type || 'credit',
+    customer_id: t.customerId || null,
+    type: dbType,
     amount: Number(t.amount) || 0,
     date: t.date || new Date().toISOString().split('T')[0],
-    customer_id: t.customerId || null,
-    customer_name: t.customerName || '',
+    description: t.note || t.description || '',
     category: t.category || 'General',
-    payment_mode: t.paymentMode || 'upi',
-    note: t.note || '',
-    tags: baseTags,
-    attachments: sanitizedAttachments,
-    reference_no: t.referenceNo || '',
+    payment_mode: t.paymentMode || 'cash',
     status: (t.isDeleted || t.status === 'deleted') ? 'deleted' : (t.status || 'completed'),
-    created_by: t.createdBy || '',
+    bill_number: t.referenceNo || '',
+    invoice_id: t.invoiceId || null,
+    attachments: sanitizedAttachments,
     created_at: t.createdAt || new Date().toISOString(),
     updated_at: t.updatedAt || new Date().toISOString(),
   };
 }
 
 function productToDb(p: any, userId: string) {
+  const images = Array.isArray(p.images) && p.images.length > 0 
+    ? p.images 
+    : (p.imageUrl && !p.imageUrl.startsWith('data:') ? [p.imageUrl] : []);
+
   return {
     id: String(p.id),
     user_id: userId,
@@ -129,50 +151,56 @@ function productToDb(p: any, userId: string) {
     category: p.category || 'General',
     purchase_price: Number(p.purchasePrice) || 0,
     selling_price: Number(p.sellingPrice) || 0,
+    mrp: Number(p.mrp || p.sellingPrice) || 0,
     current_stock: Number(p.currentStock) || 0,
-    min_stock: Number(p.minStock) || 0,
+    min_stock_alert: Number(p.minStock ?? p.minStockAlert ?? 0),
     unit: p.unit || 'pcs',
-    supplier: p.supplier || '',
-    location: p.location || '',
-    image_url: p.imageUrl && !p.imageUrl.startsWith('data:') ? p.imageUrl : '',
+    images,
+    description: p.description || (p.location ? `Loc: ${p.location}` : ''),
+    is_active: p.isActive !== false,
+    created_at: p.createdAt || new Date().toISOString(),
     updated_at: p.updatedAt || new Date().toISOString(),
   };
 }
 
 function invoiceToDb(inv: any, userId: string) {
+  const invDate = inv.invoiceDate || inv.issueDate || inv.date || new Date().toISOString().split('T')[0];
+  const grandTotal = Number(inv.grandTotal ?? inv.total ?? inv.totalAmount ?? 0);
+  const paidAmt = Number(inv.paidAmount || 0);
+  const balAmt = Number(inv.balanceAmount ?? (grandTotal - paidAmt));
+
   return {
     id: String(inv.id),
     user_id: userId,
     invoice_number: inv.invoiceNumber || '',
-    type: inv.type || 'sales',
+    invoice_date: invDate,
+    due_date: inv.dueDate || invDate,
     customer_id: inv.customerId || '',
     customer_name: inv.customerName || '',
     customer_phone: inv.customerPhone || '',
-    customer_gst: inv.customerGst || '',
     customer_address: inv.customerAddress || '',
-    issue_date: inv.issueDate || new Date().toISOString().split('T')[0],
-    due_date: inv.dueDate || new Date().toISOString().split('T')[0],
+    customer_gst: inv.customerGst || '',
     items: Array.isArray(inv.items) ? inv.items : [],
     subtotal: Number(inv.subtotal) || 0,
-    discount_amount: Number(inv.discountAmount) || 0,
-    tax_amount: Number(inv.taxAmount) || 0,
-    cgst: Number(inv.cgst) || 0,
-    sgst: Number(inv.sgst) || 0,
-    igst: Number(inv.igst) || 0,
-    total: Number(inv.total) || 0,
-    paid_amount: Number(inv.paidAmount) || 0,
-    status: inv.status || 'unpaid',
-    payment_date: inv.paymentDate || null,
-    receipt_url: inv.receiptUrl && !inv.receiptUrl.startsWith('data:') ? inv.receiptUrl : null,
-    receipt_name: inv.receiptName || null,
-    receipt_type: inv.receiptType || null,
-    status_history: Array.isArray(inv.statusHistory) ? inv.statusHistory : [],
-    applied_charges: Array.isArray(inv.appliedCharges) ? inv.appliedCharges : [],
-    notes: inv.notes || null,
-    terms: inv.terms || null,
-    upi_payment_qr: inv.upiPaymentQr && !inv.upiPaymentQr.startsWith('data:') ? inv.upiPaymentQr : null,
-    stock_deducted: Boolean(inv.stockDeducted),
+    discount_type: inv.discountType || 'fixed',
+    discount_value: Number(inv.discountValue || 0),
+    discount_amount: Number(inv.discountAmount ?? inv.discountTotal ?? 0),
+    taxable_amount: Number(inv.taxableAmount || (Number(inv.subtotal || 0) - Number(inv.discountAmount || 0))),
+    cgst_amount: Number(inv.cgstAmount ?? inv.cgst ?? 0),
+    sgst_amount: Number(inv.sgstAmount ?? inv.sgst ?? 0),
+    igst_amount: Number(inv.igstAmount ?? inv.igst ?? 0),
+    total_tax: Number(inv.totalTax ?? inv.taxAmount ?? inv.taxTotal ?? 0),
+    round_off: Number(inv.roundOff || 0),
+    grand_total: grandTotal,
+    paid_amount: paidAmt,
+    balance_amount: balAmt,
+    payment_status: inv.paymentStatus || inv.status || 'unpaid',
+    payment_mode: inv.paymentMode || 'cash',
+    notes: inv.notes || '',
+    terms: inv.terms || '',
+    template_id: inv.templateId || 'modern',
     created_at: inv.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   };
 }
 
@@ -185,13 +213,14 @@ function expenseToDb(e: any, userId: string) {
     category: e.category || 'General',
     date: e.date || new Date().toISOString().split('T')[0],
     payment_mode: e.paymentMode || 'cash',
-    notes: e.notes || null,
+    notes: e.notes || e.note || (e.paidTo ? `Paid to: ${e.paidTo}` : ''),
     receipt_url: e.receiptUrl && !e.receiptUrl.startsWith('data:') ? e.receiptUrl : null,
     receipt_urls: Array.isArray(e.receiptUrls) ? e.receiptUrls.filter((u: any) => typeof u === 'string' && !u.startsWith('data:')) : [],
     is_recurring: Boolean(e.isRecurring),
     recurring_frequency: e.recurringFrequency || null,
     tags: Array.isArray(e.tags) ? e.tags : [],
     created_at: e.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   };
 }
 
@@ -203,14 +232,15 @@ function savingsGoalToDb(s: any, userId: string) {
     target_amount: Number(s.targetAmount) || 0,
     current_amount: Number(s.currentAmount) || 0,
     category: s.category || 'Emergency Fund',
-    deadline: s.deadline || '',
-    notes: s.notes || null,
-    icon: s.icon || null,
+    deadline: s.deadline || s.targetDate || '',
+    notes: s.notes || s.note || null,
+    icon: s.icon || s.color || null,
     document_url: s.documentUrl && !s.documentUrl.startsWith('data:') ? s.documentUrl : null,
     document_name: s.documentName || null,
     document_type: s.documentType || null,
     deposits: Array.isArray(s.deposits) ? s.deposits : [],
     created_at: s.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   };
 }
 
@@ -224,14 +254,12 @@ function reminderToDb(r: any, userId: string) {
     customer_email: r.customerEmail || '',
     amount: Number(r.amount) || 0,
     due_date: r.dueDate || '',
-    reminder_type: r.reminderType || 'upcoming',
-    channels: Array.isArray(r.channels) ? r.channels : ['sms'],
+    reminder_type: r.reminderType || r.type || 'upcoming',
     status: r.status || 'pending',
-    sent_at: r.sentAt || null,
-    message_template: r.messageTemplate || '',
-    note: r.note || null,
-    transaction_id: r.transactionId || null,
+    custom_message: r.notes || r.note || r.customMessage || r.messageTemplate || '',
+    sent_history: Array.isArray(r.sentHistory) ? r.sentHistory : [],
     created_at: r.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   };
 }
 
@@ -251,13 +279,17 @@ function documentToDb(d: any, userId: string) {
     id: String(d.id),
     user_id: userId,
     title: d.title || 'Document',
+    type: d.type || d.fileType || 'document',
     category: d.category || 'general',
     file_url: fileUrl,
-    file_type: d.fileType || '',
-    file_size: d.fileSize || '',
-    related_entity_id: d.relatedEntityId || null,
-    related_entity_name: d.relatedEntityName || null,
-    uploaded_at: d.uploadedAt || new Date().toISOString(),
+    file_name: d.fileName || d.title || 'file',
+    file_size: parseFileSizeToBytes(d.fileSize || d.size),
+    mime_type: d.mimeType || d.type || 'application/pdf',
+    tags: Array.isArray(d.tags) ? d.tags : [],
+    notes: d.notes || '',
+    is_locked: Boolean(d.isLocked),
+    created_at: d.createdAt || d.uploadedAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   };
 }
 
@@ -266,13 +298,12 @@ function noteToDb(n: any, userId: string) {
     id: String(n.id),
     user_id: userId,
     title: n.title || '',
-    description: n.description || '',
-    reminder_date: n.reminderDate || null,
-    reminder_time: n.reminderTime || null,
+    content: n.content || n.description || '',
     category: n.category || 'General',
     color: n.color || 'amber',
     is_pinned: Boolean(n.isPinned),
-    attached_image: n.attachedImage && !n.attachedImage.startsWith('data:') ? n.attachedImage : null,
+    is_locked: Boolean(n.isLocked),
+    tags: Array.isArray(n.tags) ? n.tags : [],
     created_at: n.createdAt || new Date().toISOString(),
     updated_at: n.updatedAt || new Date().toISOString(),
   };
@@ -284,14 +315,13 @@ function taskToDb(t: any, userId: string) {
     user_id: userId,
     title: t.title || '',
     description: t.description || '',
-    is_completed: Boolean(t.isCompleted),
-    due_date: t.dueDate || null,
-    reminder_date: t.reminderDate || null,
-    reminder_time: t.reminderTime || null,
     priority: t.priority || 'medium',
+    due_date: t.dueDate || null,
+    completed: Boolean(t.isCompleted || t.completed || t.status === 'completed'),
     category: t.category || 'General',
+    tags: Array.isArray(t.tags) ? t.tags : [],
     created_at: t.createdAt || new Date().toISOString(),
-    completed_at: t.completedAt || null,
+    updated_at: new Date().toISOString(),
   };
 }
 
@@ -299,14 +329,13 @@ function passwordToDb(p: any, userId: string) {
   return {
     id: String(p.id),
     user_id: userId,
-    app_name: p.appName || '',
+    title: p.title || p.appName || 'Account',
     username: p.username || '',
-    password: p.password || '',
-    recovery_key: p.recoveryKey || null,
-    attached_image: p.attachedImage && !p.attachedImage.startsWith('data:') ? p.attachedImage : null,
-    website_url: p.websiteUrl || null,
-    notes: p.notes || null,
+    password_encrypted: p.password || p.password_encrypted || '',
+    url: p.url || p.websiteUrl || null,
     category: p.category || 'Business',
+    notes: p.notes || null,
+    is_favorite: Boolean(p.isFavorite),
     created_at: p.createdAt || new Date().toISOString(),
     updated_at: p.updatedAt || new Date().toISOString(),
   };
@@ -318,11 +347,11 @@ function authenticatorToDb(a: any, userId: string) {
     user_id: userId,
     issuer: a.issuer || '',
     account_name: a.accountName || a.account_name || '',
-    secret: a.secret || '',
-    category: a.category || 'Other',
-    notes: a.notes || null,
-    period: Number(a.period) || 30,
+    secret_encrypted: a.secret || a.secret_encrypted || '',
     digits: Number(a.digits) || 6,
+    period: Number(a.period) || 30,
+    algorithm: a.algorithm || 'SHA1',
+    icon: a.icon || null,
     created_at: a.createdAt || a.created_at || new Date().toISOString(),
     updated_at: a.updatedAt || a.updated_at || new Date().toISOString(),
   };
@@ -333,34 +362,32 @@ function customerDriveFolderToDb(f: any, userId: string) {
     id: String(f.id),
     user_id: userId,
     customer_id: f.customerId || '',
-    name: f.name || '',
-    color: f.color || null,
+    folder_id: f.folderId || f.id || '',
+    folder_name: f.name || f.folderName || 'Folder',
     created_at: f.createdAt || new Date().toISOString(),
   };
 }
 
 function customerDriveFileToDb(f: any, userId: string) {
-  let safeUrl = f.url && !f.url.startsWith('data:') ? f.url : null;
+  let safeUrl = f.url && !f.url.startsWith('data:') ? f.url : '';
   if (!safeUrl && f.driveFileId) {
     safeUrl = `https://drive.google.com/file/d/${f.driveFileId}/view`;
   }
-  const proxyUrl = f.driveFileId ? `/api/backup/google-drive/view-file?fileId=${f.driveFileId}` : '';
-  const fallbackSafeDataUrl = proxyUrl || safeUrl || (f.dataUrl && !f.dataUrl.startsWith('data:') ? f.dataUrl : '') || f.name || 'file';
+  const driveId = f.driveFileId || f.fileId || f.id || '';
+  const proxyUrl = driveId ? `/api/backup/google-drive/view-file?fileId=${driveId}` : '';
+  const finalUrl = proxyUrl || safeUrl || '';
 
   return {
     id: String(f.id),
     user_id: userId,
     customer_id: f.customerId || '',
-    name: f.name || 'Untitled File',
-    size: Number(f.size) || 0,
-    type: f.type || 'application/octet-stream',
-    mime_type: f.mimeType || null,
-    url: safeUrl || proxyUrl || null,
-    data_url: fallbackSafeDataUrl, // Satisfies PostgreSQL `data_url TEXT NOT NULL` constraint without storing multi-megabyte base64
+    file_id: driveId,
+    file_name: f.name || f.fileName || 'Untitled File',
+    file_size: parseFileSizeToBytes(f.size || f.fileSize),
+    mime_type: f.mimeType || f.type || 'application/octet-stream',
     folder_id: f.folderId || null,
+    view_link: finalUrl,
     created_at: f.createdAt || new Date().toISOString(),
-    uploaded_at: f.uploadedAt || new Date().toISOString(),
-    updated_at: f.updatedAt || new Date().toISOString(),
   };
 }
 
@@ -412,9 +439,33 @@ function customerFromDb(row: any) {
 }
 
 function transactionFromDb(row: any) {
-  const transformedAttachments = (row.attachments || []).map((att: string) => {
+  let origType = row.type === 'give' ? 'credit' : 'debit';
+  let customerName = row.customer_name || '';
+  let createdBy = row.created_by || '';
+  let referenceNo = row.bill_number || row.reference_no || '';
+  let tags: string[] = Array.isArray(row.tags) ? [...row.tags] : [];
+  let isDeleted = row.status === 'deleted';
+  let deletedAt: string | undefined = undefined;
+  let deletedBy: string | undefined = undefined;
+  let groupId: string | undefined = undefined;
+  let groupName: string | undefined = undefined;
+  let splitMembers: any[] | undefined = undefined;
+  let editHistory: any[] | undefined = undefined;
+
+  const cleanAttachments: string[] = [];
+
+  (row.attachments || []).forEach((att: string) => {
     try {
       const obj = JSON.parse(att);
+      if (obj && obj.__sk_meta) {
+        if (obj.origType) origType = obj.origType;
+        if (obj.customerName && !customerName) customerName = obj.customerName;
+        if (obj.createdBy && !createdBy) createdBy = obj.createdBy;
+        if (obj.referenceNo && !referenceNo) referenceNo = obj.referenceNo;
+        if (Array.isArray(obj.tags)) tags = obj.tags;
+        return;
+      }
+
       let driveId = obj.driveFileId;
       if (!driveId && obj.url) {
         if (obj.url.includes('view-file?fileId=')) {
@@ -426,31 +477,25 @@ function transactionFromDb(row: any) {
       }
 
       if (obj.url && (obj.url.startsWith('https://') || obj.url.startsWith('http://') || obj.url.startsWith('data:'))) {
-        return JSON.stringify(obj);
+        cleanAttachments.push(JSON.stringify(obj));
+        return;
       }
       if (driveId) {
-        return JSON.stringify({
+        cleanAttachments.push(JSON.stringify({
           ...obj,
           driveFileId: driveId,
           url: `/api/backup/google-drive/view-file?fileId=${driveId}`,
-        });
+        }));
+        return;
       }
-      return att;
+      cleanAttachments.push(att);
     } catch {
-      return att;
+      cleanAttachments.push(att);
     }
   });
 
-  let groupId: string | undefined = undefined;
-  let groupName: string | undefined = undefined;
-  let splitMembers: any[] | undefined = undefined;
-  let editHistory: any[] | undefined = undefined;
-  let isDeleted = row.status === 'deleted';
-  let deletedAt: string | undefined = undefined;
-  let deletedBy: string | undefined = undefined;
-
-  const cleanTags: string[] = [];
-  (row.tags || []).forEach((t: string) => {
+  const finalTags: string[] = [];
+  tags.forEach((t: string) => {
     if (t.startsWith('__grp_id:')) {
       groupId = t.replace('__grp_id:', '');
     } else if (t.startsWith('__grp_name:')) {
@@ -480,28 +525,28 @@ function transactionFromDb(row: any) {
     } else if (t.startsWith('__is_deleted:')) {
       isDeleted = true;
     } else {
-      cleanTags.push(t);
+      finalTags.push(t);
     }
   });
 
   return {
     id: row.id,
-    type: row.type,
+    type: origType,
     amount: Number(row.amount) || 0,
     date: row.date,
     customerId: row.customer_id || undefined,
-    customerName: row.customer_name || '',
+    customerName: customerName || '',
     category: row.category || 'General',
-    paymentMode: row.payment_mode || 'upi',
-    note: row.note || '',
-    tags: cleanTags,
-    attachments: transformedAttachments,
-    referenceNo: row.reference_no || '',
+    paymentMode: row.payment_mode || 'cash',
+    note: row.description || row.note || '',
+    tags: finalTags,
+    attachments: cleanAttachments,
+    referenceNo: referenceNo,
     status: isDeleted ? 'deleted' : (row.status || 'completed'),
     isDeleted,
     deletedAt,
     deletedBy,
-    createdBy: row.created_by || '',
+    createdBy: createdBy || '',
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
     groupId,
@@ -512,6 +557,10 @@ function transactionFromDb(row: any) {
 }
 
 function productFromDb(row: any) {
+  const img = Array.isArray(row.images) && row.images.length > 0 
+    ? row.images[0] 
+    : (row.image_url || '');
+
   return {
     id: row.id,
     name: row.name,
@@ -520,17 +569,27 @@ function productFromDb(row: any) {
     category: row.category || 'General',
     purchasePrice: Number(row.purchase_price) || 0,
     sellingPrice: Number(row.selling_price) || 0,
+    mrp: Number(row.mrp || row.selling_price) || 0,
     currentStock: Number(row.current_stock) || 0,
-    minStock: Number(row.min_stock) || 0,
+    minStock: Number(row.min_stock_alert ?? row.min_stock ?? 0),
     unit: row.unit || 'pcs',
     supplier: row.supplier || '',
     location: row.location || '',
-    imageUrl: row.image_url || '',
+    imageUrl: img,
+    images: Array.isArray(row.images) ? row.images : (img ? [img] : []),
+    description: row.description || '',
+    isActive: row.is_active !== false,
     updatedAt: row.updated_at,
   };
 }
 
 function invoiceFromDb(row: any) {
+  const invDate = row.invoice_date || row.issue_date || row.created_at;
+  const grandTotal = Number(row.grand_total ?? row.total ?? 0);
+  const paidAmt = Number(row.paid_amount || 0);
+  const balAmt = Number(row.balance_amount ?? (grandTotal - paidAmt));
+  const status = row.payment_status || row.status || 'unpaid';
+
   let receiptUrl = row.receipt_url || undefined;
   if (receiptUrl && receiptUrl.includes('/file/d/')) {
     const match = receiptUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
@@ -546,28 +605,27 @@ function invoiceFromDb(row: any) {
     customerPhone: row.customer_phone || '',
     customerGst: row.customer_gst || '',
     customerAddress: row.customer_address || '',
-    issueDate: row.issue_date,
-    dueDate: row.due_date,
-    items: row.items || [],
+    date: invDate,
+    issueDate: invDate,
+    dueDate: row.due_date || invDate,
+    items: Array.isArray(row.items) ? row.items : [],
     subtotal: Number(row.subtotal) || 0,
     discountAmount: Number(row.discount_amount) || 0,
-    taxAmount: Number(row.tax_amount) || 0,
-    cgst: Number(row.cgst) || 0,
-    sgst: Number(row.sgst) || 0,
-    igst: Number(row.igst) || 0,
-    total: Number(row.total) || 0,
-    paidAmount: Number(row.paid_amount) || 0,
-    status: row.status || 'unpaid',
-    paymentDate: row.payment_date || undefined,
-    receiptUrl: receiptUrl,
-    receiptName: row.receipt_name || undefined,
-    receiptType: row.receipt_type || undefined,
-    statusHistory: row.status_history || [],
-    appliedCharges: row.applied_charges || [],
+    taxAmount: Number(row.total_tax ?? row.tax_amount ?? 0),
+    cgst: Number(row.cgst_amount ?? row.cgst ?? 0),
+    sgst: Number(row.sgst_amount ?? row.sgst ?? 0),
+    igst: Number(row.igst_amount ?? row.igst ?? 0),
+    total: grandTotal,
+    grandTotal: grandTotal,
+    totalAmount: grandTotal,
+    paidAmount: paidAmt,
+    balanceAmount: balAmt,
+    status: status,
+    paymentStatus: status,
+    paymentMode: row.payment_mode || 'cash',
     notes: row.notes || undefined,
     terms: row.terms || undefined,
-    upiPaymentQr: row.upi_payment_qr || undefined,
-    stockDeducted: Boolean(row.stock_deducted),
+    receiptUrl: receiptUrl,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
   };
@@ -620,12 +678,15 @@ function savingsGoalFromDb(row: any) {
     currentAmount: Number(row.current_amount) || 0,
     category: row.category || 'Emergency Fund',
     deadline: row.deadline || '',
+    targetDate: row.deadline || '',
     notes: row.notes || undefined,
     icon: row.icon || undefined,
+    color: row.icon || '#4f46e5',
     documentUrl: docUrl,
     documentName: row.document_name || undefined,
     documentType: row.document_type || undefined,
-    deposits: row.deposits || [],
+    deposits: Array.isArray(row.deposits) ? row.deposits : [],
+    isCompleted: Number(row.current_amount) >= Number(row.target_amount),
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
   };
@@ -641,12 +702,14 @@ function reminderFromDb(row: any) {
     amount: Number(row.amount) || 0,
     dueDate: row.due_date,
     reminderType: row.reminder_type || 'upcoming',
-    channels: row.channels || ['sms'],
+    type: row.reminder_type || 'upcoming',
+    channels: ['sms', 'whatsapp'],
     status: row.status || 'pending',
-    sentAt: row.sent_at || undefined,
-    messageTemplate: row.message_template || '',
-    note: row.note || undefined,
-    transactionId: row.transaction_id || undefined,
+    messageTemplate: row.custom_message || '',
+    customMessage: row.custom_message || '',
+    note: row.custom_message || '',
+    notes: row.custom_message || '',
+    sentHistory: row.sent_history || [],
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
   };
@@ -662,18 +725,29 @@ function documentFromDb(row: any) {
     if (match) driveFileId = match[1];
   }
 
+  const sizeBytes = Number(row.file_size) || 0;
+  const displaySize = sizeBytes > 1048576 
+    ? `${(sizeBytes / 1048576).toFixed(1)} MB` 
+    : `${Math.round(sizeBytes / 1024) || 1} KB`;
+
   return {
     id: row.id,
     title: row.title,
     category: row.category || 'general',
     fileUrl: fileUrl,
-    fileType: row.file_type || '',
-    fileSize: row.file_size || '',
-    relatedEntityId: row.related_entity_id || undefined,
-    relatedEntityName: row.related_entity_name || undefined,
+    fileType: row.type || 'document',
+    type: row.type || 'document',
+    fileSize: displaySize,
+    size: sizeBytes,
+    fileName: row.file_name || row.title,
+    mimeType: row.mime_type,
+    tags: row.tags || [],
+    notes: row.notes || '',
+    isLocked: Boolean(row.is_locked),
     driveFileId,
-    uploadedAt: row.uploaded_at,
-    updatedAt: row.updated_at || row.uploaded_at || new Date().toISOString(),
+    uploadedAt: row.created_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
   };
 }
 
@@ -681,46 +755,48 @@ function noteFromDb(row: any) {
   return {
     id: row.id,
     title: row.title,
-    description: row.description || '',
-    reminderDate: row.reminder_date || undefined,
-    reminderTime: row.reminder_time || undefined,
+    content: row.content || row.description || '',
+    description: row.content || row.description || '',
     category: row.category || 'General',
     color: row.color || 'amber',
     isPinned: Boolean(row.is_pinned),
-    attachedImage: row.attached_image || undefined,
+    isLocked: Boolean(row.is_locked),
+    tags: row.tags || [],
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
   };
 }
 
 function taskFromDb(row: any) {
+  const isComp = Boolean(row.completed ?? row.is_completed);
   return {
     id: row.id,
     title: row.title,
     description: row.description || '',
-    isCompleted: Boolean(row.is_completed),
+    isCompleted: isComp,
+    completed: isComp,
+    status: isComp ? 'completed' : 'pending',
     dueDate: row.due_date || undefined,
-    reminderDate: row.reminder_date || undefined,
-    reminderTime: row.reminder_time || undefined,
     priority: row.priority || 'medium',
     category: row.category || 'General',
+    tags: row.tags || [],
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
-    completedAt: row.completed_at || undefined,
   };
 }
 
 function passwordFromDb(row: any) {
   return {
     id: row.id,
-    appName: row.app_name,
-    username: row.username,
-    password: row.password,
-    recoveryKey: row.recovery_key || undefined,
-    attachedImage: row.attached_image || undefined,
-    websiteUrl: row.website_url || undefined,
+    title: row.title || row.app_name || 'Account',
+    appName: row.title || row.app_name || 'Account',
+    username: row.username || '',
+    password: row.password_encrypted || row.password || '',
+    url: row.url || row.website_url || undefined,
+    websiteUrl: row.url || row.website_url || undefined,
     notes: row.notes || undefined,
     category: row.category || 'Business',
+    isFavorite: Boolean(row.is_favorite),
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
   };
@@ -731,11 +807,11 @@ function authenticatorFromDb(row: any) {
     id: String(row.id),
     issuer: row.issuer || '',
     accountName: row.account_name || row.accountName || '',
-    secret: row.secret || '',
-    category: row.category || 'Other',
-    notes: row.notes || undefined,
-    period: Number(row.period) || 30,
+    secret: row.secret_encrypted || row.secret || '',
     digits: Number(row.digits) || 6,
+    period: Number(row.period) || 30,
+    algorithm: row.algorithm || 'SHA1',
+    icon: row.icon || undefined,
     createdAt: row.created_at || new Date().toISOString(),
     updatedAt: row.updated_at || row.created_at || new Date().toISOString(),
   };
@@ -745,17 +821,18 @@ function customerDriveFolderFromDb(row: any) {
   return {
     id: row.id,
     customerId: row.customer_id,
-    name: row.name,
-    color: row.color || undefined,
+    folderId: row.folder_id,
+    name: row.folder_name || row.name || 'Folder',
+    folderName: row.folder_name || row.name || 'Folder',
     createdAt: row.created_at,
-    updatedAt: row.updated_at || row.created_at,
+    updatedAt: row.created_at,
   };
 }
 
 function customerDriveFileFromDb(row: any) {
   // Extract real Drive file ID (either raw ID or parsed from drive.google.com/file/d/ID/view or view-file)
   let extractedDriveFileId = '';
-  const candidateUrl = row.url || row.data_url || '';
+  const candidateUrl = row.view_link || row.url || row.data_url || '';
   if (candidateUrl.includes('view-file?fileId=')) {
     extractedDriveFileId = candidateUrl.split('view-file?fileId=')[1]?.split('&')[0];
   } else if (candidateUrl.includes('/file/d/')) {
@@ -767,22 +844,29 @@ function customerDriveFileFromDb(row: any) {
 
   // Streamable direct URL through our view-file proxy
   const proxyUrl = extractedDriveFileId ? `/api/backup/google-drive/view-file?fileId=${extractedDriveFileId}` : '';
-  const finalDisplayUrl = proxyUrl || (row.data_url && row.data_url !== 'file' ? row.data_url : '') || row.url || '';
+  const finalDisplayUrl = proxyUrl || row.view_link || (row.data_url && row.data_url !== 'file' ? row.data_url : '') || row.url || '';
+
+  const sizeBytes = Number(row.file_size ?? row.size) || 0;
+  const displaySize = sizeBytes > 1048576 
+    ? `${(sizeBytes / 1048576).toFixed(1)} MB` 
+    : `${Math.round(sizeBytes / 1024) || 1} KB`;
 
   return {
     id: row.id,
     customerId: row.customer_id,
-    name: row.name,
-    size: Number(row.size) || 0,
-    type: row.type || '',
-    mimeType: row.mime_type || undefined,
-    url: proxyUrl || row.url || undefined,
-    driveFileId: extractedDriveFileId || undefined,
+    name: row.file_name || row.name || 'File',
+    fileName: row.file_name || row.name || 'File',
+    size: sizeBytes,
+    fileSize: displaySize,
+    type: row.mime_type || row.type || '',
+    mimeType: row.mime_type || row.type || undefined,
+    url: proxyUrl || row.view_link || row.url || undefined,
+    driveFileId: extractedDriveFileId || row.file_id || undefined,
     dataUrl: finalDisplayUrl,
     folderId: row.folder_id || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
-    uploadedAt: row.uploaded_at,
+    uploadedAt: row.created_at || row.uploaded_at,
   };
 }
 
@@ -1459,7 +1543,7 @@ export async function POST(req: NextRequest) {
               .filter(id => {
                 // Safeguard: peer_txn_ rows are managed exclusively by syncPeerMerchants
                 if (table === 'transactions' && id.startsWith('peer_txn_')) return false;
-                return !activeIds.has(id) || (tableDeletedSet && tableDeletedSet.has(id));
+                return Boolean(tableDeletedSet && tableDeletedSet.has(id));
               });
 
             if (toDelete.length > 0) {
@@ -1483,9 +1567,12 @@ export async function POST(req: NextRequest) {
             chunks.push(rows.slice(i, i + chunkSize));
           }
           await Promise.all(
-            chunks.map(chunk =>
-              supabase.from(table).upsert(chunk, { onConflict: 'id, user_id' })
-            )
+            chunks.map(async chunk => {
+              const { error: upsertErr } = await supabase.from(table).upsert(chunk, { onConflict: 'id, user_id' });
+              if (upsertErr) {
+                console.error(`[syncRowsWithDeletions] ERROR upserting into ${table}:`, upsertErr.message, upsertErr.details);
+              }
+            })
           );
         }
       };
