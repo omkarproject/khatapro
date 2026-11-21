@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo, useRef, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams, useParams, useRouter } from 'next/navigation';
 import Loading from '@/components/Loading';
 import QRCode from 'qrcode';
 import {
@@ -38,8 +38,12 @@ import { Transaction } from '@/types';
 
 function PayRedirectContent() {
   const searchParams = useSearchParams();
+  const params = useParams();
   const router = useRouter();
   const { settings, profile, currentUser, addTransaction, transactions, customers } = useApp();
+
+  const pathCustomerId = (params?.customerId as string) || '';
+  const pathPid = (params?.pid as string) || '';
 
   const pParam = searchParams?.get('p');
   const decodedToken = useMemo(() => {
@@ -47,31 +51,117 @@ function PayRedirectContent() {
     return null;
   }, [pParam]);
 
+  const [fetchedDetails, setFetchedDetails] = useState<{
+    customer?: { id: string; name: string; phone: string; dueAmount: number };
+    merchant?: { businessName: string; officialPhone: string; upiId: string };
+    paymentSettings?: {
+      activeGateway: string;
+      cashfreeAppId?: string;
+      razorpayKeyId?: string;
+      upiGatewayApiKey?: string;
+    };
+  } | null>(null);
+
+  // 1-Week Expiry Check & Dynamic Customer / Merchant details from Server
+  useEffect(() => {
+    const cid = pathCustomerId || decodedToken?.cid || searchParams?.get('cid') || '';
+    const pid = pathPid || searchParams?.get('pid') || (decodedToken?.timestamp ? Math.floor(decodedToken.timestamp / 1000).toString() : '');
+
+    // 1-Week Expiration Rule: If link is older than 7 days, redirect to official domain login / sign up
+    if (pid) {
+      const pidNum = parseInt(pid, 10);
+      if (!isNaN(pidNum) && pidNum > 0) {
+        const linkTimeMs = pidNum > 1000000000 && pidNum < 9999999999 ? pidNum * 1000 : pidNum;
+        const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+        if (Date.now() - linkTimeMs > oneWeekMs) {
+          if (typeof window !== 'undefined') {
+            window.location.href = '/login';
+          }
+          return;
+        }
+      }
+    }
+
+    if (cid) {
+      fetch(`/api/pay/link-details?cid=${encodeURIComponent(cid)}&pid=${encodeURIComponent(pid)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data) {
+            if (data.isExpiredAfter1Week && data.redirectUrl) {
+              window.location.href = data.redirectUrl;
+              return;
+            }
+            if (data.isPaid && data.receipt) {
+              setReceiptData(data.receipt);
+              setIsLinkExpired(true);
+              setPaymentSuccess(true);
+              return;
+            }
+            if (data.valid) {
+              setFetchedDetails(data);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [pathCustomerId, pathPid, searchParams, decodedToken]);
+
   const id = searchParams?.get('id') || searchParams?.get('inv');
   const gw = decodedToken?.gw || searchParams?.get('gw');
 
-  // Query parameters for direct UPI settlement
-  const pa = (decodedToken?.pa || searchParams?.get('pa') || '').trim();
-  const pn = (decodedToken?.pn || searchParams?.get('pn') || '').trim();
-  const am = decodedToken?.am !== undefined ? decodedToken.am : parseFloat(searchParams?.get('am') || '0');
+  // Active Payment Collection Gateway Resolution
+  const activeGateway = useMemo(() => {
+    if (gw && ['cashfree', 'razorpay', 'upi_gateway'].includes(gw)) {
+      return gw;
+    }
+    if (fetchedDetails?.paymentSettings?.activeGateway && fetchedDetails.paymentSettings.activeGateway !== 'direct_upi') {
+      return fetchedDetails.paymentSettings.activeGateway;
+    }
+    const mode = settings.paymentSettings?.collectionMode;
+    if (mode && mode !== 'direct_upi') {
+      return mode;
+    }
+    return 'cashfree'; // Default active online gateway
+  }, [gw, fetchedDetails, settings.paymentSettings]);
+
+  // Query parameters for settlement
+  const pa = (decodedToken?.pa || searchParams?.get('pa') || fetchedDetails?.merchant?.upiId || '').trim();
+  const pn = (decodedToken?.pn || searchParams?.get('pn') || fetchedDetails?.merchant?.businessName || '').trim();
+  const cidParam = pathCustomerId || decodedToken?.cid || searchParams?.get('cid') || fetchedDetails?.customer?.id || '';
+  const cnParam = decodedToken?.cn || searchParams?.get('cn') || fetchedDetails?.customer?.name || '';
+  const cphoneParam = decodedToken?.cphone || searchParams?.get('cphone') || fetchedDetails?.customer?.phone || '';
+
+  // Resolve Customer from local context or server
+  const matchedCustomer = useMemo(() => {
+    if (cidParam) {
+      const found = customers.find(c => c.id === cidParam);
+      if (found) return found;
+    }
+    if (cnParam) {
+      const found = customers.find(c => c.name.toLowerCase() === cnParam.toLowerCase());
+      if (found) return found;
+    }
+    if (cphoneParam) {
+      const found = customers.find(c => c.phone.replace(/\D/g, '') === cphoneParam.replace(/\D/g, ''));
+      if (found) return found;
+    }
+    return null;
+  }, [customers, cidParam, cnParam, cphoneParam]);
+
+  const rawAm = decodedToken?.am !== undefined
+    ? decodedToken.am
+    : searchParams?.get('am')
+    ? parseFloat(searchParams.get('am') || '0')
+    : (fetchedDetails?.customer?.dueAmount !== undefined ? fetchedDetails.customer.dueAmount : (matchedCustomer?.outstandingBalance || 0));
+
+  const am = !isNaN(rawAm) && rawAm > 0 ? rawAm : (matchedCustomer?.outstandingBalance || 0);
   const tn = (decodedToken?.tn || searchParams?.get('tn') || '').trim();
   const logoParam = searchParams?.get('logo') || '';
-  const cidParam = decodedToken?.cid || searchParams?.get('cid') || '';
-  const cnParam = decodedToken?.cn || searchParams?.get('cn') || '';
-  const cphoneParam = decodedToken?.cphone || searchParams?.get('cphone') || '';
 
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isGeneratingQr, setIsGeneratingQr] = useState(true);
-
-  // Active Payment Collection Gateway Resolution
-  const activeGateway = useMemo(() => {
-    if (gw && ['cashfree', 'razorpay', 'upi_gateway', 'direct_upi'].includes(gw)) {
-      return gw;
-    }
-    return settings.paymentSettings?.collectionMode || 'direct_upi';
-  }, [gw, settings.paymentSettings]);
 
   // Payment Gateway Convenience Fee calculation:
   // Cashfree & Razorpay = 2%; UPI PG (Dynamic) & Direct UPI = 0%
@@ -146,45 +236,23 @@ function PayRedirectContent() {
     }
   }, [id, gw, router]);
 
+  const targetCustomerId = pathCustomerId || matchedCustomer?.id || cidParam || 'cust_online_checkout';
+  const targetCustomerName = fetchedDetails?.customer?.name || matchedCustomer?.name || cnParam || 'Customer';
+  const targetCustomerPhone = fetchedDetails?.customer?.phone || matchedCustomer?.phone || cphoneParam || '';
+
   // Payee & Business info
-  const payeeUpiId = pa || settings.paymentSettings?.upiId || '';
-  const payeeName = pn || settings.paymentSettings?.payeeName || settings.businessName || profile?.businessName || 'SmartKhata Merchant';
-  const paymentNote = tn || 'Payment Settlement';
+  const payeeUpiId = pa || fetchedDetails?.merchant?.upiId || settings.paymentSettings?.upiId || '';
+  const payeeName = pn || fetchedDetails?.merchant?.businessName || settings.paymentSettings?.payeeName || settings.businessName || profile?.businessName || 'SmartKhata Merchant';
+  const paymentNote = tn || (targetCustomerName ? `Payment from ${targetCustomerName}` : 'Payment Settlement');
   const effectiveAmount = isNaN(am) ? 0 : am;
   const merchantLogo = logoParam || profile?.avatarUrl || currentUser?.avatarUrl || settings.businessLogo || '';
 
-  // Resolve Customer Name and ID
-  const matchedCustomer = useMemo(() => {
-    if (cidParam) {
-      const found = customers.find(c => c.id === cidParam);
-      if (found) return found;
-    }
-    if (cnParam) {
-      const found = customers.find(c => c.name.toLowerCase() === cnParam.toLowerCase());
-      if (found) return found;
-    }
-    if (cphoneParam) {
-      const found = customers.find(c => c.phone.replace(/\D/g, '') === cphoneParam.replace(/\D/g, ''));
-      if (found) return found;
-    }
-    // Try to deduce from note: "Payment from <Name>"
-    if (paymentNote.toLowerCase().startsWith('payment from ')) {
-      const extractedName = paymentNote.substring(13).trim();
-      const found = customers.find(c => c.name.toLowerCase() === extractedName.toLowerCase());
-      if (found) return found;
-    }
-    return null;
-  }, [customers, cidParam, cnParam, cphoneParam, paymentNote]);
-
-  const targetCustomerId = matchedCustomer?.id || cidParam || 'cust_online_checkout';
-  const targetCustomerName = matchedCustomer?.name || cnParam || (paymentNote.toLowerCase().startsWith('payment from ') ? paymentNote.substring(13).trim() : 'Customer');
-  const targetCustomerPhone = matchedCustomer?.phone || cphoneParam || '';
-
   // Link identifier for expiration and duplicate protection
   const linkKey = useMemo(() => {
+    if (pathCustomerId && pathPid) return `skp_paid_link_${pathCustomerId}_${pathPid}`;
     if (pParam) return `skp_paid_v3_${pParam}`;
     return `skp_paid_v3_${payeeUpiId.replace(/[^a-zA-Z0-9]/g, '_')}_${effectiveAmount}_${targetCustomerId.replace(/[^a-zA-Z0-9]/g, '_')}`;
-  }, [pParam, payeeUpiId, effectiveAmount, targetCustomerId]);
+  }, [pathCustomerId, pathPid, pParam, payeeUpiId, effectiveAmount, targetCustomerId]);
 
   // Check if link is already expired / paid
   useEffect(() => {
@@ -626,28 +694,62 @@ function PayRedirectContent() {
       localStorage.setItem(linkKey, JSON.stringify(fullReceipt));
     } catch {}
 
-    // 3. Add to Digital Khata via context if available
-    try {
-      const newTxn: Transaction = {
-        id: `txn_online_${Date.now()}`,
-        customerId: targetCustomerId,
-        customerName: targetCustomerName,
-        type: 'collection',
-        amount: effectiveAmount,
-        date: nowIso,
-        category: 'Online Payment Collection',
-        note: `Online payment received via ${gatewayName} [Ref: ${finalTxnId}]`,
-        paymentMode: gatewayName.toLowerCase().includes('card') ? 'card' : 'upi',
-        referenceNo: finalTxnId,
-        attachments: receiptImgUrl ? [receiptImgUrl] : [],
-        status: 'completed',
-        createdBy: payeeName || 'SmartKhata Online Checkout',
-        createdAt: nowIso,
-      };
+    // 3. Add to Digital Khata via context and persistent storage (RECEIVED transaction)
+    const receiptAttachment = JSON.stringify({
+      name: `Payment_Receipt_${finalTxnId}.png`,
+      url: receiptImgUrl,
+      size: 'Settled Receipt',
+      type: 'image/png',
+    });
 
+    const newTxn: Transaction = {
+      id: `txn_online_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      customerId: targetCustomerId,
+      customerName: targetCustomerName,
+      type: 'debit', // 'debit' represents "Received" (Jama Hua) in Digital Khatabook!
+      amount: effectiveAmount,
+      date: nowIso,
+      category: 'Payment Received',
+      note: `Payment Received via ${gatewayName} [Bank Ref / UTR: ${finalTxnId}]`,
+      paymentMode: gatewayName.toLowerCase().includes('card') ? 'card' : 'upi',
+      referenceNo: finalTxnId,
+      attachments: receiptImgUrl ? [receiptAttachment] : [],
+      status: 'completed',
+      createdBy: payeeName || 'SmartKhata Online Checkout',
+      createdAt: nowIso,
+    };
+
+    try {
       addTransaction(newTxn);
     } catch (e) {
       console.warn('Local context addTransaction fallback:', e);
+    }
+
+    try {
+      const rawTxns = localStorage.getItem('skp_transactions');
+      const list = rawTxns ? JSON.parse(rawTxns) : [];
+      if (!list.some((t: any) => t.id === newTxn.id)) {
+        list.push(newTxn);
+        localStorage.setItem('skp_transactions', JSON.stringify(list));
+      }
+
+      const rawCusts = localStorage.getItem('skp_customers');
+      if (rawCusts) {
+        const custList = JSON.parse(rawCusts);
+        const cIdx = custList.findIndex((c: any) => c.id === targetCustomerId);
+        if (cIdx !== -1) {
+          const currentDue = Number(custList[cIdx].outstandingBalance ?? custList[cIdx].outstanding_balance ?? 0);
+          const updatedDue = Math.max(0, currentDue - effectiveAmount);
+          custList[cIdx].outstandingBalance = updatedDue;
+          custList[cIdx].outstanding_balance = updatedDue;
+          localStorage.setItem('skp_customers', JSON.stringify(custList));
+        }
+      }
+
+      window.dispatchEvent(new CustomEvent('khatapro_transactions_updated', { detail: newTxn }));
+      localStorage.setItem('khatapro_realtime_ping', `pay_${Date.now()}`);
+    } catch (syncErr) {
+      console.warn('Direct storage sync warning:', syncErr);
     }
 
     // 4. Also call server-side /api/pay/confirm to ensure Supabase syncs across all devices!
@@ -664,10 +766,10 @@ function PayRedirectContent() {
           payeeName,
           gateway: gatewayName,
           referenceNo: finalTxnId,
-          note: `Online payment received via ${gatewayName} [Ref: ${finalTxnId}]`,
+          note: `Payment Received via ${gatewayName} [Bank Ref / UTR: ${finalTxnId}]`,
           receiptUrl: receiptImgUrl,
-          paymentToken: pParam || '',
-          tokenTimestamp: decodedToken?.timestamp || 0,
+          paymentToken: pathPid || pParam || '',
+          tokenTimestamp: (pathPid ? (Number(pathPid) > 1000000000 && Number(pathPid) < 9999999999 ? Number(pathPid) * 1000 : Number(pathPid)) : (decodedToken?.timestamp || 0)),
         }),
       });
     } catch (e) {

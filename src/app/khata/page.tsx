@@ -3568,21 +3568,14 @@ function KhataPageInner() {
 
       const appBaseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://smartkhata.netsell.in';
       const activeGw = settings.paymentSettings?.collectionMode || 'cashfree';
-      const payToken = encodePayToken({
-        upiId,
-        payeeName,
-        amount: numDue > 0 ? numDue : 0,
-        note: `Payment from ${activeCustomer.name}`,
-        customerId: activeCustomer.id,
-        customerName: activeCustomer.name,
-        customerPhone: activeCustomer.phone || '',
-        gateway: activeGw,
-      });
-      const webPayUrl = `${appBaseUrl}/pay?p=${payToken}`;
+      const tempPayId = Math.floor(Date.now() / 1000).toString();
+      const shortPayUrl = `${appBaseUrl}/pay/${encodeURIComponent(activeCustomer.id)}/${tempPayId}`;
 
-      // Real payment reminder with locked online pay link and UPI intent
+      const isOnlinePgActive = activeGw === 'cashfree' || activeGw === 'razorpay' || activeGw === 'upi_gateway';
+
+      // Real payment reminder with active online gateway link and direct UPI intent
       const messageText = numDue > 0
-        ? `*Payment Reminder from ${businessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${formattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n👉 *Tap to Pay Online *:\n${webPayUrl}\n\n⚡ *Direct UPI Link (Amount Locked)*:\n${upiUri}\n\nScan the attached QR code with Google Pay, PhonePe, Paytm, or BHIM.\n\nThank you,\n${businessName}${officialPhone ? `\n📞 ${officialPhone}` : ''}`
+        ? `*Payment Reminder from ${businessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${formattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n${isOnlinePgActive ? `👉 *Tap to Pay Online *:\n${shortPayUrl}\n\n` : ''}⚡ *Direct UPI Link (Amount Locked)*:\n${upiUri}\n\nScan the attached QR code with Google Pay, PhonePe, Paytm, or BHIM.\n\nThank you,\n${businessName}${officialPhone ? `\n📞 ${officialPhone}` : ''}`
         : `*Account Statement from ${businessName}*\n\nDear ${activeCustomer.name},\nAll dues are fully settled (*₹0 Due*).\nThank you for your business!\n\n—\n${businessName}${officialPhone ? `\n📞 ${officialPhone}` : ''}`;
 
       // Generate the custom QR card image (Total Due on top in Red or Settled in Emerald, QR in center, embedded logo, UPI ID below)
@@ -3680,20 +3673,13 @@ function KhataPageInner() {
 
       const appBaseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://smartkhata.netsell.in';
       const activeGw = settings.paymentSettings?.collectionMode || 'cashfree';
-      const payToken = encodePayToken({
-        upiId,
-        payeeName,
-        amount: numDue > 0 ? numDue : 0,
-        note: `Payment from ${activeCustomer.name}`,
-        customerId: activeCustomer.id,
-        customerName: activeCustomer.name,
-        customerPhone: activeCustomer.phone || '',
-        gateway: activeGw,
-      });
-      const webPayUrl = `${appBaseUrl}/pay?p=${payToken}`;
+      const tempPayId = Math.floor(Date.now() / 1000).toString();
+      const shortPayUrl = `${appBaseUrl}/pay/${encodeURIComponent(activeCustomer.id)}/${tempPayId}`;
+
+      const isOnlinePgActive = activeGw === 'cashfree' || activeGw === 'razorpay' || activeGw === 'upi_gateway';
 
       const shareText = numDue > 0
-        ? `*Payment Reminder from ${businessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${formattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n👉 *Tap to Pay Online *:\n${webPayUrl}\n\n⚡ *Direct UPI Link*:\n${upiUri}\n\n—\n${businessName}${officialPhone ? `  (${officialPhone})` : ''}`
+        ? `*Payment Reminder from ${businessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${formattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n${isOnlinePgActive ? `👉 *Tap to Pay Online *:\n${shortPayUrl}\n\n` : ''}⚡ *Direct UPI Link*:\n${upiUri}\n\n—\n${businessName}${officialPhone ? `  (${officialPhone})` : ''}`
         : `*Account Statement from ${businessName}*\n\nDear ${activeCustomer.name},\nAll dues are cleared (*₹0 Due*).\nThank you!\n\n—\n${businessName}${officialPhone ? `  (${officialPhone})` : ''}`;
 
       // Generate the custom QR card image
@@ -6850,20 +6836,14 @@ function KhataPageInner() {
         );
         const appBaseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://smartkhata.netsell.in';
         const modalActiveGw = settings.paymentSettings?.collectionMode || 'cashfree';
-        const modalPayToken = encodePayToken({
-          upiId: modalUpiId,
-          payeeName: modalPayeeName,
-          amount: modalDueAmount > 0 ? modalDueAmount : 0,
-          note: `Payment from ${activeCustomer.name}`,
-          customerId: activeCustomer.id,
-          customerName: activeCustomer.name,
-          customerPhone: activeCustomer.phone || '',
-          gateway: modalActiveGw,
-        });
-        const modalWebPayUrl = `${appBaseUrl}/pay?p=${modalPayToken}`;
+        const modalTempPayId = Math.floor(Date.now() / 1000).toString();
+        const modalShortPayUrl = `${appBaseUrl}/pay/${encodeURIComponent(activeCustomer.id)}/${modalTempPayId}`;
+        const modalWebPayUrl = modalShortPayUrl;
+
+        const isModalPgActive = modalActiveGw === 'cashfree' || modalActiveGw === 'razorpay' || modalActiveGw === 'upi_gateway';
 
         const modalShareText = modalDueAmount > 0
-          ? `*Payment Reminder from ${modalBusinessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${modalFormattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n👉 *Tap to Pay Online *:\n${modalWebPayUrl}\n\n⚡ *Direct UPI Link*:\n${modalUpiUri}\n\n—\n${modalBusinessName}${modalOfficialPhone ? `\n📞 ${modalOfficialPhone}` : ''}`
+          ? `*Payment Reminder from ${modalBusinessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${modalFormattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n${isModalPgActive ? `👉 *Tap to Pay Online *:\n${modalShortPayUrl}\n\n` : ''}⚡ *Direct UPI Link*:\n${modalUpiUri}\n\n—\n${modalBusinessName}${modalOfficialPhone ? `\n📞 ${modalOfficialPhone}` : ''}`
           : currentCustBal < 0
           ? `Advance balance of ${formatINR(Math.abs(currentCustBal))} available for ${activeCustomer.name}.\n—\n${modalBusinessName}${modalOfficialPhone ? `  (${modalOfficialPhone})` : ''}`
           : `All dues are cleared (₹0 Due) for ${activeCustomer.name}.\nThank you!\n\n—\n${modalBusinessName}${modalOfficialPhone ? `  (${modalOfficialPhone})` : ''}`;

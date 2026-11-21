@@ -94,15 +94,25 @@ export async function POST(req: NextRequest) {
     // Build attachments array with rich metadata envelope
     const metaEnvelope = {
       __sk_meta: true,
-      origType: 'collection',
+      origType: 'debit', // Maps to 'debit' (Received / Jama Hua) in Digital Khatabook!
       customerName: customerName || '',
       createdBy: payeeName || 'SmartKhata Online Checkout',
       referenceNo: finalRef,
       paymentToken: paymentToken || '',
       tokenTimestamp: tokenTimestamp || 0,
-      tags: ['online_payment', `gw:${gatewayName}`],
+      tags: ['online_payment', 'received', `gw:${gatewayName}`],
     };
-    const attachments = receiptUrl ? [receiptUrl, JSON.stringify(metaEnvelope)] : [JSON.stringify(metaEnvelope)];
+
+    const receiptAttachment = receiptUrl ? JSON.stringify({
+      name: `Payment_Receipt_${finalRef}.png`,
+      url: receiptUrl,
+      size: 'Settled Receipt',
+      type: 'image/png',
+    }) : null;
+
+    const attachments = receiptAttachment
+      ? [receiptAttachment, JSON.stringify(metaEnvelope)]
+      : (receiptUrl ? [receiptUrl, JSON.stringify(metaEnvelope)] : [JSON.stringify(metaEnvelope)]);
 
     // Insert into transactions table (compatible with both 'give'/'got' constraints and modern schemas)
     const { error: insertError } = await supabase.from('transactions').insert({
@@ -112,8 +122,8 @@ export async function POST(req: NextRequest) {
       type: 'got', // 'got' satisfies PostgreSQL check constraint (type IN ('give', 'got'))
       amount: numAmount,
       date: nowIso.split('T')[0],
-      description: note || `Online payment received via ${gatewayName} [Ref: ${finalRef}]`,
-      category: 'Online Payment Collection',
+      description: note || `Payment Received via ${gatewayName} [Bank Ref / UTR: ${finalRef}]`,
+      category: 'Payment Received',
       payment_mode: gatewayName.toLowerCase().includes('card') ? 'card' : 'upi',
       bill_number: finalRef,
       attachments: attachments,
@@ -191,7 +201,7 @@ export async function GET(req: NextRequest) {
       .select('*')
       .eq('customer_id', customerId)
       .eq('type', 'got')
-      .eq('category', 'Online Payment Collection')
+      .in('category', ['Payment Received', 'Online Payment Collection'])
       .gte('created_at', tokenIso)
       .order('created_at', { ascending: false })
       .limit(5);
