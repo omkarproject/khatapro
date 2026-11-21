@@ -303,7 +303,7 @@ async function backupSingleUser(
 
 async function handleCron(req: NextRequest) {
   try {
-    const cronSecret = process.env.CRON_SECRET || 'skp_cron_daily_backup_secret_2026_secure';
+    const cronSecret = process.env.CRON_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || 'skp_cron_daily_backup_secret_2026_secure';
     const authHeader = req.headers.get('authorization') || '';
     const customHeader = req.headers.get('x-cron-secret') || req.headers.get('x-cronjob') || '';
     const cronjobHeader = req.headers.get('x-cronjob') || req.headers.get('x-vercel-cron') || '';

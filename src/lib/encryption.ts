@@ -4,7 +4,7 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 12 bytes standard for GCM
 
 function getEncryptionKey(): Buffer {
-  const secret = process.env.DRIVE_TOKEN_ENCRYPTION_KEY || 'smartkhata_pro_default_master_salt_2026';
+  const secret = process.env.DRIVE_TOKEN_ENCRYPTION_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || 'smartkhata_pro_default_master_salt_2026';
   return crypto.createHash('sha256').update(secret).digest();
 }
 
