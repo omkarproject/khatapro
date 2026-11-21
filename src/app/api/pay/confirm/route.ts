@@ -16,6 +16,8 @@ export async function POST(req: NextRequest) {
       note,
       receiptUrl,
       userId: passedUserId,
+      paymentToken,
+      tokenTimestamp,
     } = body;
 
     const numAmount = parseFloat(amount || '0');
@@ -96,6 +98,8 @@ export async function POST(req: NextRequest) {
       customerName: customerName || '',
       createdBy: payeeName || 'SmartKhata Online Checkout',
       referenceNo: finalRef,
+      paymentToken: paymentToken || '',
+      tokenTimestamp: tokenTimestamp || 0,
       tags: ['online_payment', `gw:${gatewayName}`],
     };
     const attachments = receiptUrl ? [receiptUrl, JSON.stringify(metaEnvelope)] : [JSON.stringify(metaEnvelope)];
@@ -165,9 +169,11 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const customerId = searchParams.get('customerId');
-    const amount = parseFloat(searchParams.get('amount') || '0');
+    const paymentToken = searchParams.get('token') || '';
+    const tokenTime = Number(searchParams.get('t') || '0');
 
-    if (!isSupabaseConfigured() || !customerId) {
+    // If no customerId or no token creation timestamp, never claim it's paid
+    if (!isSupabaseConfigured() || !customerId || !tokenTime) {
       return NextResponse.json({ isPaid: false });
     }
 
@@ -176,19 +182,27 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ isPaid: false });
     }
 
-    // Look for recent completed online collection transaction for this customer
+    // A payment link can ONLY be paid if there is an online payment ('got') transaction
+    // created strictly AFTER this link was generated (tokenTime), with category = 'Online Payment Collection'.
+    // Debit/credit entries ('give') or older payments must NEVER match!
+    const tokenIso = new Date(tokenTime).toISOString();
     const { data: txns } = await supabase
       .from('transactions')
       .select('*')
       .eq('customer_id', customerId)
-      .eq('status', 'completed')
+      .eq('type', 'got')
+      .eq('category', 'Online Payment Collection')
+      .gte('created_at', tokenIso)
       .order('created_at', { ascending: false })
       .limit(5);
 
     if (txns && txns.length > 0) {
       const match = txns.find(t => {
-        const tAmt = Number(t.amount) || 0;
-        return Math.abs(tAmt - amount) < 1.0;
+        if (paymentToken) {
+          const rawAtt = JSON.stringify(t.attachments || '');
+          if (rawAtt.includes(paymentToken)) return true;
+        }
+        return true;
       });
 
       if (match) {
@@ -207,6 +221,7 @@ export async function GET(req: NextRequest) {
             }),
             paymentMode: match.payment_mode ? match.payment_mode.toUpperCase() : 'ONLINE GATEWAY',
             referenceNo: match.bill_number || match.id,
+            isRealSettlement: true,
           },
         });
       }

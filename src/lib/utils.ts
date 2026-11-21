@@ -123,16 +123,35 @@ export function encodePayToken(data: {
   };
 
   const jsonStr = JSON.stringify(compact);
+
+  // 1. Browser client-side safe base64url encoding
+  if (typeof window !== 'undefined' && typeof window.btoa === 'function') {
+    try {
+      const bytes = new TextEncoder().encode(jsonStr);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    } catch {}
+  }
+
+  // 2. Node.js / SSR safe base64url encoding
   try {
     if (typeof Buffer !== 'undefined') {
-      return Buffer.from(jsonStr, 'utf-8').toString('base64url');
+      return Buffer.from(jsonStr, 'utf-8')
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
     }
-    return btoa(unescape(encodeURIComponent(jsonStr)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-  } catch {
+  } catch {}
+
+  // 3. Fallback
+  try {
     return encodeURIComponent(jsonStr);
+  } catch {
+    return '';
   }
 }
 
@@ -151,44 +170,55 @@ export function decodePayToken(token: string): {
   timestamp?: number;
 } | null {
   if (!token) return null;
+  const clean = token.trim();
   try {
     let jsonStr = '';
-    if (typeof Buffer !== 'undefined') {
-      jsonStr = Buffer.from(token, 'base64url').toString('utf-8');
+
+    // If token starts with %7B or { it was URL encoded directly
+    if (clean.startsWith('%7B') || clean.startsWith('{')) {
+      jsonStr = decodeURIComponent(clean);
     } else {
-      let base64 = token.replace(/-/g, '+').replace(/_/g, '/');
+      let base64 = clean.replace(/-/g, '+').replace(/_/g, '/');
       while (base64.length % 4) base64 += '=';
-      jsonStr = decodeURIComponent(escape(atob(base64)));
+
+      // 1. Browser atob with TextDecoder
+      if (typeof window !== 'undefined' && typeof window.atob === 'function') {
+        try {
+          const binary = window.atob(base64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          jsonStr = new TextDecoder().decode(bytes);
+        } catch {}
+      }
+
+      // 2. Node Buffer
+      if (!jsonStr && typeof Buffer !== 'undefined') {
+        try {
+          jsonStr = Buffer.from(base64, 'base64').toString('utf-8');
+        } catch {}
+      }
     }
+
+    if (!jsonStr) {
+      jsonStr = decodeURIComponent(clean);
+    }
+
     const compact = JSON.parse(jsonStr);
     return {
-      pa: compact.u || '',
-      pn: compact.m || '',
-      am: Number(compact.a) || 0,
-      tn: compact.n || '',
-      cid: compact.c || '',
-      cn: compact.k || '',
-      cphone: compact.p || '',
-      gw: compact.g || '',
-      timestamp: compact.t,
+      pa: compact.u || compact.pa || '',
+      pn: compact.m || compact.pn || '',
+      am: Number(compact.a ?? compact.am) || 0,
+      tn: compact.n || compact.tn || '',
+      cid: compact.c || compact.cid || '',
+      cn: compact.k || compact.cn || '',
+      cphone: compact.p || compact.cphone || '',
+      gw: compact.g || compact.gw || '',
+      timestamp: compact.t || compact.timestamp,
     };
   } catch {
-    try {
-      const parsed = JSON.parse(decodeURIComponent(token));
-      return {
-        pa: parsed.u || parsed.pa || '',
-        pn: parsed.m || parsed.pn || '',
-        am: Number(parsed.a ?? parsed.am) || 0,
-        tn: parsed.n || parsed.tn || '',
-        cid: parsed.c || parsed.cid || '',
-        cn: parsed.k || parsed.cn || '',
-        cphone: parsed.p || parsed.cphone || '',
-        gw: parsed.g || parsed.gw || '',
-        timestamp: parsed.t || parsed.timestamp,
-      };
-    } catch {
-      return null;
-    }
+    return null;
   }
 }
 

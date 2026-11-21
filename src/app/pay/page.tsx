@@ -182,35 +182,35 @@ function PayRedirectContent() {
 
   // Link identifier for expiration and duplicate protection
   const linkKey = useMemo(() => {
-    if (pParam) return `skp_paid_token_${pParam}`;
-    return `skp_paid_${payeeUpiId.replace(/[^a-zA-Z0-9]/g, '_')}_${effectiveAmount}_${targetCustomerId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    if (pParam) return `skp_paid_v3_${pParam}`;
+    return `skp_paid_v3_${payeeUpiId.replace(/[^a-zA-Z0-9]/g, '_')}_${effectiveAmount}_${targetCustomerId.replace(/[^a-zA-Z0-9]/g, '_')}`;
   }, [pParam, payeeUpiId, effectiveAmount, targetCustomerId]);
 
   // Check if link is already expired / paid
   useEffect(() => {
     if (typeof window === 'undefined' || effectiveAmount <= 0) return;
 
-    // 1. Check local storage
+    // 1. Check local storage ONLY for real settlement completed on this exact link
     try {
-      let storedReceipt = localStorage.getItem(linkKey);
-      if (!storedReceipt && pParam) {
-        storedReceipt = localStorage.getItem(`skp_paid_token_${pParam}`);
-      }
+      const storedReceipt = localStorage.getItem(linkKey);
       if (storedReceipt) {
         const parsed = JSON.parse(storedReceipt);
-        setReceiptData(parsed);
-        setIsLinkExpired(true);
-        setPaymentSuccess(true);
-        return;
+        if (parsed && parsed.isRealSettlement) {
+          setReceiptData(parsed);
+          setIsLinkExpired(true);
+          setPaymentSuccess(true);
+          return;
+        }
       }
     } catch {}
 
-    // 2. Check server-side confirmation via Supabase
-    if (targetCustomerId) {
-      fetch(`/api/pay/confirm?customerId=${encodeURIComponent(targetCustomerId)}&amount=${grandTotalAmount}&key=${encodeURIComponent(linkKey)}`)
+    // 2. Check server-side confirmation via Supabase ONLY for payments completed AFTER this link was generated
+    const tokenTime = decodedToken?.timestamp;
+    if (targetCustomerId && tokenTime) {
+      fetch(`/api/pay/confirm?customerId=${encodeURIComponent(targetCustomerId)}&token=${encodeURIComponent(pParam || '')}&t=${tokenTime}&amount=${grandTotalAmount}`)
         .then(res => res.json())
         .then(data => {
-          if (data && data.isPaid && data.receipt) {
+          if (data && data.isPaid && data.receipt && data.receipt.isRealSettlement) {
             setReceiptData(data.receipt);
             setIsLinkExpired(true);
             setPaymentSuccess(true);
@@ -221,42 +221,7 @@ function PayRedirectContent() {
         })
         .catch(() => {});
     }
-
-    // 3. Check if local transactions already has a matching settlement for this customer and amount
-    if (transactions && transactions.length > 0 && targetCustomerId) {
-      const matched = transactions.find(t => 
-        !t.isDeleted &&
-        t.status !== 'deleted' &&
-        t.customerId === targetCustomerId &&
-        (Number(t.amount) === effectiveAmount || Number(t.amount) === grandTotalAmount) &&
-        (t.type === 'collection' || t.category === 'Online Payment Collection' || t.category === 'Payment Received')
-      );
-      if (matched) {
-        const rec = {
-          receiptNo: matched.referenceNo || `SKP-REC-${Date.now()}`,
-          dueAmount: effectiveAmount,
-          gatewayFee: pgFeeAmount,
-          amount: Number(matched.amount),
-          payeeName,
-          payeeUpi: payeeUpiId,
-          customerName: targetCustomerName,
-          customerPhone: targetCustomerPhone,
-          dateTime: new Date(matched.date || matched.createdAt || Date.now()).toLocaleString('en-IN', {
-            dateStyle: 'medium',
-            timeStyle: 'short'
-          }),
-          paymentMode: matched.paymentMode ? matched.paymentMode.toUpperCase() : 'ONLINE GATEWAY',
-          referenceNo: matched.referenceNo || `TXN_${Date.now()}`
-        };
-        setReceiptData(rec);
-        setIsLinkExpired(true);
-        setPaymentSuccess(true);
-        try {
-          localStorage.setItem(linkKey, JSON.stringify(rec));
-        } catch {}
-      }
-    }
-  }, [linkKey, effectiveAmount, grandTotalAmount, pParam, transactions, targetCustomerId, payeeName, payeeUpiId, targetCustomerName, targetCustomerPhone, pgFeeAmount]);
+  }, [linkKey, effectiveAmount, grandTotalAmount, pParam, decodedToken, targetCustomerId]);
 
   // Global website branding resolution (Website Name, Website Header Logo, Badge)
   const [localBrand, setLocalBrand] = useState<any>(() => {
@@ -633,7 +598,9 @@ function PayRedirectContent() {
 
     const newReceipt = {
       receiptNo: finalReceiptNo,
-      amount: effectiveAmount,
+      dueAmount: effectiveAmount,
+      gatewayFee: pgFeeAmount,
+      amount: grandTotalAmount > 0 ? grandTotalAmount : effectiveAmount,
       payeeName,
       payeeUpi: payeeUpiId,
       customerName: targetCustomerName,
@@ -641,11 +608,12 @@ function PayRedirectContent() {
       dateTime: formattedDateTime,
       paymentMode: gatewayName,
       referenceNo: finalTxnId,
+      isRealSettlement: true,
     };
 
     // 1. Generate receipt image
     const receiptImgUrl = await generateReceiptCanvasBlob(newReceipt);
-    const fullReceipt = { ...newReceipt, receiptDataUrl: receiptImgUrl };
+    const fullReceipt = { ...newReceipt, receiptDataUrl: receiptImgUrl, isRealSettlement: true };
 
     setReceiptData(fullReceipt);
     setPaymentSuccess(true);
@@ -698,6 +666,8 @@ function PayRedirectContent() {
           referenceNo: finalTxnId,
           note: `Online payment received via ${gatewayName} [Ref: ${finalTxnId}]`,
           receiptUrl: receiptImgUrl,
+          paymentToken: pParam || '',
+          tokenTimestamp: decodedToken?.timestamp || 0,
         }),
       });
     } catch (e) {
