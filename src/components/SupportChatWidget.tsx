@@ -144,10 +144,10 @@ export default function SupportChatWidget() {
         if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
           fetchTickets(true);
         }
-      }, 25000);
+      }, isOpen ? 30000 : 180000); // 30s when chatting, 3 minutes when closed
       return () => clearInterval(interval);
     }
-  }, [currentUser, isAdmin]);
+  }, [currentUser, isAdmin, isOpen]);
 
   // Auto-scroll chat to bottom
   useEffect(() => {

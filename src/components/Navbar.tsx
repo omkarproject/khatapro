@@ -107,7 +107,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
       refreshActiveDevicesCount();
       const interval = setInterval(() => {
         refreshActiveDevicesCount();
-      }, 6000);
+      }, 30000); // 30s check while popover is open
       return () => clearInterval(interval);
     }
   }, [isUserMenuOpen, currentUser, refreshActiveDevicesCount]);
@@ -339,7 +339,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
         if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
           fetchSupportTickets();
         }
-      }, 30000);
+      }, 120000); // 2 minutes background poll
       const ticketCreatedHandler = () => {
         fetchSupportTickets();
       };

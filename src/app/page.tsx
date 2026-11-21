@@ -202,7 +202,7 @@ export default function DashboardPage() {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         fetchSupportTickets();
       }
-    }, 30000);
+    }, 120000); // 2 minutes background poll
     const handleTicketCreated = () => fetchSupportTickets();
     window.addEventListener('khatapro_ticket_created', handleTicketCreated);
     return () => {

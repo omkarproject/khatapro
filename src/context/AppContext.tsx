@@ -1234,7 +1234,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       }
     }
 
-    // 4. Ultra-fast sub-25ms version check interval (3.5s) to guarantee instantaneous sync even if WebSockets drop or sleep on mobile
+    // 4. Safe background version check fallback (60s) to guarantee sync even if WebSockets drop or sleep on mobile
     const versionCheckInterval = setInterval(async () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible' && !isSyncInFlightRef.current && !isSyncingFromCloudRef.current) {
         try {
@@ -1255,7 +1255,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           }
         } catch {}
       }
-    }, 3500);
+    }, 60000);
 
     // 5. Tab Focus & Visibility Change Listeners (wakes up mobile device / inactive tab)
     const handleVisibility = () => {
@@ -1301,11 +1301,11 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       document.addEventListener('visibilitychange', handleVisibility);
     }
 
-    // 6. Ultra-fast session validity & revoked device check interval (every 2.5s)
+    // 6. Safe background device status & 10-minute fallback heartbeat (every 120s / 2m)
     const pollingInterval = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         const elapsed = Date.now() - lastCloudSyncTimestampRef.current;
-        if (elapsed > 18000) {
+        if (elapsed > 600000) {
           debouncedLoadFromCloud(userId, 'heartbeat_poll');
         }
 
@@ -1325,7 +1325,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
             .catch(() => null);
         } catch {}
       }
-    }, 2500);
+    }, 120000);
 
     return () => {
       clearInterval(versionCheckInterval);
@@ -1884,7 +1884,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         fetchGlobalSystemConfig();
       }
-    }, 25000);
+    }, 300000); // 5 minutes background check instead of 25 seconds
     return () => clearInterval(interval);
   }, [mounted]);
 
