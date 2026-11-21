@@ -46,13 +46,13 @@ export async function getActiveSmtpConfig(): Promise<SmtpServerConfig> {
 
   // Default from .env
   const envConfig: SmtpServerConfig = {
-    enabled: process.env.SMTP_ENABLED !== 'false',
-    host: (process.env.SMTP_HOST || 'my.mailbux.com').replace(/['"]/g, '').trim(),
+    enabled: process.env.SMTP_ENABLED !== 'false' && Boolean(process.env.SMTP_HOST),
+    host: (process.env.SMTP_HOST || '').replace(/['"]/g, '').trim(),
     port: Number(process.env.SMTP_PORT) || 587,
-    user: (process.env.SMTP_USER || 'admin@rpmdg.me').replace(/['"]/g, '').trim(),
-    pass: (process.env.SMTP_PASS || 'Rpmdgadmin@2026#').replace(/['"]/g, '').trim(),
-    from: (process.env.SMTP_FROM || 'AutoPrint Xerox Cloud').replace(/['"]/g, '').trim(),
-    secure: Number(process.env.SMTP_PORT) === 465,
+    user: (process.env.SMTP_USER || '').replace(/['"]/g, '').trim(),
+    pass: (process.env.SMTP_PASS || '').replace(/['"]/g, '').trim(),
+    from: (process.env.SMTP_FROM || 'SmartKhata Cloud').replace(/['"]/g, '').trim(),
+    secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT) === 465,
     triggers: { ...DEFAULT_SMTP_TRIGGERS },
   };
 
@@ -574,7 +574,7 @@ export async function sendOtpEmailDirect(params: {
     // Auto background attach SMTP Username / Mailbox Email as the sender address:
     const senderEmail = config.user.trim();
     const formattedFrom = `"${displayName}" <${senderEmail}>`;
-    const senderDomain = senderEmail.includes('@') ? senderEmail.split('@')[1] : 'rpmdg.me';
+    const senderDomain = senderEmail.includes('@') ? senderEmail.split('@')[1] : 'smartkhata.app';
     const cleanMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 10)}@${senderDomain}>`;
 
     const info = await transporter.sendMail({
@@ -946,7 +946,7 @@ export async function sendWelcomeEmailDirect(params: {
 
     const senderEmail = config.user.trim();
     const formattedFrom = `"${displayName}" <${senderEmail}>`;
-    const senderDomain = senderEmail.includes('@') ? senderEmail.split('@')[1] : 'rpmdg.me';
+    const senderDomain = senderEmail.includes('@') ? senderEmail.split('@')[1] : 'smartkhata.app';
     const cleanMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 10)}@${senderDomain}>`;
 
     const info = await transporter.sendMail({

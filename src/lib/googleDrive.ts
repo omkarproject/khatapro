@@ -5,8 +5,8 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { decryptToken } from '@/lib/encryption';
 import { getGoogleRedirectUri } from '@/lib/domain';
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '997421467008-nbhomb8nrp56opa09og9od1t68pa049j.apps.googleusercontent.com';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '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';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 // Dynamic redirect URI fallback based on current host/runtime
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || '';
 

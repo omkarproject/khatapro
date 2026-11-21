@@ -9,20 +9,12 @@ import { NextRequest } from 'next/server';
  * - Custom domain set via NEXT_PUBLIC_APP_URL / APP_URL
  */
 export function getBaseUrl(req?: NextRequest | Request | { headers: Headers }): string {
-  // 1. Explicit environment variable override
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '');
-  }
-  if (process.env.APP_URL) {
-    return process.env.APP_URL.replace(/\/$/, '');
-  }
-
-  // 2. Client-side browser execution
+  // 1. Client-side browser execution (always dynamically reflects the exact domain the user is visiting)
   if (typeof window !== 'undefined' && window.location?.origin) {
     return window.location.origin;
   }
 
-  // 3. Request-based dynamic host resolution (works seamlessly on any VPS/Reverse Proxy/Vercel)
+  // 2. Request-based dynamic host resolution (works seamlessly on any domain, Vercel preview/production, custom domain, or VPS)
   if (req) {
     try {
       const headers = 'headers' in req ? req.headers : null;
@@ -42,9 +34,20 @@ export function getBaseUrl(req?: NextRequest | Request | { headers: Headers }): 
     } catch {}
   }
 
-  // 4. Vercel deployment URL
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`.replace(/\/$/, '');
+  // 3. Explicit environment variable override (if defined in .env)
+  if (process.env.NEXT_PUBLIC_APP_URL && process.env.NEXT_PUBLIC_APP_URL.trim()) {
+    return process.env.NEXT_PUBLIC_APP_URL.trim().replace(/\/$/, '');
+  }
+  if (process.env.APP_URL && process.env.APP_URL.trim()) {
+    return process.env.APP_URL.trim().replace(/\/$/, '');
+  }
+
+  // 4. Vercel deployment URL (automatic on Vercel)
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL && process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`.replace(/\/$/, '');
+  }
+  if (process.env.VERCEL_URL && process.env.VERCEL_URL.trim()) {
+    return `https://${process.env.VERCEL_URL.trim()}`.replace(/\/$/, '');
   }
 
   // 5. Default fallback for SSR without request
@@ -58,8 +61,8 @@ export function getGoogleRedirectUri(req?: NextRequest | Request | { headers: He
   if (typeof req === 'string' && req.startsWith('http')) {
     return req;
   }
-  if (process.env.GOOGLE_REDIRECT_URI) {
-    return process.env.GOOGLE_REDIRECT_URI;
+  if (process.env.GOOGLE_REDIRECT_URI && process.env.GOOGLE_REDIRECT_URI.trim()) {
+    return process.env.GOOGLE_REDIRECT_URI.trim();
   }
   const base = typeof req === 'object' ? getBaseUrl(req) : getBaseUrl();
   return `${base}/api/backup/google-drive/callback`;
