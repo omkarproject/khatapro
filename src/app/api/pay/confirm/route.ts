@@ -89,29 +89,64 @@ export async function POST(req: NextRequest) {
     const finalRef = referenceNo || `TXN_${Date.now()}`;
     const gatewayName = gateway || 'Online Gateway';
 
-    // Build attachments array
-    const attachments = receiptUrl ? [receiptUrl] : [];
+    // Build attachments array with rich metadata envelope
+    const metaEnvelope = {
+      __sk_meta: true,
+      origType: 'collection',
+      customerName: customerName || '',
+      createdBy: payeeName || 'SmartKhata Online Checkout',
+      referenceNo: finalRef,
+      tags: ['online_payment', `gw:${gatewayName}`],
+    };
+    const attachments = receiptUrl ? [receiptUrl, JSON.stringify(metaEnvelope)] : [JSON.stringify(metaEnvelope)];
 
-    // Insert into transactions table
+    // Insert into transactions table (compatible with both 'give'/'got' constraints and modern schemas)
     const { error: insertError } = await supabase.from('transactions').insert({
       id: txnId,
       user_id: merchantUserId,
       customer_id: customerId || null,
-      type: 'collection',
+      type: 'got', // 'got' satisfies PostgreSQL check constraint (type IN ('give', 'got'))
       amount: numAmount,
-      date: nowIso,
+      date: nowIso.split('T')[0],
+      description: note || `Online payment received via ${gatewayName} [Ref: ${finalRef}]`,
       category: 'Online Payment Collection',
       payment_mode: gatewayName.toLowerCase().includes('card') ? 'card' : 'upi',
-      reference_no: finalRef,
-      note: note || `Online payment received via ${gatewayName} [Ref: ${finalRef}]`,
+      bill_number: finalRef,
       attachments: attachments,
       status: 'completed',
-      created_by: payeeName || 'SmartKhata Online Checkout',
       created_at: nowIso,
+      updated_at: nowIso,
     });
 
     if (insertError) {
       console.error('Error inserting online transaction in Supabase:', insertError);
+    }
+
+    // Update customer outstanding balance in Supabase
+    if (customerId) {
+      try {
+        const { data: cust } = await supabase
+          .from('customers')
+          .select('outstanding_balance')
+          .eq('id', customerId)
+          .eq('user_id', merchantUserId)
+          .maybeSingle();
+
+        if (cust) {
+          const currentBal = Number(cust.outstanding_balance) || 0;
+          const newBal = Math.max(0, currentBal - numAmount);
+          await supabase
+            .from('customers')
+            .update({
+              outstanding_balance: newBal,
+              updated_at: nowIso,
+            })
+            .eq('id', customerId)
+            .eq('user_id', merchantUserId);
+        }
+      } catch (custErr) {
+        console.warn('Customer balance update warning in pay/confirm:', custErr);
+      }
     }
 
     return NextResponse.json({
@@ -123,5 +158,62 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error('Error in /api/pay/confirm:', err);
     return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
+  }
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const customerId = searchParams.get('customerId');
+    const amount = parseFloat(searchParams.get('amount') || '0');
+
+    if (!isSupabaseConfigured() || !customerId) {
+      return NextResponse.json({ isPaid: false });
+    }
+
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return NextResponse.json({ isPaid: false });
+    }
+
+    // Look for recent completed online collection transaction for this customer
+    const { data: txns } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('customer_id', customerId)
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (txns && txns.length > 0) {
+      const match = txns.find(t => {
+        const tAmt = Number(t.amount) || 0;
+        return Math.abs(tAmt - amount) < 1.0;
+      });
+
+      if (match) {
+        return NextResponse.json({
+          isPaid: true,
+          receipt: {
+            receiptNo: match.bill_number || `SKP-REC-${match.id}`,
+            amount: Number(match.amount),
+            payeeName: match.created_by || 'SmartKhata Merchant',
+            payeeUpi: '',
+            customerName: '',
+            customerPhone: '',
+            dateTime: new Date(match.created_at || match.date).toLocaleString('en-IN', {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+            }),
+            paymentMode: match.payment_mode ? match.payment_mode.toUpperCase() : 'ONLINE GATEWAY',
+            referenceNo: match.bill_number || match.id,
+          },
+        });
+      }
+    }
+
+    return NextResponse.json({ isPaid: false });
+  } catch {
+    return NextResponse.json({ isPaid: false });
   }
 }

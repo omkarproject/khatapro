@@ -27,9 +27,12 @@ import {
   RefreshCw,
   X,
   FileCheck2,
-  Printer
+  Printer,
+  MessageSquare,
+  Phone,
+  Clock,
 } from 'lucide-react';
-import { formatINR, buildUpiUri, buildRawUpiQrString } from '@/lib/utils';
+import { formatINR, buildUpiUri, buildRawUpiQrString, decodePayToken } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
 import { Transaction } from '@/types';
 
@@ -38,18 +41,24 @@ function PayRedirectContent() {
   const router = useRouter();
   const { settings, profile, currentUser, addTransaction, transactions, customers } = useApp();
 
+  const pParam = searchParams?.get('p');
+  const decodedToken = useMemo(() => {
+    if (pParam) return decodePayToken(pParam);
+    return null;
+  }, [pParam]);
+
   const id = searchParams?.get('id') || searchParams?.get('inv');
-  const gw = searchParams?.get('gw');
+  const gw = decodedToken?.gw || searchParams?.get('gw');
 
   // Query parameters for direct UPI settlement
-  const pa = (searchParams?.get('pa') || '').trim();
-  const pn = (searchParams?.get('pn') || '').trim();
-  const am = parseFloat(searchParams?.get('am') || '0');
-  const tn = (searchParams?.get('tn') || '').trim();
+  const pa = (decodedToken?.pa || searchParams?.get('pa') || '').trim();
+  const pn = (decodedToken?.pn || searchParams?.get('pn') || '').trim();
+  const am = decodedToken?.am !== undefined ? decodedToken.am : parseFloat(searchParams?.get('am') || '0');
+  const tn = (decodedToken?.tn || searchParams?.get('tn') || '').trim();
   const logoParam = searchParams?.get('logo') || '';
-  const cidParam = searchParams?.get('cid') || '';
-  const cnParam = searchParams?.get('cn') || '';
-  const cphoneParam = searchParams?.get('cphone') || '';
+  const cidParam = decodedToken?.cid || searchParams?.get('cid') || '';
+  const cnParam = decodedToken?.cn || searchParams?.get('cn') || '';
+  const cphoneParam = decodedToken?.cphone || searchParams?.get('cphone') || '';
 
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [copiedUpi, setCopiedUpi] = useState(false);
@@ -61,8 +70,40 @@ function PayRedirectContent() {
     if (gw && ['cashfree', 'razorpay', 'upi_gateway', 'direct_upi'].includes(gw)) {
       return gw;
     }
-    return settings.paymentSettings?.collectionMode || 'cashfree';
+    return settings.paymentSettings?.collectionMode || 'direct_upi';
   }, [gw, settings.paymentSettings]);
+
+  // Payment Gateway Convenience Fee calculation:
+  // Cashfree & Razorpay = 2%; UPI PG (Dynamic) & Direct UPI = 0%
+  const isPgFeeChargeable = activeGateway === 'cashfree' || activeGateway === 'razorpay';
+  const pgFeePercent = isPgFeeChargeable ? 2.0 : 0.0;
+  const pgFeeAmount = isPgFeeChargeable ? Number(((am * 2) / 100).toFixed(2)) : 0;
+  const grandTotalAmount = Number((am + pgFeeAmount).toFixed(2));
+
+  // Date of Transaction / Reminder
+  const txnDateFormatted = useMemo(() => {
+    const rawDate = decodedToken?.timestamp ? new Date(decodedToken.timestamp) : new Date();
+    return rawDate.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  }, [decodedToken]);
+
+  // WhatsApp support phone
+  const officialMerchantPhone = (
+    settings.businessPhone ||
+    profile?.phone ||
+    currentUser?.phone ||
+    '8371838314'
+  ).trim();
+
+  const cleanWaNumber = useMemo(() => {
+    const digits = officialMerchantPhone.replace(/\D/g, '');
+    if (digits.length === 10) return `91${digits}`;
+    if (digits.length >= 11) return digits;
+    return '918371838314';
+  }, [officialMerchantPhone]);
 
   const [isCfLoading, setIsCfLoading] = useState(false);
   const [cfError, setCfError] = useState('');
@@ -82,6 +123,8 @@ function PayRedirectContent() {
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [receiptData, setReceiptData] = useState<{
     receiptNo: string;
+    dueAmount?: number;
+    gatewayFee?: number;
     amount: number;
     payeeName: string;
     payeeUpi: string;
@@ -139,8 +182,9 @@ function PayRedirectContent() {
 
   // Link identifier for expiration and duplicate protection
   const linkKey = useMemo(() => {
+    if (pParam) return `skp_paid_token_${pParam}`;
     return `skp_paid_${payeeUpiId.replace(/[^a-zA-Z0-9]/g, '_')}_${effectiveAmount}_${targetCustomerId.replace(/[^a-zA-Z0-9]/g, '_')}`;
-  }, [payeeUpiId, effectiveAmount, targetCustomerId]);
+  }, [pParam, payeeUpiId, effectiveAmount, targetCustomerId]);
 
   // Check if link is already expired / paid
   useEffect(() => {
@@ -148,7 +192,10 @@ function PayRedirectContent() {
 
     // 1. Check local storage
     try {
-      const storedReceipt = localStorage.getItem(linkKey);
+      let storedReceipt = localStorage.getItem(linkKey);
+      if (!storedReceipt && pParam) {
+        storedReceipt = localStorage.getItem(`skp_paid_token_${pParam}`);
+      }
       if (storedReceipt) {
         const parsed = JSON.parse(storedReceipt);
         setReceiptData(parsed);
@@ -158,18 +205,37 @@ function PayRedirectContent() {
       }
     } catch {}
 
-    // 2. Check if transactions already has a matching settlement for this customer and amount
+    // 2. Check server-side confirmation via Supabase
+    if (targetCustomerId) {
+      fetch(`/api/pay/confirm?customerId=${encodeURIComponent(targetCustomerId)}&amount=${grandTotalAmount}&key=${encodeURIComponent(linkKey)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.isPaid && data.receipt) {
+            setReceiptData(data.receipt);
+            setIsLinkExpired(true);
+            setPaymentSuccess(true);
+            try {
+              localStorage.setItem(linkKey, JSON.stringify(data.receipt));
+            } catch {}
+          }
+        })
+        .catch(() => {});
+    }
+
+    // 3. Check if local transactions already has a matching settlement for this customer and amount
     if (transactions && transactions.length > 0 && targetCustomerId) {
       const matched = transactions.find(t => 
         !t.isDeleted &&
         t.status !== 'deleted' &&
         t.customerId === targetCustomerId &&
-        Number(t.amount) === effectiveAmount &&
+        (Number(t.amount) === effectiveAmount || Number(t.amount) === grandTotalAmount) &&
         (t.type === 'collection' || t.category === 'Online Payment Collection' || t.category === 'Payment Received')
       );
       if (matched) {
-        setReceiptData({
+        const rec = {
           receiptNo: matched.referenceNo || `SKP-REC-${Date.now()}`,
+          dueAmount: effectiveAmount,
+          gatewayFee: pgFeeAmount,
           amount: Number(matched.amount),
           payeeName,
           payeeUpi: payeeUpiId,
@@ -181,12 +247,16 @@ function PayRedirectContent() {
           }),
           paymentMode: matched.paymentMode ? matched.paymentMode.toUpperCase() : 'ONLINE GATEWAY',
           referenceNo: matched.referenceNo || `TXN_${Date.now()}`
-        });
+        };
+        setReceiptData(rec);
         setIsLinkExpired(true);
         setPaymentSuccess(true);
+        try {
+          localStorage.setItem(linkKey, JSON.stringify(rec));
+        } catch {}
       }
     }
-  }, [linkKey, effectiveAmount, transactions, targetCustomerId, payeeName, payeeUpiId, targetCustomerName, targetCustomerPhone]);
+  }, [linkKey, effectiveAmount, grandTotalAmount, pParam, transactions, targetCustomerId, payeeName, payeeUpiId, targetCustomerName, targetCustomerPhone, pgFeeAmount]);
 
   // Global website branding resolution (Website Name, Website Header Logo, Badge)
   const [localBrand, setLocalBrand] = useState<any>(() => {
@@ -239,19 +309,21 @@ function PayRedirectContent() {
 
   const [logoImgError, setLogoImgError] = useState(false);
 
-  // Canonical UPI URIs
+  // Canonical UPI URIs with Grand Total Amount
+  const payableAmount = grandTotalAmount > 0 ? grandTotalAmount : (effectiveAmount > 0 ? effectiveAmount : undefined);
+
   const rawQrString = useMemo(() => {
-    return buildRawUpiQrString(payeeUpiId, payeeName, effectiveAmount > 0 ? effectiveAmount : undefined, paymentNote);
-  }, [payeeUpiId, payeeName, effectiveAmount, paymentNote]);
+    return buildRawUpiQrString(payeeUpiId, payeeName, payableAmount, paymentNote);
+  }, [payeeUpiId, payeeName, payableAmount, paymentNote]);
 
   const standardUpiUri = useMemo(() => {
-    return buildUpiUri(payeeUpiId, payeeName, effectiveAmount > 0 ? effectiveAmount : undefined, paymentNote);
-  }, [payeeUpiId, payeeName, effectiveAmount, paymentNote]);
+    return buildUpiUri(payeeUpiId, payeeName, payableAmount, paymentNote);
+  }, [payeeUpiId, payeeName, payableAmount, paymentNote]);
 
   // Deep links for Indian UPI apps
-  const gpayUri = `tez://upi/pay?pa=${payeeUpiId}&pn=${encodeURIComponent(payeeName).replace(/%20/g, '+')}${effectiveAmount > 0 ? `&am=${effectiveAmount.toFixed(2)}` : ''}&cu=INR&tn=${encodeURIComponent(paymentNote).replace(/%20/g, '+')}`;
-  const phonepeUri = `phonepe://pay?pa=${payeeUpiId}&pn=${encodeURIComponent(payeeName).replace(/%20/g, '+')}${effectiveAmount > 0 ? `&am=${effectiveAmount.toFixed(2)}` : ''}&cu=INR&tn=${encodeURIComponent(paymentNote).replace(/%20/g, '+')}`;
-  const paytmUri = `paytmmp://pay?pa=${payeeUpiId}&pn=${encodeURIComponent(payeeName).replace(/%20/g, '+')}${effectiveAmount > 0 ? `&am=${effectiveAmount.toFixed(2)}` : ''}&cu=INR&tn=${encodeURIComponent(paymentNote).replace(/%20/g, '+')}`;
+  const gpayUri = `tez://upi/pay?pa=${payeeUpiId}&pn=${encodeURIComponent(payeeName).replace(/%20/g, '+')}${payableAmount ? `&am=${payableAmount.toFixed(2)}` : ''}&cu=INR&tn=${encodeURIComponent(paymentNote).replace(/%20/g, '+')}`;
+  const phonepeUri = `phonepe://pay?pa=${payeeUpiId}&pn=${encodeURIComponent(payeeName).replace(/%20/g, '+')}${payableAmount ? `&am=${payableAmount.toFixed(2)}` : ''}&cu=INR&tn=${encodeURIComponent(paymentNote).replace(/%20/g, '+')}`;
+  const paytmUri = `paytmmp://pay?pa=${payeeUpiId}&pn=${encodeURIComponent(payeeName).replace(/%20/g, '+')}${payableAmount ? `&am=${payableAmount.toFixed(2)}` : ''}&cu=INR&tn=${encodeURIComponent(paymentNote).replace(/%20/g, '+')}`;
 
   // Generate QR Code with embedded Profile/Business logo in center
   useEffect(() => {
@@ -710,7 +782,7 @@ function PayRedirectContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderId: newOrderId,
-          orderAmount: effectiveAmount,
+          orderAmount: grandTotalAmount,
           customerName: targetCustomerName,
           customerPhone: targetCustomerPhone || '9820111223',
           customerEmail: 'customer@smartkhatapro.in',
@@ -768,13 +840,11 @@ function PayRedirectContent() {
               }),
             });
             const verifyData = await verifyRes.json();
-            if (verifyData.success) {
-              await handlePaymentSuccess('Cashfree Official PG', verifyData.cfPaymentId || `CF_${Date.now()}`);
-            } else {
-              await handlePaymentSuccess('Cashfree PG', `CF_TXN_${Date.now().toString().slice(-8)}`);
-            }
+            const realRef = verifyData.cfPaymentId || result.paymentDetails.paymentMessage || result.paymentDetails.cfPaymentId || `CF_${Date.now()}`;
+            await handlePaymentSuccess('Cashfree Official PG', realRef);
           } catch {
-            await handlePaymentSuccess('Cashfree PG', `CF_TXN_${Date.now().toString().slice(-8)}`);
+            const realRef = result.paymentDetails.cfPaymentId || `CF_TXN_${Date.now().toString().slice(-8)}`;
+            await handlePaymentSuccess('Cashfree PG', realRef);
           }
         }
       });
@@ -804,7 +874,7 @@ function PayRedirectContent() {
       const razorpayKey = settings.paymentSettings?.razorpayKeyId?.trim() || 'rzp_test_1DP5mmOlF5G5ag';
       const options = {
         key: razorpayKey,
-        amount: Math.round(effectiveAmount * 100),
+        amount: Math.round(grandTotalAmount * 100),
         currency: 'INR',
         name: payeeName,
         description: paymentNote || `Settlement for ${targetCustomerName}`,
@@ -838,15 +908,25 @@ function PayRedirectContent() {
     }
   };
 
-  // Main Trigger when clicking "Pay Online"
-  const handleOpenOnlineGateway = async () => {
+  // Unified PAY NOW trigger based on active payment gateway
+  const handlePayNow = async () => {
     if (activeGateway === 'cashfree') {
       await executeCashfreeCheckout();
     } else if (activeGateway === 'razorpay') {
       await executeRazorpayCheckout();
-    } else {
+    } else if (activeGateway === 'upi_gateway') {
       setIsOnlineGatewayOpen(true);
+    } else {
+      // Direct UPI: Trigger standard UPI intent
+      if (typeof window !== 'undefined') {
+        window.location.href = standardUpiUri;
+      }
     }
+  };
+
+  // Main Trigger when clicking "Pay Online"
+  const handleOpenOnlineGateway = async () => {
+    await handlePayNow();
   };
 
   // If no pa is passed and no invoice id, show missing params
@@ -875,6 +955,141 @@ function PayRedirectContent() {
         subtitle="Connecting to Payment Portal"
         fullScreen
       />
+    );
+  }
+
+  // 404 / LINK EXPIRED / ALREADY SETTLED SCREEN (Prevents duplicate payments + WhatsApp Support button)
+  if (isLinkExpired) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-3 sm:p-5 max-w-md w-full mx-auto animate-in fade-in duration-200">
+        
+        {/* Header */}
+        <header className="w-full flex items-center justify-between pb-3 shrink-0">
+          <Link href="/" prefetch={true} className="flex items-center gap-2 group">
+            {!logoImgError && websiteLogo ? (
+              <div className="w-8 h-8 rounded-xl overflow-hidden shadow-xs shrink-0 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center p-0.5">
+                <img
+                  src={websiteLogo}
+                  alt={websiteName || 'Website Logo'}
+                  className="w-full h-full object-contain"
+                  onError={() => setLogoImgError(true)}
+                />
+              </div>
+            ) : (
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-indigo-600 flex items-center justify-center text-white font-bold text-xs">
+                {(websiteName || 'SK').slice(0, 2).toUpperCase()}
+              </div>
+            )}
+            <div className="flex items-center gap-1 font-black text-sm">
+              <span>{websiteName}</span>
+              {websiteBadgeText && (
+                <span className={`text-[7px] px-1 py-[1px] rounded font-bold uppercase text-white shadow-xs ${websiteBadgeBg || 'fintech-gradient-primary'}`}>
+                  {websiteBadgeText}
+                </span>
+              )}
+            </div>
+          </Link>
+          <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 px-2.5 py-1 rounded-full">
+            Link Closed
+          </span>
+        </header>
+
+        {/* 404 Expired Card */}
+        <main className="w-full my-auto bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 shadow-xl p-5 space-y-4 text-center">
+          
+          <div className="relative">
+            <div className="w-16 h-16 rounded-3xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 mx-auto flex items-center justify-center shadow-lg shadow-rose-500/20 border border-rose-200 dark:border-rose-900/60">
+              <Lock className="w-8 h-8 stroke-[2.2]" />
+            </div>
+            <div className="mt-3 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-black">
+              <span>🔴 404 — PAYMENT LINK EXPIRED</span>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
+              Payment Link Expired
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs mx-auto">
+              Yeh payment link pehle hi 100% settle ho chuka hai aur ab expire ho gaya hai. Dobara duplicate payment karne se rokne ke liye yeh link deactivate kar diya gaya hai.
+            </p>
+          </div>
+
+          {/* Settled Details Box if receipt data exists */}
+          {receiptData && (
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 text-left space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Total Settled Amount:</span>
+                <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm font-sans">
+                  {formatINR(receiptData.amount)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Customer Name:</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{receiptData.customerName}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Bank / Ref ID:</span>
+                <span className="font-mono text-slate-600 dark:text-slate-300 text-[11px] truncate max-w-[180px]">
+                  {receiptData.referenceNo}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Settled Date:</span>
+                <span className="text-slate-600 dark:text-slate-300">{receiptData.dateTime}</span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                <span className="text-slate-400">Status:</span>
+                <span className="inline-flex items-center gap-1 font-bold text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> 100% PAID &amp; RECORDED
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons: WhatsApp Support & Receipt Download */}
+          <div className="space-y-2.5 pt-1">
+            {/* WhatsApp Support Button */}
+            <a
+              href={`https://wa.me/${cleanWaNumber}?text=${encodeURIComponent(
+                `Hello ${payeeName}, regarding my payment link on ${websiteName} (${receiptData?.customerName || targetCustomerName}, Amount: ${formatINR(receiptData?.amount || effectiveAmount)}, Ref: ${receiptData?.referenceNo || 'N/A'}). I need assistance:`
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 transition-all cursor-pointer"
+            >
+              <MessageSquare className="w-4 h-4 fill-white shrink-0" />
+              <span>Chat with Support on WhatsApp</span>
+            </a>
+
+            {/* Download Receipt if available */}
+            {receiptData && (
+              <button
+                type="button"
+                onClick={handleDownloadReceipt}
+                disabled={isDownloadingReceipt}
+                className="w-full py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors cursor-pointer"
+              >
+                <Download className="w-4 h-4 text-emerald-500" />
+                <span>{isDownloadingReceipt ? 'Preparing...' : 'Download Settled Receipt'}</span>
+              </button>
+            )}
+
+            <Link
+              href="/"
+              className="block w-full py-2 text-center text-xs font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+            >
+              Back to Home
+            </Link>
+          </div>
+
+        </main>
+
+        <footer className="w-full text-center py-2 text-[10px] text-slate-400">
+          Official Security Gate • {websiteName} Fintech Enterprise
+        </footer>
+
+      </div>
     );
   }
 
@@ -926,11 +1141,6 @@ function PayRedirectContent() {
             <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center shadow-lg shadow-emerald-500/20">
               <CheckCircle2 className="w-8 h-8" />
             </div>
-            {isLinkExpired && (
-              <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300">
-                Link Settled & Expired
-              </span>
-            )}
           </div>
 
           <div>
@@ -976,18 +1186,18 @@ function PayRedirectContent() {
               <span className="font-semibold text-slate-800 dark:text-slate-200">{receiptData.customerName}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Ref ID:</span>
-              <span className="font-mono text-slate-500 text-[11px] truncate max-w-[180px]">{receiptData.referenceNo}</span>
+              <span className="text-slate-400">Bank / Ref ID:</span>
+              <span className="font-mono text-slate-600 dark:text-slate-300 text-[11px] truncate max-w-[180px]">{receiptData.referenceNo}</span>
             </div>
             <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
               <span className="text-slate-400">Status:</span>
               <span className="inline-flex items-center gap-1 font-bold text-emerald-600 dark:text-emerald-400">
-                <Check className="w-3.5 h-3.5" /> 100% Paid & Settled
+                <Check className="w-3.5 h-3.5" /> 100% Paid &amp; Settled
               </span>
             </div>
           </div>
 
-          {/* Action Buttons: Download Receipt */}
+          {/* Action Buttons: Download Receipt & WhatsApp Support */}
           <div className="space-y-2 pt-1">
             <button
               type="button"
@@ -998,6 +1208,17 @@ function PayRedirectContent() {
               <Download className="w-4 h-4" />
               <span>{isDownloadingReceipt ? 'Preparing Receipt...' : 'Download Official Receipt'}</span>
             </button>
+            <a
+              href={`https://wa.me/${cleanWaNumber}?text=${encodeURIComponent(
+                `Hello ${payeeName}, regarding my payment on ${websiteName} (${receiptData.customerName}, Amount: ${formatINR(receiptData.amount)}, Ref: ${receiptData.referenceNo}).`
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-2.5 px-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs flex items-center justify-center gap-2 hover:bg-emerald-500/20 transition-colors"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>WhatsApp Support</span>
+            </a>
             <Link
               href="/"
               className="block w-full py-2 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-50 transition-colors"
@@ -1082,7 +1303,7 @@ function PayRedirectContent() {
         <div className="text-center space-y-0.5">
           <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900/60 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold">
             <CheckCircle2 className="w-3 h-3" />
-            <span>Official UPI Collect</span>
+            <span>Official Checkout Portal</span>
           </div>
           <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight truncate">
             {payeeName}
@@ -1100,39 +1321,79 @@ function PayRedirectContent() {
           </div>
         </div>
 
-        {/* Total Outstanding Amount Box (Small & Stylish as requested!) */}
-        <div className="py-2 px-3 sm:px-3.5 rounded-2xl bg-gradient-to-r from-rose-500/10 via-indigo-500/10 to-emerald-500/10 border border-rose-500/20 dark:border-rose-500/30 flex items-center justify-between shadow-xs">
-          <div className="text-left">
-            <span className="text-[9.5px] font-black uppercase tracking-wider text-rose-500 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-              Total Outstanding
-            </span>
-            {paymentNote && (
-              <p className="text-[10.5px] text-slate-500 dark:text-slate-400 font-medium truncate max-w-[150px] sm:max-w-[200px]">
-                {paymentNote}
-              </p>
-            )}
+        {/* Transaction Due & Payment Gateway Breakdown Card */}
+        <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/90 dark:border-slate-700/80 space-y-1.5 text-xs shadow-xs">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+            <span>Customer Name:</span>
+            <span className="font-bold text-slate-900 dark:text-white">{targetCustomerName}</span>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-sans tracking-tight">
-            {effectiveAmount > 0 ? formatINR(effectiveAmount) : 'Custom'}
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+            <span>Transaction Date:</span>
+            <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+              <Clock className="w-3 h-3 text-slate-400" />
+              {txnDateFormatted}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+            <span>Ledger Due Amount:</span>
+            <span className="font-bold text-slate-900 dark:text-white font-sans">{formatINR(effectiveAmount)}</span>
+          </div>
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+            <span>Payment Method:</span>
+            <span className="font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+              <CreditCard className="w-3 h-3" />
+              {activeGateway === 'cashfree' ? 'Cashfree PG' : activeGateway === 'razorpay' ? 'Razorpay PG' : activeGateway === 'upi_gateway' ? 'UPI PG (Dynamic)' : 'Default UPI & QR'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+            <span>Gateway Charge:</span>
+            <span className={isPgFeeChargeable ? "font-bold text-rose-500 dark:text-rose-400" : "font-bold text-emerald-600 dark:text-emerald-400"}>
+              {isPgFeeChargeable ? `+ ${formatINR(pgFeeAmount)} (2% PG Fee)` : `₹0.00 (0% Free)`}
+            </span>
+          </div>
+          <div className="pt-2 border-t border-slate-200/80 dark:border-slate-700 flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">Grand Total Amount:</span>
+            <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-sans tracking-tight">
+              {formatINR(grandTotalAmount)}
+            </span>
           </div>
         </div>
 
-        {/* QR Code Container (Compact ~140px) */}
+        {/* PRIMARY "PAY NOW" BUTTON */}
+        <button
+          type="button"
+          onClick={handlePayNow}
+          disabled={isCfLoading}
+          className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 active:scale-98 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-75"
+        >
+          {isCfLoading ? (
+            <>
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              <span>Connecting Gateway...</span>
+            </>
+          ) : (
+            <>
+              <Zap className="w-4 h-4 fill-white shrink-0" />
+              <span>PAY NOW • {formatINR(grandTotalAmount)}</span>
+            </>
+          )}
+        </button>
+
+        {/* QR Code Container (Compact ~130px) */}
         <div className="bg-slate-50 dark:bg-slate-800/50 p-2 sm:p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 flex flex-col items-center justify-center text-center space-y-1.5">
           <div className="p-2 bg-white rounded-xl shadow-xs border border-slate-200/80 inline-block">
             {isGeneratingQr ? (
-              <div className="w-[135px] h-[135px] sm:w-[150px] sm:h-[150px] flex items-center justify-center text-[10px] text-slate-400">
+              <div className="w-[125px] h-[125px] flex items-center justify-center text-[10px] text-slate-400">
                 Generating QR...
               </div>
             ) : qrDataUrl ? (
               <img
                 src={qrDataUrl}
                 alt="Payment QR"
-                className="w-[135px] h-[135px] sm:w-[150px] sm:h-[150px] object-contain rounded-lg"
+                className="w-[125px] h-[125px] object-contain rounded-lg"
               />
             ) : (
-              <div className="w-[135px] h-[135px] flex items-center justify-center text-[10px] text-slate-400">
+              <div className="w-[125px] h-[125px] flex items-center justify-center text-[10px] text-slate-400">
                 QR Unavailable
               </div>
             )}
@@ -1142,69 +1403,52 @@ function PayRedirectContent() {
           </p>
         </div>
 
-        {/* Side-by-Side Action Buttons: PAY UPI and Pay Online */}
-        <div className="space-y-2 pt-0.5">
-          <div className="grid grid-cols-2 gap-2">
-            
-            {/* Button 1: PAY UPI (Renamed from Pay Now via Any UPI App) */}
-            <a
-              href={standardUpiUri}
-              className="py-2.5 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-              title="Open Default UPI App"
-            >
-              <Zap className="w-4 h-4 fill-white shrink-0" />
-              <span>PAY UPI</span>
-            </a>
-
-            {/* Button 2: Pay Online (Payment Gateway Popup Modal) */}
-            <button
-              type="button"
-              onClick={handleOpenOnlineGateway}
-              disabled={isCfLoading}
-              className="py-2.5 px-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 transition-all cursor-pointer disabled:opacity-75"
-              title={activeGateway === 'cashfree' ? 'Pay via Cashfree PG' : activeGateway === 'razorpay' ? 'Pay via Razorpay' : 'Pay with Online Payment Gateway'}
-            >
-              {isCfLoading ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Connecting...</span>
-                </>
-              ) : (
-                <>
-                  <CreditCard className="w-4 h-4 shrink-0" />
-                  <span>Pay Online</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* Quick App Specific Buttons */}
-          <div className="grid grid-cols-3 gap-1.5">
-            <a
-              href={gpayUri}
-              className="py-1 px-1 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-center text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 transition-all"
-            >
-              <span className="text-emerald-600 font-black text-xs">GPay</span>
-            </a>
-            <a
-              href={phonepeUri}
-              className="py-1 px-1 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-center text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 transition-all"
-            >
-              <span className="text-indigo-600 font-black text-xs">PhonePe</span>
-            </a>
-            <a
-              href={paytmUri}
-              className="py-1 px-1 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-center text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 transition-all"
-            >
-              <span className="text-cyan-600 font-black text-xs">Paytm</span>
-            </a>
-          </div>
+        {/* Quick App Specific Buttons */}
+        <div className="grid grid-cols-4 gap-1.5">
+          <a
+            href={standardUpiUri}
+            className="py-1.5 px-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-center text-xs font-black text-emerald-700 dark:text-emerald-300 flex items-center justify-center gap-1 transition-all"
+            title="Open UPI Intent"
+          >
+            <span>UPI Intent</span>
+          </a>
+          <a
+            href={gpayUri}
+            className="py-1.5 px-1 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-center text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 transition-all"
+          >
+            <span className="text-emerald-600 font-black text-xs">GPay</span>
+          </a>
+          <a
+            href={phonepeUri}
+            className="py-1.5 px-1 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-center text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 transition-all"
+          >
+            <span className="text-indigo-600 font-black text-xs">PhonePe</span>
+          </a>
+          <a
+            href={paytmUri}
+            className="py-1.5 px-1 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-center text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 transition-all"
+          >
+            <span className="text-cyan-600 font-black text-xs">Paytm</span>
+          </a>
         </div>
 
-        {/* Security Footer */}
-        <div className="pt-1 border-t border-slate-100 dark:border-slate-800 flex items-center justify-center gap-1.5 text-[9.5px] text-slate-400">
-          <Shield className="w-3 h-3 text-emerald-500" />
-          <span>NPCI Unified Payments Interface • End-to-End Encrypted</span>
+        {/* WhatsApp Support Link at bottom */}
+        <div className="pt-1 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px]">
+          <span className="text-slate-400 flex items-center gap-1">
+            <Shield className="w-3 h-3 text-emerald-500" />
+            100% Encrypted Payment
+          </span>
+          <a
+            href={`https://wa.me/${cleanWaNumber}?text=${encodeURIComponent(
+              `Hello ${payeeName}, I am on the payment checkout page for ${targetCustomerName} (Amount: ${formatINR(grandTotalAmount)}). I need assistance:`
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1"
+          >
+            <MessageSquare className="w-3 h-3 fill-emerald-500 text-emerald-500" />
+            <span>WhatsApp Support</span>
+          </a>
         </div>
 
       </main>
