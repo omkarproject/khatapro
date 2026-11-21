@@ -54,8 +54,11 @@ export default function RemindersPage() {
   });
 
   const handleSendWhatsApp = (rem: PaymentReminder) => {
+    const appBaseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://smartkhata.netsell.in';
+    const tempPayId = Math.floor(Date.now() / 1000).toString();
+    const shortPayUrl = `${appBaseUrl}/pay/${encodeURIComponent(rem.customerId)}/${tempPayId}`;
     const upiUri = buildUpiUri(settings.paymentSettings.upiId, settings.paymentSettings.payeeName, rem.amount, `Reminder ${rem.id}`);
-    const fullMsg = `${rem.messageTemplate}\n\n*Pay Now via UPI:*\n${upiUri}\n\nThank you,\n${settings.businessName}`;
+    const fullMsg = `${rem.messageTemplate}\n\n👉 *Online Pay (Auto Settled)*:\n${shortPayUrl}\n\n⚡ *Direct UPI Link*:\n${upiUri}\n\nThank you,\n${settings.businessName}`;
     openWhatsApp(rem.customerPhone, fullMsg);
 
     // Mark as sent

@@ -3578,15 +3578,12 @@ function KhataPageInner() {
       );
 
       const appBaseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://smartkhata.netsell.in';
-      const activeGw = settings.paymentSettings?.collectionMode || 'cashfree';
       const tempPayId = Math.floor(Date.now() / 1000).toString();
       const shortPayUrl = `${appBaseUrl}/pay/${encodeURIComponent(activeCustomer.id)}/${tempPayId}`;
 
-      const isOnlinePgActive = activeGw === 'cashfree' || activeGw === 'razorpay' || activeGw === 'upi_gateway';
-
       // Real payment reminder with active online gateway link and direct UPI intent
       const messageText = numDue > 0
-        ? `*Payment Reminder from ${businessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${formattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n${isOnlinePgActive ? `👉 *Tap to Pay Online *:\n${shortPayUrl}\n\n` : ''}⚡ *Direct UPI Link (Amount Locked)*:\n${upiUri}\n\nScan the attached QR code with Google Pay, PhonePe, Paytm, or BHIM.\n\nThank you,\n${businessName}${officialPhone ? `\n📞 ${officialPhone}` : ''}`
+        ? `*Payment Reminder from ${businessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${formattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n👉 *Online Pay (Auto Settled)*:\n${shortPayUrl}\n\n⚡ *Direct UPI Link*:\n${upiUri}\n\nScan the attached QR code with Google Pay, PhonePe, Paytm, or BHIM.\n\nThank you,\n${businessName}${officialPhone ? `\n📞 ${officialPhone}` : ''}`
         : `*Account Statement from ${businessName}*\n\nDear ${activeCustomer.name},\nAll dues are fully settled (*₹0 Due*).\nThank you for your business!\n\n—\n${businessName}${officialPhone ? `\n📞 ${officialPhone}` : ''}`;
 
       // Generate the custom QR card image (Total Due on top in Red or Settled in Emerald, QR in center, embedded logo, UPI ID below)
@@ -3600,8 +3597,33 @@ function KhataPageInner() {
 
       if (blob) {
         const fileName = `Payment_QR_${activeCustomer.name.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+        let fileObj: File | null = null;
+        try {
+          fileObj = new File([blob], fileName, { type: 'image/png' });
+        } catch {
+          fileObj = null;
+        }
 
-        // 1. Copy image to Clipboard so user can simply press Ctrl+V (or Paste) in WhatsApp
+        // 1. Mobile Web Share API with Files: opens native share / WhatsApp with QR Image attached + Message Text caption!
+        if (fileObj && typeof navigator !== 'undefined' && navigator.share && navigator.canShare && navigator.canShare({ files: [fileObj] })) {
+          try {
+            await navigator.share({
+              title: `Payment Reminder - ${activeCustomer.name}`,
+              text: messageText,
+              files: [fileObj],
+            });
+            addToast('Shared Successfully', 'Payment QR card and message shared.', 'success');
+            return;
+          } catch (shareErr: any) {
+            if (shareErr?.name === 'AbortError') {
+              // User dismissed the OS share drawer
+              return;
+            }
+            console.warn('Native file share failed, proceeding with fallback:', shareErr);
+          }
+        }
+
+        // 2. Desktop Fallback: Copy image to Clipboard so user can simply press Ctrl+V (or Paste) in WhatsApp Web
         let copied = false;
         try {
           if (typeof ClipboardItem !== 'undefined' && navigator.clipboard && navigator.clipboard.write) {
@@ -3614,7 +3636,7 @@ function KhataPageInner() {
           console.warn('Clipboard write fallback:', clipErr);
         }
 
-        // 2. Auto-download QR Image file to Gallery / Downloads
+        // 3. Auto-download QR Image file to Gallery / Downloads
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -3624,19 +3646,19 @@ function KhataPageInner() {
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 4000);
 
-        // 3. Launch WhatsApp directly via Android Native Intent Protocol / WhatsApp Protocol
+        // 4. Launch WhatsApp directly via Android Native Intent Protocol / WhatsApp Protocol
         openWhatsApp(targetPhone, messageText);
 
         if (copied) {
           addToast(
             'WhatsApp Opening...',
-            'QR Image copied to clipboard & downloaded! Paste (Ctrl+V) to send with message.',
+            'QR Image copied to clipboard & downloaded! Paste (Ctrl+V) in chat to attach QR card.',
             'success'
           );
         } else {
           addToast(
             'WhatsApp Opening...',
-            'QR Image downloaded to gallery! Attach image and send message.',
+            'QR Image downloaded to gallery! Attach downloaded QR image in WhatsApp.',
             'success'
           );
         }
@@ -3683,14 +3705,11 @@ function KhataPageInner() {
       );
 
       const appBaseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://smartkhata.netsell.in';
-      const activeGw = settings.paymentSettings?.collectionMode || 'cashfree';
       const tempPayId = Math.floor(Date.now() / 1000).toString();
       const shortPayUrl = `${appBaseUrl}/pay/${encodeURIComponent(activeCustomer.id)}/${tempPayId}`;
 
-      const isOnlinePgActive = activeGw === 'cashfree' || activeGw === 'razorpay' || activeGw === 'upi_gateway';
-
       const shareText = numDue > 0
-        ? `*Payment Reminder from ${businessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${formattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n${isOnlinePgActive ? `👉 *Tap to Pay Online *:\n${shortPayUrl}\n\n` : ''}⚡ *Direct UPI Link*:\n${upiUri}\n\n—\n${businessName}${officialPhone ? `  (${officialPhone})` : ''}`
+        ? `*Payment Reminder from ${businessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${formattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n👉 *Online Pay (Auto Settled)*:\n${shortPayUrl}\n\n⚡ *Direct UPI Link*:\n${upiUri}\n\nScan the attached QR code with Google Pay, PhonePe, Paytm, or BHIM.\n\nThank you,\n${businessName}${officialPhone ? `\n📞 ${officialPhone}` : ''}`
         : `*Account Statement from ${businessName}*\n\nDear ${activeCustomer.name},\nAll dues are cleared (*₹0 Due*).\nThank you!\n\n—\n${businessName}${officialPhone ? `  (${officialPhone})` : ''}`;
 
       // Generate the custom QR card image
@@ -6864,10 +6883,8 @@ function KhataPageInner() {
         const modalShortPayUrl = `${appBaseUrl}/pay/${encodeURIComponent(activeCustomer.id)}/${modalTempPayId}`;
         const modalWebPayUrl = modalShortPayUrl;
 
-        const isModalPgActive = modalActiveGw === 'cashfree' || modalActiveGw === 'razorpay' || modalActiveGw === 'upi_gateway';
-
         const modalShareText = modalDueAmount > 0
-          ? `*Payment Reminder from ${modalBusinessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${modalFormattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n${isModalPgActive ? `👉 *Tap to Pay Online *:\n${modalShortPayUrl}\n\n` : ''}⚡ *Direct UPI Link*:\n${modalUpiUri}\n\n—\n${modalBusinessName}${modalOfficialPhone ? `\n📞 ${modalOfficialPhone}` : ''}`
+          ? `*Payment Reminder from ${modalBusinessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${modalFormattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n👉 *Online Pay (Auto Settled)*:\n${modalShortPayUrl}\n\n⚡ *Direct UPI Link*:\n${modalUpiUri}\n\nScan the attached QR code with Google Pay, PhonePe, Paytm, or BHIM.\n\nThank you,\n${modalBusinessName}${modalOfficialPhone ? `\n📞 ${modalOfficialPhone}` : ''}`
           : currentCustBal < 0
           ? `Advance balance of ${formatINR(Math.abs(currentCustBal))} available for ${activeCustomer.name}.\n—\n${modalBusinessName}${modalOfficialPhone ? `  (${modalOfficialPhone})` : ''}`
           : `All dues are cleared (₹0 Due) for ${activeCustomer.name}.\nThank you!\n\n—\n${modalBusinessName}${modalOfficialPhone ? `  (${modalOfficialPhone})` : ''}`;
@@ -6936,9 +6953,9 @@ function KhataPageInner() {
                   {/* 1. WhatsApp (Direct Intent / Web + QR Image) */}
                   <button
                     type="button"
-                    onClick={() => {
-                      handleShareWhatsApp();
+                    onClick={async () => {
                       setIsUniversalShareModalOpen(false);
+                      await handleShareWhatsApp();
                     }}
                     className="p-3.5 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/30 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
                   >
@@ -6958,9 +6975,9 @@ function KhataPageInner() {
                   {/* 2. Device Native Share (All Apps: Android / iOS / Mac / Win) */}
                   <button
                     type="button"
-                    onClick={() => {
-                      handleUniversalShare();
+                    onClick={async () => {
                       setIsUniversalShareModalOpen(false);
+                      await handleUniversalShare();
                     }}
                     className="p-3.5 rounded-2xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 hover:bg-indigo-100/70 dark:hover:bg-indigo-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
                   >
