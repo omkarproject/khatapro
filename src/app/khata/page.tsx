@@ -3540,8 +3540,8 @@ function KhataPageInner() {
     }
   };
 
-  // WhatsApp Share Statement & Payment QR Card
-  const handleShareWhatsApp = async () => {
+  // WhatsApp Direct 1-on-1 Chat with Customer (Opens chat directly + copies & saves QR)
+  const handleShareWhatsAppDirect = async () => {
     if (!activeCustomer || isSharingWhatsApp) return;
     setIsSharingWhatsApp(true);
 
@@ -3597,33 +3597,8 @@ function KhataPageInner() {
 
       if (blob) {
         const fileName = `Payment_QR_${activeCustomer.name.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
-        let fileObj: File | null = null;
-        try {
-          fileObj = new File([blob], fileName, { type: 'image/png' });
-        } catch {
-          fileObj = null;
-        }
 
-        // 1. Mobile Web Share API with Files: opens native share / WhatsApp with QR Image attached + Message Text caption!
-        if (fileObj && typeof navigator !== 'undefined' && navigator.share && navigator.canShare && navigator.canShare({ files: [fileObj] })) {
-          try {
-            await navigator.share({
-              title: `Payment Reminder - ${activeCustomer.name}`,
-              text: messageText,
-              files: [fileObj],
-            });
-            addToast('Shared Successfully', 'Payment QR card and message shared.', 'success');
-            return;
-          } catch (shareErr: any) {
-            if (shareErr?.name === 'AbortError') {
-              // User dismissed the OS share drawer
-              return;
-            }
-            console.warn('Native file share failed, proceeding with fallback:', shareErr);
-          }
-        }
-
-        // 2. Desktop Fallback: Copy image to Clipboard so user can simply press Ctrl+V (or Paste) in WhatsApp Web
+        // 1. Copy image to Clipboard so user can simply press Ctrl+V (or Paste) in WhatsApp Web
         let copied = false;
         try {
           if (typeof ClipboardItem !== 'undefined' && navigator.clipboard && navigator.clipboard.write) {
@@ -3636,7 +3611,7 @@ function KhataPageInner() {
           console.warn('Clipboard write fallback:', clipErr);
         }
 
-        // 3. Auto-download QR Image file to Gallery / Downloads
+        // 2. Auto-download QR Image file to Gallery / Downloads
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -3646,33 +3621,118 @@ function KhataPageInner() {
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 4000);
 
-        // 4. Launch WhatsApp directly via Android Native Intent Protocol / WhatsApp Protocol
+        // 3. Launch WhatsApp directly to Customer's 1-on-1 Chat!
         openWhatsApp(targetPhone, messageText);
 
-        if (copied) {
-          addToast(
-            'WhatsApp Opening...',
-            'QR Image copied to clipboard & downloaded! Paste (Ctrl+V) in chat to attach QR card.',
-            'success'
-          );
-        } else {
-          addToast(
-            'WhatsApp Opening...',
-            'QR Image downloaded to gallery! Attach downloaded QR image in WhatsApp.',
-            'success'
-          );
-        }
+        addToast(
+          `Chat Opened: ${activeCustomer.name}`,
+          'Direct chat opened with pre-filled message! QR image saved in gallery & clipboard.',
+          'success'
+        );
         return;
       }
 
       // Fallback if blob failed: open WhatsApp directly with message text
       openWhatsApp(targetPhone, messageText);
     } catch (err) {
-      console.error('Error in handleShareWhatsApp:', err);
+      console.error('Error in handleShareWhatsAppDirect:', err);
     } finally {
       setIsSharingWhatsApp(false);
     }
   };
+
+  // WhatsApp with QR Image Attached (Web Share API - Opens media editor with QR attached)
+  const handleShareWhatsAppAttached = async () => {
+    if (!activeCustomer || isSharingWhatsApp) return;
+    setIsSharingWhatsApp(true);
+
+    try {
+      let targetPhone = activeCustomer.phone.replace(/[^0-9]/g, '');
+      if (targetPhone.length === 10) {
+        targetPhone = '91' + targetPhone;
+      }
+
+      const currentCustBal = customerBalances[activeCustomer.id] ?? 0;
+      const numDue = Math.max(0, currentCustBal);
+      const formattedDue = formatINR(numDue);
+
+      const businessName = (settings.businessName || profile?.businessName || currentUser?.businessName || 'SmartKhata Merchant').trim();
+      const officialPhone = (settings.businessPhone || profile?.phone || currentUser?.phone || '').trim();
+      const upiId = (settings.paymentSettings?.upiId || (officialPhone ? `${officialPhone}@upi` : '')).trim();
+      const payeeName = (settings.paymentSettings?.payeeName || businessName).trim();
+      const logoUrl = profile?.avatarUrl || currentUser?.avatarUrl || settings?.businessLogo || '';
+
+      const upiUri = buildUpiUri(
+        upiId,
+        payeeName,
+        numDue > 0 ? numDue : undefined,
+        `Payment from ${activeCustomer.name}`
+      );
+
+      const rawQrString = buildRawUpiQrString(
+        upiId,
+        payeeName,
+        numDue > 0 ? numDue : undefined,
+        `Payment from ${activeCustomer.name}`
+      );
+
+      const appBaseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://smartkhata.netsell.in';
+      const tempPayId = Math.floor(Date.now() / 1000).toString();
+      const shortPayUrl = `${appBaseUrl}/pay/${encodeURIComponent(activeCustomer.id)}/${tempPayId}`;
+
+      const messageText = numDue > 0
+        ? `*Payment Reminder from ${businessName}*\n\nDear ${activeCustomer.name},\nYour balance of *${formattedDue}* is Due.\nPlease settle this amount at the earliest.\n\n👉 *Online Pay (Auto Settled)*:\n${shortPayUrl}\n\n⚡ *Direct UPI Link*:\n${upiUri}\n\nScan the attached QR code with Google Pay, PhonePe, Paytm, or BHIM.\n\nThank you,\n${businessName}${officialPhone ? `\n📞 ${officialPhone}` : ''}`
+        : `*Account Statement from ${businessName}*\n\nDear ${activeCustomer.name},\nAll dues are fully settled (*₹0 Due*).\nThank you for your business!\n\n—\n${businessName}${officialPhone ? `\n📞 ${officialPhone}` : ''}`;
+
+      const blob = await generateWhatsAppPaymentQrBlob({
+        dueAmount: numDue,
+        upiId,
+        payeeName,
+        upiUri: rawQrString,
+        logoUrl,
+      });
+
+      if (blob) {
+        const fileName = `Payment_QR_${activeCustomer.name.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+        let fileObj: File | null = null;
+        try {
+          fileObj = new File([blob], fileName, { type: 'image/png' });
+        } catch {
+          fileObj = null;
+        }
+
+        // Web Share API with Files (Android Chrome, iOS Safari)
+        if (fileObj && typeof navigator !== 'undefined' && navigator.share && navigator.canShare && navigator.canShare({ files: [fileObj] })) {
+          try {
+            await navigator.share({
+              title: `Payment Reminder - ${activeCustomer.name}`,
+              text: messageText,
+              files: [fileObj],
+            });
+            addToast('Shared Successfully', 'Payment QR card and message shared.', 'success');
+            return;
+          } catch (shareErr: any) {
+            if (shareErr?.name === 'AbortError') return;
+            console.warn('Native file share failed:', shareErr);
+          }
+        }
+
+        // Fallback: Open direct chat
+        openWhatsApp(targetPhone, messageText);
+        addToast('WhatsApp Opening', `Direct chat opened for ${activeCustomer.name}.`, 'info');
+        return;
+      }
+
+      openWhatsApp(targetPhone, messageText);
+    } catch (err) {
+      console.error('Error in handleShareWhatsAppAttached:', err);
+    } finally {
+      setIsSharingWhatsApp(false);
+    }
+  };
+
+  // Backwards-compatible default
+  const handleShareWhatsApp = handleShareWhatsAppDirect;
  
   // Universal Share for Customer Profile Header (Mobile Native Share Sheet / Desktop Fallback)
   const handleUniversalShare = async () => {
@@ -6925,71 +6985,73 @@ function KhataPageInner() {
               </div>
 
               {/* Scrollable Content */}
-              <div className="p-5 space-y-4 overflow-y-auto">
+              <div className="p-4 sm:p-5 space-y-3 overflow-y-auto">
                 
-                {/* Reminder Preview Box */}
-                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 space-y-2 overflow-hidden">
+                {/* Reminder Preview Box (Compact - No Scroll Needed on Screen) */}
+                <div className="p-2.5 sm:p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 space-y-1.5 overflow-hidden">
                   <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     <span>Message Preview</span>
                     <span className="text-emerald-600 dark:text-emerald-400 font-mono text-[10px] font-bold">⚡ Ready to Share</span>
                   </div>
-                  <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 font-sans whitespace-pre-line leading-relaxed shadow-xs max-w-full break-all break-words [overflow-wrap:anywhere] overflow-x-hidden select-text">
+                  <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700 text-[11px] text-slate-800 dark:text-slate-200 font-sans whitespace-pre-line leading-relaxed shadow-xs max-w-full break-all break-words [overflow-wrap:anywhere] max-h-24 sm:max-h-28 overflow-y-auto select-text scrollbar-thin">
                     {modalShareText}
                   </div>
-                  <div className="flex items-center justify-between flex-wrap gap-2 text-[11px] text-slate-500 px-1 pt-0.5 font-mono">
+                  <div className="flex items-center justify-between flex-wrap gap-2 text-[10px] text-slate-500 px-1 pt-0.5 font-mono">
                     <span className="truncate max-w-[48%]">UPI ID: <strong className="text-slate-800 dark:text-white">{modalUpiId}</strong></span>
                     <span className="truncate max-w-[48%] text-right">Payee: <strong className="text-slate-800 dark:text-white">{modalPayeeName}</strong></span>
                   </div>
                 </div>
 
                 {/* Share Channels Heading */}
-                <div className="text-xs font-black uppercase tracking-wider text-slate-400 px-1">
+                <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 px-1">
                   Choose Share Channel
                 </div>
 
                 {/* Options Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   
-                  {/* 1. WhatsApp (Direct Intent / Web + QR Image) */}
+                  {/* 1. WhatsApp Direct (1-Tap to Customer Direct Chat) */}
                   <button
                     type="button"
                     onClick={async () => {
                       setIsUniversalShareModalOpen(false);
-                      await handleShareWhatsApp();
+                      await handleShareWhatsAppDirect();
                     }}
-                    className="p-3.5 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/30 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
+                    className="p-3 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/30 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
+                    title={`Open direct WhatsApp chat with ${activeCustomer.name} (${activeCustomer.phone})`}
                   >
-                    <div className="w-9 h-9 rounded-xl bg-[#25D366] text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <div className="w-8 h-8 rounded-xl bg-[#25D366] text-white flex items-center justify-center shrink-0 shadow-xs">
                       <Share2 className="w-4 h-4" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1">
-                        <span className="text-xs font-bold text-slate-900 dark:text-white">WhatsApp</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">WhatsApp Direct</span>
                       </div>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                        QR card + pay link
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug truncate">
+                        1-Tap to {activeCustomer.name.split(' ')[0]}
                       </p>
                     </div>
                   </button>
 
-                  {/* 2. Device Native Share (All Apps: Android / iOS / Mac / Win) */}
+                  {/* 2. Attach QR Image (Auto-attached QR via Web Share) */}
                   <button
                     type="button"
                     onClick={async () => {
                       setIsUniversalShareModalOpen(false);
-                      await handleUniversalShare();
+                      await handleShareWhatsAppAttached();
                     }}
-                    className="p-3.5 rounded-2xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 hover:bg-indigo-100/70 dark:hover:bg-indigo-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
+                    className="p-3 rounded-2xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 hover:bg-indigo-100/70 dark:hover:bg-indigo-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
+                    title="Share with QR card image attached directly"
                   >
-                    <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
                       <Smartphone className="w-4 h-4" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1">
-                        <span className="text-xs font-bold text-slate-900 dark:text-white">System Share</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">Attach QR</span>
                       </div>
                       <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                        Native sheet
+                        Image + caption
                       </p>
                     </div>
                   </button>
@@ -7001,9 +7063,10 @@ function KhataPageInner() {
                       handleDownloadQrCard();
                       setIsUniversalShareModalOpen(false);
                     }}
-                    className="p-3.5 rounded-2xl border border-purple-200 dark:border-purple-900/60 bg-purple-50/60 dark:bg-purple-950/30 hover:bg-purple-100/70 dark:hover:bg-purple-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
+                    className="p-3 rounded-2xl border border-purple-200 dark:border-purple-900/60 bg-purple-50/60 dark:bg-purple-950/30 hover:bg-purple-100/70 dark:hover:bg-purple-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
+                    title="Download High-Res QR Card PNG"
                   >
-                    <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
                       <QrCode className="w-4 h-4" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -7019,40 +7082,40 @@ function KhataPageInner() {
                 </div>
 
                 {/* Quick Copy Rows */}
-                <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <div className="space-y-1.5 pt-1.5 border-t border-slate-200 dark:border-slate-800">
                   {/* Copy Online Web Pay Link */}
-                  <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
+                  <div className="flex items-center justify-between gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
                     <div className="min-w-0 flex-1">
-                      <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Online Pay Link (Clickable)</div>
-                      <div className="text-xs font-mono text-slate-700 dark:text-slate-300 truncate">
+                      <div className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Online Pay Link (Auto Settled)</div>
+                      <div className="text-[11px] font-mono text-slate-700 dark:text-slate-300 truncate">
                         {modalWebPayUrl}
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleCopyShareText(modalWebPayUrl)}
-                      className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
                     >
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy Link</span>
+                      <Copy className="w-3 h-3" />
+                      <span>Copy</span>
                     </button>
                   </div>
 
                   {/* Copy Direct UPI Intent */}
-                  <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
+                  <div className="flex items-center justify-between gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
                     <div className="min-w-0 flex-1">
-                      <div className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">Direct UPI Link</div>
-                      <div className="text-xs font-mono text-slate-700 dark:text-slate-300 truncate">
+                      <div className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">Direct UPI Link</div>
+                      <div className="text-[11px] font-mono text-slate-700 dark:text-slate-300 truncate">
                         {modalUpiUri}
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleCopyUpiUri(modalUpiUri)}
-                      className="px-2.5 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+                      className="px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-[11px] font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
                     >
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy UPI</span>
+                      <Copy className="w-3 h-3" />
+                      <span>Copy</span>
                     </button>
                   </div>
                 </div>
