@@ -42,7 +42,7 @@ function PayRedirectContent() {
   const router = useRouter();
   const { settings, profile, currentUser, addTransaction, transactions, customers } = useApp();
 
-  const pathCustomerId = (params?.customerId as string) || '';
+  const pathCustomerId = (params?.customerId as string) || (params?.id as string) || '';
   const pathPid = (params?.pid as string) || '';
 
   const pParam = searchParams?.get('p');
