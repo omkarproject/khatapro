@@ -3731,8 +3731,8 @@ function KhataPageInner() {
     }
   };
 
-  // Backwards-compatible default
-  const handleShareWhatsApp = handleShareWhatsAppDirect;
+  // Default WhatsApp Share (Attaches QR Image + Message)
+  const handleShareWhatsApp = handleShareWhatsAppAttached;
  
   // Universal Share for Customer Profile Header (Mobile Native Share Sheet / Desktop Fallback)
   const handleUniversalShare = async () => {
@@ -7010,48 +7010,47 @@ function KhataPageInner() {
                 {/* Options Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   
-                  {/* 1. WhatsApp Direct (1-Tap to Customer Direct Chat) */}
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setIsUniversalShareModalOpen(false);
-                      await handleShareWhatsAppDirect();
-                    }}
-                    className="p-3 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/30 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
-                    title={`Open direct WhatsApp chat with ${activeCustomer.name} (${activeCustomer.phone})`}
-                  >
-                    <div className="w-8 h-8 rounded-xl bg-[#25D366] text-white flex items-center justify-center shrink-0 shadow-xs">
-                      <Share2 className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs font-bold text-slate-900 dark:text-white">WhatsApp Direct</span>
-                      </div>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug truncate">
-                        1-Tap to {activeCustomer.name.split(' ')[0]}
-                      </p>
-                    </div>
-                  </button>
-
-                  {/* 2. Attach QR Image (Auto-attached QR via Web Share) */}
+                  {/* 1. WhatsApp (QR Image Card Attached + Message) */}
                   <button
                     type="button"
                     onClick={async () => {
                       setIsUniversalShareModalOpen(false);
                       await handleShareWhatsAppAttached();
                     }}
+                    className="p-3 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/30 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
+                    title="Share with QR card image attached directly via WhatsApp"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-[#25D366] text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Share2 className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">WhatsApp</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                        QR card + pay link
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* 2. Device Native Share (All Apps: Android / iOS / Mac / Win) */}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsUniversalShareModalOpen(false);
+                      await handleUniversalShare();
+                    }}
                     className="p-3 rounded-2xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 hover:bg-indigo-100/70 dark:hover:bg-indigo-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
-                    title="Share with QR card image attached directly"
                   >
                     <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
                       <Smartphone className="w-4 h-4" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1">
-                        <span className="text-xs font-bold text-slate-900 dark:text-white">Attach QR</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">System Share</span>
                       </div>
                       <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                        Image + caption
+                        Native sheet
                       </p>
                     </div>
                   </button>
