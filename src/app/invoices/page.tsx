@@ -50,6 +50,7 @@ import {
   ChevronDown,
   Package,
   Pencil,
+  Smartphone,
 } from 'lucide-react';
 
 const DEFAULT_INVOICE_CHARGES: InvoiceChargeConfig[] = [
@@ -82,6 +83,8 @@ export default function InvoicesPage() {
   const [activeInvoice, setActiveInvoice] = useState<Invoice | null>(null);
   const [invoiceQrDataUrl, setInvoiceQrDataUrl] = useState<string>('');
   const [isSharingPdf, setIsSharingPdf] = useState<boolean>(false);
+  const [shareModalInvoice, setShareModalInvoice] = useState<Invoice | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
 
@@ -696,6 +699,113 @@ export default function InvoicesPage() {
     }
   };
 
+  // Open Unified Invoice Share Modal (Choose Share Channel)
+  const handleOpenInvoiceShare = (inv: Invoice) => {
+    setShareModalInvoice(inv);
+    setIsShareModalOpen(true);
+  };
+
+  // Download High-Res Vector Tax Invoice PDF
+  const handleDownloadInvoicePdf = async (inv: Invoice) => {
+    try {
+      addToast('Preparing PDF', 'Generating high-resolution Tax Invoice PDF...', 'info');
+      const upiUri = buildUpiUri(
+        settings.paymentSettings.upiId,
+        settings.paymentSettings.payeeName,
+        inv.total,
+        `Inv ${inv.invoiceNumber}`
+      );
+      const merchantLogo = (
+        settings.businessLogo ||
+        profile.avatarUrl ||
+        currentUser?.avatarUrl ||
+        settings.websiteLogo ||
+        '/brand-logo.png'
+      ).trim();
+      const qrDataUrl =
+        (activeInvoice && activeInvoice.id === inv.id && invoiceQrDataUrl)
+          ? invoiceQrDataUrl
+          : await generateInvoiceQrWithLogo(upiUri, merchantLogo, 320);
+
+      const pdfBlob = await generateInvoicePdfBlob(inv, settings, profile, qrDataUrl);
+      const safeInvNum = (inv.invoiceNumber || 'INV').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const fileName = `Tax_Invoice_${safeInvNum}.pdf`;
+
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = blobUrl;
+      downloadLink.download = fileName;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+
+      addToast('PDF Downloaded', `Invoice #${inv.invoiceNumber} downloaded successfully.`, 'success');
+    } catch (err) {
+      console.error('Error downloading invoice PDF:', err);
+      addToast('Download Failed', 'Failed to generate invoice PDF.', 'error');
+    }
+  };
+
+  // Device Native Share (System Share) with PDF Attachment
+  const handleNativeSystemShare = async (inv: Invoice, shareMessage: string) => {
+    try {
+      const upiUri = buildUpiUri(
+        settings.paymentSettings.upiId,
+        settings.paymentSettings.payeeName,
+        inv.total,
+        `Inv ${inv.invoiceNumber}`
+      );
+      const merchantLogo = (
+        settings.businessLogo ||
+        profile.avatarUrl ||
+        currentUser?.avatarUrl ||
+        settings.websiteLogo ||
+        '/brand-logo.png'
+      ).trim();
+      const qrDataUrl =
+        (activeInvoice && activeInvoice.id === inv.id && invoiceQrDataUrl)
+          ? invoiceQrDataUrl
+          : await generateInvoiceQrWithLogo(upiUri, merchantLogo, 320);
+
+      const pdfBlob = await generateInvoicePdfBlob(inv, settings, profile, qrDataUrl);
+      const safeInvNum = (inv.invoiceNumber || 'INV').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const fileName = `Tax_Invoice_${safeInvNum}.pdf`;
+
+      let pdfFile: File | null = null;
+      try {
+        pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+      } catch {
+        pdfFile = null;
+      }
+
+      if (pdfFile && typeof navigator !== 'undefined' && navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+        await navigator.share({
+          title: `Tax Invoice #${inv.invoiceNumber}`,
+          text: shareMessage,
+          files: [pdfFile],
+        });
+        addToast('Invoice Shared', 'Invoice shared successfully.', 'success');
+        return;
+      }
+
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({
+          title: `Tax Invoice #${inv.invoiceNumber}`,
+          text: shareMessage,
+        });
+        addToast('Invoice Shared', 'Invoice details shared.', 'success');
+        return;
+      }
+
+      // Fallback
+      await handleDownloadInvoicePdf(inv);
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return;
+      console.warn('System share error:', err);
+    }
+  };
+
   // Handle Open Status Update Modal
   const handleOpenStatusModal = (inv: Invoice) => {
     setStatusModalInvoice(inv);
@@ -975,19 +1085,10 @@ export default function InvoicesPage() {
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
-                      {inv.status !== 'paid' && (
-                        <button
-                          onClick={() => handleOpenSendPaymentLink(inv)}
-                          className="p-1.5 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-slate-500 hover:text-indigo-600 cursor-pointer"
-                          title="Generate & Send Payment Link"
-                        >
-                          <Link2 className="w-4 h-4" />
-                        </button>
-                      )}
                       <button
-                        onClick={() => handleWhatsAppShare(inv)}
-                        className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-emerald-600"
-                        title="Share on WhatsApp"
+                        onClick={() => handleOpenInvoiceShare(inv)}
+                        className="p-1.5 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/60 text-slate-500 hover:text-emerald-600 transition-colors cursor-pointer"
+                        title="Share"
                       >
                         <Share2 className="w-4 h-4" />
                       </button>
@@ -1048,11 +1149,11 @@ export default function InvoicesPage() {
                   <Printer className="w-3.5 h-3.5" /> Print
                 </button>
                 <button
-                  onClick={() => handleWhatsAppShare(activeInvoice)}
-                  disabled={isSharingPdf}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-xs"
+                  onClick={() => handleOpenInvoiceShare(activeInvoice)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-xs"
+                  title="Share invoice with PDF attached & Pay link"
                 >
-                  <Share2 className="w-3.5 h-3.5" /> {isSharingPdf ? 'Preparing PDF...' : 'WhatsApp'}
+                  <Share2 className="w-3.5 h-3.5" /> Share
                 </button>
                 <button
                   onClick={() => setActiveInvoice(null)}
@@ -1622,6 +1723,207 @@ export default function InvoicesPage() {
           </div>
         </div>
       )}
+
+      {/* ================= MODAL: INVOICE SHARE (CHOOSE SHARE CHANNEL) ================= */}
+      {isShareModalOpen && shareModalInvoice && (() => {
+        const inv = shareModalInvoice;
+        const origin = typeof window !== 'undefined' ? window.location.origin : 'https://smartkhata.netsell.in';
+        const webPayUrl = `${origin}/pay/${inv.id}?gw=${settings.paymentSettings?.collectionMode || 'direct_upi'}`;
+        const upiUri = buildUpiUri(
+          settings.paymentSettings.upiId,
+          settings.paymentSettings.payeeName,
+          inv.total,
+          `Inv ${inv.invoiceNumber}`
+        );
+        const businessName = settings.businessName || profile.businessName || 'SmartKhata';
+        const businessPhone = settings.businessPhone || profile.phone || '';
+        const isPaid = inv.status === 'paid';
+        const dueAmount = Math.max(0, inv.total - inv.paidAmount);
+
+        const shareMessage = isPaid
+          ? `*Tax Invoice from ${businessName}*\n\nDear ${inv.customerName},\n\nPlease find your official Tax Invoice *#${inv.invoiceNumber}* for *${formatINR(inv.total)}*.\nStatus: *PAID (Payment Received & Settled)* ✅\n\n👉 *Online View / Receipt:*\n${webPayUrl}\n\nThank you for your business,\n*${businessName}*${businessPhone ? ` (${businessPhone})` : ''}`
+          : `*Tax Invoice from ${businessName}*\n\nDear ${inv.customerName},\n\nPlease find your official Tax Invoice *#${inv.invoiceNumber}* for *${formatINR(inv.total)}*.\nDue Date: ${formatDate(inv.dueDate)}\nStatus: *UNPAID*\n\n👉 *Online Pay (Auto Settled):*\n${webPayUrl}\n\n⚡ *Direct UPI Link (Amount Locked):*\n${upiUri}\n\nScan the attached QR with Google Pay, PhonePe, Paytm, or BHIM.\n\nThank you,\n*${businessName}*${businessPhone ? ` (${businessPhone})` : ''}`;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-slate-900 rounded-[28px] max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+              
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <Share2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                      Share
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {inv.customerName} • {isPaid ? (
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">Settled: ₹0 Due</span>
+                      ) : (
+                        <span className="font-bold text-rose-600 dark:text-rose-400">Due: {formatINR(dueAmount)}</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsShareModalOpen(false)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                  title="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="p-4 sm:p-5 space-y-3 overflow-y-auto">
+                
+                {/* Message Preview Box (Compact) */}
+                <div className="p-2.5 sm:p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 space-y-1.5 overflow-hidden">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <span>Message Preview</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-mono text-[10px] font-bold">⚡ Ready to Share</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700 text-[11px] text-slate-800 dark:text-slate-200 font-sans whitespace-pre-line leading-relaxed shadow-xs max-w-full break-all break-words [overflow-wrap:anywhere] max-h-24 sm:max-h-28 overflow-y-auto select-text scrollbar-thin">
+                    {shareMessage}
+                  </div>
+                  <div className="flex items-center justify-between flex-wrap gap-2 text-[10px] text-slate-500 px-1 pt-0.5 font-mono">
+                    <span className="truncate max-w-[48%]">UPI ID: <strong className="text-slate-800 dark:text-white">{settings.paymentSettings.upiId || 'N/A'}</strong></span>
+                    <span className="truncate max-w-[48%] text-right">Payee: <strong className="text-slate-800 dark:text-white">{settings.paymentSettings.payeeName || businessName}</strong></span>
+                  </div>
+                </div>
+
+                {/* Share Channels Heading */}
+                <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 px-1">
+                  Choose Share Channel
+                </div>
+
+                {/* Options Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  
+                  {/* 1. WhatsApp (PDF Invoice Attached + Message) */}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsShareModalOpen(false);
+                      await handleWhatsAppShare(inv);
+                    }}
+                    className="p-3 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/30 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
+                    title="Share with Tax Invoice PDF attached directly via WhatsApp"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-[#25D366] text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Share2 className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">WhatsApp</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                        PDF invoice + pay link
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* 2. Device Native Share (System Share) */}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsShareModalOpen(false);
+                      await handleNativeSystemShare(inv, shareMessage);
+                    }}
+                    className="p-3 rounded-2xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 hover:bg-indigo-100/70 dark:hover:bg-indigo-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
+                    title="Share with all native device apps"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Smartphone className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">System Share</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                        Native sheet
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* 3. Download / Save Invoice PDF */}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsShareModalOpen(false);
+                      await handleDownloadInvoicePdf(inv);
+                    }}
+                    className="p-3 rounded-2xl border border-purple-200 dark:border-purple-900/60 bg-purple-50/60 dark:bg-purple-950/30 hover:bg-purple-100/70 dark:hover:bg-purple-950/60 transition-all text-left flex items-start gap-2.5 group cursor-pointer shadow-xs active:scale-98"
+                    title="Download High-Res Vector Tax Invoice PDF"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Download className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">Save PDF</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                        Download invoice
+                      </p>
+                    </div>
+                  </button>
+
+                </div>
+
+                {/* Quick Copy Rows */}
+                <div className="space-y-1.5 pt-1.5 border-t border-slate-200 dark:border-slate-800">
+                  {/* Copy Online Web Pay Link */}
+                  <div className="flex items-center justify-between gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Online Pay Link (Auto Settled)</div>
+                      <div className="text-[11px] font-mono text-slate-700 dark:text-slate-300 truncate">
+                        {webPayUrl}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(webPayUrl);
+                        addToast('Copied!', 'Online payment link copied to clipboard.', 'success');
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>Copy</span>
+                    </button>
+                  </div>
+
+                  {/* Copy Direct UPI Intent */}
+                  <div className="flex items-center justify-between gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">Direct UPI Link</div>
+                      <div className="text-[11px] font-mono text-slate-700 dark:text-slate-300 truncate">
+                        {upiUri}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(upiUri);
+                        addToast('Copied!', 'Direct UPI payment URI copied to clipboard.', 'success');
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-[11px] font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>Copy</span>
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ================= MODAL: GENERATE & SEND PAYMENT LINK ================= */}
       {paymentLinkInvoice && (
