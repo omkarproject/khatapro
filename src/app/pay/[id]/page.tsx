@@ -147,23 +147,40 @@ function CustomerPayInvoiceContent() {
       if (isActuallyPaid) {
         setPaymentSuccess(true);
         if (targetInv.receiptUrl) setLastReceiptImgUrl(targetInv.receiptUrl);
-        const hist = targetInv.statusHistory?.[0];
-        if (hist?.notes) {
-          const matchUtr = hist.notes.match(/(?:Bank Ref \/ UTR|UTR)[:\s]+([A-Za-z0-9_-]+)/i);
-          if (matchUtr) setTxnRef(matchUtr[1]);
-          const matchRec = hist.notes.match(/Receipt ID[:\s]+([A-Za-z0-9_-]+)/i);
-          if (matchRec) setLastReceiptNo(matchRec[1]);
-          const matchTxn = hist.notes.match(/Transaction ID[:\s]+([A-Za-z0-9_-]+)/i);
-          if (matchTxn) setLastGatewayTxnId(matchTxn[1]);
-        }
-        if (settledRaw) {
+
+        // Read settled details from settledRaw or history/notes
+        const targetSettledRaw =
+          settledRaw ||
+          (typeof window !== 'undefined' &&
+            (localStorage.getItem(`sk_invoice_settled_${invoiceId}`) ||
+              (found.id && localStorage.getItem(`sk_invoice_settled_${found.id}`)) ||
+              (found.invoiceNumber && localStorage.getItem(`sk_invoice_settled_${found.invoiceNumber}`)))) ||
+          null;
+
+        if (targetSettledRaw) {
           try {
-            const s = JSON.parse(settledRaw);
-            if (s.referenceNo) setTxnRef(s.referenceNo);
-            if (s.receiptNo) setLastReceiptNo(s.receiptNo);
+            const s = JSON.parse(targetSettledRaw);
+            if (s.referenceNo && !s.referenceNo.startsWith('inv_')) setTxnRef(s.referenceNo);
+            if (s.receiptNo && !s.receiptNo.includes(invoiceId)) setLastReceiptNo(s.receiptNo);
             if (s.gatewayTxnId) setLastGatewayTxnId(s.gatewayTxnId);
             if (s.receiptUrl) setLastReceiptImgUrl(s.receiptUrl);
           } catch {}
+        }
+
+        const histNote = targetInv.statusHistory?.[0]?.notes || targetInv.notes || '';
+        if (histNote) {
+          const matchUtr = histNote.match(/(?:Bank Ref \/ UTR|UTR)[:\s]+([A-Za-z0-9_-]+)/i);
+          if (matchUtr && !matchUtr[1].startsWith('inv_')) {
+            setTxnRef((curr) => (curr && !curr.startsWith('inv_') ? curr : matchUtr[1]));
+          }
+          const matchRec = histNote.match(/Receipt ID[:\s]+([A-Za-z0-9_-]+)/i);
+          if (matchRec && !matchRec[1].includes(invoiceId)) {
+            setLastReceiptNo((curr) => (curr && !curr.includes(invoiceId) ? curr : matchRec[1]));
+          }
+          const matchTxn = histNote.match(/Transaction ID[:\s]+([A-Za-z0-9_-]+)/i);
+          if (matchTxn) {
+            setLastGatewayTxnId((curr) => curr || matchTxn[1]);
+          }
         }
       } else {
         setPaymentSuccess(false);
@@ -217,9 +234,19 @@ function CustomerPayInvoiceContent() {
         if (res && res.isPaid) {
           setPaymentSuccess(true);
           setInvoice((prev) => (prev ? { ...prev, status: 'paid', paidAmount: prev.total, receiptUrl: res.invoice?.receiptUrl || prev.receiptUrl } : prev));
-          if (res.receipt?.referenceNo) setTxnRef(res.receipt.referenceNo);
-          if (res.receipt?.receiptNo) setLastReceiptNo(res.receipt.receiptNo);
-          if (res.invoice?.receiptUrl) setLastReceiptImgUrl(res.invoice.receiptUrl);
+          // Never overwrite valid true reference / receipt numbers with fallback values
+          if (res.receipt?.referenceNo && !res.receipt.referenceNo.startsWith('inv_')) {
+            setTxnRef((curr) => (curr && !curr.startsWith('inv_') ? curr : res.receipt.referenceNo));
+          }
+          if (res.receipt?.receiptNo && !res.receipt.receiptNo.includes(invoiceId) && !res.receipt.receiptNo.includes(found?.invoiceNumber || '')) {
+            setLastReceiptNo((curr) => (curr && !curr.includes(invoiceId) ? curr : res.receipt.receiptNo));
+          }
+          if (res.receipt?.gatewayTxnId) {
+            setLastGatewayTxnId((curr) => curr || res.receipt.gatewayTxnId);
+          }
+          if (res.invoice?.receiptUrl) {
+            setLastReceiptImgUrl((curr) => curr || res.invoice.receiptUrl);
+          }
           if (typeof window !== 'undefined') {
             localStorage.setItem(`sk_destroyed_pay_link_${invoiceId}`, 'true');
           }
@@ -388,17 +415,43 @@ function CustomerPayInvoiceContent() {
       try {
         localStorage.setItem(`sk_destroyed_pay_link_${invoice.id}`, 'true');
         localStorage.setItem(`sk_destroyed_pay_link_${invoice.invoiceNumber}`, 'true');
-        localStorage.setItem(
-          `sk_invoice_settled_${invoice.id}`,
-          JSON.stringify({
-            receiptNo: finalReceiptNo,
-            referenceNo: finalTxnId,
-            gatewayTxnId: gatewayTxnId || '',
-            paidAmount: invoice.total,
-            receiptUrl: receiptImgUrl,
-            settledAt: nowIso,
-          })
-        );
+        if (invoiceId) {
+          localStorage.setItem(`sk_destroyed_pay_link_${invoiceId}`, 'true');
+        }
+        const settledPayload = JSON.stringify({
+          receiptNo: finalReceiptNo,
+          referenceNo: finalTxnId,
+          gatewayTxnId: gatewayTxnId || '',
+          paidAmount: invoice.total,
+          receiptUrl: receiptImgUrl,
+          settledAt: nowIso,
+        });
+        localStorage.setItem(`sk_invoice_settled_${invoice.id}`, settledPayload);
+        localStorage.setItem(`sk_invoice_settled_${invoice.invoiceNumber}`, settledPayload);
+        if (invoiceId) {
+          localStorage.setItem(`sk_invoice_settled_${invoiceId}`, settledPayload);
+        }
+
+        // Clean up any scheduled payment reminder for this invoice in localStorage
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('skp_reminders')) {
+            try {
+              const raw = localStorage.getItem(k);
+              if (raw) {
+                const remList = JSON.parse(raw);
+                if (Array.isArray(remList)) {
+                  const filtered = remList.filter((r: any) => {
+                    if (r.id === `rem_inv_${invoice.id}` || r.id === `rem_inv_${invoice.invoiceNumber}`) return false;
+                    if (invoice.invoiceNumber && (r.note?.includes(invoice.invoiceNumber) || r.messageTemplate?.includes(invoice.invoiceNumber))) return false;
+                    return true;
+                  });
+                  localStorage.setItem(k, JSON.stringify(filtered));
+                }
+              }
+            } catch {}
+          }
+        }
       } catch {}
     }
 

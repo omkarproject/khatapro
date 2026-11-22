@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
-import { formatINR, formatDate, isOnlineCollectionTxn } from '@/lib/utils';
+import { formatINR, formatDate, isOnlineCollectionTxn, isInvoicePaid } from '@/lib/utils';
 import { t } from '@/lib/i18n';
 import QuickAddRecordModal from '@/components/QuickAddRecordModal';
 import {
@@ -302,7 +302,7 @@ export default function DashboardPage() {
     // --- 3. BILLING & INVOICING CALCULATIONS ---
     // User requested: I: must be UNPAID invoices total only
     const totalInvoiceAmount = invoices
-      .filter(inv => inv.status !== 'paid')
+      .filter(inv => !isInvoicePaid(inv))
       .reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
 
     // --- 4. NET AMOUNT (KHATA - EXPENSES) ---
@@ -400,7 +400,7 @@ export default function DashboardPage() {
     });
 
     invoices.forEach(inv => {
-      if (inv.status === 'paid') return;
+      if (isInvoicePaid(inv)) return;
       try {
         const d = new Date(inv.issueDate || inv.createdAt || '');
         if (!isNaN(d.getTime())) {

@@ -1386,7 +1386,9 @@ export const StorageService = {
         const isDestroyed =
           localStorage.getItem('sk_destroyed_pay_link_' + inv.id) === 'true' ||
           localStorage.getItem('sk_destroyed_pay_link_' + inv.invoiceNumber) === 'true';
-        const settledRaw = localStorage.getItem('sk_invoice_settled_' + inv.id);
+        const settledRaw =
+          localStorage.getItem('sk_invoice_settled_' + inv.id) ||
+          (inv.invoiceNumber ? localStorage.getItem('sk_invoice_settled_' + inv.invoiceNumber) : null);
         if (isDestroyed || settledRaw) {
           modified = true;
           let settledData: any = null;

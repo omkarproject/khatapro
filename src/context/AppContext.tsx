@@ -23,6 +23,7 @@ import {
 } from '@/types';
 import { StorageService, getCleanDefaultSettings } from '@/services/storage';
 import { deleteFromDriveFiles } from '@/lib/driveUploadClient';
+import { isInvoicePaid } from '@/lib/utils';
 import { setActiveLanguage, setActiveCurrency, getActiveLanguage, getActiveCurrency, LanguageOption, CurrencyOption, t } from '@/lib/i18n';
 import { syncLiveExchangeRates } from '@/lib/currencyService';
 import { getSupabaseClient } from '@/lib/supabase';
@@ -2374,6 +2375,22 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     const updated = StorageService.saveInvoice(inv);
     setInvoices(updated);
     setProducts(StorageService.getProducts());
+
+    if (isInvoicePaid(inv)) {
+      const allReminders = StorageService.getReminders();
+      const linkedReminders = allReminders.filter(
+        r =>
+          r.id === `rem_inv_${inv.id}` ||
+          r.id === `rem_inv_${inv.invoiceNumber}` ||
+          (inv.invoiceNumber && (r.note?.includes(inv.invoiceNumber) || r.messageTemplate?.includes(inv.invoiceNumber))) ||
+          (r.customerId === inv.customerId && r.amount === inv.total && r.dueDate === inv.dueDate)
+      );
+      if (linkedReminders.length > 0) {
+        linkedReminders.forEach(rem => StorageService.deleteReminder(rem.id));
+        setReminders(StorageService.getReminders());
+      }
+    }
+
     addToast('Invoice Saved', `Invoice #${inv.invoiceNumber} has been updated.`, 'success');
     syncWithDatabase();
   };
@@ -2398,6 +2415,18 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         StorageService.hardDeleteTransaction(matchingTxn.id);
         setTransactions(StorageService.getTransactions());
         setCustomers(StorageService.getCustomers());
+      }
+
+      // Clean up linked payment reminders
+      const allReminders = StorageService.getReminders();
+      const linkedReminders = allReminders.filter(
+        r =>
+          r.id === `rem_inv_${id}` ||
+          (existing.invoiceNumber && (r.note?.includes(existing.invoiceNumber) || r.messageTemplate?.includes(existing.invoiceNumber)))
+      );
+      if (linkedReminders.length > 0) {
+        linkedReminders.forEach(rem => StorageService.deleteReminder(rem.id));
+        setReminders(StorageService.getReminders());
       }
     }
     const updated = StorageService.deleteInvoice(id);

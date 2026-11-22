@@ -621,3 +621,41 @@ export function formatTransactionNote(noteOrTxn: any): string {
 
   return note || '-';
 }
+
+/**
+ * Accurately determines if an invoice is paid by checking:
+ * 1. inv.status (case-insensitive)
+ * 2. inv.paymentStatus / inv.payment_status
+ * 3. paidAmount >= total (when total > 0)
+ * 4. localStorage link destruction & settled receipt markers
+ */
+export function isInvoicePaid(inv: any): boolean {
+  if (!inv) return false;
+  const status = String(inv.status || '').toLowerCase().trim();
+  const paymentStatus = String(inv.paymentStatus || inv.payment_status || '').toLowerCase().trim();
+  if (status === 'paid' || paymentStatus === 'paid') return true;
+  const total = Number(inv.total ?? inv.grandTotal ?? inv.grand_total ?? 0);
+  const paid = Number(inv.paidAmount ?? inv.paid_amount ?? 0);
+  if (total > 0 && paid >= total) return true;
+
+  if (typeof window !== 'undefined') {
+    if (inv.id) {
+      if (
+        localStorage.getItem(`sk_destroyed_pay_link_${inv.id}`) === 'true' ||
+        localStorage.getItem(`sk_invoice_settled_${inv.id}`)
+      ) {
+        return true;
+      }
+    }
+    if (inv.invoiceNumber) {
+      if (
+        localStorage.getItem(`sk_destroyed_pay_link_${inv.invoiceNumber}`) === 'true' ||
+        localStorage.getItem(`sk_invoice_settled_${inv.invoiceNumber}`)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+

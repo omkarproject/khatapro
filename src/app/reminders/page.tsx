@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
-import { formatINR, formatDate, buildUpiUri, openWhatsApp } from '@/lib/utils';
+import { formatINR, formatDate, buildUpiUri, openWhatsApp, isInvoicePaid } from '@/lib/utils';
+import { StorageService } from '@/services/storage';
 import { getActiveCurrency, t } from '@/lib/i18n';
 import { PaymentReminder } from '@/types';
 import {
@@ -54,23 +55,40 @@ export default function RemindersPage() {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // Auto-schedule payment reminders for any unpaid invoices
+  // Auto-schedule payment reminders for any unpaid invoices & clean up paid ones
   useEffect(() => {
     if (!invoices || invoices.length === 0) return;
     invoices.forEach((inv) => {
       const remId = `rem_inv_${inv.id}`;
-      if (inv.status === 'paid') {
-        const existing = reminders.find((r) => r.id === remId);
-        if (existing && existing.status !== 'sent') {
-          deleteReminder(remId);
-        }
+      const isPaid = isInvoicePaid(inv);
+
+      if (isPaid) {
+        // Find and remove ANY scheduled reminder for this paid invoice
+        const toDelete = reminders.filter(
+          (r) =>
+            r.id === remId ||
+            r.id === `rem_inv_${inv.invoiceNumber}` ||
+            (inv.invoiceNumber && (r.note?.includes(inv.invoiceNumber) || r.messageTemplate?.includes(inv.invoiceNumber))) ||
+            (r.customerId === inv.customerId && r.amount === inv.total && r.dueDate === inv.dueDate)
+        );
+        toDelete.forEach((r) => {
+          deleteReminder(r.id);
+        });
       } else {
+        // Unpaid invoice: check if user already dismissed or deleted this reminder
+        const isDismissed =
+          (typeof window !== 'undefined' &&
+            (localStorage.getItem(`skp_dismissed_reminder_${remId}`) === 'true' ||
+              (inv.invoiceNumber && localStorage.getItem(`skp_dismissed_reminder_${inv.invoiceNumber}`) === 'true'))) ||
+          StorageService.getDeletedRecordIds('reminders').has(remId);
+
+        if (isDismissed) return;
+
         const alreadyExists = reminders.some(
           (r) =>
             r.id === remId ||
-            (r.customerId === inv.customerId &&
-              r.amount === inv.total &&
-              r.dueDate === inv.dueDate)
+            r.id === `rem_inv_${inv.invoiceNumber}` ||
+            (inv.invoiceNumber && (r.note?.includes(inv.invoiceNumber) || r.messageTemplate?.includes(inv.invoiceNumber)))
         );
         if (!alreadyExists) {
           const cust = customers.find((c) => c.id === inv.customerId);
@@ -98,10 +116,45 @@ export default function RemindersPage() {
     });
   }, [invoices, reminders, customers, todayStr, saveReminder, deleteReminder]);
 
-  const overdueCount = reminders.filter(r => (r.dueDate ? r.dueDate < todayStr : r.reminderType === 'overdue')).length;
-  const upcomingCount = reminders.filter(r => (r.dueDate ? r.dueDate >= todayStr : r.reminderType !== 'overdue')).length;
+  const handleDeleteReminder = (rem: PaymentReminder) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`skp_dismissed_reminder_${rem.id}`, 'true');
+      if (rem.id.startsWith('rem_inv_')) {
+        localStorage.setItem(`skp_dismissed_reminder_${rem.id.replace('rem_inv_', '')}`, 'true');
+      }
+      const matchInvNo = rem.note?.match(/#(SKP\/[0-9]+\/[0-9]+)/i) || rem.messageTemplate?.match(/#(SKP\/[0-9]+\/[0-9]+)/i);
+      if (matchInvNo?.[1]) {
+        localStorage.setItem(`skp_dismissed_reminder_${matchInvNo[1]}`, 'true');
+      }
+    }
+    deleteReminder(rem.id);
+  };
 
-  const filteredReminders = reminders.filter(r => {
+  const activeReminders = React.useMemo(() => {
+    return reminders.filter((r) => {
+      // 1. If linked invoice is paid, hide immediately
+      const linkedInvoice = invoices.find(
+        (i) =>
+          r.id === `rem_inv_${i.id}` ||
+          r.id === `rem_inv_${i.invoiceNumber}` ||
+          (i.invoiceNumber && (r.note?.includes(i.invoiceNumber) || r.messageTemplate?.includes(i.invoiceNumber)))
+      );
+      if (linkedInvoice && isInvoicePaid(linkedInvoice)) return false;
+
+      // 2. If manually deleted/dismissed, hide immediately
+      if (typeof window !== 'undefined') {
+        if (localStorage.getItem(`skp_dismissed_reminder_${r.id}`) === 'true') return false;
+      }
+      if (StorageService.getDeletedRecordIds('reminders').has(r.id)) return false;
+
+      return true;
+    });
+  }, [reminders, invoices]);
+
+  const overdueCount = activeReminders.filter(r => (r.dueDate ? r.dueDate < todayStr : r.reminderType === 'overdue')).length;
+  const upcomingCount = activeReminders.filter(r => (r.dueDate ? r.dueDate >= todayStr : r.reminderType !== 'overdue')).length;
+
+  const filteredReminders = activeReminders.filter(r => {
     const isPastDue = r.dueDate ? r.dueDate < todayStr : r.reminderType === 'overdue';
     if (filter === 'overdue') return isPastDue;
     if (filter === 'upcoming') return !isPastDue;
@@ -293,11 +346,7 @@ export default function RemindersPage() {
                   </button>
 
                   <button
-                    onClick={() => {
-                      if (confirm(`Delete reminder for ${rem.customerName}?`)) {
-                        deleteReminder(rem.id);
-                      }
-                    }}
+                    onClick={() => handleDeleteReminder(rem)}
                     className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
                     title="Delete Reminder"
                   >

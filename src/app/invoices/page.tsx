@@ -1112,6 +1112,10 @@ export default function InvoicesPage() {
     };
 
     saveInvoice(updatedInvoice);
+    if (newStatus === 'paid') {
+      deleteReminder(`rem_inv_${statusModalInvoice.id}`);
+      deleteReminder(`rem_inv_${statusModalInvoice.invoiceNumber}`);
+    }
     addToast(
       'Status Updated',
       `Invoice #${statusModalInvoice.invoiceNumber} status set to ${newStatus.toUpperCase()}.`,

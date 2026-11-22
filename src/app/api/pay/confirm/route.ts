@@ -284,6 +284,54 @@ export async function GET(req: NextRequest) {
             inv.status === 'paid' ||
             Number(inv.paid_amount || 0) >= Number(inv.total || inv.grand_total || 0);
 
+          let receiptData = null;
+          if (isPaid) {
+            let utrRef = '';
+            let recNo = '';
+            let gwTxnId = '';
+
+            try {
+              const { data: matchedTxn } = await supabase
+                .from('transactions')
+                .select('*')
+                .or(`bill_number.eq.${inv.invoice_number},description.ilike.%${inv.invoice_number}%`)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+              if (matchedTxn) {
+                if (matchedTxn.bill_number && !matchedTxn.bill_number.startsWith('inv_')) {
+                  utrRef = matchedTxn.bill_number;
+                }
+                const desc = matchedTxn.description || '';
+                const matchRec = desc.match(/Receipt ID[:\s]+([^\n\r]+)/i);
+                if (matchRec) recNo = matchRec[1].trim();
+                const matchUtr = desc.match(/(?:Bank Ref \/ UTR|UTR)[:\s]+([^\n\r]+)/i);
+                if (matchUtr && !utrRef) utrRef = matchUtr[1].trim();
+                const matchTxn = desc.match(/Transaction ID[:\s]+([^\n\r]+)/i);
+                if (matchTxn) gwTxnId = matchTxn[1].trim();
+              }
+            } catch {}
+
+            if (!recNo && inv.notes) {
+              const matchRec = inv.notes.match(/Receipt ID[:\s]+([^\n\r]+)/i);
+              if (matchRec) recNo = matchRec[1].trim();
+            }
+            if (!utrRef && inv.notes) {
+              const matchUtr = inv.notes.match(/(?:Bank Ref \/ UTR|UTR)[:\s]+([^\n\r]+)/i);
+              if (matchUtr && !matchUtr[1].startsWith('inv_')) utrRef = matchUtr[1].trim();
+            }
+
+            receiptData = {
+              receiptNo: recNo || '',
+              amount: Number(inv.paid_amount || inv.total || 0),
+              referenceNo: utrRef || '',
+              gatewayTxnId: gwTxnId || '',
+              dateTime: inv.payment_date || inv.updated_at,
+              paymentMode: inv.payment_mode || 'Cashfree PG',
+            };
+          }
+
           return NextResponse.json({
             isPaid,
             invoice: {
@@ -295,13 +343,7 @@ export async function GET(req: NextRequest) {
               receiptUrl: inv.receipt_url,
               notes: inv.notes,
             },
-            receipt: isPaid ? {
-              receiptNo: `SKP-REC-${inv.invoice_number || inv.id}`,
-              amount: Number(inv.paid_amount || inv.total || 0),
-              referenceNo: inv.id,
-              dateTime: inv.payment_date || inv.updated_at,
-              paymentMode: inv.payment_mode || 'Cashfree PG',
-            } : null,
+            receipt: receiptData,
           });
         }
       }
