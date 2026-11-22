@@ -240,67 +240,115 @@ export default function CustomersPage() {
     setReviewAvatarCustomer(cust);
   };
 
+  // Helper to compress customer profile avatar to lightweight, fast-loading image (< 60KB)
+  const compressAvatar = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve((e.target?.result as string) || '');
+        reader.readAsDataURL(file);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX_SIZE = 400;
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > MAX_SIZE) {
+              height = Math.round((height * MAX_SIZE) / width);
+              width = MAX_SIZE;
+            }
+          } else {
+            if (height > MAX_SIZE) {
+              width = Math.round((width * MAX_SIZE) / height);
+              height = MAX_SIZE;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', 0.85);
+            resolve(compressed);
+          } else {
+            resolve((e.target?.result as string) || '');
+          }
+        };
+        img.onerror = () => resolve((e.target?.result as string) || '');
+        img.src = (e.target?.result as string) || '';
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleChangeAvatarInReview = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !reviewAvatarCustomer) return;
-    if (file.size > 10 * 1024 * 1024) {
-      addToast('File too large', 'Please select an image under 10MB.', 'warning');
+    if (file.size > 15 * 1024 * 1024) {
+      addToast('File too large', 'Please select an image under 15MB.', 'warning');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      const base64 = evt.target?.result as string;
+    try {
       setIsUpdatingAvatarInReview(true);
-      addToast('Uploading...', `Uploading new photo to Google Drive for ${reviewAvatarCustomer.name}...`, 'info');
+      const compressed = await compressAvatar(file);
+      const finalAvatar = compressed || '';
+      let driveAvatarId = reviewAvatarCustomer.driveAvatarId;
 
-      try {
-        const driveRes = await uploadToDriveFiles(
-          `${reviewAvatarCustomer.name.replace(/\s+/g, '_')}_profile.jpg`,
-          base64,
-          file.type || 'image/jpeg',
-          {
-            customerName: reviewAvatarCustomer.name,
-            customerId: reviewAvatarCustomer.id,
-            folderName: 'Profile Picture',
-            category: 'Profile Picture',
-            appFileId: `avatar_${reviewAvatarCustomer.id}`,
-            uploadedAt: new Date().toISOString(),
+      const isDriveActive = Boolean(
+        settings.googleDriveEnabled &&
+        settings.googleDriveSettings?.enabled
+      );
+
+      if (isDriveActive && finalAvatar) {
+        try {
+          const driveRes = await uploadToDriveFiles(
+            `${reviewAvatarCustomer.name.replace(/\s+/g, '_')}_profile.jpg`,
+            finalAvatar,
+            'image/jpeg',
+            {
+              customerName: reviewAvatarCustomer.name,
+              customerId: reviewAvatarCustomer.id,
+              folderName: 'Profile Picture',
+              category: 'Profile Picture',
+              appFileId: `avatar_${reviewAvatarCustomer.id}`,
+              uploadedAt: new Date().toISOString(),
+            }
+          );
+          if (driveRes.success && driveRes.fileId) {
+            driveAvatarId = driveRes.fileId;
           }
-        );
-
-        let finalAvatar = base64;
-        let driveAvatarId: string | undefined = undefined;
-        if (driveRes.success && (driveRes.publicUrl || driveRes.url)) {
-          finalAvatar = driveRes.publicUrl || driveRes.url || base64;
-          driveAvatarId = driveRes.fileId;
-        } else if (driveRes.success && driveRes.fileId) {
-          driveAvatarId = driveRes.fileId;
-          finalAvatar = `/api/backup/google-drive/view-file?fileId=${driveRes.fileId}`;
+        } catch (driveErr) {
+          console.warn('Optional background drive avatar upload warning:', driveErr);
         }
-
-        const updatedCustomer: Customer = {
-          ...reviewAvatarCustomer,
-          avatar: finalAvatar,
-          avatarUrl: finalAvatar,
-          driveAvatarId,
-        };
-
-        saveCustomer(updatedCustomer);
-        setReviewAvatarCustomer(updatedCustomer);
-        if (activeCustomer && activeCustomer.id === updatedCustomer.id) {
-          setActiveCustomer(updatedCustomer);
-        }
-        addToast('Photo Updated', `${reviewAvatarCustomer.name}'s profile photo updated and saved to Google Drive!`, 'success');
-      } catch (err) {
-        console.error('Error changing avatar:', err);
-        addToast('Upload Failed', 'Could not upload photo to Google Drive.', 'error');
-      } finally {
-        setIsUpdatingAvatarInReview(false);
       }
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+
+      const updatedCustomer: Customer = {
+        ...reviewAvatarCustomer,
+        avatar: finalAvatar,
+        avatarUrl: finalAvatar,
+        driveAvatarId,
+      };
+
+      saveCustomer(updatedCustomer);
+      setReviewAvatarCustomer(updatedCustomer);
+      if (activeCustomer && activeCustomer.id === updatedCustomer.id) {
+        setActiveCustomer(updatedCustomer);
+      }
+      addToast('Photo Updated', `${reviewAvatarCustomer.name}'s profile photo updated!`, 'success');
+    } catch (err) {
+      console.error('Error changing avatar:', err);
+      addToast('Upload Failed', 'Could not update profile photo.', 'error');
+    } finally {
+      setIsUpdatingAvatarInReview(false);
+      e.target.value = '';
+    }
   };
 
   const handleDeleteAvatarInReview = async () => {
@@ -330,20 +378,27 @@ export default function CustomersPage() {
   };
 
   // Handle avatar upload in customer Add/Edit modal (purely local preview until Save is clicked)
-  const handleFormAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFormAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        addToast('File too large', 'Please select an image under 10MB.', 'warning');
+      if (file.size > 15 * 1024 * 1024) {
+        addToast('File too large', 'Please select an image under 15MB.', 'warning');
         return;
       }
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        const base64 = evt.target?.result as string;
-        setFormAvatar(base64);
-        addToast('Photo Selected', 'Preview updated. Photo will be saved to Google Drive when you click Save.', 'info');
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressedBase64 = await compressAvatar(file);
+        if (compressedBase64) {
+          setFormAvatar(compressedBase64);
+          addToast('Photo Selected', 'Customer profile photo selected.', 'success');
+        }
+      } catch {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          setFormAvatar(evt.target?.result as string);
+          addToast('Photo Selected', 'Customer profile photo selected.', 'success');
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -475,11 +530,16 @@ export default function CustomersPage() {
     }
 
     const customerId = editingId || `cust_${Date.now()}`;
-    let finalAvatar = formAvatar || undefined;
+    const finalAvatar = formAvatar || undefined;
     let finalDriveAvatarId = formDriveAvatarId || undefined;
 
-    // If formAvatar is still raw base64, ensure it's uploaded to Google Drive
-    if (formAvatar && formAvatar.startsWith('data:')) {
+    const isDriveActive = Boolean(
+      settings.googleDriveEnabled &&
+      settings.googleDriveSettings?.enabled
+    );
+
+    // If Google Drive integration is ON and formAvatar is raw base64, back up to Drive
+    if (isDriveActive && formAvatar && formAvatar.startsWith('data:')) {
       try {
         setIsUploadingAvatar(true);
         const driveRes = await uploadToDriveFiles(
@@ -495,12 +555,8 @@ export default function CustomersPage() {
             uploadedAt: new Date().toISOString(),
           }
         );
-        if (driveRes.success && (driveRes.publicUrl || driveRes.url)) {
-          finalAvatar = driveRes.publicUrl || driveRes.url || formAvatar;
+        if (driveRes.success && driveRes.fileId) {
           finalDriveAvatarId = driveRes.fileId;
-        } else if (driveRes.success && driveRes.fileId) {
-          finalDriveAvatarId = driveRes.fileId;
-          finalAvatar = `/api/backup/google-drive/view-file?fileId=${driveRes.fileId}`;
         }
       } catch (err) {
         console.warn('Avatar upload on save deferred:', err);
@@ -1352,7 +1408,7 @@ export default function CustomersPage() {
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2.5">
             <Users className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-            Customer Relationship Management (CRM)
+            Customer Relationship Management
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
             360-degree customer profiling, credit risk scoring, purchase history, and direct collections
@@ -1857,13 +1913,19 @@ export default function CustomersPage() {
               {/* Profile Picture Uploader */}
               <div className="flex items-center gap-4 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80">
                 <div className="relative shrink-0">
-                  <div className="w-16 h-16 rounded-2xl fintech-gradient-primary text-white font-black text-xl flex items-center justify-center shadow-md overflow-hidden border-2 border-white dark:border-slate-800">
-                    {formAvatar ? (
-                      <img src={formAvatar} alt="Profile preview" className="w-full h-full object-cover" />
-                    ) : formName.trim() ? (
-                      formName.trim().charAt(0).toUpperCase()
-                    ) : (
-                      <Camera className="w-7 h-7 text-white/80" />
+                  <div className="w-16 h-16 rounded-2xl fintech-gradient-primary text-white font-black text-xl flex items-center justify-center shadow-md overflow-hidden relative border-2 border-white dark:border-slate-800">
+                    <span className="font-extrabold text-xl select-none">
+                      {formName.trim() ? formName.trim().charAt(0).toUpperCase() : <Camera className="w-7 h-7 text-white/80" />}
+                    </span>
+                    {formAvatar && (
+                      <img
+                        src={formAvatar}
+                        alt="Profile preview"
+                        className="w-full h-full object-cover absolute inset-0"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                      />
                     )}
                   </div>
                   <input
@@ -1879,12 +1941,12 @@ export default function CustomersPage() {
                     <span>Customer Profile Photo</span>
                     {isUploadingAvatar && (
                       <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold animate-pulse">
-                        • Saving to Drive...
+                        • Saving...
                       </span>
                     )}
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    PNG, JPG, WEBP • Saves to Google Drive (Profile Picture)
+                    PNG, JPG, WEBP
                   </p>
                   <div className="flex items-center gap-2 pt-0.5">
                     <button
@@ -3889,7 +3951,7 @@ export default function CustomersPage() {
                   <Loading
                     variant="almost"
                     title="Almost"
-                    subtitle="Updating Drive..."
+                    subtitle="Updating Photo..."
                     size="sm"
                     minHeight="min-h-0"
                   />

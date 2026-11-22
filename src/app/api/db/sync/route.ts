@@ -16,9 +16,13 @@ function normalizePhone(p?: string | null): string {
 function customerToDb(c: any, userId: string) {
   // Store permanent URL or compact photo, avoid multi-MB strings
   let safeAvatar = c.avatar || c.avatarUrl || null;
-  if (safeAvatar && typeof safeAvatar === 'string' && safeAvatar.startsWith('data:')) {
-    if (safeAvatar.length > 500000) {
-      safeAvatar = c.driveAvatarId ? `/api/backup/google-drive/view-file?fileId=${c.driveAvatarId}` : null;
+  if (safeAvatar && typeof safeAvatar === 'string') {
+    if (safeAvatar.includes('view-file?fileId=file_')) {
+      safeAvatar = null;
+    } else if (safeAvatar.startsWith('data:') && safeAvatar.length > 500000) {
+      safeAvatar = (c.driveAvatarId && !c.driveAvatarId.startsWith('file_'))
+        ? `/api/backup/google-drive/view-file?fileId=${c.driveAvatarId}`
+        : safeAvatar;
     }
   }
 
@@ -399,6 +403,10 @@ function customerFromDb(row: any) {
   if (avatarUrl) {
     if (avatarUrl.includes('view-file?fileId=')) {
       driveAvatarId = avatarUrl.split('view-file?fileId=')[1]?.split('&')[0];
+      if (driveAvatarId && driveAvatarId.startsWith('file_')) {
+        driveAvatarId = undefined;
+        avatarUrl = '';
+      }
     } else if (avatarUrl.includes('/file/d/')) {
       const match = avatarUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
       if (match) {
