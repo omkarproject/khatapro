@@ -55,8 +55,8 @@ import {
 } from 'lucide-react';
 
 const DEFAULT_INVOICE_CHARGES: InvoiceChargeConfig[] = [
-  { id: 'cgst', name: 'CGST', type: 'percentage', value: 9, enabled: true, isSystemTax: true },
-  { id: 'sgst', name: 'SGST', type: 'percentage', value: 9, enabled: true, isSystemTax: true },
+  { id: 'cgst', name: 'CGST', type: 'percentage', value: 9, enabled: false, isSystemTax: true },
+  { id: 'sgst', name: 'SGST', type: 'percentage', value: 9, enabled: false, isSystemTax: true },
   { id: 'igst', name: 'IGST', type: 'percentage', value: 18, enabled: false, isSystemTax: true },
   { id: 'delivery', name: 'Delivery Charges', type: 'fixed', value: 50, enabled: false },
   { id: 'packaging', name: 'Packaging Charges', type: 'fixed', value: 20, enabled: false },

@@ -64,6 +64,24 @@ function CustomerPayInvoiceContent() {
     return 'cashfree';
   }, [gwParam, settings.paymentSettings]);
 
+  // Gateway processing fee (2% for Cashfree PG and Razorpay PG, 0% for UPI PG / direct)
+  const gatewayFeePercent = useMemo(() => {
+    if (activeGateway === 'cashfree' || activeGateway === 'razorpay') {
+      return 0.02;
+    }
+    return 0;
+  }, [activeGateway]);
+
+  const gatewayFeeAmount = useMemo(() => {
+    if (!invoice || gatewayFeePercent === 0) return 0;
+    return Math.round(invoice.total * gatewayFeePercent * 100) / 100;
+  }, [invoice, gatewayFeePercent]);
+
+  const totalPayableWithFee = useMemo(() => {
+    if (!invoice) return 0;
+    return Math.round((invoice.total + gatewayFeeAmount) * 100) / 100;
+  }, [invoice, gatewayFeeAmount]);
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRazorpayLoading, setIsRazorpayLoading] = useState(false);
   const [copiedUpi, setCopiedUpi] = useState(false);
@@ -318,9 +336,9 @@ function CustomerPayInvoiceContent() {
     try {
       receiptImgUrl = await generateReceiptCanvasBlob({
         receiptNo: finalReceiptNo,
-        amount: invoice.total,
+        amount: totalPayableWithFee,
         dueAmount: invoice.total,
-        gatewayFee: 0,
+        gatewayFee: gatewayFeeAmount,
         payeeName: payeeName || merchantName,
         payeeUpi: upiId,
         customerName: invoice.customerName || 'Customer',
@@ -581,7 +599,7 @@ function CustomerPayInvoiceContent() {
 
       const options = {
         key: razorpayKey,
-        amount: Math.round(invoice.total * 100), // amount in paise
+        amount: Math.round(totalPayableWithFee * 100), // amount in paise
         currency: 'INR',
         name: merchantName || 'KhataPro Merchant',
         description: `Payment for Tax Invoice #${invoice.invoiceNumber}`,
@@ -639,7 +657,7 @@ function CustomerPayInvoiceContent() {
     const message = `🚨 *Payment Assistance / Error Report*
 ------------------------------------------------
 📄 *Invoice:* #${invoice.invoiceNumber}
-💰 *Total Payable:* ${formatINR(invoice.total)}
+💰 *Total Payable:* ${formatINR(totalPayableWithFee)}
 👤 *Customer:* ${invoice.customerName || 'Customer'}
 📱 *Customer Phone:* ${invoice.customerPhone || 'N/A'}
 🏢 *Merchant:* ${merchantName}
@@ -679,7 +697,7 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
     const appId = settings.paymentSettings?.cashfreeAppId?.trim();
     const secretKey = settings.paymentSettings?.cashfreeSecretKey?.trim();
     const env = settings.paymentSettings?.cashfreeEnv || 'production';
-    const amountToPay = customAmount !== undefined ? customAmount : invoice.total;
+    const amountToPay = customAmount !== undefined ? customAmount : totalPayableWithFee;
 
     try {
       // 1. Create order on Cashfree server via our API route
@@ -996,24 +1014,49 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
                   <span>Subtotal:</span>
                   <span className="font-mono font-semibold">{formatINR(invoice.subtotal)}</span>
                 </div>
-                {invoice.discountAmount > 0 && (
+                {Number(invoice.discountAmount || 0) > 0 && (
                   <div className="flex justify-between text-emerald-600">
                     <span>Special Discount:</span>
                     <span className="font-mono font-semibold">-{formatINR(invoice.discountAmount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                  <span>Central GST (CGST 9%):</span>
-                  <span className="font-mono">{formatINR(invoice.cgst)}</span>
-                </div>
-                <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                  <span>State GST (SGST 9%):</span>
-                  <span className="font-mono">{formatINR(invoice.sgst)}</span>
-                </div>
+                {Number(invoice.cgst || 0) > 0 && (
+                  <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                    <span>Central GST (CGST 9%):</span>
+                    <span className="font-mono">+{formatINR(invoice.cgst)}</span>
+                  </div>
+                )}
+                {Number(invoice.sgst || 0) > 0 && (
+                  <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                    <span>State GST (SGST 9%):</span>
+                    <span className="font-mono">+{formatINR(invoice.sgst)}</span>
+                  </div>
+                )}
+                {Number(invoice.igst || 0) > 0 && (
+                  <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                    <span>Integrated GST (IGST 18%):</span>
+                    <span className="font-mono">+{formatINR(invoice.igst)}</span>
+                  </div>
+                )}
+                {invoice.appliedCharges && invoice.appliedCharges.length > 0 &&
+                  invoice.appliedCharges
+                    .filter((chg) => Number(chg.amount || 0) > 0)
+                    .map((chg) => (
+                      <div key={chg.id} className="flex justify-between text-slate-600 dark:text-slate-400">
+                        <span>{chg.name}:</span>
+                        <span className="font-mono">+{formatINR(chg.amount)}</span>
+                      </div>
+                    ))}
+                {gatewayFeeAmount > 0 && (
+                  <div className="flex justify-between text-purple-600 dark:text-purple-400 font-medium">
+                    <span>Gateway Processing Fee (2%):</span>
+                    <span className="font-mono">+{formatINR(gatewayFeeAmount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center text-sm font-black text-slate-900 dark:text-white pt-3 border-t border-slate-200 dark:border-slate-800">
                   <span>Total Payable:</span>
                   <span className="text-lg font-mono font-black text-indigo-600 dark:text-indigo-400">
-                    {formatINR(invoice.total)}
+                    {formatINR(totalPayableWithFee)}
                   </span>
                 </div>
               </div>
@@ -1053,7 +1096,7 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
                   <div className="flex justify-between">
                     <span className="text-slate-500">Amount Paid:</span>
                     <span className="font-mono font-black text-emerald-700 dark:text-emerald-400 text-sm">
-                      {formatINR(invoice.total)}
+                      {formatINR(totalPayableWithFee)}
                     </span>
                   </div>
                   {lastReceiptNo && (
@@ -1149,72 +1192,65 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
               /* If Payment is Pending / Unpaid: Online Payment Gateway Station */
               <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xl space-y-6">
 
-                {/* Amount Due Big Banner */}
+                {/* Amount Due Banner */}
                 <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-violet-500/5 to-purple-500/10 border border-indigo-200 dark:border-indigo-900/50 text-center space-y-1">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                     Total Amount Due
                   </div>
                   <div className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white font-mono tracking-tight">
-                    {formatINR(invoice.total)}
+                    {formatINR(totalPayableWithFee)}
                   </div>
                   <p className="text-[11px] text-slate-500">
                     Pay securely to <strong>{payeeName}</strong>
+                    {gatewayFeeAmount > 0 && (
+                      <span className="block text-[10px] text-purple-600 dark:text-purple-400 font-semibold mt-0.5">
+                        (Includes 2% gateway fee: +{formatINR(gatewayFeeAmount)})
+                      </span>
+                    )}
                   </p>
                 </div>
 
-                {/* Active Payment Gateway Mode Card */}
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-xs">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold shadow-xs ${
+                {/* Sleek, Compact & Stylish Payment Gateway & Channels Strip */}
+                <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-700/60 text-xs shadow-2xs">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold shrink-0 ${
                       activeGateway === 'cashfree'
-                        ? 'bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400'
+                        ? 'bg-purple-100 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400'
                         : activeGateway === 'razorpay'
-                        ? 'bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400'
-                        : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400'
+                        ? 'bg-blue-100 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400'
+                        : 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400'
                     }`}>
                       {activeGateway === 'cashfree' ? (
-                        <CreditCard className="w-5 h-5" />
+                        <CreditCard className="w-3.5 h-3.5" />
                       ) : activeGateway === 'razorpay' ? (
-                        <Sparkles className="w-5 h-5" />
+                        <Sparkles className="w-3.5 h-3.5" />
                       ) : (
-                        <QrCode className="w-5 h-5" />
+                        <QrCode className="w-3.5 h-3.5" />
                       )}
                     </div>
                     <div>
-                      <div className="text-xs font-extrabold text-slate-900 dark:text-white">
-                        {activeGateway === 'cashfree'
-                          ? 'Cashfree Payment Gateway'
-                          : activeGateway === 'razorpay'
-                          ? 'Razorpay Payment Gateway'
-                          : 'UPI Payment Gateway'}
-                      </div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">
-                        {activeGateway === 'cashfree'
-                          ? 'Real Cashfree PG • Instant Automated Settlement'
-                          : activeGateway === 'razorpay'
-                          ? 'Instant PG Checkout • 100% Secure'
-                          : 'Dynamic QR & Webhook Settlement'}
+                      <div className="font-bold text-slate-800 dark:text-slate-200 text-[11px] flex items-center gap-1.5">
+                        <span>
+                          {activeGateway === 'cashfree'
+                            ? 'Cashfree PG'
+                            : activeGateway === 'razorpay'
+                            ? 'Razorpay PG'
+                            : 'UPI Gateway'}
+                        </span>
+                        {gatewayFeePercent > 0 && (
+                          <span className="px-1.5 py-0.2 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 text-[10px] font-bold border border-purple-200/80 dark:border-purple-800/50">
+                            +2% Fee
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 shrink-0">
-                    <Shield className="w-3 h-3" /> 100% Secure
-                  </span>
-                </div>
-
-                {/* Accepted Payment Channels */}
-                <div className="p-3.5 rounded-2xl bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 space-y-2 text-center">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    Accepted Payment Methods
-                  </div>
-                  <div className="flex flex-wrap items-center justify-center gap-1.5 text-[10px] font-semibold text-slate-700 dark:text-slate-300">
-                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">Google Pay</span>
-                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">PhonePe</span>
-                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">Paytm</span>
-                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">BHIM UPI</span>
-                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">Cards</span>
-                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">NetBanking</span>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                    <span className="hidden sm:inline font-medium text-slate-400">UPI &bull; Cards &bull; NetBanking</span>
+                    <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-800/40">
+                      <ShieldCheck className="w-3 h-3" /> 100% Secure
+                    </span>
                   </div>
                 </div>
 
@@ -1245,7 +1281,7 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
                     type="button"
                     onClick={handleOpenCashfreeCheckout}
                     disabled={isCfLoading}
-                    className="w-full py-4 rounded-2xl text-sm font-extrabold text-white bg-purple-600 hover:bg-purple-700 shadow-xl shadow-purple-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-all"
+                    className="w-full py-3.5 rounded-2xl text-sm font-extrabold text-white bg-purple-600 hover:bg-purple-700 shadow-xl shadow-purple-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-all"
                   >
                     {isCfLoading ? (
                       <>
@@ -1255,7 +1291,7 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
                     ) : (
                       <>
                         <CreditCard className="w-4 h-4" />
-                        <span>Pay {formatINR(invoice.total)} via Cashfree PG</span>
+                        <span>Pay {formatINR(totalPayableWithFee)} via Cashfree PG</span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
@@ -1267,7 +1303,7 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
                     type="button"
                     onClick={handlePayWithRazorpay}
                     disabled={isRazorpayLoading}
-                    className="w-full py-4 rounded-2xl text-sm font-extrabold text-white bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-all"
+                    className="w-full py-3.5 rounded-2xl text-sm font-extrabold text-white bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-all"
                   >
                     {isRazorpayLoading ? (
                       <>
@@ -1277,7 +1313,7 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
                     ) : (
                       <>
                         <Sparkles className="w-4 h-4" />
-                        <span>Pay {formatINR(invoice.total)} via Razorpay PG</span>
+                        <span>Pay {formatINR(totalPayableWithFee)} via Razorpay PG</span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
@@ -1289,10 +1325,10 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
                     type="button"
                     onClick={handleOpenCashfreeCheckout}
                     disabled={isCfLoading}
-                    className="w-full py-4 rounded-2xl text-sm font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-all"
+                    className="w-full py-3.5 rounded-2xl text-sm font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-all"
                   >
                     <QrCode className="w-4 h-4" />
-                    <span>Pay {formatINR(invoice.total)} via UPI Gateway</span>
+                    <span>Pay {formatINR(totalPayableWithFee)} via UPI Gateway</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 )}
