@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
+import { generateInvoicePdfBlob, generateInvoiceQrWithLogo } from '@/lib/invoicePdfGenerator';
 import { getActiveCurrency, t } from '@/lib/i18n';
 import { uploadToDriveFiles } from '@/lib/driveUploadClient';
 import {
@@ -79,6 +80,8 @@ export default function InvoicesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [activeInvoice, setActiveInvoice] = useState<Invoice | null>(null);
+  const [invoiceQrDataUrl, setInvoiceQrDataUrl] = useState<string>('');
+  const [isSharingPdf, setIsSharingPdf] = useState<boolean>(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
 
@@ -148,6 +151,50 @@ export default function InvoicesPage() {
       },
     ];
   }, [settings.paymentSettings]);
+
+  // Generate dynamic Scan to Pay QR code with merchant Profile / Business Logo in center
+  useEffect(() => {
+    if (!activeInvoice) {
+      setInvoiceQrDataUrl('');
+      return;
+    }
+
+    let isMounted = true;
+    const upiUri = buildUpiUri(
+      settings.paymentSettings?.upiId || '',
+      settings.paymentSettings?.payeeName || '',
+      activeInvoice.total,
+      activeInvoice.invoiceNumber
+    );
+
+    const merchantLogo = (
+      settings.businessLogo ||
+      profile.avatarUrl ||
+      currentUser?.avatarUrl ||
+      settings.websiteLogo ||
+      '/brand-logo.png'
+    ).trim();
+
+    generateInvoiceQrWithLogo(upiUri, merchantLogo, 320).then((qrUrl) => {
+      if (isMounted) {
+        setInvoiceQrDataUrl(qrUrl);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    activeInvoice?.id,
+    activeInvoice?.total,
+    activeInvoice?.invoiceNumber,
+    settings.paymentSettings?.upiId,
+    settings.paymentSettings?.payeeName,
+    settings.businessLogo,
+    profile.avatarUrl,
+    currentUser?.avatarUrl,
+    settings.websiteLogo,
+  ]);
 
   // Form State for New Invoice
   const [invType, setInvType] = useState<'sales' | 'purchase' | 'quotation'>('sales');
@@ -553,13 +600,100 @@ export default function InvoicesPage() {
     setActiveInvoice(newInvoice);
   };
 
-  // WhatsApp Share Invoice
-  const handleWhatsAppShare = (inv: Invoice) => {
-    const upiUri = buildUpiUri(settings.paymentSettings.upiId, settings.paymentSettings.payeeName, inv.total, `Inv ${inv.invoiceNumber}`);
-    const message = inv.status === 'paid'
-      ? `Dear ${inv.customerName},\n\nPlease find your official Tax Invoice *#${inv.invoiceNumber}* for *${formatINR(inv.total)}*.\nStatus: *PAID (Payment Received & Settled)* ✅\n\nThank you for your business,\n${settings.businessName}`
-      : `Dear ${inv.customerName},\n\nPlease find your invoice *#${inv.invoiceNumber}* for *${formatINR(inv.total)}*.\nDue Date: ${formatDate(inv.dueDate)}\n\n*Pay Directly via UPI:*\n${upiUri}\n\nThank you,\n${settings.businessName}`;
-    openWhatsApp(inv.customerPhone, message);
+  // WhatsApp Share Invoice with PDF Attachment
+  const handleWhatsAppShare = async (inv: Invoice) => {
+    try {
+      setIsSharingPdf(true);
+      addToast('Preparing PDF Invoice', 'Generating high-resolution Tax Invoice PDF...', 'info');
+
+      const upiUri = buildUpiUri(
+        settings.paymentSettings.upiId,
+        settings.paymentSettings.payeeName,
+        inv.total,
+        `Inv ${inv.invoiceNumber}`
+      );
+
+      const merchantLogo = (
+        settings.businessLogo ||
+        profile.avatarUrl ||
+        currentUser?.avatarUrl ||
+        settings.websiteLogo ||
+        '/brand-logo.png'
+      ).trim();
+
+      // 1. Generate QR Code with Center Profile / Business Logo
+      const qrDataUrl =
+        (activeInvoice && activeInvoice.id === inv.id && invoiceQrDataUrl)
+          ? invoiceQrDataUrl
+          : await generateInvoiceQrWithLogo(upiUri, merchantLogo, 320);
+
+      // 2. Generate PDF Document Blob
+      const pdfBlob = await generateInvoicePdfBlob(inv, settings, profile, qrDataUrl);
+      const safeInvNum = (inv.invoiceNumber || 'INV').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const fileName = `Tax_Invoice_${safeInvNum}.pdf`;
+
+      // 3. Create Shareable File Object
+      let pdfFile: File | null = null;
+      try {
+        pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+      } catch {
+        pdfFile = null;
+      }
+
+      const businessName = settings.businessName || profile.businessName || 'SmartKhata';
+      const isPaid = inv.status === 'paid';
+      const message = isPaid
+        ? `*Tax Invoice from ${businessName}*\n\nDear ${inv.customerName},\n\nPlease find attached your official Tax Invoice *#${inv.invoiceNumber}* for *${formatINR(inv.total)}*.\nStatus: *PAID (Payment Received & Settled)* ✅\n\nThank you for your business,\n*${businessName}*`
+        : `*Tax Invoice from ${businessName}*\n\nDear ${inv.customerName},\n\nPlease find attached your official Tax Invoice *#${inv.invoiceNumber}* for *${formatINR(inv.total)}*.\nDue Date: ${formatDate(inv.dueDate)}\nStatus: *UNPAID*\n\n👉 *Pay Directly via UPI (Amount Locked):*\n${upiUri}\n\nScan the QR in the attached invoice with Google Pay, PhonePe, Paytm or BHIM.\n\nThank you,\n*${businessName}*`;
+
+      // 4. Mobile / Web Share API with file attachment
+      if (pdfFile && typeof navigator !== 'undefined' && navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+        try {
+          await navigator.share({
+            title: `Tax Invoice #${inv.invoiceNumber} - ${businessName}`,
+            text: message,
+            files: [pdfFile],
+          });
+          addToast('Invoice Shared', 'Invoice PDF and details shared to WhatsApp.', 'success');
+          return;
+        } catch (shareErr: any) {
+          if (shareErr?.name === 'AbortError') return;
+          console.warn('Navigator file share error, using fallback:', shareErr);
+        }
+      }
+
+      // 5. Desktop / Non-WebShare Fallback: Download PDF & Open WhatsApp
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = blobUrl;
+      downloadLink.download = fileName;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+
+      openWhatsApp(inv.customerPhone, message);
+      addToast(
+        'PDF Downloaded & WhatsApp Opened',
+        'Invoice PDF auto-downloaded. WhatsApp me attach karke send karein.',
+        'success'
+      );
+    } catch (err: any) {
+      console.error('Error sharing invoice PDF on WhatsApp:', err);
+      // Fallback text message
+      const upiUri = buildUpiUri(
+        settings.paymentSettings.upiId,
+        settings.paymentSettings.payeeName,
+        inv.total,
+        `Inv ${inv.invoiceNumber}`
+      );
+      const businessName = settings.businessName || profile.businessName || 'SmartKhata';
+      const message = `Dear ${inv.customerName},\nPlease find your invoice #${inv.invoiceNumber} for ${formatINR(inv.total)}.\nUPI: ${upiUri}\nThank you,\n${businessName}`;
+      openWhatsApp(inv.customerPhone, message);
+      addToast('WhatsApp Opened', 'Direct WhatsApp chat opened.', 'info');
+    } finally {
+      setIsSharingPdf(false);
+    }
   };
 
   // Handle Open Status Update Modal
@@ -907,32 +1041,22 @@ export default function InvoicesPage() {
                 Tax Invoice Preview
               </span>
               <div className="flex items-center gap-2">
-                {activeInvoice.status !== 'paid' && (
-                  <button
-                    type="button"
-                    onClick={() => handleOpenSendPaymentLink(activeInvoice)}
-                    className="px-3 py-1.5 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
-                    title="Generate & Send Payment Link"
-                  >
-                    <Link2 className="w-3.5 h-3.5" />
-                    <span>Send Payment Link</span>
-                  </button>
-                )}
                 <button
                   onClick={() => window.print()}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 flex items-center gap-1.5"
+                  className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
                 >
                   <Printer className="w-3.5 h-3.5" /> Print
                 </button>
                 <button
                   onClick={() => handleWhatsAppShare(activeInvoice)}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white flex items-center gap-1.5"
+                  disabled={isSharingPdf}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-xs"
                 >
-                  <Share2 className="w-3.5 h-3.5" /> WhatsApp
+                  <Share2 className="w-3.5 h-3.5" /> {isSharingPdf ? 'Preparing PDF...' : 'WhatsApp'}
                 </button>
                 <button
                   onClick={() => setActiveInvoice(null)}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600"
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1059,7 +1183,7 @@ export default function InvoicesPage() {
                 <div className="p-4 rounded-xl bg-indigo-50/60 border border-indigo-100 flex items-center gap-4">
                   <img
                     src={
-                      settings.paymentSettings.customQrUrl ||
+                      invoiceQrDataUrl ||
                       getQrCodeUrl(
                         buildUpiUri(settings.paymentSettings.upiId, settings.paymentSettings.payeeName, activeInvoice.total, activeInvoice.invoiceNumber),
                         200
