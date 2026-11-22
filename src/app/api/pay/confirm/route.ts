@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
       txnId: passedTxnId,
       paymentToken,
       tokenTimestamp,
+      invoiceId,
     } = body;
 
     const numAmount = parseFloat(amount || '0');
@@ -197,6 +198,24 @@ export async function POST(req: NextRequest) {
         }
       } catch (custErr) {
         console.warn('Customer balance update warning in pay/confirm:', custErr);
+      }
+    }
+
+    // Update invoice status in Supabase if invoiceId provided
+    if (invoiceId) {
+      try {
+        await supabase
+          .from('invoices')
+          .update({
+            status: 'paid',
+            paid_amount: numAmount,
+            payment_date: nowIso.split('T')[0],
+            receipt_url: receiptUrl || null,
+            updated_at: nowIso,
+          })
+          .eq('id', invoiceId);
+      } catch (invErr) {
+        console.warn('Invoice status update warning in pay/confirm:', invErr);
       }
     }
 

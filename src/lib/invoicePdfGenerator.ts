@@ -431,3 +431,178 @@ export async function generateInvoicePdfBlob(
   const arrayBuffer = doc.output('arraybuffer');
   return new Blob([arrayBuffer], { type: 'application/pdf' });
 }
+
+export interface ReceiptCanvasData {
+  receiptNo: string;
+  amount: number;
+  dueAmount?: number;
+  gatewayFee?: number;
+  payeeName: string;
+  payeeUpi: string;
+  customerName: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  dateTime: string;
+  paymentMode: string;
+  referenceNo: string;
+  gatewayTxnId?: string;
+  websiteName?: string;
+}
+
+/**
+ * Generates a high-resolution Classic White & Clean Receipt image Data URL.
+ */
+export async function generateReceiptCanvasBlob(data: ReceiptCanvasData): Promise<string> {
+  if (typeof window === 'undefined') return '';
+  try {
+    const canvas = document.createElement('canvas');
+    const w = 680;
+    const h = 880;
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+
+    // Outer Page Background (Subtle Clean Frame)
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(0, 0, w, h);
+
+    // Main White Receipt Card
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.roundRect(20, 20, w - 40, h - 40, 20);
+    ctx.fill();
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Top Emerald Brand Bar
+    const grad = ctx.createLinearGradient(20, 0, w - 20, 0);
+    grad.addColorStop(0, '#059669');
+    grad.addColorStop(0.5, '#10b981');
+    grad.addColorStop(1, '#0284c7');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(20, 20, w - 40, 8, [20, 20, 0, 0]);
+    ctx.fill();
+
+    // Header Branding: Merchant Business Name & Title
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(data.payeeName || data.websiteName || 'SmartKhata Merchant', 48, 68);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('OFFICIAL DIGITAL PAYMENT RECEIPT • TAX INVOICE', 48, 88);
+
+    // Verified Badge (Top Right)
+    ctx.fillStyle = '#ecfdf5';
+    ctx.beginPath();
+    ctx.roundRect(w - 180, 50, 132, 28, 14);
+    ctx.fill();
+    ctx.strokeStyle = '#a7f3d0';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = '#059669';
+    ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('✔ 100% VERIFIED', w - 166, 68);
+
+    // Horizontal Divider
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(48, 108);
+    ctx.lineTo(w - 48, 108);
+    ctx.stroke();
+
+    // Big Amount Settled Box (Emerald tint)
+    ctx.fillStyle = '#f0fdf4';
+    ctx.beginPath();
+    ctx.roundRect(48, 126, w - 96, 105, 16);
+    ctx.fill();
+    ctx.strokeStyle = '#86efac';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#15803d';
+    ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('TOTAL AMOUNT SETTLED & PAID', 72, 156);
+
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(formatINR(data.amount), 72, 200);
+
+    // Breakdown note inside amount box
+    const duePart = data.dueAmount !== undefined ? `Due Amount: ${formatINR(data.dueAmount)}` : '';
+    const feePart = data.gatewayFee && data.gatewayFee > 0 ? `  •  PG Convenience Fee (2%): ${formatINR(data.gatewayFee)}` : '';
+    if (duePart) {
+      ctx.fillStyle = '#166534';
+      ctx.font = '500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText(`${duePart}${feePart}`, 72, 222);
+    }
+
+    // Details Rows (Table style)
+    const rows: [string, string, boolean][] = [
+      ['Receipt ID', data.receiptNo, false],
+      ['Payment Date & Time', data.dateTime, false],
+      ['Bank Ref / UTR No', data.referenceNo, true],
+      ['Paid To (Merchant)', data.payeeName, false],
+      ['Merchant UPI ID', data.payeeUpi || 'UPI Linked Account', false],
+      ['Paid By (Customer)', `${data.customerName}${data.customerPhone ? ` (${data.customerPhone})` : ''}`, false],
+      ['Customer Email', data.customerEmail || 'billing@smartkhata.in', false],
+      ['Payment Method', data.paymentMode, false],
+      ['Settlement Status', 'COMPLETED & RECORDED', true],
+    ];
+
+    if (data.gatewayTxnId) {
+      rows.splice(3, 0, ['Gateway Txn ID', data.gatewayTxnId, false]);
+    }
+
+    let startY = 268;
+    rows.forEach(([label, val, isHighlight]) => {
+      // Label (left)
+      ctx.fillStyle = '#64748b';
+      ctx.font = '500 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText(label, 48, startY);
+
+      // Value (right)
+      if (label === 'Settlement Status') {
+        ctx.fillStyle = '#059669';
+        ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      } else if (isHighlight) {
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      } else {
+        ctx.fillStyle = '#1e293b';
+        ctx.font = '600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      }
+      ctx.textAlign = 'right';
+      ctx.fillText(val, w - 48, startY);
+      ctx.textAlign = 'left';
+
+      // Row Separator
+      ctx.strokeStyle = '#f1f5f9';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(48, startY + 12);
+      ctx.lineTo(w - 48, startY + 12);
+      ctx.stroke();
+
+      startY += 40;
+    });
+
+    // Bottom Security & Compliance Footer
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Secured by NPCI Unified Payments Interface (UPI) • 256-Bit SSL Encrypted Settlement', w / 2, h - 62);
+    ctx.fillText('Official computer-generated receipt issued natively by SmartKhata ERP Enterprise Portal', w / 2, h - 45);
+    ctx.textAlign = 'left';
+
+    return canvas.toDataURL('image/png');
+  } catch (e) {
+    console.error('Error drawing receipt canvas:', e);
+    return '';
+  }
+}

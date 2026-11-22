@@ -912,9 +912,9 @@ export default function InvoicesPage() {
     setCopiedLink(false);
   };
 
-  const getGeneratedPaymentLink = (inv: Invoice, gw: PaymentCollectionMode) => {
-    if (typeof window === 'undefined') return `/pay/${inv.id}?gw=${gw}`;
-    return `${window.location.origin}/pay/${inv.id}?gw=${gw}`;
+  const getGeneratedPaymentLink = (inv: Invoice, _gw?: PaymentCollectionMode) => {
+    if (typeof window === 'undefined') return `/pay/${inv.id}`;
+    return `${window.location.origin}/pay/${inv.id}`;
   };
 
   const handleSendPaymentLinkWhatsApp = () => {
@@ -1728,7 +1728,7 @@ export default function InvoicesPage() {
       {isShareModalOpen && shareModalInvoice && (() => {
         const inv = shareModalInvoice;
         const origin = typeof window !== 'undefined' ? window.location.origin : 'https://smartkhata.netsell.in';
-        const webPayUrl = `${origin}/pay/${inv.id}?gw=${settings.paymentSettings?.collectionMode || 'direct_upi'}`;
+        const webPayUrl = `${origin}/pay/${inv.id}`;
         const upiUri = buildUpiUri(
           settings.paymentSettings.upiId,
           settings.paymentSettings.payeeName,

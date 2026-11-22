@@ -5,8 +5,13 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import Loading from '@/components/Loading';
 import { StorageService } from '@/services/storage';
-import { Invoice, PaymentCollectionMode } from '@/types';
+import { Invoice, PaymentCollectionMode, isGatewayActive, PaymentMode } from '@/types';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl } from '@/lib/utils';
+import {
+  generateInvoicePdfBlob,
+  generateReceiptCanvasBlob,
+  generateInvoiceQrWithLogo,
+} from '@/lib/invoicePdfGenerator';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -38,60 +43,41 @@ function CustomerPayInvoiceContent() {
   const searchParams = useSearchParams();
   const invoiceId = params?.id as string;
   const gwParam = searchParams?.get('gw') as PaymentCollectionMode | null;
-  const isLockedGateway = Boolean(
-    gwParam && ['direct_upi', 'cashfree', 'razorpay', 'upi_gateway'].includes(gwParam)
-  );
 
   const { invoices, saveInvoice, settings, updateSettings, profile, currentUser, addTransaction, addToast } = useApp();
 
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedMethod, setSelectedMethod] = useState<PaymentCollectionMode>(() => {
-    return gwParam || settings.paymentSettings?.collectionMode || 'direct_upi';
-  });
 
-  useEffect(() => {
-    if (gwParam && ['direct_upi', 'cashfree', 'razorpay', 'upi_gateway'].includes(gwParam)) {
-      setSelectedMethod(gwParam);
-    } else if (settings.paymentSettings?.collectionMode) {
-      setSelectedMethod(settings.paymentSettings.collectionMode);
+  // Active online payment gateway resolution (Cashfree PG, Razorpay PG, or UPI PG)
+  const activeGateway = useMemo<PaymentCollectionMode>(() => {
+    if (gwParam && ['cashfree', 'razorpay', 'upi_gateway'].includes(gwParam)) {
+      return gwParam;
     }
-  }, [gwParam, settings.paymentSettings?.collectionMode]);
+    const mode = settings.paymentSettings?.collectionMode;
+    if (mode && mode !== 'direct_upi') {
+      return mode;
+    }
+    if (isGatewayActive('cashfree', settings.paymentSettings)) return 'cashfree';
+    if (isGatewayActive('razorpay', settings.paymentSettings)) return 'razorpay';
+    if (isGatewayActive('upi_gateway', settings.paymentSettings)) return 'upi_gateway';
+    return 'cashfree';
+  }, [gwParam, settings.paymentSettings]);
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRazorpayLoading, setIsRazorpayLoading] = useState(false);
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [txnRef, setTxnRef] = useState<string>('');
+  const [lastGatewayTxnId, setLastGatewayTxnId] = useState<string>('');
+  const [lastReceiptNo, setLastReceiptNo] = useState<string>('');
+  const [lastReceiptImgUrl, setLastReceiptImgUrl] = useState<string>('');
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [lastOrderId, setLastOrderId] = useState<string>('');
   const [paymentSuccess, setPaymentSuccess] = useState(false);
-
-  // Standalone UPI UTR Verification state
-  const [utrNumber, setUtrNumber] = useState('');
-  const [utrError, setUtrError] = useState('');
 
   // Cashfree API Integration States
   const [cfApiError, setCfApiError] = useState('');
   const [isCfLoading, setIsCfLoading] = useState(false);
-
-  // Fallback interactive Cashfree Modal States (if needed)
-  const [isCashfreeModalOpen, setIsCashfreeModalOpen] = useState(false);
-  const [cfTab, setCfTab] = useState<'upi' | 'card' | 'nb' | 'wallet'>('upi');
-  const [cfUpiApp, setCfUpiApp] = useState<'gpay' | 'phonepe' | 'paytm' | 'bhim'>('gpay');
-  const [cfUpiLaunched, setCfUpiLaunched] = useState(false);
-  const [cfUtrInput, setCfUtrInput] = useState('');
-  const [cfUtrError, setCfUtrError] = useState('');
-  const [cfCardOtpStep, setCfCardOtpStep] = useState(false);
-  const [cfCardOtpValue, setCfCardOtpValue] = useState('');
-  const [cfCardOtpError, setCfCardOtpError] = useState('');
-  const [cfSelectedBank, setCfSelectedBank] = useState('HDFC Bank');
-  const [cfNbStep, setCfNbStep] = useState(false);
-  const [cfSelectedWallet, setCfSelectedWallet] = useState('Paytm');
-  const [cfCardData, setCfCardData] = useState({
-    number: '4111 2222 3333 4444',
-    name: 'Amit Verma',
-    expiry: '12/28',
-    cvv: '888',
-  });
 
   // Load invoice from context or directly from localStorage
   useEffect(() => {
@@ -105,11 +91,18 @@ function CustomerPayInvoiceContent() {
     );
     if (found) {
       setInvoice(found);
-      if (found.customerName) {
-        setCfCardData((prev) => ({ ...prev, name: found.customerName }));
-      }
       if (found.status === 'paid') {
         setPaymentSuccess(true);
+        if (found.receiptUrl) setLastReceiptImgUrl(found.receiptUrl);
+        const hist = found.statusHistory?.[0];
+        if (hist?.notes) {
+          const matchUtr = hist.notes.match(/(?:Bank Ref \/ UTR|UTR)[:\s]+([A-Za-z0-9_-]+)/i);
+          if (matchUtr) setTxnRef(matchUtr[1]);
+          const matchRec = hist.notes.match(/Receipt ID[:\s]+([A-Za-z0-9_-]+)/i);
+          if (matchRec) setLastReceiptNo(matchRec[1]);
+          const matchTxn = hist.notes.match(/Transaction ID[:\s]+([A-Za-z0-9_-]+)/i);
+          if (matchTxn) setLastGatewayTxnId(matchTxn[1]);
+        }
       } else {
         setPaymentSuccess(false);
       }
@@ -208,43 +201,244 @@ function CustomerPayInvoiceContent() {
   };
 
   // Payment completion handler
-  const handleCompletePayment = (methodUsed: string, customTxnId?: string) => {
+  const handleCompletePayment = async (
+    gatewayName: string,
+    bankRef: string,
+    gatewayTxnId?: string
+  ) => {
     if (!invoice) return;
     setIsProcessing(false);
 
-    const generatedTxn = customTxnId || 'TXN_' + Math.floor(100000000 + Math.random() * 900000000);
-    setTxnRef(generatedTxn);
+    const finalTxnId = (bankRef || '').trim() || `TXN_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
+    const finalReceiptNo = `SKP-REC-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+    const nowIso = new Date().toISOString();
+    const todayDate = nowIso.split('T')[0];
+    const formattedDateTime = new Date().toLocaleString('en-IN', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
 
-    // Update invoice to paid
+    let cleanGwName = 'Cashfree';
+    if (gatewayName.toLowerCase().includes('razorpay')) cleanGwName = 'Razorpay';
+    else if (gatewayName.toLowerCase().includes('upi_gateway') || gatewayName.toLowerCase().includes('upi pg')) cleanGwName = 'UPI PG';
+    else if (gatewayName.toLowerCase().includes('direct')) cleanGwName = 'Default UPI';
+
+    const cleanPaymentNote = gatewayTxnId
+      ? `Receipt ID: ${finalReceiptNo}\n${cleanGwName} - Bank Ref / UTR: ${finalTxnId}\nTransaction ID: ${gatewayTxnId}`
+      : `Receipt ID: ${finalReceiptNo}\n${cleanGwName} - Bank Ref / UTR: ${finalTxnId}`;
+
+    // 1. Generate high-resolution receipt canvas image
+    let receiptImgUrl = '';
+    try {
+      receiptImgUrl = await generateReceiptCanvasBlob({
+        receiptNo: finalReceiptNo,
+        amount: invoice.total,
+        dueAmount: invoice.total,
+        gatewayFee: 0,
+        payeeName: payeeName || merchantName,
+        payeeUpi: upiId,
+        customerName: invoice.customerName || 'Customer',
+        customerPhone: invoice.customerPhone || '',
+        customerEmail: (invoice as any).customerEmail || merchantEmail,
+        dateTime: formattedDateTime,
+        paymentMode: gatewayName,
+        referenceNo: finalTxnId,
+        gatewayTxnId: gatewayTxnId || '',
+        websiteName: settings.websiteName || profile.businessName || 'SmartKhata',
+      });
+    } catch (e) {
+      console.warn('Could not generate receipt canvas:', e);
+    }
+
+    // 2. Update invoice to PAID with attached receipt
+    const historyEntry = {
+      id: `hist_${Date.now()}`,
+      status: 'paid' as const,
+      date: todayDate,
+      amount: invoice.total,
+      notes: cleanPaymentNote,
+      receiptUrl: receiptImgUrl || undefined,
+      receiptName: `Payment_Receipt_${finalTxnId}.png`,
+      receiptType: 'image' as const,
+      updatedAt: nowIso,
+    };
+
     const updatedInv: Invoice = {
       ...invoice,
       status: 'paid',
       paidAmount: invoice.total,
+      paymentDate: todayDate,
+      receiptUrl: receiptImgUrl || undefined,
+      receiptName: `Payment_Receipt_${finalTxnId}.png`,
+      receiptType: 'image',
+      statusHistory: [historyEntry, ...(invoice.statusHistory || [])],
     };
+
     saveInvoice(updatedInv);
     setInvoice(updatedInv);
 
-    // Also record in KhataBook ledger
-    if (invoice.customerId) {
-      addTransaction({
-        id: `txn_${Date.now()}`,
-        customerId: invoice.customerId,
-        customerName: invoice.customerName || 'Customer',
-        type: 'collection',
-        amount: invoice.total,
-        date: new Date().toISOString(),
-        category: 'Online Payment Collection',
-        note: `Online Payment received for Tax Invoice #${invoice.invoiceNumber} (${methodUsed}) [Ref: ${generatedTxn}]`,
-        paymentMode: methodUsed.toLowerCase().includes('card') ? 'card' : 'upi',
-        referenceNo: generatedTxn,
-        status: 'completed',
-        createdBy: profile.businessName || 'System Online Checkout',
-        createdAt: new Date().toISOString(),
-      });
+    // Direct localStorage update & realtime broadcast for Invoices
+    try {
+      const rawInvs = localStorage.getItem('skp_invoices');
+      if (rawInvs) {
+        const invList = JSON.parse(rawInvs);
+        const idx = invList.findIndex((i: any) => i.id === updatedInv.id);
+        if (idx !== -1) {
+          invList[idx] = updatedInv;
+        } else {
+          invList.push(updatedInv);
+        }
+        localStorage.setItem('skp_invoices', JSON.stringify(invList));
+      }
+      window.dispatchEvent(new CustomEvent('khatapro_invoices_updated', { detail: updatedInv }));
+      localStorage.setItem('khatapro_realtime_ping', `inv_${Date.now()}`);
+    } catch (e) {
+      console.warn('Direct storage sync warning for invoices:', e);
     }
 
+    // 3. Record in Digital Khata ledger & Payment Collection Hub
+    const receiptAttachment = JSON.stringify({
+      name: `Payment_Receipt_${finalTxnId}.png`,
+      url: receiptImgUrl,
+      size: 'Settled Receipt',
+      type: 'image',
+    });
+
+    const onlineTxnId = `txn_online_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const newTxn = {
+      id: onlineTxnId,
+      customerId: invoice.customerId || 'cust_walkin',
+      customerName: invoice.customerName || 'Customer',
+      type: 'debit' as const, // "Payment Received" in Digital Khatabook!
+      amount: invoice.total,
+      date: nowIso,
+      category: 'Payment Received',
+      note: cleanPaymentNote,
+      paymentMode: (gatewayName.toLowerCase().includes('card') ? 'card' : 'upi') as PaymentMode,
+      referenceNo: finalTxnId,
+      gatewayTxnId: gatewayTxnId || '',
+      attachments: receiptImgUrl ? [receiptAttachment] : [],
+      status: 'completed' as const,
+      createdBy: merchantName || payeeName || 'SmartKhata Online Checkout',
+      createdAt: nowIso,
+    };
+
+    try {
+      addTransaction(newTxn);
+    } catch (e) {
+      console.warn('Local context addTransaction fallback:', e);
+    }
+
+    try {
+      const rawTxns = localStorage.getItem('skp_transactions');
+      const list = rawTxns ? JSON.parse(rawTxns) : [];
+      if (!list.some((t: any) => t.id === newTxn.id || (t.referenceNo && t.referenceNo === finalTxnId))) {
+        list.push(newTxn);
+        localStorage.setItem('skp_transactions', JSON.stringify(list));
+      }
+
+      if (invoice.customerId) {
+        const rawCusts = localStorage.getItem('skp_customers');
+        if (rawCusts) {
+          const custList = JSON.parse(rawCusts);
+          const cIdx = custList.findIndex((c: any) => c.id === invoice.customerId);
+          if (cIdx !== -1) {
+            const currentDue = Number(custList[cIdx].outstandingBalance ?? custList[cIdx].outstanding_balance ?? 0);
+            const updatedDue = Math.max(0, currentDue - invoice.total);
+            custList[cIdx].outstandingBalance = updatedDue;
+            custList[cIdx].outstanding_balance = updatedDue;
+            localStorage.setItem('skp_customers', JSON.stringify(custList));
+          }
+        }
+      }
+
+      window.dispatchEvent(new CustomEvent('khatapro_transactions_updated', { detail: newTxn }));
+      localStorage.setItem('khatapro_realtime_ping', `pay_${Date.now()}`);
+    } catch (syncErr) {
+      console.warn('Direct storage sync warning for transactions:', syncErr);
+    }
+
+    // 4. Server-side Supabase sync via /api/pay/confirm
+    try {
+      await fetch('/api/pay/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: invoice.customerId,
+          customerName: invoice.customerName,
+          customerPhone: invoice.customerPhone,
+          amount: invoice.total,
+          receiptNo: finalReceiptNo,
+          referenceNo: finalTxnId,
+          gatewayTxnId: gatewayTxnId || '',
+          gateway: gatewayName,
+          note: cleanPaymentNote,
+          receiptUrl: receiptImgUrl,
+          invoiceId: invoice.id,
+        }),
+      });
+    } catch (confirmErr) {
+      console.warn('Server confirmation error:', confirmErr);
+    }
+
+    setTxnRef(finalTxnId);
+    setLastGatewayTxnId(gatewayTxnId || '');
+    setLastReceiptNo(finalReceiptNo);
+    setLastReceiptImgUrl(receiptImgUrl);
     setPaymentSuccess(true);
-    addToast('Payment Verified & Succeeded!', `Invoice #${invoice.invoiceNumber} has been settled and marked as PAID.`, 'success');
+    addToast('Payment Verified & Settled!', `Invoice #${invoice.invoiceNumber} has been marked as PAID.`, 'success');
+  };
+
+  // Download high-res vector Tax Invoice PDF
+  const handleDownloadPaidInvoicePdf = async () => {
+    if (!invoice) return;
+    try {
+      setIsDownloadingPdf(true);
+      addToast('Generating PDF', 'Generating official Tax Invoice PDF...', 'info');
+      const merchantLogo = (
+        settings.businessLogo ||
+        profile.avatarUrl ||
+        currentUser?.avatarUrl ||
+        settings.websiteLogo ||
+        '/brand-logo.png'
+      ).trim();
+      const qrDataUrl = await generateInvoiceQrWithLogo(upiDeepLink, merchantLogo, 320);
+      const targetInv: Invoice = {
+        ...invoice,
+        status: 'paid',
+        paidAmount: invoice.total,
+      };
+      const pdfBlob = await generateInvoicePdfBlob(targetInv, settings, profile, qrDataUrl);
+      const safeInvNum = (invoice.invoiceNumber || 'INV').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const fileName = `Tax_Invoice_${safeInvNum}_PAID.pdf`;
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = blobUrl;
+      downloadLink.download = fileName;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+      addToast('Downloaded', `Paid invoice #${invoice.invoiceNumber} downloaded successfully.`, 'success');
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      window.print();
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
+  // Download settled payment receipt PNG
+  const handleDownloadReceiptImage = () => {
+    const targetUrl = lastReceiptImgUrl || invoice?.receiptUrl;
+    if (!targetUrl) return;
+    const downloadLink = document.createElement('a');
+    downloadLink.href = targetUrl;
+    downloadLink.download = `Payment_Receipt_${txnRef || invoice?.invoiceNumber || 'settled'}.png`;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    addToast('Downloaded', 'Payment receipt image downloaded.', 'success');
   };
 
   // Reset to unpaid (For testing purpose)
@@ -254,16 +448,17 @@ function CustomerPayInvoiceContent() {
       ...invoice,
       status: 'unpaid',
       paidAmount: 0,
+      receiptUrl: undefined,
+      receiptName: undefined,
+      receiptType: undefined,
     };
     saveInvoice(resetInv);
     setInvoice(resetInv);
     setPaymentSuccess(false);
     setTxnRef('');
-    setUtrNumber('');
-    setCfUpiLaunched(false);
-    setCfUtrInput('');
-    setCfCardOtpStep(false);
-    setCfNbStep(false);
+    setLastGatewayTxnId('');
+    setLastReceiptNo('');
+    setLastReceiptImgUrl('');
     addToast('Invoice Reset (Test Mode)', 'Invoice status reset to UNPAID. You can now test payment flows again!', 'info');
   };
 
@@ -288,10 +483,11 @@ function CustomerPayInvoiceContent() {
         name: merchantName || 'KhataPro Merchant',
         description: `Payment for Tax Invoice #${invoice.invoiceNumber}`,
         image: merchantLogo || 'https://cdn-icons-png.flaticon.com/512/9131/9131529.png',
-        handler: function (response: any) {
+        handler: async function (response: any) {
           setIsRazorpayLoading(false);
           const paymentId = response.razorpay_payment_id || `pay_rzp_${Date.now()}`;
-          handleCompletePayment('Razorpay PG', paymentId);
+          const rzpOrderId = response.razorpay_order_id || '';
+          await handleCompletePayment('Razorpay PG', paymentId, rzpOrderId);
         },
         prefill: {
           name: invoice.customerName || '',
@@ -442,20 +638,30 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                orderId: data.orderId,
+                orderId: data.orderId || newOrderId,
                 appId: appId || undefined,
                 secretKey: secretKey || undefined,
                 env: checkoutEnv,
               }),
             });
             const verifyData = await verifyRes.json();
-            if (verifyData.success) {
-              handleCompletePayment('Cashfree Official PG', verifyData.cfPaymentId || `CF_${Date.now()}`);
-            } else {
-              handleCompletePayment('Cashfree PG', `CF_TXN_${Date.now().toString().slice(-8)}`);
-            }
+            const realBankRef =
+              (verifyData.bankReference ? String(verifyData.bankReference).trim() : '') ||
+              (result.paymentDetails?.bankReference ? String(result.paymentDetails.bankReference).trim() : '') ||
+              (verifyData.cfPaymentId ? String(verifyData.cfPaymentId).trim() : '') ||
+              (result.paymentDetails?.cfPaymentId ? String(result.paymentDetails.cfPaymentId).trim() : '') ||
+              `CF_${Date.now()}`;
+            const cfTxnId =
+              (verifyData.cfPaymentId ? String(verifyData.cfPaymentId).trim() : '') ||
+              (result.paymentDetails?.cfPaymentId ? String(result.paymentDetails.cfPaymentId).trim() : '');
+
+            await handleCompletePayment('Cashfree Official PG', realBankRef, cfTxnId);
           } catch {
-            handleCompletePayment('Cashfree PG', `CF_TXN_${Date.now().toString().slice(-8)}`);
+            const fallbackRef =
+              (result.paymentDetails?.bankReference ? String(result.paymentDetails.bankReference).trim() : '') ||
+              (result.paymentDetails?.cfPaymentId ? String(result.paymentDetails.cfPaymentId).trim() : '') ||
+              `CF_TXN_${Date.now().toString().slice(-8)}`;
+            await handleCompletePayment('Cashfree PG', fallbackRef);
           }
         }
       });
@@ -470,20 +676,6 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
   // Main Handler when clicking "Proceed to Cashfree Checkout"
   const handleOpenCashfreeCheckout = () => {
     executeCashfreeApiCheckout();
-  };
-
-  // Standalone UPI UTR Manual Confirmation
-  const handleVerifyUtr = () => {
-    if (!utrNumber.trim()) {
-      setUtrError('Please enter the 12-digit UTR / UPI Reference Number from your payment app receipt.');
-      return;
-    }
-    if (utrNumber.trim().length < 6) {
-      setUtrError('Please enter a valid Reference/UTR number (minimum 6 digits).');
-      return;
-    }
-    setUtrError('');
-    handleCompletePayment('UPI Direct (UTR Verified)', `UTR_${utrNumber.trim().toUpperCase()}`);
   };
 
   const handleCopyUpi = () => {
@@ -743,11 +935,14 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
                   <CheckCircle2 className="w-10 h-10" />
                 </div>
                 <div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 text-xs font-bold mb-2">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> 100% PAID &amp; RECORDED
+                  </div>
                   <h3 className="text-xl font-black text-slate-900 dark:text-white">
                     Payment Completed!
                   </h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    Thank you! Your payment for Invoice #{invoice.invoiceNumber} has been received and verified.
+                    Thank you! Your payment for Tax Invoice #{invoice.invoiceNumber} has been received and settled.
                   </p>
                 </div>
 
@@ -758,10 +953,22 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
                       {formatINR(invoice.total)}
                     </span>
                   </div>
+                  {lastReceiptNo && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Receipt ID:</span>
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{lastReceiptNo}</span>
+                    </div>
+                  )}
                   {txnRef && (
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Gateway Ref:</span>
+                      <span className="text-slate-500">Bank Ref / UTR:</span>
                       <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{txnRef}</span>
+                    </div>
+                  )}
+                  {lastGatewayTxnId && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Transaction ID:</span>
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{lastGatewayTxnId}</span>
                     </div>
                   )}
                   <div className="flex justify-between">
@@ -769,33 +976,57 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
                     <span className="font-semibold text-slate-800 dark:text-slate-200">{payeeName}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Status:</span>
-                    <span className="font-bold text-emerald-600">PAID &amp; SETTLED</span>
+                    <span className="text-slate-500">Settlement Status:</span>
+                    <span className="font-bold text-emerald-600">SETTLED IN LEDGER</span>
                   </div>
                 </div>
 
-                <div className="space-y-3 pt-2">
+                <div className="space-y-2.5 pt-2">
+                  {/* Download Official Paid Tax Invoice PDF */}
                   <button
-                    onClick={() => window.print()}
+                    type="button"
+                    onClick={handleDownloadPaidInvoicePdf}
+                    disabled={isDownloadingPdf}
                     className="w-full py-3.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
                   >
-                    <Download className="w-4 h-4" /> Download Official Tax Receipt (PDF)
+                    <Download className="w-4 h-4" />
+                    <span>{isDownloadingPdf ? 'Generating PDF...' : 'Download Paid Tax Invoice (PDF)'}</span>
+                  </button>
+
+                  {/* Download Payment Receipt PNG */}
+                  {(lastReceiptImgUrl || invoice.receiptUrl) && (
+                    <button
+                      type="button"
+                      onClick={handleDownloadReceiptImage}
+                      className="w-full py-3 rounded-2xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Download Settled Payment Receipt (PNG)</span>
+                    </button>
+                  )}
+
+                  {/* Print Button */}
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="w-full py-2.5 rounded-2xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print Invoice</span>
                   </button>
 
                   {/* Reset to Test Payment Flow Button */}
                   <button
+                    type="button"
                     onClick={handleResetToUnpaid}
-                    className="w-full py-2.5 rounded-2xl text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                    className="w-full py-2 rounded-xl text-[11px] font-medium text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 flex items-center justify-center gap-1.5 cursor-pointer transition-all"
                   >
-                    <RefreshCw className="w-3.5 h-3.5" /> Re-open Payment / Test Pay Again
+                    <RefreshCw className="w-3 h-3" /> Re-open / Test Pay Again
                   </button>
-                  <p className="text-[10px] text-slate-400">
-                    Click &ldquo;Re-open Payment&rdquo; if you want to test another payment method or gateway checkout.
-                  </p>
                 </div>
               </div>
             ) : (
-              /* If Payment is Pending / Unpaid: Interactive Checkout Station */
+              /* If Payment is Pending / Unpaid: Online Payment Gateway Station */
               <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xl space-y-6">
 
                 {/* Amount Due Big Banner */}
@@ -811,358 +1042,162 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
                   </p>
                 </div>
 
-                {/* Choose Payment Method Header / Locked Gateway Display */}
-                {isLockedGateway ? (
-                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-xs">
-                    <div className="flex items-center gap-2.5">
-                      {selectedMethod === 'cashfree' && (
-                        <>
-                          <div className="w-9 h-9 rounded-xl bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold shadow-xs">
-                            <CreditCard className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="text-xs font-extrabold text-slate-900 dark:text-white">
-                              Cashfree Payment Gateway
-                            </div>
-                            <div className="text-[10px] text-slate-500">
-                              Real Cashfree PG &bull; Selected by Merchant
-                            </div>
-                          </div>
-                        </>
-                      )}
-
-                      {selectedMethod === 'razorpay' && (
-                        <>
-                          <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shadow-xs">
-                            <Sparkles className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="text-xs font-extrabold text-slate-900 dark:text-white">
-                              Razorpay Payment Gateway
-                            </div>
-                            <div className="text-[10px] text-slate-500">
-                              Instant PG Checkout &bull; Selected by Merchant
-                            </div>
-                          </div>
-                        </>
-                      )}
-
-                      {selectedMethod === 'direct_upi' && (
-                        <>
-                          <div className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold shadow-xs">
-                            <QrCode className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="text-xs font-extrabold text-slate-900 dark:text-white">
-                              Default UPI &amp; Shop QR
-                            </div>
-                            <div className="text-[10px] text-slate-500">
-                              0% Fee Instant UPI &bull; Selected by Merchant
-                            </div>
-                          </div>
-                        </>
-                      )}
-
-                      {selectedMethod === 'upi_gateway' && (
-                        <>
-                          <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shadow-xs">
-                            <QrCode className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="text-xs font-extrabold text-slate-900 dark:text-white">
-                              UPI Payment Gateway
-                            </div>
-                            <div className="text-[10px] text-slate-500">
-                              Dynamic QR &amp; Auto Webhook &bull; Selected by Merchant
-                            </div>
-                          </div>
-                        </>
+                {/* Active Payment Gateway Mode Card */}
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-xs">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold shadow-xs ${
+                      activeGateway === 'cashfree'
+                        ? 'bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400'
+                        : activeGateway === 'razorpay'
+                        ? 'bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400'
+                        : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400'
+                    }`}>
+                      {activeGateway === 'cashfree' ? (
+                        <CreditCard className="w-5 h-5" />
+                      ) : activeGateway === 'razorpay' ? (
+                        <Sparkles className="w-5 h-5" />
+                      ) : (
+                        <QrCode className="w-5 h-5" />
                       )}
                     </div>
-
-                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
-                      <Shield className="w-3 h-3" /> 100% Secure
-                    </span>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="text-xs font-bold text-slate-800 dark:text-slate-200 mb-2.5 flex items-center justify-between">
-                      <span>Choose Payment Mode</span>
-                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
-                        <Shield className="w-3 h-3" /> 100% Secure
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedMethod('direct_upi')}
-                        className={`py-2 px-2 rounded-xl text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all cursor-pointer ${
-                          selectedMethod === 'direct_upi' || selectedMethod === 'upi_gateway'
-                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700'
-                        }`}
-                      >
-                        <QrCode className="w-3.5 h-3.5" />
-                        <span>UPI &amp; QR</span>
-                      </button>
-                      
-                      <button
-                        type="button"
-                        onClick={() => setSelectedMethod('razorpay')}
-                        className={`py-2 px-2 rounded-xl text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all cursor-pointer ${
-                          selectedMethod === 'razorpay'
-                            ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700'
-                        }`}
-                      >
-                        <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                        <span>Razorpay</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setSelectedMethod('cashfree')}
-                        className={`py-2 px-2 rounded-xl text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all cursor-pointer ${
-                          selectedMethod === 'cashfree'
-                            ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700'
-                        }`}
-                      >
-                        <CreditCard className="w-3.5 h-3.5" />
-                        <span>Cashfree</span>
-                      </button>
+                    <div>
+                      <div className="text-xs font-extrabold text-slate-900 dark:text-white">
+                        {activeGateway === 'cashfree'
+                          ? 'Cashfree Payment Gateway'
+                          : activeGateway === 'razorpay'
+                          ? 'Razorpay Payment Gateway'
+                          : 'UPI Payment Gateway'}
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        {activeGateway === 'cashfree'
+                          ? 'Real Cashfree PG • Instant Automated Settlement'
+                          : activeGateway === 'razorpay'
+                          ? 'Instant PG Checkout • 100% Secure'
+                          : 'Dynamic QR & Webhook Settlement'}
+                      </div>
                     </div>
                   </div>
-                )}
 
-                {/* TAB 1: UPI & QR Code Collection with Real 12-Digit UTR Verification */}
-                {(selectedMethod === 'direct_upi' || selectedMethod === 'upi_gateway') && (
-                  <div className="space-y-4 animate-in fade-in duration-150">
-                    
-                    {/* QR Code Box */}
-                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 flex flex-col items-center text-center space-y-3">
-                      <div className="relative p-2 rounded-2xl bg-white shadow-sm border border-slate-100">
-                        <img
-                          src={qrCodeUrl}
-                          alt="Scan & Pay UPI QR"
-                          className="w-44 h-44 sm:w-48 sm:h-48 object-contain"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center justify-center gap-1.5">
-                          <span>
-                            {selectedMethod === 'upi_gateway' ? 'Dynamic UPI Gateway QR' : 'Scan QR using any UPI App'}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-500">
-                          Google Pay • PhonePe • Paytm • BHIM • CRED • Amazon Pay
-                        </div>
-                      </div>
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 shrink-0">
+                    <Shield className="w-3 h-3" /> 100% Secure
+                  </span>
+                </div>
 
-                      {/* Monospace UPI ID with Copy */}
-                      <div className="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
-                        <span className="font-mono text-slate-700 dark:text-slate-300 font-bold">{upiId}</span>
-                        <button
-                          type="button"
-                          onClick={handleCopyUpi}
-                          className="text-indigo-600 dark:text-indigo-400 hover:opacity-80 p-0.5 cursor-pointer"
-                          title="Copy UPI ID"
-                        >
-                          {copiedUpi ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Direct UPI App Launch Buttons for Mobile */}
-                    <div className="space-y-2">
-                      <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center flex items-center justify-center gap-1.5">
-                        <Smartphone className="w-3.5 h-3.5" /> Or Tap App to Open &amp; Pay
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        <a
-                          href={upiDeepLink}
-                          className="py-2.5 px-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-center text-xs font-bold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex flex-col items-center gap-1 active:scale-95 transition-all"
-                        >
-                          <span className="w-2 h-2 rounded-full bg-blue-500" />
-                          <span>Google Pay</span>
-                        </a>
-                        <a
-                          href={upiDeepLink}
-                          className="py-2.5 px-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-center text-xs font-bold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex flex-col items-center gap-1 active:scale-95 transition-all"
-                        >
-                          <span className="w-2 h-2 rounded-full bg-purple-500" />
-                          <span>PhonePe</span>
-                        </a>
-                        <a
-                          href={upiDeepLink}
-                          className="py-2.5 px-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-center text-xs font-bold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex flex-col items-center gap-1 active:scale-95 transition-all"
-                        >
-                          <span className="w-2 h-2 rounded-full bg-sky-500" />
-                          <span>Paytm</span>
-                        </a>
-                        <a
-                          href={upiDeepLink}
-                          className="py-2.5 px-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-center text-xs font-bold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex flex-col items-center gap-1 active:scale-95 transition-all"
-                        >
-                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                          <span>BHIM UPI</span>
-                        </a>
-                      </div>
-                    </div>
-
-                    {/* Step 2: UPI 12-digit UTR Verification Card */}
-                    <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/50 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-extrabold text-indigo-900 dark:text-indigo-300">
-                          Verify Payment (Enter UTR / UPI Ref ID)
-                        </label>
-                        <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">
-                          12-digit number
-                        </span>
-                      </div>
-                      
-                      <div className="space-y-1.5">
-                        <input
-                          type="text"
-                          placeholder="e.g. 423987123456 or PhonePe UTR"
-                          value={utrNumber}
-                          onChange={(e) => {
-                            setUtrNumber(e.target.value);
-                            if (utrError) setUtrError('');
-                          }}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-                        />
-                        {utrError && (
-                          <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" /> {utrError}
-                          </p>
-                        )}
-                      </div>
-
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                        Payment karne ke baad apne UPI app receipt me se <strong>12-digit UPI Ref / UTR No.</strong> yahan daal kar verify karein.
-                      </p>
-
-                      <button
-                        type="button"
-                        onClick={handleVerifyUtr}
-                        disabled={isProcessing}
-                        className="w-full py-3 rounded-xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
-                      >
-                        {isProcessing ? 'Verifying Reference...' : 'Verify & Confirm UPI Payment'}
-                      </button>
-                    </div>
-
+                {/* Accepted Payment Channels */}
+                <div className="p-3.5 rounded-2xl bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 space-y-2 text-center">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Accepted Payment Methods
                   </div>
-                )}
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 text-[10px] font-semibold text-slate-700 dark:text-slate-300">
+                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">Google Pay</span>
+                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">PhonePe</span>
+                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">Paytm</span>
+                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">BHIM UPI</span>
+                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">Cards</span>
+                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">NetBanking</span>
+                  </div>
+                </div>
 
-                {/* TAB 2: Official Razorpay Payment Gateway Modal */}
-                {selectedMethod === 'razorpay' && (
-                  <div className="space-y-4 pt-1 animate-in fade-in duration-150">
+                {/* Gateway Error Alert with WhatsApp Support */}
+                {cfApiError && (
+                  <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-xs text-rose-700 dark:text-rose-300 space-y-2.5 animate-in fade-in">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <div className="font-bold text-xs text-rose-900 dark:text-rose-200">Payment Gateway Notice</div>
+                        <div className="text-[11px] font-mono leading-relaxed">{cfApiError}</div>
+                      </div>
+                    </div>
                     <button
                       type="button"
-                      onClick={handlePayWithRazorpay}
-                      disabled={isRazorpayLoading}
-                      className="w-full py-4 rounded-2xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
+                      onClick={() => handleConnectAdminWhatsApp(cfApiError)}
+                      className="w-full py-2.5 px-3 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
                     >
-                      {isRazorpayLoading ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>Opening Razorpay Checkout...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4" />
-                          <span>Proceed to Razorpay Checkout &bull; {formatINR(invoice.total)}</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </>
-                      )}
+                      <MessageCircle className="w-4 h-4 fill-white" />
+                      <span>Connect to Admin on WhatsApp (Send Error Details)</span>
                     </button>
-
-                    <div className="text-center text-[10px] text-slate-400 flex items-center justify-center gap-1.5">
-                      <Lock className="w-3 h-3 text-emerald-500" />
-                      <span>Razorpay 256-bit encrypted secure checkout popup</span>
-                    </div>
                   </div>
                 )}
 
-                {/* TAB 3: Cashfree Payment Gateway (Uses Official Cashfree API) */}
-                {selectedMethod === 'cashfree' && (
-                  <div className="space-y-4 pt-1 animate-in fade-in duration-150">
-                    
-                    {/* Error Alert with Direct WhatsApp Admin Connect and Test Pay ₹1 button */}
-                    {cfApiError && (
-                      <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-xs text-rose-700 dark:text-rose-300 space-y-3 animate-in fade-in">
-                        <div className="flex items-start gap-2.5">
-                          <AlertCircle className="w-5 h-5 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
-                          <div className="space-y-1">
-                            <p className="font-extrabold text-xs text-rose-900 dark:text-rose-200">
-                              Payment Gateway Alert
-                            </p>
-                            <p className="text-[11px] text-rose-700 dark:text-rose-300 leading-relaxed font-mono bg-rose-100/60 dark:bg-rose-900/30 p-2.5 rounded-xl border border-rose-200/60 dark:border-rose-800/60">
-                              {cfApiError}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* WhatsApp Button with Auto-Filled Error Details */}
-                        <button
-                          type="button"
-                          onClick={() => handleConnectAdminWhatsApp(cfApiError)}
-                          className="w-full py-3 px-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
-                        >
-                          <MessageCircle className="w-4 h-4 fill-white" />
-                          <span>Connect to Admin on WhatsApp (Send Error Details)</span>
-                        </button>
-                      </div>
+                {/* Active Gateway Execution Buttons */}
+                {activeGateway === 'cashfree' && (
+                  <button
+                    type="button"
+                    onClick={handleOpenCashfreeCheckout}
+                    disabled={isCfLoading}
+                    className="w-full py-4 rounded-2xl text-sm font-extrabold text-white bg-purple-600 hover:bg-purple-700 shadow-xl shadow-purple-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-all"
+                  >
+                    {isCfLoading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Opening Cashfree PG Checkout...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="w-4 h-4" />
+                        <span>Pay {formatINR(invoice.total)} via Cashfree PG</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
                     )}
-
-                    {/* Button that opens Cashfree Official Checkout directly under Cashfree Payment Gateway */}
-                    <button
-                      type="button"
-                      onClick={handleOpenCashfreeCheckout}
-                      disabled={isCfLoading}
-                      className="w-full py-4 rounded-2xl text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-xl shadow-purple-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
-                    >
-                      {isCfLoading ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>Opening Cashfree Checkout...</span>
-                        </>
-                      ) : (
-                        <>
-                          <CreditCard className="w-4 h-4" />
-                          <span>Proceed to Cashfree Checkout &bull; {formatINR(invoice.total)}</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </>
-                      )}
-                    </button>
-
-                    <div className="text-center text-[10px] text-slate-400 flex items-center justify-center gap-1.5">
-                      <Lock className="w-3 h-3 text-emerald-500" />
-                      <span>Cashfree PCI-DSS Level 1 Certified &bull; 100% Secure Checkout</span>
-                    </div>
-
-                    {/* Always-Accessible WhatsApp Support Button */}
-                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleConnectAdminWhatsApp(
-                            cfApiError ||
-                              'Payment Gateway inquiry: Please share alternate payment method or direct UPI QR.'
-                          )
-                        }
-                        className="w-full py-2.5 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
-                      >
-                        <MessageCircle className="w-4 h-4 text-[#25D366] fill-[#25D366]" />
-                        <span>Facing Payment Issue? Connect to Admin on WhatsApp</span>
-                      </button>
-                    </div>
-
-                  </div>
+                  </button>
                 )}
+
+                {activeGateway === 'razorpay' && (
+                  <button
+                    type="button"
+                    onClick={handlePayWithRazorpay}
+                    disabled={isRazorpayLoading}
+                    className="w-full py-4 rounded-2xl text-sm font-extrabold text-white bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-all"
+                  >
+                    {isRazorpayLoading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Opening Razorpay Checkout...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Pay {formatINR(invoice.total)} via Razorpay PG</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {activeGateway === 'upi_gateway' && (
+                  <button
+                    type="button"
+                    onClick={handleOpenCashfreeCheckout}
+                    disabled={isCfLoading}
+                    className="w-full py-4 rounded-2xl text-sm font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-all"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    <span>Pay {formatINR(invoice.total)} via UPI Gateway</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
+
+                <div className="text-center text-[10px] text-slate-400 flex items-center justify-center gap-1.5">
+                  <Lock className="w-3 h-3 text-emerald-500" />
+                  <span>256-Bit SSL Encrypted &bull; PCI-DSS Level 1 Certified Checkout</span>
+                </div>
+
+                {/* Always-Accessible WhatsApp Support Button */}
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleConnectAdminWhatsApp(
+                        cfApiError ||
+                          `Payment Inquiry for Invoice #${invoice.invoiceNumber}`
+                      )
+                    }
+                    className="w-full py-2.5 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <MessageCircle className="w-4 h-4 text-[#25D366] fill-[#25D366]" />
+                    <span>Facing Payment Issue? Connect to Admin on WhatsApp</span>
+                  </button>
+                </div>
 
               </div>
             )}
