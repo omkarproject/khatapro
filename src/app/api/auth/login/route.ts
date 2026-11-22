@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
-import { sendWelcomeEmailDirect } from '@/lib/emailService';
+import { sendWelcomeEmailDirect, getActiveSmtpConfig } from '@/lib/emailService';
 import { resolveUserEmail, verifyUserCredentials } from '@/lib/authHelpers';
 
 export async function POST(req: NextRequest) {
@@ -54,17 +54,31 @@ export async function POST(req: NextRequest) {
       .eq('user_id', sbUser.id)
       .single();
 
-    // Strict 2FA Safeguard: If user has Two-Factor Authentication enabled, direct login without 2FA verification is forbidden
+    // Strict 2FA Safeguard: If user has Two-Factor Authentication enabled
     const twoFa = userSettings?.payment_settings?.twoFactorAuth;
     if (twoFa && twoFa.enabled) {
-      return NextResponse.json({
-        success: false,
-        require2FA: true,
-        twoFactorType: twoFa.mode || 'authenticator',
-        message: twoFa.mode === 'authenticator'
-          ? 'Two-Factor Authentication is enabled on this account. Please enter your 6-digit Authenticator code.'
-          : 'Two-Factor Authentication is enabled on this account. Please enter the verification code sent to your email.',
-      }, { status: 403 });
+      if (twoFa.mode === 'authenticator' && twoFa.secret) {
+        return NextResponse.json({
+          success: false,
+          require2FA: true,
+          twoFactorType: 'authenticator',
+          message: 'Two-Factor Authentication is enabled on this account. Please enter your 6-digit Authenticator code.',
+        }, { status: 403 });
+      }
+
+      // If mode is Email OTP, check if Admin has "Login 2FA Security (OTP)" enabled in SMTP triggers
+      const smtpConfig = await getActiveSmtpConfig();
+      const isEmailLoginOtpActive = Boolean(smtpConfig.enabled && smtpConfig.triggers?.loginOtp === true);
+
+      if (isEmailLoginOtpActive) {
+        return NextResponse.json({
+          success: false,
+          require2FA: true,
+          twoFactorType: 'email',
+          message: 'Two-Factor Authentication is enabled on this account. Please enter the verification code sent to your email.',
+        }, { status: 403 });
+      }
+      // If Email Login OTP is unticked in SMTP settings, allow direct password login!
     }
 
     const avatar = profile?.avatar_url || userSettings?.business_logo || userSettings?.payment_settings?.businessLogo || sbUser.user_metadata?.avatar_url || '';

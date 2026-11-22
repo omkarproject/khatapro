@@ -2825,10 +2825,30 @@ export default function SettingsPage() {
               {/* Status Indicator Bar */}
               <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-slate-200/80 dark:border-slate-800/80">
                 <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-[10px]">
-                  <span className={`w-1.5 h-1.5 rounded-full ${twoFactorAuth.mode === 'authenticator' ? 'bg-cyan-400 animate-pulse' : 'bg-emerald-400'}`} />
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      twoFactorAuth.mode === 'authenticator'
+                        ? 'bg-cyan-400 animate-pulse'
+                        : Boolean((settings.smtpSettings?.enabled ?? smtpEnabled ?? true) && smtpTriggerLogin)
+                        ? 'bg-emerald-400'
+                        : 'bg-amber-400'
+                    }`}
+                  />
                   Active Mode:{' '}
-                  <strong className={twoFactorAuth.mode === 'authenticator' ? 'text-cyan-400' : 'text-emerald-400'}>
-                    {twoFactorAuth.mode === 'authenticator' ? 'Authenticator App (TOTP)' : 'Email OTP Verification'}
+                  <strong
+                    className={
+                      twoFactorAuth.mode === 'authenticator'
+                        ? 'text-cyan-400'
+                        : Boolean((settings.smtpSettings?.enabled ?? smtpEnabled ?? true) && smtpTriggerLogin)
+                        ? 'text-emerald-500 dark:text-emerald-400'
+                        : 'text-amber-500 dark:text-amber-400 font-extrabold'
+                    }
+                  >
+                    {twoFactorAuth.mode === 'authenticator'
+                      ? 'Authenticator App (TOTP)'
+                      : Boolean((settings.smtpSettings?.enabled ?? smtpEnabled ?? true) && smtpTriggerLogin)
+                      ? 'Email OTP Verification'
+                      : 'DISABLE ADMIN'}
                   </strong>
                 </span>
 
@@ -4145,7 +4165,50 @@ export default function SettingsPage() {
                 <input
                   type="checkbox"
                   checked={smtpTriggerLogin}
-                  onChange={(e) => setSmtpTriggerLogin(e.target.checked)}
+                  onChange={(e) => {
+                    const nextVal = e.target.checked;
+                    setSmtpTriggerLogin(nextVal);
+                    const updated: SystemSettings = {
+                      ...settings,
+                      smtpSettings: {
+                        enabled: smtpEnabled,
+                        host: smtpHost.trim(),
+                        port: Number(smtpPort) || 587,
+                        user: smtpUser.trim(),
+                        pass: smtpPass.trim(),
+                        from: (smtpSenderName.trim() || settings.websiteName || 'AutoPrint Xerox Cloud').replace(/<[^>]+>/g, '').trim(),
+                        secure: Number(smtpPort) === 465,
+                        triggers: {
+                          signupOtp: smtpTriggerSignup,
+                          loginOtp: nextVal,
+                          forgotPasswordOtp: smtpTriggerForgot,
+                          welcomeEmail: smtpTriggerWelcome,
+                        },
+                      },
+                    };
+                    updateSettings(updated);
+                    fetch('/api/admin/env-config', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        target: 'smtp',
+                        smtp: {
+                          enabled: smtpEnabled,
+                          host: smtpHost.trim(),
+                          port: Number(smtpPort) || 587,
+                          user: smtpUser.trim(),
+                          pass: smtpPass.trim(),
+                          from: (smtpSenderName.trim() || settings.websiteName || 'AutoPrint Xerox Cloud').replace(/<[^>]+>/g, '').trim(),
+                          triggers: {
+                            signupOtp: smtpTriggerSignup,
+                            loginOtp: nextVal,
+                            forgotPasswordOtp: smtpTriggerForgot,
+                            welcomeEmail: smtpTriggerWelcome,
+                          },
+                        },
+                      }),
+                    }).catch(() => {});
+                  }}
                   className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer shrink-0"
                 />
                 <div className="flex-1 flex items-center justify-between gap-2 min-w-0">

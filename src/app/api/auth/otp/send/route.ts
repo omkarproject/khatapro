@@ -70,17 +70,16 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // PRIORITY 2: Email 2FA (User explicitly enabled Email 2FA or Admin globally enforces login OTP)
+      // PRIORITY 2: Email 2FA (Requires Admin to have "Login 2FA Security (OTP)" enabled in Email SMTP triggers)
       const smtpConfig = await getActiveSmtpConfig();
-      const isUserEmail2Fa = Boolean(twoFa && twoFa.enabled && twoFa.mode === 'email');
-      const isGlobalEmail2Fa = Boolean(smtpConfig.enabled && smtpConfig.triggers?.loginOtp !== false);
+      const isEmailLoginOtpActive = Boolean(smtpConfig.enabled && smtpConfig.triggers?.loginOtp === true);
 
-      if (!isUserEmail2Fa && !isGlobalEmail2Fa) {
-        // Neither user 2FA nor global 2FA is active -> Allow direct password sign-in
+      if (!isEmailLoginOtpActive) {
+        // Email 2FA is unticked/disabled in SMTP settings -> Allow direct password sign-in without OTP
         return NextResponse.json({
           success: true,
           skipped: true,
-          message: 'Two-Factor Authentication is disabled. Direct password sign-in enabled.',
+          message: 'Two-Factor Email OTP is disabled by admin. Direct password sign-in enabled.',
         });
       }
 
