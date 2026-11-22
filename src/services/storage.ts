@@ -433,8 +433,29 @@ export const StorageService = {
 
       // 4. Preserve ONLY very recent local creations (< 45s) that haven't been pushed to cloud yet.
       // Older items missing from cloud were deleted on another device -> DO NOT KEEP!
+      const seenTxnRefs = new Set<string>();
+      if (tableName === 'transactions') {
+        incomingMap.forEach((cloudItem: any) => {
+          const r = (cloudItem.referenceNo || cloudItem.bill_number || '').trim();
+          if (r) seenTxnRefs.add(r);
+          const n = cloudItem.note || cloudItem.description || '';
+          const m = n.match(/(?:Bank Ref \/ UTR|UTR)[:\s]+([A-Za-z0-9_-]+)/i);
+          if (m) seenTxnRefs.add(m[1].trim());
+        });
+      }
+
       localMap.forEach((localItem, id) => {
         if (!incomingMap.has(id)) {
+          if (tableName === 'transactions') {
+            const r = ((localItem as any).referenceNo || ((localItem as any).bill_number) || '').trim();
+            const n = (localItem as any).note || (localItem as any).description || '';
+            const m = n.match(/(?:Bank Ref \/ UTR|UTR)[:\s]+([A-Za-z0-9_-]+)/i);
+            const utr = m ? m[1].trim() : '';
+            if ((r && seenTxnRefs.has(r)) || (utr && seenTxnRefs.has(utr))) {
+              // Local item already captured in cloud list with server ID - do not duplicate
+              return;
+            }
+          }
           const createdTime = new Date((localItem as any).createdAt || (localItem as any).date || 0).getTime();
           if (createdTime > 0 && (now - createdTime) < 45000) {
             resultMap.set(id, localItem);
@@ -1088,13 +1109,72 @@ export const StorageService = {
 
   // Transactions / Ledger Entries
   getTransactions: (): Transaction[] => {
-    return getLocalItem(STORAGE_KEYS.TRANSACTIONS, []);
+    const rawList = getLocalItem<Transaction[]>(STORAGE_KEYS.TRANSACTIONS, []);
+    if (!Array.isArray(rawList)) return [];
+
+    // Strict deduplication by ID, referenceNo, and Bank Ref / UTR
+    const seenIds = new Set<string>();
+    const seenRefs = new Set<string>();
+    const deduplicated: Transaction[] = [];
+
+    for (const t of rawList) {
+      if (!t || !t.id) continue;
+      if (seenIds.has(t.id)) continue;
+
+      const ref = (t.referenceNo || '').trim();
+      let utrFromNote = '';
+      if (t.note) {
+        const m = t.note.match(/(?:Bank Ref \/ UTR|UTR)[:\s]+([A-Za-z0-9_-]+)/i);
+        if (m) utrFromNote = m[1].trim();
+      }
+      const uniqueRef = ref || utrFromNote;
+
+      if (uniqueRef && seenRefs.has(uniqueRef)) {
+        // Drop duplicate transaction with identical UTR / Bank Reference!
+        continue;
+      }
+
+      seenIds.add(t.id);
+      if (uniqueRef) seenRefs.add(uniqueRef);
+      deduplicated.push(t);
+    }
+
+    if (deduplicated.length !== rawList.length) {
+      setLocalItem(STORAGE_KEYS.TRANSACTIONS, deduplicated);
+      setTimeout(() => {
+        StorageService.reconcileCustomerBalances();
+      }, 0);
+    }
+
+    return deduplicated;
   },
   setTransactions: (transactions: Transaction[]): void => {
     setLocalItem(STORAGE_KEYS.TRANSACTIONS, transactions);
   },
   addTransaction: (transaction: Transaction): Transaction[] => {
     const list = StorageService.getTransactions();
+    const ref = (transaction.referenceNo || '').trim();
+    let utrFromNote = '';
+    if (transaction.note) {
+      const m = transaction.note.match(/(?:Bank Ref \/ UTR|UTR)[:\s]+([A-Za-z0-9_-]+)/i);
+      if (m) utrFromNote = m[1].trim();
+    }
+    const uniqueRef = ref || utrFromNote;
+
+    // Idempotency: skip if already present
+    const exists = list.some(t => {
+      if (t.id === transaction.id) return true;
+      if (uniqueRef) {
+        if (t.referenceNo && t.referenceNo.trim() === uniqueRef) return true;
+        if (t.note && t.note.includes(uniqueRef)) return true;
+      }
+      return false;
+    });
+
+    if (exists) {
+      return list;
+    }
+
     const nowStr = new Date().toISOString();
     const txnToSave = {
       ...transaction,
@@ -1279,7 +1359,58 @@ export const StorageService = {
   },
 
   // Invoices
-  getInvoices: (): Invoice[] => getLocalItem(STORAGE_KEYS.INVOICES, []),
+  getInvoices: (): Invoice[] => {
+    let list = getLocalItem<Invoice[]>(STORAGE_KEYS.INVOICES, []);
+    if ((!list || list.length === 0) && typeof window !== 'undefined') {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('skp_invoices') && k !== getScopedKey(STORAGE_KEYS.INVOICES)) {
+          try {
+            const raw = localStorage.getItem(k);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                list = parsed;
+                break;
+              }
+            }
+          } catch {}
+        }
+      }
+    }
+    // Check if any invoice was settled/destroyed via link or settled receipt
+    if (Array.isArray(list) && typeof window !== 'undefined') {
+      let modified = false;
+      list = list.map(inv => {
+        if (inv.status === 'paid') return inv;
+        const isDestroyed =
+          localStorage.getItem('sk_destroyed_pay_link_' + inv.id) === 'true' ||
+          localStorage.getItem('sk_destroyed_pay_link_' + inv.invoiceNumber) === 'true';
+        const settledRaw = localStorage.getItem('sk_invoice_settled_' + inv.id);
+        if (isDestroyed || settledRaw) {
+          modified = true;
+          let settledData: any = null;
+          try {
+            settledData = settledRaw ? JSON.parse(settledRaw) : null;
+          } catch {}
+          return {
+            ...inv,
+            status: 'paid',
+            paidAmount: inv.total,
+            paymentDate: settledData?.settledAt
+              ? settledData.settledAt.split('T')[0]
+              : (inv.paymentDate || new Date().toISOString().split('T')[0]),
+            receiptUrl: settledData?.receiptUrl || inv.receiptUrl,
+          };
+        }
+        return inv;
+      });
+      if (modified) {
+        setLocalItem(STORAGE_KEYS.INVOICES, list);
+      }
+    }
+    return list || [];
+  },
   saveInvoice: (invoice: Invoice): Invoice[] => {
     const list = StorageService.getInvoices();
     const idx = list.findIndex(i => i.id === invoice.id);
@@ -1378,6 +1509,32 @@ export const StorageService = {
       updated = [invWithTime, ...list];
     }
     setLocalItem(STORAGE_KEYS.INVOICES, updated);
+
+    // Sync across all scoped and unscoped invoice keys in localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('skp_invoices')) {
+            const raw = localStorage.getItem(k);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) {
+                const kIdx = parsed.findIndex((i: any) => i.id === invWithTime.id || i.invoiceNumber === invWithTime.invoiceNumber);
+                if (kIdx >= 0) {
+                  parsed[kIdx] = invWithTime;
+                } else {
+                  parsed.unshift(invWithTime);
+                }
+                localStorage.setItem(k, JSON.stringify(parsed));
+              }
+            }
+          }
+        }
+        window.dispatchEvent(new CustomEvent('khatapro_invoices_updated', { detail: invWithTime }));
+      } catch {}
+    }
+
     return updated;
   },
   deleteInvoice: (id: string): Invoice[] => {

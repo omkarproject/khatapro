@@ -204,16 +204,45 @@ export async function POST(req: NextRequest) {
     // Update invoice status in Supabase if invoiceId provided
     if (invoiceId) {
       try {
-        await supabase
+        const updateData: Record<string, any> = {
+          paid_amount: numAmount,
+          balance_amount: 0,
+          payment_date: nowIso.split('T')[0],
+          receipt_url: receiptUrl || null,
+          updated_at: nowIso,
+        };
+
+        // First try updating both payment_status and status
+        const { error: err1 } = await supabase
           .from('invoices')
           .update({
+            ...updateData,
+            payment_status: 'paid',
             status: 'paid',
-            paid_amount: numAmount,
-            payment_date: nowIso.split('T')[0],
-            receipt_url: receiptUrl || null,
-            updated_at: nowIso,
           })
-          .eq('id', invoiceId);
+          .or(`id.eq.${invoiceId},invoice_number.eq.${invoiceId}`);
+
+        if (err1) {
+          // Fallback: try just payment_status
+          const { error: err2 } = await supabase
+            .from('invoices')
+            .update({
+              ...updateData,
+              payment_status: 'paid',
+            })
+            .or(`id.eq.${invoiceId},invoice_number.eq.${invoiceId}`);
+
+          if (err2) {
+            // Fallback: try just status
+            await supabase
+              .from('invoices')
+              .update({
+                ...updateData,
+                status: 'paid',
+              })
+              .or(`id.eq.${invoiceId},invoice_number.eq.${invoiceId}`);
+          }
+        }
       } catch (invErr) {
         console.warn('Invoice status update warning in pay/confirm:', invErr);
       }
@@ -234,9 +263,49 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
+    const invoiceId = searchParams.get('invoiceId');
     const customerId = searchParams.get('customerId');
     const paymentToken = searchParams.get('token') || '';
     const tokenTime = Number(searchParams.get('t') || '0');
+
+    // Check by invoiceId if provided
+    if (invoiceId && isSupabaseConfigured()) {
+      const supabase = getSupabaseAdmin();
+      if (supabase) {
+        const { data: inv } = await supabase
+          .from('invoices')
+          .select('*')
+          .or(`id.eq.${invoiceId},invoice_number.eq.${invoiceId}`)
+          .maybeSingle();
+
+        if (inv) {
+          const isPaid =
+            inv.payment_status === 'paid' ||
+            inv.status === 'paid' ||
+            Number(inv.paid_amount || 0) >= Number(inv.total || inv.grand_total || 0);
+
+          return NextResponse.json({
+            isPaid,
+            invoice: {
+              id: inv.id,
+              invoiceNumber: inv.invoice_number,
+              status: isPaid ? 'paid' : (inv.payment_status || inv.status || 'unpaid'),
+              total: Number(inv.total || inv.grand_total || 0),
+              paidAmount: Number(inv.paid_amount || 0),
+              receiptUrl: inv.receipt_url,
+              notes: inv.notes,
+            },
+            receipt: isPaid ? {
+              receiptNo: `SKP-REC-${inv.invoice_number || inv.id}`,
+              amount: Number(inv.paid_amount || inv.total || 0),
+              referenceNo: inv.id,
+              dateTime: inv.payment_date || inv.updated_at,
+              paymentMode: inv.payment_mode || 'Cashfree PG',
+            } : null,
+          });
+        }
+      }
+    }
 
     // If no customerId or no token creation timestamp, never claim it's paid
     if (!isSupabaseConfigured() || !customerId || !tokenTime) {

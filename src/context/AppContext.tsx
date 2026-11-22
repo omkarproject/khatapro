@@ -691,8 +691,29 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
             // 4. Safely preserve all active local records that haven't been pushed to cloud or are pending sync.
             // Never delete local items just because of elapsed time! Only discard if explicitly deleted.
+            const seenTxnRefs = new Set<string>();
+            if (tableName === 'transactions') {
+              incomingMap.forEach((cloudItem: any) => {
+                const r = (cloudItem.referenceNo || cloudItem.bill_number || '').trim();
+                if (r) seenTxnRefs.add(r);
+                const n = cloudItem.note || cloudItem.description || '';
+                const m = n.match(/(?:Bank Ref \/ UTR|UTR)[:\s]+([A-Za-z0-9_-]+)/i);
+                if (m) seenTxnRefs.add(m[1].trim());
+              });
+            }
+
             localMap.forEach((localItem, id) => {
               if (!incomingMap.has(id)) {
+                if (tableName === 'transactions') {
+                  const r = ((localItem as any).referenceNo || (localItem as any).bill_number || '').trim();
+                  const n = (localItem as any).note || (localItem as any).description || '';
+                  const m = n.match(/(?:Bank Ref \/ UTR|UTR)[:\s]+([A-Za-z0-9_-]+)/i);
+                  const utr = m ? m[1].trim() : '';
+                  if ((r && seenTxnRefs.has(r)) || (utr && seenTxnRefs.has(utr))) {
+                    // Already in cloud list with server ID - do not duplicate
+                    return;
+                  }
+                }
                 const isLocalDeleted = (localItem as any).isDeleted || (localItem as any).status === 'deleted';
                 if (!isLocalDeleted && !deletedIds.has(id)) {
                   resultMap.set(id, localItem);
@@ -1695,7 +1716,11 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     }
 
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'skp_transactions' && e.newValue) {
+      if (e.key?.startsWith('skp_invoices') || e.key === 'khatapro_realtime_ping') {
+        refreshData();
+      }
+
+      if (e.key?.startsWith('skp_transactions') && e.newValue) {
         try {
           const freshTxns: Transaction[] = JSON.parse(e.newValue);
           const now = Date.now();
@@ -1729,9 +1754,17 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       }
     };
 
+    const handleCustomEventRefresh = () => {
+      refreshData();
+    };
+
     window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('khatapro_invoices_updated', handleCustomEventRefresh);
+    window.addEventListener('khatapro_transactions_updated', handleCustomEventRefresh);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('khatapro_invoices_updated', handleCustomEventRefresh);
+      window.removeEventListener('khatapro_transactions_updated', handleCustomEventRefresh);
       window.removeEventListener('khatapro_groups_updated', handleGroupsUpdate);
       window.removeEventListener('khatapro_group_notifications_updated', handleGroupNotifsUpdate);
     };

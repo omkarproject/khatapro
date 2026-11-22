@@ -221,9 +221,32 @@ export default function InvoicesPage() {
   const [notes, setNotes] = useState('Thank you for your business!');
   const [terms, setTerms] = useState('Payment due within 15 days. Subject to local jurisdiction.');
 
-  // Filter invoices
+  // Filter invoices with instant settled status reconciliation
   const filteredInvoices = useMemo(() => {
-    return invoices.filter(inv => {
+    return invoices.map(inv => {
+      if (inv.status !== 'paid' && typeof window !== 'undefined') {
+        const isDestroyed =
+          localStorage.getItem(`sk_destroyed_pay_link_${inv.id}`) === 'true' ||
+          localStorage.getItem(`sk_destroyed_pay_link_${inv.invoiceNumber}`) === 'true';
+        const settledRaw = localStorage.getItem(`sk_invoice_settled_${inv.id}`);
+        if (isDestroyed || settledRaw) {
+          let s: any = null;
+          try {
+            s = settledRaw ? JSON.parse(settledRaw) : null;
+          } catch {}
+          return {
+            ...inv,
+            status: 'paid' as const,
+            paidAmount: inv.total,
+            paymentDate: s?.settledAt
+              ? s.settledAt.split('T')[0]
+              : (inv.paymentDate || new Date().toISOString().split('T')[0]),
+            receiptUrl: s?.receiptUrl || inv.receiptUrl,
+          };
+        }
+      }
+      return inv;
+    }).filter(inv => {
       const matchQuery =
         inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
         inv.customerName.toLowerCase().includes(searchTerm.toLowerCase());

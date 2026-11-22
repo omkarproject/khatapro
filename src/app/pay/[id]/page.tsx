@@ -74,27 +74,60 @@ function CustomerPayInvoiceContent() {
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [lastOrderId, setLastOrderId] = useState<string>('');
   const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
+  const isPaymentHandledRef = React.useRef(false);
 
   // Cashfree API Integration States
   const [cfApiError, setCfApiError] = useState('');
   const [isCfLoading, setIsCfLoading] = useState(false);
 
-  // Load invoice from context or directly from localStorage
+  // Load invoice from context, localStorage, or server
   useEffect(() => {
     if (!invoiceId) {
       setIsLoading(false);
       return;
     }
-    const allInvoices = invoices.length > 0 ? invoices : StorageService.getInvoices();
+
+    const isLinkDestroyed =
+      typeof window !== 'undefined' &&
+      (localStorage.getItem(`sk_destroyed_pay_link_${invoiceId}`) === 'true' ||
+       localStorage.getItem(`sk_destroyed_pay_link_${decodeURIComponent(invoiceId)}`) === 'true');
+
+    const settledRaw =
+      typeof window !== 'undefined'
+        ? localStorage.getItem(`sk_invoice_settled_${invoiceId}`) ||
+          localStorage.getItem(`sk_invoice_settled_${decodeURIComponent(invoiceId)}`)
+        : null;
+
+    let allInvoices = invoices.length > 0 ? invoices : StorageService.getInvoices();
+    if (allInvoices.length === 0 && typeof window !== 'undefined') {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('skp_invoices')) {
+          try {
+            const p = JSON.parse(localStorage.getItem(k) || '[]');
+            if (Array.isArray(p) && p.length > 0) {
+              allInvoices = p;
+              break;
+            }
+          } catch {}
+        }
+      }
+    }
+
     const found = allInvoices.find(
       (inv) => inv.id === invoiceId || inv.invoiceNumber === decodeURIComponent(invoiceId)
     );
+
     if (found) {
-      setInvoice(found);
-      if (found.status === 'paid') {
+      const isActuallyPaid = found.status === 'paid' || isLinkDestroyed || !!settledRaw;
+      const targetInv: Invoice = isActuallyPaid ? { ...found, status: 'paid', paidAmount: found.total } : found;
+      setInvoice(targetInv);
+
+      if (isActuallyPaid) {
         setPaymentSuccess(true);
-        if (found.receiptUrl) setLastReceiptImgUrl(found.receiptUrl);
-        const hist = found.statusHistory?.[0];
+        if (targetInv.receiptUrl) setLastReceiptImgUrl(targetInv.receiptUrl);
+        const hist = targetInv.statusHistory?.[0];
         if (hist?.notes) {
           const matchUtr = hist.notes.match(/(?:Bank Ref \/ UTR|UTR)[:\s]+([A-Za-z0-9_-]+)/i);
           if (matchUtr) setTxnRef(matchUtr[1]);
@@ -102,6 +135,15 @@ function CustomerPayInvoiceContent() {
           if (matchRec) setLastReceiptNo(matchRec[1]);
           const matchTxn = hist.notes.match(/Transaction ID[:\s]+([A-Za-z0-9_-]+)/i);
           if (matchTxn) setLastGatewayTxnId(matchTxn[1]);
+        }
+        if (settledRaw) {
+          try {
+            const s = JSON.parse(settledRaw);
+            if (s.referenceNo) setTxnRef(s.referenceNo);
+            if (s.receiptNo) setLastReceiptNo(s.receiptNo);
+            if (s.gatewayTxnId) setLastGatewayTxnId(s.gatewayTxnId);
+            if (s.receiptUrl) setLastReceiptImgUrl(s.receiptUrl);
+          } catch {}
         }
       } else {
         setPaymentSuccess(false);
@@ -138,19 +180,60 @@ function CustomerPayInvoiceContent() {
           sgst: 0,
           igst: 0,
           total: paramAmount,
-          paidAmount: 0,
-          status: 'unpaid',
+          paidAmount: isLinkDestroyed ? paramAmount : 0,
+          status: isLinkDestroyed ? 'paid' : 'unpaid',
           notes: sp.get('note') || 'Direct online collection',
           createdAt: new Date().toISOString(),
         };
         setInvoice(adhocInvoice);
+        if (isLinkDestroyed) setPaymentSuccess(true);
       }
     }
+
+    // Check with backend Supabase whether invoice was settled
+    fetch(`/api/pay/confirm?invoiceId=${encodeURIComponent(invoiceId)}`)
+      .then((r) => r.json())
+      .then((res) => {
+        if (res && res.isPaid) {
+          setPaymentSuccess(true);
+          setInvoice((prev) => (prev ? { ...prev, status: 'paid', paidAmount: prev.total, receiptUrl: res.invoice?.receiptUrl || prev.receiptUrl } : prev));
+          if (res.receipt?.referenceNo) setTxnRef(res.receipt.referenceNo);
+          if (res.receipt?.receiptNo) setLastReceiptNo(res.receipt.receiptNo);
+          if (res.invoice?.receiptUrl) setLastReceiptImgUrl(res.invoice.receiptUrl);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(`sk_destroyed_pay_link_${invoiceId}`, 'true');
+          }
+        }
+      })
+      .catch(() => {});
+
     const timer = setTimeout(() => {
       setIsLoading(false);
     }, 400);
     return () => clearTimeout(timer);
   }, [invoiceId, invoices]);
+
+  // 10-Second Auto-Redirect Countdown Effect
+  useEffect(() => {
+    if (!paymentSuccess) {
+      setRedirectCountdown(null);
+      return;
+    }
+    if (redirectCountdown === null) {
+      setRedirectCountdown(10);
+      return;
+    }
+    if (redirectCountdown <= 0) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/';
+      }
+      return;
+    }
+    const timer = setInterval(() => {
+      setRedirectCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [paymentSuccess, redirectCountdown]);
 
   // Dynamic business & payment details resolved from Enterprise Information
   const merchantName = (settings.businessName || profile.businessName || currentUser?.businessName || 'Merchant').trim();
@@ -207,10 +290,13 @@ function CustomerPayInvoiceContent() {
     gatewayTxnId?: string
   ) => {
     if (!invoice) return;
+    if (isPaymentHandledRef.current) return;
+    isPaymentHandledRef.current = true;
     setIsProcessing(false);
 
     const finalTxnId = (bankRef || '').trim() || `TXN_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
     const finalReceiptNo = `SKP-REC-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+    const onlineTxnId = `txn_online_${finalTxnId}`;
     const nowIso = new Date().toISOString();
     const todayDate = nowIso.split('T')[0];
     const formattedDateTime = new Date().toLocaleString('en-IN', {
@@ -277,18 +363,46 @@ function CustomerPayInvoiceContent() {
     saveInvoice(updatedInv);
     setInvoice(updatedInv);
 
+    // Mark link as destroyed & permanently settled in localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`sk_destroyed_pay_link_${invoice.id}`, 'true');
+        localStorage.setItem(`sk_destroyed_pay_link_${invoice.invoiceNumber}`, 'true');
+        localStorage.setItem(
+          `sk_invoice_settled_${invoice.id}`,
+          JSON.stringify({
+            receiptNo: finalReceiptNo,
+            referenceNo: finalTxnId,
+            gatewayTxnId: gatewayTxnId || '',
+            paidAmount: invoice.total,
+            receiptUrl: receiptImgUrl,
+            settledAt: nowIso,
+          })
+        );
+      } catch {}
+    }
+
     // Direct localStorage update & realtime broadcast for Invoices
     try {
-      const rawInvs = localStorage.getItem('skp_invoices');
-      if (rawInvs) {
-        const invList = JSON.parse(rawInvs);
-        const idx = invList.findIndex((i: any) => i.id === updatedInv.id);
-        if (idx !== -1) {
-          invList[idx] = updatedInv;
-        } else {
-          invList.push(updatedInv);
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('skp_invoices')) {
+          try {
+            const raw = localStorage.getItem(k);
+            if (raw) {
+              const invList = JSON.parse(raw);
+              if (Array.isArray(invList)) {
+                const idx = invList.findIndex((it: any) => it.id === updatedInv.id || it.invoiceNumber === updatedInv.invoiceNumber);
+                if (idx !== -1) {
+                  invList[idx] = updatedInv;
+                } else {
+                  invList.unshift(updatedInv);
+                }
+                localStorage.setItem(k, JSON.stringify(invList));
+              }
+            }
+          } catch {}
         }
-        localStorage.setItem('skp_invoices', JSON.stringify(invList));
       }
       window.dispatchEvent(new CustomEvent('khatapro_invoices_updated', { detail: updatedInv }));
       localStorage.setItem('khatapro_realtime_ping', `inv_${Date.now()}`);
@@ -304,7 +418,6 @@ function CustomerPayInvoiceContent() {
       type: 'image',
     });
 
-    const onlineTxnId = `txn_online_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const newTxn = {
       id: onlineTxnId,
       customerId: invoice.customerId || 'cust_walkin',
@@ -330,11 +443,20 @@ function CustomerPayInvoiceContent() {
     }
 
     try {
-      const rawTxns = localStorage.getItem('skp_transactions');
-      const list = rawTxns ? JSON.parse(rawTxns) : [];
-      if (!list.some((t: any) => t.id === newTxn.id || (t.referenceNo && t.referenceNo === finalTxnId))) {
-        list.push(newTxn);
-        localStorage.setItem('skp_transactions', JSON.stringify(list));
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('skp_transactions')) {
+          try {
+            const rawTxns = localStorage.getItem(k);
+            const list = rawTxns ? JSON.parse(rawTxns) : [];
+            if (Array.isArray(list)) {
+              if (!list.some((t: any) => t.id === newTxn.id || (t.referenceNo && t.referenceNo === finalTxnId))) {
+                list.unshift(newTxn);
+                localStorage.setItem(k, JSON.stringify(list));
+              }
+            }
+          } catch {}
+        }
       }
 
       if (invoice.customerId) {
@@ -375,6 +497,7 @@ function CustomerPayInvoiceContent() {
           note: cleanPaymentNote,
           receiptUrl: receiptImgUrl,
           invoiceId: invoice.id,
+          txnId: onlineTxnId,
         }),
       });
     } catch (confirmErr) {
@@ -386,6 +509,7 @@ function CustomerPayInvoiceContent() {
     setLastReceiptNo(finalReceiptNo);
     setLastReceiptImgUrl(receiptImgUrl);
     setPaymentSuccess(true);
+    setRedirectCountdown(10);
     addToast('Payment Verified & Settled!', `Invoice #${invoice.invoiceNumber} has been marked as PAID.`, 'success');
   };
 
@@ -439,27 +563,6 @@ function CustomerPayInvoiceContent() {
     downloadLink.click();
     document.body.removeChild(downloadLink);
     addToast('Downloaded', 'Payment receipt image downloaded.', 'success');
-  };
-
-  // Reset to unpaid (For testing purpose)
-  const handleResetToUnpaid = () => {
-    if (!invoice) return;
-    const resetInv: Invoice = {
-      ...invoice,
-      status: 'unpaid',
-      paidAmount: 0,
-      receiptUrl: undefined,
-      receiptName: undefined,
-      receiptType: undefined,
-    };
-    saveInvoice(resetInv);
-    setInvoice(resetInv);
-    setPaymentSuccess(false);
-    setTxnRef('');
-    setLastGatewayTxnId('');
-    setLastReceiptNo('');
-    setLastReceiptImgUrl('');
-    addToast('Invoice Reset (Test Mode)', 'Invoice status reset to UNPAID. You can now test payment flows again!', 'info');
   };
 
   // Trigger Razorpay Checkout Modal
@@ -817,15 +920,15 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
                 <div className="text-right">
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wide inline-flex items-center gap-1.5 print:border ${
-                      invoice.status === 'paid'
+                      invoice.status === 'paid' || paymentSuccess
                         ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400 print:bg-emerald-50 print:text-emerald-800 print:border-emerald-500'
                         : invoice.status === 'overdue'
                         ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-400 print:bg-rose-50 print:text-rose-800 print:border-rose-500'
                         : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400 print:bg-amber-50 print:text-amber-800 print:border-amber-500'
                     }`}
                   >
-                    {invoice.status === 'paid' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                    {invoice.status}
+                    {invoice.status === 'paid' || paymentSuccess ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+                    {invoice.status === 'paid' || paymentSuccess ? 'PAID' : invoice.status}
                   </span>
                 </div>
               </div>
@@ -1015,14 +1118,31 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
                     <span>Print Invoice</span>
                   </button>
 
-                  {/* Reset to Test Payment Flow Button */}
-                  <button
-                    type="button"
-                    onClick={handleResetToUnpaid}
-                    className="w-full py-2 rounded-xl text-[11px] font-medium text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 flex items-center justify-center gap-1.5 cursor-pointer transition-all"
-                  >
-                    <RefreshCw className="w-3 h-3" /> Re-open / Test Pay Again
-                  </button>
+                  {/* 10-Second Auto-Redirect Countdown & Link Destruction */}
+                  <div className="p-4 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-left space-y-2.5 mt-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200">
+                        <Clock className="w-4 h-4 text-indigo-600 dark:text-indigo-400 animate-pulse" />
+                        <span>Redirecting to Homepage</span>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full bg-indigo-600 text-white font-mono font-bold text-xs shadow-xs">
+                        {redirectCountdown !== null ? redirectCountdown : 10}s
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      This payment link is permanently settled and destroyed. It cannot be used again.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (typeof window !== 'undefined') window.location.href = '/';
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-indigo-500/20 transition-all active:scale-98"
+                    >
+                      <span>Return to Homepage Now</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
