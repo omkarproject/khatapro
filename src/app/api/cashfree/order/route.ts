@@ -6,19 +6,21 @@ import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { orderId, orderAmount, customerName, customerPhone, customerEmail, appId, secretKey, env } = body;
+    const { orderId, orderAmount, customerName, customerPhone, customerEmail, appId, secretKey, env, orderNote, brandDisplayName } = body;
 
     const serverConfig = getCashfreeConfig();
     let finalAppId = (appId || serverConfig.appId || process.env.CASHFREE_APP_ID || '').trim();
     let finalSecretKey = (secretKey || serverConfig.secretKey || process.env.CASHFREE_SECRET_KEY || '').trim();
     let finalEnv = (env || serverConfig.env || process.env.CASHFREE_ENV || 'production') as 'sandbox' | 'production';
 
+    let finalBrandDisplayName = (brandDisplayName || orderNote || '').trim();
+
     // Fallback: fetch from Supabase system_settings if credentials not passed by client
-    if ((!finalAppId || !finalSecretKey) && isSupabaseConfigured()) {
+    if ((!finalAppId || !finalSecretKey || !finalBrandDisplayName) && isSupabaseConfigured()) {
       try {
         const supabase = getSupabaseAdmin();
         if (supabase) {
-          const { data: setRow } = await supabase.from('system_settings').select('payment_settings').limit(1).maybeSingle();
+          const { data: setRow } = await supabase.from('system_settings').select('business_name, payment_settings').limit(1).maybeSingle();
           if (setRow?.payment_settings) {
             if (!finalAppId && setRow.payment_settings.cashfreeAppId) {
               finalAppId = setRow.payment_settings.cashfreeAppId.trim();
@@ -29,11 +31,21 @@ export async function POST(req: NextRequest) {
             if (setRow.payment_settings.cashfreeEnv) {
               finalEnv = setRow.payment_settings.cashfreeEnv;
             }
+            if (!finalBrandDisplayName && setRow.payment_settings.websiteName) {
+              finalBrandDisplayName = setRow.payment_settings.websiteName.trim();
+            }
+          }
+          if (!finalBrandDisplayName && setRow?.business_name) {
+            finalBrandDisplayName = setRow.business_name.trim();
           }
         }
       } catch (dbErr) {
-        console.warn('Error reading Cashfree credentials from Supabase:', dbErr);
+        console.warn('Error reading Cashfree credentials or brand name from Supabase:', dbErr);
       }
+    }
+
+    if (!finalBrandDisplayName) {
+      finalBrandDisplayName = 'SmartKhata';
     }
 
     if (!finalAppId || !finalSecretKey) {
@@ -56,10 +68,11 @@ export async function POST(req: NextRequest) {
       order_id: orderId || `order_${Date.now()}`,
       order_amount: Number(orderAmount),
       order_currency: 'INR',
+      order_note: finalBrandDisplayName.slice(0, 100),
       customer_details: {
         customer_id: `cust_${customerPhone ? customerPhone.replace(/\D/g, '').slice(-10) : Date.now()}`,
         customer_name: customerName || 'Valued Customer',
-        customer_email: customerEmail || 'customer@smartkhatapro.in',
+        customer_email: customerEmail || 'anantyadav8925@gmail.com',
         customer_phone: customerPhone ? customerPhone.replace(/\D/g, '').slice(-10) : '9999999999',
       },
       order_meta: {

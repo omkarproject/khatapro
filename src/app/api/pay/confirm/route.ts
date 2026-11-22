@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
       gateway,
       referenceNo,
       receiptNo,
+      gatewayTxnId,
       note,
       receiptUrl,
       userId: passedUserId,
@@ -121,7 +122,9 @@ export async function POST(req: NextRequest) {
     if (gatewayName.toLowerCase().includes('razorpay')) cleanGw = 'Razorpay';
     else if (gatewayName.toLowerCase().includes('upi')) cleanGw = 'UPI PG';
     else if (gatewayName.toLowerCase().includes('direct')) cleanGw = 'Default UPI';
-    const finalNote = note || `${cleanGw} - Bank Ref / UTR: ${finalRef}\nReceipt ID: ${finalReceiptNo}`;
+    const finalNote = note || (gatewayTxnId
+      ? `Receipt ID: ${finalReceiptNo}\n${cleanGw} - Bank Ref / UTR: ${finalRef}\nTransaction ID: ${gatewayTxnId}`
+      : `Receipt ID: ${finalReceiptNo}\n${cleanGw} - Bank Ref / UTR: ${finalRef}`);
 
     // Build attachments array with rich metadata envelope
     const metaEnvelope = {
@@ -131,6 +134,7 @@ export async function POST(req: NextRequest) {
       createdBy: payeeName || 'SmartKhata Online Checkout',
       referenceNo: finalRef,
       receiptNo: finalReceiptNo,
+      gatewayTxnId: gatewayTxnId || '',
       paymentToken: paymentToken || '',
       tokenTimestamp: tokenTimestamp || 0,
       tags: ['online_payment', 'received', `gw:${gatewayName}`],

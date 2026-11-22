@@ -228,6 +228,8 @@ export interface Transaction {
   tags?: string[];
   attachments?: string[];
   referenceNo?: string;
+  gatewayTxnId?: string;
+  receiptNo?: string;
   status: 'completed' | 'pending' | 'failed' | 'cancelled' | 'deleted';
   isDeleted?: boolean;
   deletedAt?: string;

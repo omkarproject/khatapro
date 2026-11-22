@@ -765,7 +765,9 @@ function PayRedirectContent() {
     if (gatewayName.toLowerCase().includes('razorpay')) cleanGwName = 'Razorpay';
     else if (gatewayName.toLowerCase().includes('upi')) cleanGwName = 'UPI PG';
     else if (gatewayName.toLowerCase().includes('direct')) cleanGwName = 'Default UPI';
-    const cleanPaymentNote = `${cleanGwName} - Bank Ref / UTR: ${finalTxnId}\nReceipt ID: ${finalReceiptNo}`;
+    const cleanPaymentNote = gatewayTxnId
+      ? `Receipt ID: ${finalReceiptNo}\n${cleanGwName} - Bank Ref / UTR: ${finalTxnId}\nTransaction ID: ${gatewayTxnId}`
+      : `Receipt ID: ${finalReceiptNo}\n${cleanGwName} - Bank Ref / UTR: ${finalTxnId}`;
 
     const newReceipt = {
       receiptNo: finalReceiptNo,
@@ -820,6 +822,7 @@ function PayRedirectContent() {
       note: cleanPaymentNote,
       paymentMode: gatewayName.toLowerCase().includes('card') ? 'card' : 'upi',
       referenceNo: finalTxnId,
+      gatewayTxnId: gatewayTxnId || '',
       attachments: receiptImgUrl ? [receiptAttachment] : [],
       status: 'completed',
       createdBy: merchantBusinessName || payeeName || 'SmartKhata Online Checkout',
@@ -874,6 +877,7 @@ function PayRedirectContent() {
           gateway: gatewayName,
           referenceNo: finalTxnId,
           receiptNo: finalReceiptNo,
+          gatewayTxnId: gatewayTxnId || '',
           txnId: onlineTxnId, // Exact match to avoid duplicate row
           note: cleanPaymentNote,
           receiptUrl: receiptImgUrl,
@@ -956,6 +960,14 @@ function PayRedirectContent() {
     const appId = settings.paymentSettings?.cashfreeAppId?.trim();
     const secretKey = settings.paymentSettings?.cashfreeSecretKey?.trim();
     const env = settings.paymentSettings?.cashfreeEnv || 'production';
+    const brandDisplayName = (
+      settings.websiteName ||
+      localBrand?.websiteName ||
+      (typeof window !== 'undefined' ? localStorage.getItem('skp_brand_name') || '' : '') ||
+      merchantBusinessName ||
+      settings.businessName ||
+      'SmartKhata'
+    ).trim();
 
     try {
       const res = await fetch('/api/cashfree/order', {
@@ -967,6 +979,8 @@ function PayRedirectContent() {
           customerName: targetCustomerName,
           customerPhone: targetCustomerPhone || '7718559827',
           customerEmail: targetCustomerEmail || 'anantyadav8925@gmail.com',
+          orderNote: brandDisplayName,
+          brandDisplayName: brandDisplayName,
           appId: appId || undefined,
           secretKey: secretKey || undefined,
           env,
