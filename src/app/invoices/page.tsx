@@ -15,6 +15,7 @@ import {
   PaymentCollectionMode,
   Product,
   Transaction,
+  PaymentReminder,
 } from '@/types';
 import {
   FileSpreadsheet,
@@ -80,6 +81,8 @@ export default function InvoicesPage() {
     addTransaction,
     transactions,
     updateTransaction,
+    saveReminder,
+    deleteReminder,
   } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -637,16 +640,44 @@ export default function InvoicesPage() {
           }
         } catch {}
 
+        const d = new Date(updatedInvoice.dueDate);
+        const formattedDueDate = isNaN(d.getTime())
+          ? updatedInvoice.dueDate
+          : `${String(d.getDate()).padStart(2, '0')}-${d.toLocaleString('en-US', { month: 'short' })}-${d.getFullYear()}`;
+        const invoiceReceiptId = `SKP-REC-${new Date().getFullYear()}-${updatedInvoice.invoiceNumber.slice(-6)}`;
+        const invoiceNote = `Receipt ID: ${invoiceReceiptId}\nDue Date: \t${formattedDueDate}`;
+
         updateTransaction({
           ...existingTxn,
           amount: updatedInvoice.total,
           customerId: cust.id,
           customerName: cust.name,
           referenceNo: updatedInvoice.invoiceNumber,
-          note: `Tax Invoice #${updatedInvoice.invoiceNumber}`,
+          note: invoiceNote,
+          dueDate: updatedInvoice.dueDate,
           attachments: updatedAttachments,
           updatedAt: new Date().toISOString(),
         });
+
+        try {
+          const todayStr = new Date().toISOString().split('T')[0];
+          saveReminder({
+            id: `rem_inv_${updatedInvoice.id}`,
+            customerId: cust.id,
+            customerName: cust.name,
+            customerPhone: cust.phone || '',
+            customerEmail: cust.email || '',
+            amount: updatedInvoice.total,
+            dueDate: updatedInvoice.dueDate,
+            reminderType: updatedInvoice.dueDate < todayStr ? 'overdue' : 'upcoming',
+            channels: ['whatsapp', 'sms'],
+            status: 'scheduled',
+            messageTemplate: `Payment reminder for Tax Invoice #${updatedInvoice.invoiceNumber} of ₹${updatedInvoice.total}. Due Date: ${formattedDueDate}. Kindly settle to keep your ledger up to date. Thank you!`,
+            note: `Tax Invoice #${updatedInvoice.invoiceNumber} (${formattedDueDate})`,
+          });
+        } catch (remErr) {
+          console.warn('Could not update reminder for invoice:', remErr);
+        }
       }
 
       setIsCreateModalOpen(false);
@@ -728,6 +759,14 @@ export default function InvoicesPage() {
       console.warn('Could not generate PDF attachment for ledger:', pdfErr);
     }
 
+    const d = new Date(newInvoice.dueDate);
+    const formattedDueDate = isNaN(d.getTime())
+      ? newInvoice.dueDate
+      : `${String(d.getDate()).padStart(2, '0')}-${d.toLocaleString('en-US', { month: 'short' })}-${d.getFullYear()}`;
+
+    const invoiceReceiptId = `SKP-REC-${new Date().getFullYear()}-${newInvoice.invoiceNumber.slice(-6)}`;
+    const invoiceNote = `Receipt ID: ${invoiceReceiptId}\nDue Date: \t${formattedDueDate}`;
+
     const txnId = `txn_inv_${newInvoice.id}`;
     const invoiceGivenTxn: Transaction = {
       id: txnId,
@@ -739,7 +778,8 @@ export default function InvoicesPage() {
       category: 'Sales Invoice',
       paymentMode: 'other',
       referenceNo: newInvoice.invoiceNumber,
-      note: `Tax Invoice #${newInvoice.invoiceNumber}`,
+      note: invoiceNote,
+      dueDate: newInvoice.dueDate,
       attachments: invoiceAttachments,
       status: 'completed',
       createdBy: settings.businessName || profile.businessName || currentUser?.businessName || 'SmartKhata',
@@ -747,6 +787,28 @@ export default function InvoicesPage() {
     };
 
     addTransaction(invoiceGivenTxn);
+
+    // Schedule Payment Reminder in "Payment Follow-up & Reminders" for the invoice's due date
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const scheduledReminder: PaymentReminder = {
+        id: `rem_inv_${newInvoice.id}`,
+        customerId: cust.id,
+        customerName: cust.name,
+        customerPhone: cust.phone || '',
+        customerEmail: cust.email || '',
+        amount: newInvoice.total,
+        dueDate: newInvoice.dueDate,
+        reminderType: newInvoice.dueDate < todayStr ? 'overdue' : 'upcoming',
+        channels: ['whatsapp', 'sms'],
+        status: 'scheduled',
+        messageTemplate: `Payment reminder for Tax Invoice #${newInvoice.invoiceNumber} of ₹${newInvoice.total}. Due Date: ${formattedDueDate}. Kindly settle to keep your ledger up to date. Thank you!`,
+        note: `Tax Invoice #${newInvoice.invoiceNumber} (${formattedDueDate})`,
+      };
+      saveReminder(scheduledReminder);
+    } catch (remErr) {
+      console.warn('Could not schedule payment reminder for invoice:', remErr);
+    }
 
     setIsCreateModalOpen(false);
     setActiveInvoice(newInvoice);
@@ -1266,6 +1328,7 @@ export default function InvoicesPage() {
                         onClick={() => {
                           if (confirm(`Are you sure you want to delete Invoice #${inv.invoiceNumber}?`)) {
                             deleteInvoice(inv.id);
+                            deleteReminder(`rem_inv_${inv.id}`);
                             if (activeInvoice && activeInvoice.id === inv.id) {
                               setActiveInvoice(null);
                             }

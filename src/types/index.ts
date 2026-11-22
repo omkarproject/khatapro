@@ -230,6 +230,7 @@ export interface Transaction {
   referenceNo?: string;
   gatewayTxnId?: string;
   receiptNo?: string;
+  dueDate?: string;
   status: 'completed' | 'pending' | 'failed' | 'cancelled' | 'deleted';
   isDeleted?: boolean;
   deletedAt?: string;

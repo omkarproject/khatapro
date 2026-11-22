@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, openWhatsApp } from '@/lib/utils';
 import { getActiveCurrency, t } from '@/lib/i18n';
@@ -23,7 +23,18 @@ import {
 } from 'lucide-react';
 
 export default function RemindersPage() {
-  const { reminders, saveReminder, deleteReminder, customers, settings, addToast, openCollectModal, activeCurrency, activeLanguage } = useApp();
+  const {
+    reminders,
+    saveReminder,
+    deleteReminder,
+    customers,
+    settings,
+    addToast,
+    openCollectModal,
+    activeCurrency,
+    activeLanguage,
+    invoices,
+  } = useApp();
 
   const [filter, setFilter] = useState<'all' | 'overdue' | 'upcoming'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -42,6 +53,50 @@ export default function RemindersPage() {
   );
 
   const todayStr = new Date().toISOString().split('T')[0];
+
+  // Auto-schedule payment reminders for any unpaid invoices
+  useEffect(() => {
+    if (!invoices || invoices.length === 0) return;
+    invoices.forEach((inv) => {
+      const remId = `rem_inv_${inv.id}`;
+      if (inv.status === 'paid') {
+        const existing = reminders.find((r) => r.id === remId);
+        if (existing && existing.status !== 'sent') {
+          deleteReminder(remId);
+        }
+      } else {
+        const alreadyExists = reminders.some(
+          (r) =>
+            r.id === remId ||
+            (r.customerId === inv.customerId &&
+              r.amount === inv.total &&
+              r.dueDate === inv.dueDate)
+        );
+        if (!alreadyExists) {
+          const cust = customers.find((c) => c.id === inv.customerId);
+          const d = new Date(inv.dueDate);
+          const formattedDueDate = isNaN(d.getTime())
+            ? inv.dueDate
+            : `${String(d.getDate()).padStart(2, '0')}-${d.toLocaleString('en-US', { month: 'short' })}-${d.getFullYear()}`;
+          const newRem: PaymentReminder = {
+            id: remId,
+            customerId: inv.customerId,
+            customerName: inv.customerName || cust?.name || 'Customer',
+            customerPhone: inv.customerPhone || cust?.phone || '',
+            customerEmail: (inv as any).customerEmail || cust?.email || '',
+            amount: inv.total,
+            dueDate: inv.dueDate,
+            reminderType: inv.dueDate < todayStr ? 'overdue' : 'upcoming',
+            channels: ['whatsapp', 'sms'],
+            status: 'scheduled',
+            messageTemplate: `Payment reminder for Tax Invoice #${inv.invoiceNumber} of ₹${inv.total}. Due Date: ${formattedDueDate}. Kindly settle to keep your ledger up to date. Thank you!`,
+            note: `Tax Invoice #${inv.invoiceNumber} (${formattedDueDate})`,
+          };
+          saveReminder(newRem);
+        }
+      }
+    });
+  }, [invoices, reminders, customers, todayStr, saveReminder, deleteReminder]);
 
   const overdueCount = reminders.filter(r => (r.dueDate ? r.dueDate < todayStr : r.reminderType === 'overdue')).length;
   const upcomingCount = reminders.filter(r => (r.dueDate ? r.dueDate >= todayStr : r.reminderType !== 'overdue')).length;

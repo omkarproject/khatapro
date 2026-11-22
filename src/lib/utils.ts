@@ -522,7 +522,7 @@ export function formatTransactionNote(noteOrTxn: any): string {
   // 2. Extract from note string
   if (note) {
     // Check for Receipt ID
-    const rMatch = note.match(/Receipt\s*(?:ID|id)[\s:-]+([A-Za-z0-9_-]+)/i);
+    const rMatch = note.match(/Receipt\s*(?:ID|id)[\s:-]+([A-Za-z0-9_/-]+)/i);
     if (rMatch && !receiptNo) {
       receiptNo = rMatch[1].trim();
     }
@@ -565,7 +565,44 @@ export function formatTransactionNote(noteOrTxn: any): string {
     if (knownTxnMap[utr].gw) gw = knownTxnMap[utr].gw || gw;
   }
 
-  // 4. Return formatted 3-line note if online collection
+  // 4. Check if this is an Invoice / Given entry (Sales Invoice)
+  const dMatch = note.match(/Due\s*Date[:\s\t]+([^\n\r]+)/i);
+  let extractedDueDate = dMatch ? dMatch[1].trim() : '';
+
+  const isInvoiceGiven =
+    extractedDueDate !== '' ||
+    (typeof noteOrTxn === 'object' &&
+      noteOrTxn !== null &&
+      noteOrTxn.type === 'credit' &&
+      (noteOrTxn.category === 'Sales Invoice' ||
+       String(noteOrTxn.referenceNo || '').toUpperCase().startsWith('SKP') ||
+       String(note || '').toLowerCase().includes('tax invoice') ||
+       String(note || '').toLowerCase().includes('invoice')));
+
+  if (isInvoiceGiven) {
+    if (!receiptNo) {
+      const year = new Date().getFullYear();
+      const hash = utr ? utr.slice(-6) : (noteOrTxn?.id ? String(noteOrTxn.id).slice(-6) : 'INV');
+      receiptNo = `SKP-REC-${year}-${hash}`;
+    }
+
+    if (!extractedDueDate) {
+      if (typeof noteOrTxn === 'object' && noteOrTxn?.dueDate) {
+        const d = new Date(noteOrTxn.dueDate);
+        extractedDueDate = isNaN(d.getTime())
+          ? noteOrTxn.dueDate
+          : `${String(d.getDate()).padStart(2, '0')}-${d.toLocaleString('en-US', { month: 'short' })}-${d.getFullYear()}`;
+      } else {
+        const baseDate = noteOrTxn?.date ? new Date(noteOrTxn.date) : new Date();
+        const d = new Date(baseDate.getTime() + 15 * 24 * 60 * 60 * 1000);
+        extractedDueDate = `${String(d.getDate()).padStart(2, '0')}-${d.toLocaleString('en-US', { month: 'short' })}-${d.getFullYear()}`;
+      }
+    }
+
+    return `Receipt ID: ${receiptNo}\nDue Date: \t${extractedDueDate}`;
+  }
+
+  // 5. Return formatted 3-line note if online collection
   if (utr || receiptNo) {
     if (!receiptNo) {
       const year = new Date().getFullYear();
