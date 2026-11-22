@@ -35,7 +35,8 @@ import {
   Zap,
   Key,
   ExternalLink,
-  MessageCircle
+  MessageCircle,
+  ChevronDown,
 } from 'lucide-react';
 
 function CustomerPayInvoiceContent() {
@@ -98,6 +99,7 @@ function CustomerPayInvoiceContent() {
   // Cashfree API Integration States
   const [cfApiError, setCfApiError] = useState('');
   const [isCfLoading, setIsCfLoading] = useState(false);
+  const [isMobileItemsExpanded, setIsMobileItemsExpanded] = useState(false);
 
   // Load invoice from context, localStorage, or server
   useEffect(() => {
@@ -531,8 +533,8 @@ function CustomerPayInvoiceContent() {
     addToast('Payment Verified & Settled!', `Invoice #${invoice.invoiceNumber} has been marked as PAID.`, 'success');
   };
 
-  // Download high-res vector Tax Invoice PDF
-  const handleDownloadPaidInvoicePdf = async () => {
+  // Download high-res vector Tax Invoice PDF (Universal for Paid & Unpaid)
+  const handleDownloadInvoicePdf = async (customStatus?: 'paid' | 'unpaid') => {
     if (!invoice) return;
     try {
       setIsDownloadingPdf(true);
@@ -545,14 +547,17 @@ function CustomerPayInvoiceContent() {
         '/brand-logo.png'
       ).trim();
       const qrDataUrl = await generateInvoiceQrWithLogo(upiDeepLink, merchantLogo, 320);
+      const isPaid = customStatus
+        ? customStatus === 'paid'
+        : (paymentSuccess || invoice.status === 'paid');
       const targetInv: Invoice = {
         ...invoice,
-        status: 'paid',
-        paidAmount: invoice.total,
+        status: isPaid ? 'paid' : (invoice.status || 'unpaid'),
+        paidAmount: isPaid ? invoice.total : (invoice.paidAmount || 0),
       };
       const pdfBlob = await generateInvoicePdfBlob(targetInv, settings, profile, qrDataUrl);
       const safeInvNum = (invoice.invoiceNumber || 'INV').replace(/[^a-zA-Z0-9_-]/g, '_');
-      const fileName = `Tax_Invoice_${safeInvNum}_PAID.pdf`;
+      const fileName = `Tax_Invoice_${safeInvNum}${isPaid ? '_PAID' : ''}.pdf`;
       const blobUrl = URL.createObjectURL(pdfBlob);
       const downloadLink = document.createElement('a');
       downloadLink.href = blobUrl;
@@ -561,7 +566,7 @@ function CustomerPayInvoiceContent() {
       downloadLink.click();
       document.body.removeChild(downloadLink);
       setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-      addToast('Downloaded', `Paid invoice #${invoice.invoiceNumber} downloaded successfully.`, 'success');
+      addToast('Downloaded', `Invoice #${invoice.invoiceNumber} downloaded successfully.`, 'success');
     } catch (err) {
       console.error('Error generating PDF:', err);
       window.print();
@@ -569,6 +574,8 @@ function CustomerPayInvoiceContent() {
       setIsDownloadingPdf(false);
     }
   };
+
+  const handleDownloadPaidInvoicePdf = () => handleDownloadInvoicePdf('paid');
 
   // Download settled payment receipt PNG
   const handleDownloadReceiptImage = () => {
@@ -836,59 +843,65 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#070B14] py-8 px-4 sm:px-6 lg:px-8 print:p-0 print:m-0 print:bg-white print:min-h-0">
-      <div className="max-w-5xl mx-auto space-y-6 print:max-w-none print:m-0 print:p-0 print:space-y-0">
+    <div className="min-h-screen bg-slate-50 dark:bg-[#070B14] py-3 sm:py-8 px-3 sm:px-6 lg:px-8 print:p-0 print:m-0 print:bg-white print:min-h-0">
+      <div className="max-w-5xl mx-auto space-y-3.5 sm:space-y-6 print:max-w-none print:m-0 print:p-0 print:space-y-0">
 
         {/* Top Trust & Branding Bar - HIDDEN IN PRINT */}
-        <div className="glass-card p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 border border-slate-200 dark:border-slate-800 shadow-sm print:hidden">
-          <div className="flex items-center gap-3.5">
+        <div className="glass-card p-3 sm:p-5 rounded-2xl flex items-center justify-between gap-3 border border-slate-200 dark:border-slate-800 shadow-xs print:hidden">
+          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
             {merchantLogo ? (
               <img
                 src={merchantLogo}
                 alt={merchantName}
-                className="w-12 h-12 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-md"
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-xs shrink-0"
               />
             ) : (
-              <div className="w-12 h-12 rounded-2xl fintech-gradient-primary text-white flex items-center justify-center font-black text-lg shadow-md shadow-indigo-500/20">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl fintech-gradient-primary text-white flex items-center justify-center font-black text-base sm:text-lg shadow-md shadow-indigo-500/20 shrink-0">
                 {merchantName.charAt(0) || 'M'}
               </div>
             )}
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-extrabold text-slate-900 dark:text-white">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <h1 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white truncate">
                   {merchantName}
                 </h1>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" /> Verified Merchant
+                <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 text-[9px] sm:text-[10px] font-bold flex items-center gap-0.5 shrink-0">
+                  <ShieldCheck className="w-3 h-3" /> Verified
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
                 {[merchantPhone, merchantEmail, merchantGst ? `GSTIN: ${merchantGst}` : ''].filter(Boolean).join(' • ')}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 text-xs font-semibold flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-emerald-500" />
-              <span>256-Bit SSL Encrypted</span>
-            </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleDownloadInvoicePdf()}
+              disabled={isDownloadingPdf}
+              title="Download Tax Invoice PDF"
+              className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-50 shadow-xs cursor-pointer active:scale-95 transition-all"
+            >
+              <Download className={`w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 ${isDownloadingPdf ? 'animate-bounce' : ''}`} />
+              <span className="hidden sm:inline">{isDownloadingPdf ? 'Downloading...' : 'Download Invoice'}</span>
+            </button>
             <button
               onClick={() => window.print()}
-              className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-50 shadow-xs cursor-pointer"
+              className="hidden sm:flex px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold items-center gap-1.5 hover:bg-slate-50 shadow-xs cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Print Invoice</span>
+              <span>Print</span>
             </button>
           </div>
         </div>
 
         {/* Main 2-Column Responsive Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 print:block print:w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 sm:gap-6 print:block print:w-full">
 
           {/* Left Column (7 cols): Official Tax Invoice Details (FULL WIDTH IN PRINT) */}
-          <div className="lg:col-span-7 space-y-6 print:w-full print:m-0 print:p-0">
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6 print:p-0 print:border-none print:shadow-none print:rounded-none print:w-full print:text-black print:space-y-4">
+          <div className="lg:col-span-7 space-y-4 sm:space-y-6 print:w-full print:m-0 print:p-0">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl p-4 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4 sm:space-y-6 print:p-0 print:border-none print:shadow-none print:rounded-none print:w-full print:text-black print:space-y-4">
               
               {/* PRINT ONLY MERCHANT HEADER - Only visible when printing */}
               <div className="hidden print:flex justify-between items-start pb-4 border-b border-slate-300 gap-3">
@@ -919,25 +932,37 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
               </div>
 
               {/* Invoice Meta Header */}
-              <div className="flex justify-between items-start pb-5 border-b border-slate-100 dark:border-slate-800 print:border-slate-300 print:pb-3">
+              <div className="flex justify-between items-start pb-3.5 sm:pb-5 border-b border-slate-100 dark:border-slate-800 print:border-slate-300 print:pb-3">
                 <div>
-                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-lg print:border print:border-indigo-300 print:text-indigo-900">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg print:border print:border-indigo-300 print:text-indigo-900">
                     Official Tax Invoice
                   </span>
-                  <div className="text-xl font-black text-slate-900 dark:text-white font-mono mt-2 print:text-black">
+                  <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white font-mono mt-1.5 sm:mt-2 print:text-black">
                     {invoice.invoiceNumber}
                   </div>
-                  <div className="text-xs text-slate-500 mt-1 print:text-slate-700">
+                  <div className="text-[11px] sm:text-xs text-slate-500 mt-1 print:text-slate-700">
                     Issued on: <span className="font-semibold text-slate-700 dark:text-slate-300 print:text-black">{formatDate(invoice.issueDate)}</span>
                   </div>
-                  <div className="text-xs text-slate-500 print:text-slate-700">
+                  <div className="text-[11px] sm:text-xs text-slate-500 print:text-slate-700">
                     Due by: <span className="font-semibold text-slate-700 dark:text-slate-300 print:text-black">{formatDate(invoice.dueDate)}</span>
                   </div>
                 </div>
 
-                <div className="text-right">
+                <div className="flex items-center gap-2">
+                  {/* Small Download Invoice Icon Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadInvoicePdf()}
+                    disabled={isDownloadingPdf}
+                    title="Download Official Tax Invoice PDF"
+                    className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 text-xs font-bold flex items-center gap-1 border border-indigo-200 dark:border-indigo-800/60 cursor-pointer shadow-2xs transition-all active:scale-95 print:hidden"
+                  >
+                    <Download className={`w-3.5 h-3.5 ${isDownloadingPdf ? 'animate-bounce' : ''}`} />
+                    <span className="hidden xs:inline sm:inline">{isDownloadingPdf ? 'Downloading...' : 'PDF'}</span>
+                  </button>
+
                   <span
-                    className={`px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wide inline-flex items-center gap-1.5 print:border ${
+                    className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-extrabold uppercase tracking-wide inline-flex items-center gap-1 print:border ${
                       invoice.status === 'paid' || paymentSuccess
                         ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400 print:bg-emerald-50 print:text-emerald-800 print:border-emerald-500'
                         : invoice.status === 'overdue'
@@ -951,132 +976,155 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
                 </div>
               </div>
 
-              {/* Billed To Customer Card */}
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-1 text-xs">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Billed To
-                </div>
-                <div className="text-sm font-extrabold text-slate-900 dark:text-white">
-                  {invoice.customerName}
-                </div>
-                {invoice.customerAddress && (
-                  <div className="text-slate-500">{invoice.customerAddress}</div>
-                )}
-                {invoice.customerPhone && (
-                  <div className="text-slate-500">Phone: {invoice.customerPhone}</div>
-                )}
-                {invoice.customerGst && (
-                  <div className="text-indigo-600 font-mono font-semibold">
-                    GSTIN: {invoice.customerGst}
-                  </div>
-                )}
-              </div>
-
-              {/* Itemized Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100/70 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 font-bold uppercase text-[10px] rounded-xl">
-                    <tr>
-                      <th className="py-2.5 px-3 rounded-l-xl">Description</th>
-                      <th className="py-2.5 px-2 text-center">Qty</th>
-                      <th className="py-2.5 px-3 text-right">Price</th>
-                      <th className="py-2.5 px-2 text-center">GST</th>
-                      <th className="py-2.5 px-3 text-right rounded-r-xl">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {invoice.items.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20">
-                        <td className="py-3 px-3 font-semibold text-slate-900 dark:text-white">
-                          {item.name}
-                        </td>
-                        <td className="py-3 px-2 text-center font-mono text-slate-600 dark:text-slate-400">
-                          {item.quantity}
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono text-slate-600 dark:text-slate-400">
-                          {formatINR(item.unitPrice)}
-                        </td>
-                        <td className="py-3 px-2 text-center font-mono text-slate-600 dark:text-slate-400">
-                          {item.taxPercent}%
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono font-bold text-slate-900 dark:text-white">
-                          {formatINR(item.total)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Invoice Financial Breakdown */}
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2 text-xs">
-                <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                  <span>Subtotal:</span>
-                  <span className="font-mono font-semibold">{formatINR(invoice.subtotal)}</span>
-                </div>
-                {Number(invoice.discountAmount || 0) > 0 && (
-                  <div className="flex justify-between text-emerald-600">
-                    <span>Special Discount:</span>
-                    <span className="font-mono font-semibold">-{formatINR(invoice.discountAmount)}</span>
-                  </div>
-                )}
-                {Number(invoice.cgst || 0) > 0 && (
-                  <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                    <span>Central GST (CGST 9%):</span>
-                    <span className="font-mono">+{formatINR(invoice.cgst)}</span>
-                  </div>
-                )}
-                {Number(invoice.sgst || 0) > 0 && (
-                  <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                    <span>State GST (SGST 9%):</span>
-                    <span className="font-mono">+{formatINR(invoice.sgst)}</span>
-                  </div>
-                )}
-                {Number(invoice.igst || 0) > 0 && (
-                  <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                    <span>Integrated GST (IGST 18%):</span>
-                    <span className="font-mono">+{formatINR(invoice.igst)}</span>
-                  </div>
-                )}
-                {invoice.appliedCharges && invoice.appliedCharges.length > 0 &&
-                  invoice.appliedCharges
-                    .filter((chg) => Number(chg.amount || 0) > 0)
-                    .map((chg) => (
-                      <div key={chg.id} className="flex justify-between text-slate-600 dark:text-slate-400">
-                        <span>{chg.name}:</span>
-                        <span className="font-mono">+{formatINR(chg.amount)}</span>
-                      </div>
-                    ))}
-                {gatewayFeeAmount > 0 && (
-                  <div className="flex justify-between text-purple-600 dark:text-purple-400 font-medium">
-                    <span>Gateway Processing Fee (2%):</span>
-                    <span className="font-mono">+{formatINR(gatewayFeeAmount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center text-sm font-black text-slate-900 dark:text-white pt-3 border-t border-slate-200 dark:border-slate-800">
-                  <span>Total Payable:</span>
-                  <span className="text-lg font-mono font-black text-indigo-600 dark:text-indigo-400">
-                    {formatINR(totalPayableWithFee)}
+              {/* Mobile Quick Preview Summary Row (Takes only ~35px on mobile, hidden on desktop) */}
+              <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800/80 text-xs lg:hidden">
+                <div className="min-w-0 pr-2">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Billed To</span>
+                  <span className="font-extrabold text-slate-800 dark:text-slate-200 truncate block text-xs">
+                    {invoice.customerName || 'Customer'}
                   </span>
                 </div>
+                <div className="text-right shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileItemsExpanded(!isMobileItemsExpanded)}
+                    className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/70 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-400 font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-all active:scale-95 border border-indigo-200/60 dark:border-indigo-800/50"
+                  >
+                    <span>{isMobileItemsExpanded ? 'Hide Bill Items' : `Bill Items (${invoice.items?.length || 1})`}</span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isMobileItemsExpanded ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
               </div>
 
-              {/* Terms & Notes */}
-              {(invoice.terms || invoice.notes) && (
-                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/30 text-[11px] text-slate-500 space-y-1">
-                  {invoice.terms && <div><strong>Terms:</strong> {invoice.terms}</div>}
-                  {invoice.notes && <div><strong>Notes:</strong> {invoice.notes}</div>}
+              {/* Collapsible Details on Mobile, Always Visible on Desktop (lg:block) & Print */}
+              <div className={`${isMobileItemsExpanded ? 'block' : 'hidden'} lg:block print:block space-y-4 sm:space-y-6 pt-1`}>
+                {/* Billed To Customer Card */}
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-1 text-xs">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Billed To
+                  </div>
+                  <div className="text-sm font-extrabold text-slate-900 dark:text-white">
+                    {invoice.customerName}
+                  </div>
+                  {invoice.customerAddress && (
+                    <div className="text-slate-500">{invoice.customerAddress}</div>
+                  )}
+                  {invoice.customerPhone && (
+                    <div className="text-slate-500">Phone: {invoice.customerPhone}</div>
+                  )}
+                  {invoice.customerGst && (
+                    <div className="text-indigo-600 font-mono font-semibold">
+                      GSTIN: {invoice.customerGst}
+                    </div>
+                  )}
                 </div>
-              )}
+
+                {/* Itemized Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100/70 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 font-bold uppercase text-[10px] rounded-xl">
+                      <tr>
+                        <th className="py-2.5 px-3 rounded-l-xl">Description</th>
+                        <th className="py-2.5 px-2 text-center">Qty</th>
+                        <th className="py-2.5 px-3 text-right">Price</th>
+                        <th className="py-2.5 px-2 text-center">GST</th>
+                        <th className="py-2.5 px-3 text-right rounded-r-xl">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {invoice.items.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20">
+                          <td className="py-3 px-3 font-semibold text-slate-900 dark:text-white">
+                            {item.name}
+                          </td>
+                          <td className="py-3 px-2 text-center font-mono text-slate-600 dark:text-slate-400">
+                            {item.quantity}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-slate-600 dark:text-slate-400">
+                            {formatINR(item.unitPrice)}
+                          </td>
+                          <td className="py-3 px-2 text-center font-mono text-slate-600 dark:text-slate-400">
+                            {item.taxPercent}%
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono font-bold text-slate-900 dark:text-white">
+                            {formatINR(item.total)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Invoice Financial Breakdown */}
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2 text-xs">
+                  <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                    <span>Subtotal:</span>
+                    <span className="font-mono font-semibold">{formatINR(invoice.subtotal)}</span>
+                  </div>
+                  {Number(invoice.discountAmount || 0) > 0 && (
+                    <div className="flex justify-between text-emerald-600">
+                      <span>Special Discount:</span>
+                      <span className="font-mono font-semibold">-{formatINR(invoice.discountAmount)}</span>
+                    </div>
+                  )}
+                  {Number(invoice.cgst || 0) > 0 && (
+                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                      <span>Central GST (CGST 9%):</span>
+                      <span className="font-mono">+{formatINR(invoice.cgst)}</span>
+                    </div>
+                  )}
+                  {Number(invoice.sgst || 0) > 0 && (
+                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                      <span>State GST (SGST 9%):</span>
+                      <span className="font-mono">+{formatINR(invoice.sgst)}</span>
+                    </div>
+                  )}
+                  {Number(invoice.igst || 0) > 0 && (
+                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                      <span>Integrated GST (IGST 18%):</span>
+                      <span className="font-mono">+{formatINR(invoice.igst)}</span>
+                    </div>
+                  )}
+                  {invoice.appliedCharges && invoice.appliedCharges.length > 0 &&
+                    invoice.appliedCharges
+                      .filter((chg) => Number(chg.amount || 0) > 0)
+                      .map((chg) => (
+                        <div key={chg.id} className="flex justify-between text-slate-600 dark:text-slate-400">
+                          <span>{chg.name}:</span>
+                          <span className="font-mono">+{formatINR(chg.amount)}</span>
+                        </div>
+                      ))}
+                  {gatewayFeeAmount > 0 && (
+                    <div className="flex justify-between text-purple-600 dark:text-purple-400 font-medium">
+                      <span>Gateway Processing Fee (2%):</span>
+                      <span className="font-mono">+{formatINR(gatewayFeeAmount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center text-sm font-black text-slate-900 dark:text-white pt-3 border-t border-slate-200 dark:border-slate-800">
+                    <span>Total Payable:</span>
+                    <span className="text-lg font-mono font-black text-indigo-600 dark:text-indigo-400">
+                      {formatINR(totalPayableWithFee)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Terms & Notes */}
+                {(invoice.terms || invoice.notes) && (
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/30 text-[11px] text-slate-500 space-y-1">
+                    {invoice.terms && <div><strong>Terms:</strong> {invoice.terms}</div>}
+                    {invoice.notes && <div><strong>Notes:</strong> {invoice.notes}</div>}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Right Column (5 cols): Interactive Customer Payment Station (HIDDEN IN PRINT) */}
-          <div className="lg:col-span-5 space-y-6 print:hidden">
+          <div className="lg:col-span-5 space-y-4 sm:space-y-6 print:hidden">
 
             {/* If Payment is Successful / Invoice Paid */}
             {paymentSuccess ? (
-              <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-emerald-200 dark:border-emerald-900/40 shadow-xl space-y-5 text-center animate-in fade-in zoom-in-95">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl p-4 sm:p-8 border border-emerald-200 dark:border-emerald-900/40 shadow-xl space-y-4 sm:space-y-5 text-center animate-in fade-in zoom-in-95">
                 <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto ring-8 ring-emerald-50 dark:ring-emerald-950/30">
                   <CheckCircle2 className="w-10 h-10" />
                 </div>
@@ -1190,10 +1238,10 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
               </div>
             ) : (
               /* If Payment is Pending / Unpaid: Online Payment Gateway Station */
-              <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xl space-y-6">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl p-4 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4 sm:space-y-6">
 
                 {/* Amount Due Banner */}
-                <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-violet-500/5 to-purple-500/10 border border-indigo-200 dark:border-indigo-900/50 text-center space-y-1">
+                <div className="p-4 sm:p-5 rounded-xl sm:rounded-2xl bg-gradient-to-br from-indigo-500/10 via-violet-500/5 to-purple-500/10 border border-indigo-200 dark:border-indigo-900/50 text-center space-y-1">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                     Total Amount Due
                   </div>
