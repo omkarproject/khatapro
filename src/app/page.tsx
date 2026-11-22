@@ -300,12 +300,15 @@ export default function DashboardPage() {
       .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
     // --- 3. BILLING & INVOICING CALCULATIONS ---
-    const totalInvoiceAmount = invoices.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
+    // User requested: I: must be UNPAID invoices total only
+    const totalInvoiceAmount = invoices
+      .filter(inv => inv.status !== 'paid')
+      .reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
 
-    // --- 4. NET AMOUNT (KHATA - EXPENSES - INV) ---
-    // User requested formula: KHATA (total) - EXPENSES (monthly) - INV (total billing)
+    // --- 4. NET AMOUNT (KHATA - EXPENSES) ---
+    // User requested formula: KHATA - EXPENSES (K - E)
     const khataBase = khataCredit;
-    const netAmount = khataBase - currentMonthExpenses - totalInvoiceAmount;
+    const netAmount = khataBase - currentMonthExpenses;
     const isNetPositive = netAmount >= 0;
 
     // --- 5. ONLINE COLLECTIONS (Payment Collection Hub Only) ---
@@ -397,6 +400,7 @@ export default function DashboardPage() {
     });
 
     invoices.forEach(inv => {
+      if (inv.status === 'paid') return;
       try {
         const d = new Date(inv.issueDate || inv.createdAt || '');
         if (!isNaN(d.getTime())) {
@@ -413,7 +417,7 @@ export default function DashboardPage() {
       const exp = dayMap[day].expenses;
       const inv = dayMap[day].invoices;
       const oc = dayMap[day].onlineCollections;
-      const net = k - exp - inv;
+      const net = k - exp;
 
       return {
         day,
@@ -596,23 +600,20 @@ export default function DashboardPage() {
             <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 flex-wrap">
               <span className="text-rose-500 font-bold flex items-center gap-0.5 whitespace-nowrap" title={`Debit / Given: ${formatINR(metrics.khataDebit)}`}>
                 <ArrowUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 stroke-[2.5]" />
-                <span className="hidden md:inline text-[9px] uppercase font-semibold">Debit:</span>
                 <span>{formatINR(metrics.khataDebit)}</span>
               </span>
               <span className="text-slate-300 dark:text-slate-600 font-normal">•</span>
               <span className="text-emerald-500 font-bold flex items-center gap-0.5 whitespace-nowrap" title={`Credit / Received: ${formatINR(metrics.khataCredit)}`}>
                 <ArrowDown className="w-2.5 h-2.5 sm:w-3 sm:h-3 stroke-[2.5]" />
-                <span className="hidden md:inline text-[9px] uppercase font-semibold">Credit:</span>
                 <span>{formatINR(metrics.khataCredit)}</span>
               </span>
             </div>
             <Link
               href="/khata"
-              className="p-1 sm:px-1.5 sm:py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-all shrink-0 flex items-center gap-1"
+              className="p-1 sm:p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-all shrink-0 flex items-center justify-center shadow-2xs"
               title="Open Digital KhataBook"
             >
               <BookOpen className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline text-[10px] font-bold">Khata</span>
             </Link>
           </div>
         </div>
@@ -644,16 +645,15 @@ export default function DashboardPage() {
             </div>
             <Link
               href="/expenses"
-              className="p-1 sm:px-1.5 sm:py-0.5 rounded-lg bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-all shrink-0 flex items-center gap-1"
+              className="p-1 sm:p-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-all shrink-0 flex items-center justify-center shadow-2xs"
               title="Open Expense Tracker"
             >
               <Receipt className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline text-[10px] font-bold">Expenses</span>
             </Link>
           </div>
         </div>
 
-        {/* Card 3: NET AMOUNT (KHATA - EXPENSES - INV) */}
+        {/* Card 3: NET AMOUNT (KHATA - EXPENSES) */}
         <div className="glass-card p-2.5 sm:p-3.5 rounded-2xl relative overflow-hidden group">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
@@ -684,25 +684,24 @@ export default function DashboardPage() {
                 {formatINR(metrics.currentMonthExpenses)}
               </span>
               <span className="text-slate-300 dark:text-slate-600 font-normal">•</span>
-              <span className="text-indigo-600 dark:text-indigo-400 font-bold whitespace-nowrap" title={`Invoices: ${formatINR(metrics.totalInvoiceAmount)}`}>
+              <span className="text-indigo-600 dark:text-indigo-400 font-bold whitespace-nowrap" title={`Unpaid Invoices: ${formatINR(metrics.totalInvoiceAmount)}`}>
                 <span className="text-[8.5px] uppercase text-slate-400 font-semibold mr-0.5">I:</span>
                 {formatINR(metrics.totalInvoiceAmount)}
               </span>
             </div>
             <div
-              className={`p-1 sm:px-1.5 sm:py-0.5 rounded-lg shrink-0 flex items-center gap-1 ${
+              className={`p-1 sm:p-1.5 rounded-lg shrink-0 flex items-center justify-center shadow-2xs ${
                 metrics.isNetPositive
                   ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
                   : 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400'
               }`}
-              title={metrics.isNetPositive ? 'Net Positive (+)' : 'Net Negative (-)'}
+              title={metrics.isNetPositive ? `Net Positive (+${formatINR(metrics.netAmount)})` : `Net Negative (${formatINR(metrics.netAmount)})`}
             >
               {metrics.isNetPositive ? (
                 <TrendingUp className="w-3.5 h-3.5" />
               ) : (
                 <TrendingDown className="w-3.5 h-3.5" />
               )}
-              <span className="hidden sm:inline text-[10px] font-bold">{metrics.isNetPositive ? 'Net +' : 'Net -'}</span>
             </div>
           </div>
         </div>
