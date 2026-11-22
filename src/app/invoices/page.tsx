@@ -14,6 +14,7 @@ import {
   InvoiceAppliedCharge,
   PaymentCollectionMode,
   Product,
+  Transaction,
 } from '@/types';
 import {
   FileSpreadsheet,
@@ -76,6 +77,9 @@ export default function InvoicesPage() {
     openCollectModal,
     activeCurrency,
     activeLanguage,
+    addTransaction,
+    transactions,
+    updateTransaction,
   } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -554,7 +558,7 @@ export default function InvoicesPage() {
   };
 
   // Handle Save (Create or Update) Invoice
-  const handleSaveInvoice = (e: React.FormEvent) => {
+  const handleSaveInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     const cust = customers.find(c => c.id === selectedCustomerId);
     if (!cust) {
@@ -587,6 +591,64 @@ export default function InvoicesPage() {
       };
 
       saveInvoice(updatedInvoice);
+
+      // Check for linked transaction and update in Khata
+      const existingTxn = transactions.find(
+        (t) =>
+          t.id === `txn_inv_${editingInvoice.id}` ||
+          (editingInvoice.invoiceNumber && t.referenceNo === editingInvoice.invoiceNumber) ||
+          t.note === `Tax Invoice #${editingInvoice.invoiceNumber}`
+      );
+
+      if (existingTxn) {
+        let updatedAttachments = existingTxn.attachments || [];
+        try {
+          const upiUri = buildUpiUri(
+            settings.paymentSettings?.upiId || '',
+            settings.paymentSettings?.payeeName || settings.businessName || '',
+            updatedInvoice.total,
+            `Inv ${updatedInvoice.invoiceNumber}`
+          );
+          const merchantLogo = (
+            settings.businessLogo ||
+            profile.avatarUrl ||
+            currentUser?.avatarUrl ||
+            settings.websiteLogo ||
+            '/brand-logo.png'
+          ).trim();
+          const qrDataUrl = await generateInvoiceQrWithLogo(upiUri, merchantLogo, 320);
+          const pdfBlob = await generateInvoicePdfBlob(updatedInvoice, settings, profile, qrDataUrl);
+          const pdfDataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = () => resolve('');
+            reader.readAsDataURL(pdfBlob);
+          });
+          if (pdfDataUrl) {
+            updatedAttachments = [
+              JSON.stringify({
+                id: `att_${updatedInvoice.id}`,
+                name: `Tax_Invoice_${updatedInvoice.invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`,
+                url: pdfDataUrl,
+                type: 'pdf',
+                size: 'Tax Invoice (PDF)',
+              }),
+            ];
+          }
+        } catch {}
+
+        updateTransaction({
+          ...existingTxn,
+          amount: updatedInvoice.total,
+          customerId: cust.id,
+          customerName: cust.name,
+          referenceNo: updatedInvoice.invoiceNumber,
+          note: `Tax Invoice #${updatedInvoice.invoiceNumber}`,
+          attachments: updatedAttachments,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
       setIsCreateModalOpen(false);
       setEditingInvoice(null);
       setActiveInvoice(updatedInvoice);
@@ -622,8 +684,77 @@ export default function InvoicesPage() {
     };
 
     saveInvoice(newInvoice);
+
+    // Generate Invoice PDF and record in Customer Digital Khatabook as "GIVEN" (Credit)
+    const invoicePdfName = `Tax_Invoice_${newInvoice.invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+    const invoiceAttachments: string[] = [];
+
+    try {
+      const upiUri = buildUpiUri(
+        settings.paymentSettings?.upiId || '',
+        settings.paymentSettings?.payeeName || settings.businessName || '',
+        newInvoice.total,
+        `Inv ${newInvoice.invoiceNumber}`
+      );
+      const merchantLogo = (
+        settings.businessLogo ||
+        profile.avatarUrl ||
+        currentUser?.avatarUrl ||
+        settings.websiteLogo ||
+        '/brand-logo.png'
+      ).trim();
+      const qrDataUrl = await generateInvoiceQrWithLogo(upiUri, merchantLogo, 320);
+      const pdfBlob = await generateInvoicePdfBlob(newInvoice, settings, profile, qrDataUrl);
+
+      const pdfDataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(pdfBlob);
+      });
+
+      if (pdfDataUrl) {
+        invoiceAttachments.push(
+          JSON.stringify({
+            id: `att_${newInvoice.id}`,
+            name: invoicePdfName,
+            url: pdfDataUrl,
+            type: 'pdf',
+            size: 'Tax Invoice (PDF)',
+          })
+        );
+      }
+    } catch (pdfErr) {
+      console.warn('Could not generate PDF attachment for ledger:', pdfErr);
+    }
+
+    const txnId = `txn_inv_${newInvoice.id}`;
+    const invoiceGivenTxn: Transaction = {
+      id: txnId,
+      type: 'credit', // "Given" in Digital Khatabook (Red text / arrow, increases Due balance)
+      amount: newInvoice.total,
+      date: new Date().toISOString(),
+      customerId: cust.id,
+      customerName: cust.name,
+      category: 'Sales Invoice',
+      paymentMode: 'other',
+      referenceNo: newInvoice.invoiceNumber,
+      note: `Tax Invoice #${newInvoice.invoiceNumber}`,
+      attachments: invoiceAttachments,
+      status: 'completed',
+      createdBy: settings.businessName || profile.businessName || currentUser?.businessName || 'SmartKhata',
+      createdAt: new Date().toISOString(),
+    };
+
+    addTransaction(invoiceGivenTxn);
+
     setIsCreateModalOpen(false);
     setActiveInvoice(newInvoice);
+    addToast(
+      'Invoice Created & Recorded in Khata',
+      `Invoice #${newInvoice.invoiceNumber} (₹${newInvoice.total}) added to ${cust.name}'s Khatabook as GIVEN with PDF attached.`,
+      'success'
+    );
   };
 
   // WhatsApp Share Invoice with PDF Attachment

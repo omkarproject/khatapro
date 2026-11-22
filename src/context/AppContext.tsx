@@ -2389,6 +2389,16 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       if (fileNames.length > 0) {
         deleteFromDriveFiles({ fileNames });
       }
+
+      // Clean up linked ledger transaction in Khatabook if any
+      const matchingTxn = StorageService.getTransactions().find(
+        t => t.id === `txn_inv_${id}` || (existing.invoiceNumber && t.referenceNo === existing.invoiceNumber)
+      );
+      if (matchingTxn) {
+        StorageService.hardDeleteTransaction(matchingTxn.id);
+        setTransactions(StorageService.getTransactions());
+        setCustomers(StorageService.getCustomers());
+      }
     }
     const updated = StorageService.deleteInvoice(id);
     setInvoices(updated);
