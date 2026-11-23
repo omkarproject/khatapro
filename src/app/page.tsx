@@ -330,9 +330,16 @@ export default function DashboardPage() {
   return (
     <div className="space-y-3 sm:space-y-3.5">
       
-      {/* Top Banner: Digital Clock & Quick Action Bar (Hidden on Mobile, Visible on Desktop - Slim & Stylish Corner Curve) */}
-      <div className="hidden md:block relative overflow-hidden rounded-[26px] py-2 px-4 sm:py-2.5 sm:px-6 bg-gradient-to-r from-slate-950 via-[#0d1226] to-slate-950 text-white shadow-lg shadow-slate-950/20 border border-slate-800/90 hover:border-indigo-500/30 transition-all duration-300">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+      {/* Top Banner: Digital Clock & Quick Action Bar (Hidden on Mobile, Visible on Desktop - Slim & Stylish Corner Curve with Cool Drop BG Animation) */}
+      <div className="hidden md:block relative overflow-hidden rounded-[26px] py-2 px-4 sm:py-2.5 sm:px-6 bg-gradient-to-r from-slate-950 via-[#0d1226] to-slate-950 text-white shadow-lg shadow-indigo-950/30 border border-slate-800/90 hover:border-indigo-500/40 transition-all duration-300 group/banner">
+        {/* Cool Animated BG Drops & Luminous Auras */}
+        <div className="absolute -top-10 -left-10 w-64 h-64 bg-indigo-600/25 rounded-full blur-3xl pointer-events-none animate-aura-pulse" />
+        <div className="absolute -bottom-10 -right-8 w-72 h-72 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none animate-aura-float" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-24 bg-gradient-to-r from-indigo-500/15 via-cyan-400/25 to-purple-500/15 rounded-full blur-2xl pointer-events-none animate-banner-drop-glow" />
+        
+        {/* Subtle Cyber Grid Starlight Pattern */}
+        <div className="absolute inset-0 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:16px_16px] opacity-[0.06] pointer-events-none" />
+
         <div className="relative z-10 flex items-center justify-between gap-4">
           <div className="w-1/4 hidden lg:block" />
           

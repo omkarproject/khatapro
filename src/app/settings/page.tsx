@@ -2525,7 +2525,7 @@ export default function SettingsPage() {
           </h3>
 
           {/* Business & Profile Logo Upload */}
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-4">
+          <div className="p-3 sm:p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex items-center gap-4">
             <div className="flex items-center gap-4">
               <input
                 type="file"
@@ -2548,53 +2548,49 @@ export default function SettingsPage() {
                     <span className="text-[9px] mt-1 font-medium">Add Logo</span>
                   </div>
                 )}
-              </div>
 
-              <div>
-                <div className="flex items-center gap-2 relative">
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">Profile / Business Logo</h4>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!bLogo) {
+                {/* Pencil Edit Icon placed directly on the Profile Pic */}
+                <div className="absolute -bottom-1 -right-1 z-20">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!bLogo) {
+                        logoInputRef.current?.click();
+                      } else {
+                        setIsLogoMenuOpen(!isLogoMenuOpen);
+                      }
+                    }}
+                    className="p-1.5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/40 border-2 border-white dark:border-slate-900 transition-all cursor-pointer active:scale-95 flex items-center justify-center"
+                    title="Change or Remove Logo"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  {isLogoMenuOpen && bLogo && (
+                    <div className="absolute left-0 mt-1.5 w-36 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1 z-30 animate-in fade-in zoom-in-95">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsLogoMenuOpen(false);
                           logoInputRef.current?.click();
-                        } else {
-                          setIsLogoMenuOpen(!isLogoMenuOpen);
-                        }
-                      }}
-                      className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900/80 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 transition-all cursor-pointer shadow-xs active:scale-95 flex items-center justify-center"
-                      title="Change or Remove Logo"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    {isLogoMenuOpen && bLogo && (
-                      <div className="absolute left-0 mt-1.5 w-36 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1 z-30 animate-in fade-in zoom-in-95">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsLogoMenuOpen(false);
-                            logoInputRef.current?.click();
-                          }}
-                          className="w-full px-3 py-1.5 text-left text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
-                        >
-                          <Upload className="w-3.5 h-3.5 text-indigo-500" />
-                          <span>Change Logo</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsLogoMenuOpen(false);
-                            handleRemoveLogo();
-                          }}
-                          className="w-full px-3 py-1.5 text-left text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-2 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Remove</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                        }}
+                        className="w-full px-3 py-1.5 text-left text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>Change Logo</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsLogoMenuOpen(false);
+                          handleRemoveLogo();
+                        }}
+                        className="w-full px-3 py-1.5 text-left text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-2 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Remove</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

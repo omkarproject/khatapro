@@ -849,47 +849,30 @@ export default function UpiCollectionPage() {
     <>
       <div className="print:hidden space-y-4 sm:space-y-6">
         
-        {/* Header with Active Mode Indicator */}
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-                <QrCode className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                <span>Payment Collection Hub</span>
-              </h1>
-              <span className="text-[11px] sm:text-xs font-bold px-2.5 py-0.5 sm:py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 shadow-xs shrink-0">
-                <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Active Mode: {
-                  isCashfreeActive && activeMode === 'cashfree' ? 'Cashfree PG' :
-                  isRazorpayActive && activeMode === 'razorpay' ? 'Razorpay PG' :
-                  isUpiGatewayActive && activeMode === 'upi_gateway' ? 'UPI PG (Dynamic)' :
-                  isDirectUpiActive && activeMode === 'direct_upi' ? 'Default UPI & QR' :
-                  (isDirectUpiActive ? 'Default UPI & QR' : isCashfreeActive ? 'Cashfree PG' : isRazorpayActive ? 'Razorpay PG' : isUpiGatewayActive ? 'UPI PG (Dynamic)' : 'None')
-                }
-              </span>
-            </div>
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <QrCode className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span>Payment Collection Hub</span>
+            </h1>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2.5 w-full sm:w-auto">
+          <div className="flex items-center gap-2 self-end sm:self-auto">
             <Link
               href="/settings"
-              className="flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl sm:rounded-2xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs"
-              title="Configure API Keys & Gateways in Settings"
+              className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-indigo-600 transition-colors shadow-xs flex items-center justify-center cursor-pointer"
+              title="Gateway Settings"
             >
-              <SettingsIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400" />
-              <span>Gateway Settings</span>
+              <SettingsIcon className="w-4 h-4" />
             </Link>
             <button
               type="button"
               onClick={() => setIsStandeeModalOpen(true)}
-              className="flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl sm:rounded-2xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-md shadow-indigo-600/25 transition-all cursor-pointer"
-              title="Design & Print Beautiful Modern Shop Standee (A4/Stand)"
+              className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-md shadow-indigo-600/25 transition-all flex items-center justify-center cursor-pointer"
+              title="Shop Standee Studio"
             >
-              <Printer className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span>Shop Standee</span>
-              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-white/20 text-white uppercase tracking-wider">
-                Studio
-              </span>
+              <Printer className="w-4 h-4" />
             </button>
           </div>
         </div>

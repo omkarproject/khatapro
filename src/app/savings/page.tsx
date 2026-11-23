@@ -1478,13 +1478,10 @@ export default function SavingsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2.5">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2.5">
             <PiggyBank className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
             Savings & Reserve Funds
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Dedicated emergency funds, capital expansion goals, advance tax reserves, and business cushions
-          </p>
         </div>
 
         <div className="flex items-center gap-2.5 self-start sm:self-auto">
@@ -1589,7 +1586,7 @@ export default function SavingsPage() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 sm:gap-4">
           {savingsGoals.map((goal, idx) => {
             const progress = Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100));
             const reminder = getGoalReminderStatus(goal);
@@ -1599,36 +1596,36 @@ export default function SavingsPage() {
             return (
               <div
                 key={goal.id}
-                className={`glass-card p-6 space-y-4 flex flex-col justify-between transition-all relative group ${
+                className={`glass-card p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between transition-all relative group ${
                   isSelected
                     ? 'ring-2 ring-indigo-500/60 border-indigo-500/80 bg-indigo-500/[0.03]'
-                    : 'hover:border-indigo-300 dark:hover:border-indigo-700'
+                    : 'hover:border-indigo-400 dark:hover:border-indigo-600 hover:shadow-md'
                 }`}
               >
                 <div>
                   {/* Top Bar: Checkbox, Icon, Category Badge & Action Icons */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleGoalSelection(goal.id);
                         }}
-                        className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all cursor-pointer border shrink-0 ${
+                        className={`w-5 h-5 rounded-md flex items-center justify-center transition-all cursor-pointer border shrink-0 ${
                           isSelected
                             ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
                             : 'bg-white/60 dark:bg-slate-800/60 border-slate-300 dark:border-slate-700 text-transparent hover:text-slate-400'
                         }`}
                         title={isSelected ? 'Deselect fund' : 'Select fund for export'}
                       >
-                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        <Check className="w-3 h-3 stroke-[3]" />
                       </button>
 
-                      <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                        <ShieldCheck className="w-5 h-5" />
+                      <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                        <ShieldCheck className="w-4 h-4" />
                       </div>
-                      <span className="text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 truncate">
+                      <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 truncate">
                         {goal.category}
                       </span>
                       {goal.documentUrl && (
@@ -1641,90 +1638,90 @@ export default function SavingsPage() {
                             })
                           }
                           title={`View Attached Document: ${goal.documentName || 'File'}`}
-                          className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 flex items-center gap-1 transition-colors cursor-pointer"
+                          className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 flex items-center gap-1 transition-colors cursor-pointer"
                         >
-                          <Paperclip className="w-3 h-3" />
-                          <span className="hidden sm:inline">Doc</span>
+                          <Paperclip className="w-2.5 h-2.5" />
+                          <span>Doc</span>
                         </button>
                       )}
                     </div>
 
                     {/* Quick Action Icons: History, Edit, Delete next to Category */}
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-0.5 shrink-0">
                       <button
                         onClick={() => {
                           setHistoryGoal(goal);
                           setHistorySearchTerm('');
                         }}
                         title="Deposit History & Receipts"
-                        className="p-1.5 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors cursor-pointer"
+                        className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors cursor-pointer"
                       >
-                        <History className="w-4 h-4" />
+                        <History className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => handleOpenEditModal(goal)}
                         title="Edit Fund"
-                        className="p-1.5 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors cursor-pointer"
+                        className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors cursor-pointer"
                       >
-                        <Pencil className="w-4 h-4" />
+                        <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => setGoalToDelete(goal)}
                         title="Delete Fund"
-                        className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
+                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
 
                   {/* Title & Notes */}
-                  <div className="mt-4">
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  <div className="mt-2.5">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
                       {goal.title}
                     </h3>
                     {goal.notes && (
-                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                      <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
                         {goal.notes}
                       </p>
                     )}
                   </div>
 
                   {/* Amounts & Progress Bar */}
-                  <div className="mt-4 space-y-2">
+                  <div className="mt-2.5 space-y-1.5">
                     <div className="flex justify-between items-baseline">
-                      <span className="text-xl font-black font-mono text-slate-900 dark:text-white">
+                      <span className="text-base sm:text-lg font-black font-mono text-slate-900 dark:text-white">
                         {formatINR(goal.currentAmount)}
                       </span>
-                      <span className="text-xs font-mono text-slate-400">
+                      <span className="text-[11px] font-mono text-slate-400">
                         of {formatINR(goal.targetAmount)}
                       </span>
                     </div>
 
-                    <div className="w-full h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500 transition-all duration-500"
                         style={{ width: `${progress}%` }}
                       />
                     </div>
 
-                    <div className="flex justify-between text-[11px] text-slate-400">
-                      <span>{progress}% Completed</span>
+                    <div className="flex justify-between text-[10px] text-slate-400">
+                      <span>{progress}% Done</span>
                       <span>Target: {formatDate(goal.deadline)}</span>
                     </div>
                   </div>
 
                   {/* Monthly Reminder Status Pill */}
-                  <div className="mt-3.5">
+                  <div className="mt-2">
                     {reminder.status === 'due' && (
-                      <div className="p-2.5 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300 font-bold text-[11px]">
-                          <Bell className="w-3.5 h-3.5 text-amber-500 shrink-0 animate-bounce" />
-                          <span>Deposit Due ({reminder.targetDay}{getDaySuffix(reminder.targetDay)} of month)</span>
+                      <div className="p-2 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300 font-bold text-[10px] truncate">
+                          <Bell className="w-3 h-3 text-amber-500 shrink-0 animate-bounce" />
+                          <span className="truncate">Due ({reminder.targetDay}{getDaySuffix(reminder.targetDay)})</span>
                         </div>
                         <button
                           onClick={() => handleOpenDepositModal(goal)}
-                          className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-600 text-white hover:bg-amber-700 cursor-pointer"
+                          className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-600 text-white hover:bg-amber-700 cursor-pointer shrink-0"
                         >
                           Deposit
                         </button>
@@ -1732,53 +1729,53 @@ export default function SavingsPage() {
                     )}
 
                     {reminder.status === 'paid_this_month' && (
-                      <div className="px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300 font-medium">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        <span>{reminder.message}</span>
+                      <div className="px-2 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-1 text-[10px] text-emerald-700 dark:text-emerald-300 font-medium">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                        <span className="truncate">{reminder.message}</span>
                       </div>
                     )}
 
                     {reminder.status === 'upcoming' && (
-                      <div className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400">
-                        <Clock className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                        <span>{reminder.message}</span>
+                      <div className="px-2 py-1 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1 text-[10px] text-slate-600 dark:text-slate-400">
+                        <Clock className="w-3 h-3 text-indigo-500 shrink-0" />
+                        <span className="truncate">{reminder.message}</span>
                       </div>
                     )}
 
                     {reminder.status === 'expired' && (
-                      <div className="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800/40 text-[11px] text-slate-400">
-                        <span>{reminder.message}</span>
+                      <div className="px-2 py-0.5 rounded-xl bg-slate-100 dark:bg-slate-800/40 text-[10px] text-slate-400">
+                        <span className="truncate">{reminder.message}</span>
                       </div>
                     )}
                   </div>
 
                   {/* Motivational Tiny Quote at Bottom of Card */}
-                  <div className="mt-3 p-2.5 rounded-2xl bg-gradient-to-r from-amber-500/5 via-indigo-500/5 to-emerald-500/5 border border-slate-200/50 dark:border-slate-800/60 flex items-start gap-2 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
-                    <span className="text-sm shrink-0">{motivation.emoji}</span>
-                    <div className="flex-1 italic font-medium">
+                  <div className="mt-2 p-1.5 rounded-xl bg-gradient-to-r from-amber-500/5 via-indigo-500/5 to-emerald-500/5 border border-slate-200/50 dark:border-slate-800/60 flex items-start gap-1.5 text-[10px] leading-snug text-slate-600 dark:text-slate-400 line-clamp-2">
+                    <span className="text-xs shrink-0">{motivation.emoji}</span>
+                    <div className="italic font-medium line-clamp-2">
                       "{motivation.text}"
                     </div>
                   </div>
                 </div>
 
                 {/* Card Footer: Add Funds button right aligned */}
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div className="pt-2 mt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                   <button
                     onClick={() => {
                       setHistoryGoal(goal);
                       setHistorySearchTerm('');
                     }}
-                    className="text-[11px] font-semibold text-slate-500 hover:text-indigo-600 flex items-center gap-1 cursor-pointer"
+                    className="text-[10px] font-semibold text-slate-500 hover:text-indigo-600 flex items-center gap-1 cursor-pointer"
                   >
-                    <History className="w-3.5 h-3.5" />
+                    <History className="w-3 h-3" />
                     History ({goal.deposits?.length || (goal.currentAmount > 0 ? 1 : 0)})
                   </button>
 
                   <button
                     onClick={() => handleOpenDepositModal(goal)}
-                    className="px-3.5 py-1.5 text-xs font-bold rounded-xl text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+                    className="px-2.5 py-1 text-[11px] font-bold rounded-lg text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus className="w-3 h-3" />
                     Add Funds
                   </button>
                 </div>
