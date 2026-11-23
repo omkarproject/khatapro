@@ -233,13 +233,10 @@ export default function DocumentsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2.5">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2.5">
             <FolderLock className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
             Document Vault & Receipts
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Securely organize supplier bills, signed contracts, GST registration papers, identity KYC, and expense vouchers
-          </p>
         </div>
 
         <button
@@ -247,7 +244,7 @@ export default function DocumentsPage() {
             resetUploadForm();
             setIsUploadModalOpen(true);
           }}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all self-start sm:self-auto cursor-pointer"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all self-start sm:self-auto cursor-pointer"
         >
           <Upload className="w-4 h-4" />
           Upload Document
@@ -313,21 +310,21 @@ export default function DocumentsPage() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-3.5">
           {filteredDocuments.map((doc) => (
             <div
               key={doc.id}
-              className="glass-card p-5 space-y-4 flex flex-col justify-between hover:border-indigo-300 dark:hover:border-indigo-700 transition-all group"
+              className="glass-card p-3.5 rounded-2xl flex flex-col justify-between hover:border-indigo-400 dark:hover:border-indigo-600 hover:shadow-md transition-all group"
             >
               <div>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold shrink-0">
-                    <FileText className="w-5 h-5" />
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold shrink-0">
+                    <FileText className="w-4 h-4" />
                   </div>
                   
                   {/* Category Badge & Delete Icon Next to It */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
                       {doc.category}
                     </span>
                     <button
@@ -344,20 +341,20 @@ export default function DocumentsPage() {
                   </div>
                 </div>
 
-                <div className="mt-4">
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate" title={doc.title}>
+                <div className="mt-2.5">
+                  <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate" title={doc.title}>
                     {doc.title}
                   </h3>
-                  <p className="text-xs text-slate-400 mt-0.5 truncate">
+                  <p className="text-[11px] text-slate-400 mt-0.5 truncate">
                     {doc.relatedEntityName || 'Business Record'} • {doc.fileSize}
                   </p>
-                  <p className="text-[10px] text-slate-400 mt-2 font-mono">
+                  <p className="text-[10px] text-slate-400 mt-1.5 font-mono">
                     Uploaded: {formatDate(doc.uploadedAt)}
                   </p>
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div className="pt-2.5 mt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                 <button
                   onClick={() => setPreviewDoc(doc)}
                   className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
@@ -367,10 +364,10 @@ export default function DocumentsPage() {
 
                 <button
                   onClick={() => handleDownload(doc)}
-                  className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer"
+                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer"
                   title="Download File"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
