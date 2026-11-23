@@ -20,6 +20,7 @@ import {
   AuthenticatorItem,
   KhataGroup,
   KhataGroupNotification,
+  P2PTransactionAlert,
 } from '@/types';
 import { StorageService, getCleanDefaultSettings } from '@/services/storage';
 import { deleteFromDriveFiles } from '@/lib/driveUploadClient';
@@ -117,6 +118,12 @@ interface AppContextType {
   addGroupNotification: (notif: KhataGroupNotification) => void;
   dismissGroupNotification: (id: string) => void;
   
+  // Realtime P2P Transaction Alerts
+  p2pAlerts: P2PTransactionAlert[];
+  addP2PAlert: (alert: P2PTransactionAlert) => void;
+  dismissP2PAlert: (id: string) => void;
+  clearAllP2PAlerts: () => void;
+  
   // UPI and QR Default Persistence (Key User Requirement)
   saveDefaultUpiAndQr: (data: { upiId: string; payeeName: string; customQrUrl?: string }) => void;
   
@@ -194,6 +201,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const [authenticators, setAuthenticators] = useState<AuthenticatorItem[]>([]);
   const [groups, setGroups] = useState<KhataGroup[]>([]);
   const [groupNotifications, setGroupNotifications] = useState<KhataGroupNotification[]>([]);
+  const [p2pAlerts, setP2PAlerts] = useState<P2PTransactionAlert[]>([]);
   const [settings, setSettingsState] = useState<SystemSettings>(() => {
     const s = StorageService.getSettings();
     if (initialBranding && typeof initialBranding === 'object') {
@@ -328,6 +336,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       setAuthenticators([]);
       setGroups([]);
       setGroupNotifications([]);
+      setP2PAlerts([]);
       setSettingsState(getCleanDefaultSettings());
       return;
     }
@@ -349,6 +358,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setAuthenticators(StorageService.getAuthenticators());
     setGroups(StorageService.getGroups());
     setGroupNotifications(StorageService.getGroupNotifications());
+    setP2PAlerts(StorageService.getP2PAlerts());
     const s = StorageService.getSettings();
     setSettingsState(s);
     if (s.darkMode !== undefined) {
@@ -1191,11 +1201,23 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           },
         });
 
-        // A. Listen for Realtime Broadcasts from other devices
+        // A. Listen for Realtime Broadcasts from other devices & peer merchants
         channel.on('broadcast', { event: 'khatapro_device_sync' }, (message) => {
           const payload = message.payload;
-          if (payload && payload.originDeviceId !== myDeviceIdRef.current && payload.userId === userId) {
-            debouncedLoadFromCloud(userId, payload.action || 'device_broadcast');
+          if (payload && payload.userId === userId) {
+            if (payload.action === 'p2p_transaction_alert' && payload.alert) {
+              StorageService.addP2PAlert(payload.alert);
+              setP2PAlerts(StorageService.getP2PAlerts());
+              playPaymentNotificationSound();
+              addToast(
+                `⚡ P2P Khata: ${payload.alert.peerMerchantName}`,
+                `₹${Number(payload.alert.amount).toLocaleString('en-IN')} ${payload.alert.type === 'debit' ? 'Payment Received' : 'Credit Given'} recorded by ${payload.alert.peerMerchantName}.`,
+                'success'
+              );
+            }
+            if (payload.originDeviceId !== myDeviceIdRef.current) {
+              debouncedLoadFromCloud(userId, payload.action || 'device_broadcast');
+            }
           }
         });
 
@@ -1683,8 +1705,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   useEffect(() => {
     const handleGroupsUpdate = () => setGroups(StorageService.getGroups());
     const handleGroupNotifsUpdate = () => setGroupNotifications(StorageService.getGroupNotifications());
+    const handleP2PAlertsUpdate = () => setP2PAlerts(StorageService.getP2PAlerts());
     window.addEventListener('khatapro_groups_updated', handleGroupsUpdate);
     window.addEventListener('khatapro_group_notifications_updated', handleGroupNotifsUpdate);
+    window.addEventListener('khatapro_p2p_alerts_updated', handleP2PAlertsUpdate);
 
     const activeU = StorageService.getCurrentUser();
     if (activeU?.language) setActiveLanguage(activeU.language);
@@ -1768,6 +1792,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       window.removeEventListener('khatapro_transactions_updated', handleCustomEventRefresh);
       window.removeEventListener('khatapro_groups_updated', handleGroupsUpdate);
       window.removeEventListener('khatapro_group_notifications_updated', handleGroupNotifsUpdate);
+      window.removeEventListener('khatapro_p2p_alerts_updated', handleP2PAlertsUpdate);
     };
   }, []);
 
@@ -2749,6 +2774,21 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setGroupNotifications(StorageService.getGroupNotifications());
   };
 
+  const addP2PAlert = (alert: P2PTransactionAlert) => {
+    StorageService.addP2PAlert(alert);
+    setP2PAlerts(StorageService.getP2PAlerts());
+  };
+
+  const dismissP2PAlert = (id: string) => {
+    StorageService.dismissP2PAlert(id);
+    setP2PAlerts(StorageService.getP2PAlerts());
+  };
+
+  const clearAllP2PAlerts = () => {
+    StorageService.clearAllP2PAlerts();
+    setP2PAlerts([]);
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -2772,6 +2812,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         groupNotifications,
         addGroupNotification,
         dismissGroupNotification,
+        p2pAlerts,
+        addP2PAlert,
+        dismissP2PAlert,
+        clearAllP2PAlerts,
         settings,
         darkMode,
         activeRole,

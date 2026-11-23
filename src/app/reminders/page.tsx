@@ -55,7 +55,7 @@ export default function RemindersPage() {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // Auto-schedule payment reminders for any unpaid invoices & clean up paid ones
+  // Auto-schedule payment reminders for any unpaid invoices & clean up paid/settled ones
   useEffect(() => {
     if (!invoices || invoices.length === 0) return;
     invoices.forEach((inv) => {
@@ -69,7 +69,7 @@ export default function RemindersPage() {
             r.id === remId ||
             r.id === `rem_inv_${inv.invoiceNumber}` ||
             (inv.invoiceNumber && (r.note?.includes(inv.invoiceNumber) || r.messageTemplate?.includes(inv.invoiceNumber))) ||
-            (r.customerId === inv.customerId && r.amount === inv.total && r.dueDate === inv.dueDate)
+            (r.customerId === inv.customerId && r.amount === inv.total)
         );
         toDelete.forEach((r) => {
           deleteReminder(r.id);
@@ -114,6 +114,28 @@ export default function RemindersPage() {
         }
       }
     });
+
+    // Auto-clean reminders for customers that are fully settled in KhataBook with no pending unpaid invoices
+    if (customers && customers.length > 0) {
+      customers.forEach((cust) => {
+        const normPhone = cust.phone ? cust.phone.replace(/\D/g, '').slice(-10) : '';
+        const hasUnpaidInvoice = invoices.some(
+          (i) =>
+            (i.customerId === cust.id || (normPhone && i.customerPhone && i.customerPhone.replace(/\D/g, '').slice(-10) === normPhone)) &&
+            !isInvoicePaid(i)
+        );
+        if (cust.outstandingBalance <= 0 && !hasUnpaidInvoice) {
+          const settledReminders = reminders.filter(
+            (r) =>
+              r.customerId === cust.id ||
+              (normPhone && r.customerPhone && r.customerPhone.replace(/\D/g, '').slice(-10) === normPhone)
+          );
+          settledReminders.forEach((r) => {
+            deleteReminder(r.id);
+          });
+        }
+      });
+    }
   }, [invoices, reminders, customers, todayStr, saveReminder, deleteReminder]);
 
   const handleDeleteReminder = (rem: PaymentReminder) => {
@@ -141,7 +163,42 @@ export default function RemindersPage() {
       );
       if (linkedInvoice && isInvoicePaid(linkedInvoice)) return false;
 
-      // 2. If manually deleted/dismissed, hide immediately
+      // 2. If any paid invoice matches this customer and amount, and there are no unpaid invoices for that amount
+      const matchingPaidInvoice = invoices.find(
+        (i) =>
+          (i.customerId === r.customerId ||
+            (r.customerPhone && i.customerPhone && i.customerPhone.replace(/\D/g, '').slice(-10) === r.customerPhone.replace(/\D/g, '').slice(-10))) &&
+          Number(i.total) === Number(r.amount) &&
+          isInvoicePaid(i)
+      );
+      if (matchingPaidInvoice) {
+        const hasUnpaidSameAmount = invoices.some(
+          (i) =>
+            (i.customerId === r.customerId ||
+              (r.customerPhone && i.customerPhone && i.customerPhone.replace(/\D/g, '').slice(-10) === r.customerPhone.replace(/\D/g, '').slice(-10))) &&
+            Number(i.total) === Number(r.amount) &&
+            !isInvoicePaid(i)
+        );
+        if (!hasUnpaidSameAmount) return false;
+      }
+
+      // 3. If customer's Digital KhataBook balance is SETTLED (<= 0) and has no unpaid invoices
+      const cust = customers.find(
+        (c) =>
+          c.id === r.customerId ||
+          (r.customerPhone && c.phone && c.phone.replace(/\D/g, '').slice(-10) === r.customerPhone.replace(/\D/g, '').slice(-10))
+      );
+      if (cust && cust.outstandingBalance <= 0) {
+        const normPhone = cust.phone ? cust.phone.replace(/\D/g, '').slice(-10) : '';
+        const hasPendingUnpaid = invoices.some(
+          (i) =>
+            (i.customerId === cust.id || (normPhone && i.customerPhone && i.customerPhone.replace(/\D/g, '').slice(-10) === normPhone)) &&
+            !isInvoicePaid(i)
+        );
+        if (!hasPendingUnpaid) return false;
+      }
+
+      // 4. If manually deleted/dismissed, hide immediately
       if (typeof window !== 'undefined') {
         if (localStorage.getItem(`skp_dismissed_reminder_${r.id}`) === 'true') return false;
       }
@@ -149,7 +206,7 @@ export default function RemindersPage() {
 
       return true;
     });
-  }, [reminders, invoices]);
+  }, [reminders, invoices, customers]);
 
   const overdueCount = activeReminders.filter(r => (r.dueDate ? r.dueDate < todayStr : r.reminderType === 'overdue')).length;
   const upcomingCount = activeReminders.filter(r => (r.dueDate ? r.dueDate >= todayStr : r.reminderType !== 'overdue')).length;

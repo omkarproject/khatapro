@@ -506,14 +506,48 @@ function KhataPageInner() {
 
     if (!activeCustomer) return [];
     const normPhone = activeCustomer.phone ? activeCustomer.phone.replace(/\D/g, '').slice(-10) : '';
+    const cleanCustName = (activeCustomer.name || '').toLowerCase().trim();
+    const isPeerMerchant = activeCustomer.category === 'Merchant' || activeCustomer.id.startsWith('peer_cust_');
+    const peerUuid = activeCustomer.id.startsWith('peer_cust_') ? activeCustomer.id.replace('peer_cust_', '') : '';
+
+    // Collect all customer IDs that belong to this phone/customer
+    const matchingCustomerIds = new Set<string>([String(activeCustomer.id)]);
+    if (peerUuid) {
+      matchingCustomerIds.add(peerUuid);
+      matchingCustomerIds.add(`peer_cust_${peerUuid}`);
+    }
+    if (normPhone) {
+      customers.forEach((c) => {
+        if (!c || !c.phone) return;
+        const cPhone = c.phone.replace(/\D/g, '').slice(-10);
+        if (cPhone === normPhone) {
+          matchingCustomerIds.add(String(c.id));
+          if (c.id.startsWith('peer_cust_')) {
+            matchingCustomerIds.add(c.id.replace('peer_cust_', ''));
+          }
+        }
+      });
+    }
+
     return transactions
-      .filter(t => {
+      .filter((t) => {
         if (!t) return false;
-        if (String(t.customerId) === String(activeCustomer.id)) return true;
-        // Also match peer customer ID variants (e.g. peer_cust_UUID)
-        if (activeCustomer.id.startsWith('peer_cust_') && t.customerId === activeCustomer.id.replace('peer_cust_', '')) return true;
-        if (t.customerId && String(t.customerId).startsWith('peer_cust_') && activeCustomer.id === String(t.customerId).replace('peer_cust_', '')) return true;
-        if (normPhone && (t as any).customerPhone && (t as any).customerPhone.replace(/\D/g, '').slice(-10) === normPhone) return true;
+        const tCustId = String(t.customerId || '');
+        if (tCustId && matchingCustomerIds.has(tCustId)) return true;
+        if (activeCustomer.id.startsWith('peer_cust_') && tCustId === peerUuid) return true;
+        if (tCustId.startsWith('peer_cust_') && activeCustomer.id === tCustId.replace('peer_cust_', '')) return true;
+
+        // Check transaction customer phone or peer phone
+        const tPhone = (t.customerPhone || t.peerPhone || (t as any).customer_phone || '').replace(/\D/g, '').slice(-10);
+        if (normPhone && tPhone && tPhone === normPhone) return true;
+
+        // Check if transaction has peer metadata matching this customer
+        if (isPeerMerchant) {
+          if (t.peerUserId && peerUuid && t.peerUserId === peerUuid) return true;
+          if (t.id.startsWith('peer_txn_') && normPhone && t.tags?.some((tag) => tag === `__peer_phone:${normPhone}` || tag === `__cust_phone:${normPhone}`)) return true;
+          if (t.id.startsWith('peer_txn_') && cleanCustName && (t.customerName?.toLowerCase().trim() === cleanCustName || t.createdBy?.toLowerCase().trim() === cleanCustName)) return true;
+        }
+
         return false;
       })
       .sort((a, b) => {
@@ -524,7 +558,7 @@ function KhataPageInner() {
         const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return createdA - createdB;
       });
-  }, [activeGroup, activeCustomer, transactions, selectedMemberFilterId]);
+  }, [activeGroup, activeCustomer, transactions, customers, selectedMemberFilterId]);
 
   // Compute running balance for each transaction chronologically
   const enrichedTransactions = useMemo(() => {
@@ -2031,6 +2065,7 @@ function KhataPageInner() {
       // New Transaction: Ensure timestamp is current so it appends at the bottom of today ("last me")
       const todayStr = new Date().toISOString().split('T')[0];
       const txnDateIso = entryDate === todayStr ? new Date().toISOString() : new Date(entryDate).toISOString();
+      const isPeerMerchant = activeCustomer.category === 'Merchant' || activeCustomer.id.startsWith('peer_cust_');
 
       const newTxn: Transaction = {
         id: finalTxnId,
@@ -2039,9 +2074,11 @@ function KhataPageInner() {
         date: txnDateIso,
         customerId: activeCustomer.id,
         customerName: activeCustomer.name,
+        customerPhone: activeCustomer.phone,
         category: isGot ? 'Payment Received' : 'Credit Given',
         paymentMode: isGot ? 'upi' : 'cash',
         note: entryNotes || (isGot ? 'Payment received' : 'Goods on credit'),
+        tags: isPeerMerchant ? ['__p2p_peer'] : [],
         attachments: serializedAttachments,
         status: 'completed',
         createdBy: settings.businessName,
@@ -2054,6 +2091,21 @@ function KhataPageInner() {
         `₹${num.toLocaleString('en-IN')} added to ${activeCustomer.name}'s Khata.`,
         'success'
       );
+
+      // Auto-remove any pending payment reminder when payment is received (isGot) or settled
+      if (isGot) {
+        const normCustPhone = activeCustomer.phone ? activeCustomer.phone.replace(/\D/g, '').slice(-10) : '';
+        const remsToDelete = reminders.filter((r) => {
+          if (!r) return false;
+          const isThisCustomer = r.customerId === activeCustomer.id ||
+            (normCustPhone && r.customerPhone && r.customerPhone.replace(/\D/g, '').slice(-10) === normCustPhone);
+          if (!isThisCustomer) return false;
+          return r.amount <= num || (activeCustomer.outstandingBalance - num) <= 0;
+        });
+        remsToDelete.forEach((r) => {
+          deleteReminder(r.id);
+        });
+      }
     }
 
     // Save / update Payment Reminder if enabled during Received / Given entry
@@ -2275,6 +2327,8 @@ function KhataPageInner() {
       const todayStr = new Date().toISOString().split('T')[0];
       const txnDateIso = entryDate === todayStr ? new Date().toISOString() : new Date(entryDate).toISOString();
 
+      const isPeerMerchant = activeCustomer.category === 'Merchant' || activeCustomer.id.startsWith('peer_cust_');
+
       createdOrUpdatedTxn = {
         id: `txn_${Date.now()}`,
         type: isGot ? 'debit' : 'credit',
@@ -2282,15 +2336,31 @@ function KhataPageInner() {
         date: txnDateIso,
         customerId: activeCustomer.id,
         customerName: activeCustomer.name,
+        customerPhone: activeCustomer.phone,
         category: isGot ? 'Payment Received' : 'Credit Given',
         paymentMode: isGot ? 'upi' : 'cash',
         note: entryNotes || (isGot ? 'Payment received' : 'Goods on credit'),
+        tags: isPeerMerchant ? ['__p2p_peer'] : [],
         attachments: serializedAttachments,
         status: 'completed',
         createdBy: settings.businessName,
         createdAt: new Date().toISOString(),
       };
       addTransaction(createdOrUpdatedTxn);
+
+      if (isGot) {
+        const normCustPhone = activeCustomer.phone ? activeCustomer.phone.replace(/\D/g, '').slice(-10) : '';
+        const remsToDelete = reminders.filter((r) => {
+          if (!r) return false;
+          const isThisCustomer = r.customerId === activeCustomer.id ||
+            (normCustPhone && r.customerPhone && r.customerPhone.replace(/\D/g, '').slice(-10) === normCustPhone);
+          if (!isThisCustomer) return false;
+          return r.amount <= num || (activeCustomer.outstandingBalance - num) <= 0;
+        });
+        remsToDelete.forEach((r) => {
+          deleteReminder(r.id);
+        });
+      }
     }
 
     addToast(

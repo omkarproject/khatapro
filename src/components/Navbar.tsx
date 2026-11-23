@@ -44,7 +44,9 @@ import {
   Folder,
   Users,
   RotateCcw,
-  Laptop
+  Laptop,
+  ArrowDownLeft,
+  ArrowUpRight
 } from 'lucide-react';
 import { formatINR, formatDate } from '@/lib/utils';
 import { SavingsGoal, SavingsDeposit, SupportTicket } from '@/types';
@@ -84,6 +86,9 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     tasks,
     groupNotifications,
     dismissGroupNotification,
+    p2pAlerts,
+    dismissP2PAlert,
+    clearAllP2PAlerts,
     saveSavingsGoal,
     addToast,
     settings,
@@ -538,6 +543,16 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     }
   );
 
+  const unreadP2PAlerts = (p2pAlerts || []).filter(
+    (a) => !dismissedAlerts.includes(a.id) && !dismissedAlerts.includes(`p2p_${a.id}`)
+  );
+
+  const handleDismissP2PAlert = (alertId: string) => {
+    handleDismissAlert(alertId);
+    handleDismissAlert(`p2p_${alertId}`);
+    dismissP2PAlert(alertId);
+  };
+
   const handleDismissGroupAlert = (notifId: string) => {
     handleDismissAlert(`grp_notif_${notifId}`);
     dismissGroupNotification(notifId);
@@ -551,6 +566,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     activeTaskReminders.length +
     unreadSupportTickets.length +
     unreadGroupAlerts.length +
+    unreadP2PAlerts.length +
     (isBackupRunning || isBackupCompletedAlert || isBackupFailedAlert ? 1 : 0) +
     (isDriveUploadRunning || isDriveUploadCompletedAlert ? 1 : 0);
 
@@ -566,6 +582,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
       ...activeTaskReminders.map((t) => `task_${t.id}`),
       ...unreadSupportTickets.map((t) => `ticket_${t.id}`),
       ...unreadGroupAlerts.map((n) => `grp_notif_${n.id}`),
+      ...unreadP2PAlerts.map((a) => a.id),
     ]);
     if (isBackupCompletedAlert) currentAlertIds.add(`backup_${autoBackupProgress?.date || todayStr}`);
     if (isBackupFailedAlert) currentAlertIds.add(`backup_failed_${autoBackupProgress?.date || todayStr}`);
@@ -629,6 +646,13 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     unreadGroupAlerts.forEach((n) => {
       dismissGroupNotification(n.id);
     });
+
+    // Dismiss all unread P2P alerts in StorageService
+    unreadP2PAlerts.forEach((a) => {
+      allIds.push(a.id);
+      allIds.push(`p2p_${a.id}`);
+    });
+    clearAllP2PAlerts();
 
     // Clear stale completed or failed backup progress
     if (autoBackupProgress?.status === 'completed' || autoBackupProgress?.status === 'failed') {
@@ -1256,6 +1280,87 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                             </div>
                           </div>
                         ))}
+                      </div>
+                    )}
+
+                    {/* Realtime P2P Peer Merchant Transaction Alerts */}
+                    {unreadP2PAlerts.length > 0 && (
+                      <div className="space-y-2">
+                        {unreadP2PAlerts.map((alert) => {
+                          const isGot = alert.type === 'debit';
+                          return (
+                            <div
+                              key={alert.id}
+                              className={`p-3 rounded-2xl border space-y-2 relative group shadow-xs ${
+                                isGot
+                                  ? 'bg-gradient-to-r from-emerald-50 to-teal-50/70 dark:from-emerald-950/40 dark:to-teal-950/30 border-emerald-200/90 dark:border-emerald-800/60'
+                                  : 'bg-gradient-to-r from-rose-50 to-amber-50/70 dark:from-rose-950/40 dark:to-amber-950/30 border-rose-200/90 dark:border-rose-800/60'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div
+                                    className={`w-8 h-8 rounded-xl text-white flex items-center justify-center shrink-0 shadow-xs ${
+                                      isGot ? 'bg-emerald-600' : 'bg-rose-600'
+                                    }`}
+                                  >
+                                    {isGot ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-xs font-black text-slate-900 dark:text-white truncate">
+                                        {alert.peerMerchantName}
+                                      </span>
+                                      <span className="text-[8.5px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider font-mono bg-indigo-600 text-white">
+                                        ⚡ P2P Khata
+                                      </span>
+                                      <span
+                                        className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider text-white font-mono ${
+                                          isGot ? 'bg-emerald-600 animate-pulse' : 'bg-rose-600 animate-pulse'
+                                        }`}
+                                      >
+                                        {isGot ? `+ ₹${alert.amount} Received` : `- ₹${alert.amount} Given`}
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-700 dark:text-slate-300 font-medium truncate mt-0.5">
+                                      {alert.note ? `"${alert.note}"` : `${alert.peerMerchantName} recorded transaction in your Khata`}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDismissP2PAlert(alert.id)}
+                                  title="Dismiss alert"
+                                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer shrink-0"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2 pt-0.5">
+                                <span className="text-[9px] text-slate-400 font-mono">
+                                  {new Date(alert.createdAt || Date.now()).toLocaleDateString([], {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </span>
+
+                                <Link
+                                  href={`/khata?customerId=${alert.customerId}`}
+                                  prefetch={true}
+                                  onClick={() => setIsNotificationsOpen(false)}
+                                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-600/30 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+                                >
+                                  <ArrowRight className="w-3.5 h-3.5" />
+                                  <span>Open Khata</span>
+                                </Link>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 

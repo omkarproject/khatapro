@@ -21,6 +21,7 @@ import {
   AuthenticatorItem,
   KhataGroup,
   KhataGroupNotification,
+  P2PTransactionAlert,
 } from '@/types';
 
 
@@ -42,6 +43,7 @@ const STORAGE_KEYS = {
   AUTHENTICATOR: 'skp_authenticator',
   GROUPS: 'skp_groups',
   GROUP_NOTIFICATIONS: 'skp_group_notifications',
+  P2P_ALERTS: 'skp_p2p_alerts',
   PINNED_CHATS: 'skp_pinned_chats',
   INITIALIZED: 'skp_db_v1_initialized',
 };
@@ -2142,6 +2144,59 @@ export const StorageService = {
     }
   },
 
+  // P2P Khata Alerts
+  getP2PAlerts: (): P2PTransactionAlert[] => {
+    const list = getLocalItem<P2PTransactionAlert[]>(STORAGE_KEYS.P2P_ALERTS, []);
+    const dismissed = StorageService.getDismissedNotificationIds();
+    const threeDaysAgo = Date.now() - 72 * 60 * 60 * 1000;
+    return list.filter(a => {
+      if (!a || !a.id) return false;
+      if (dismissed.has(a.id)) return false;
+      const created = new Date(a.createdAt || 0).getTime();
+      return created >= threeDaysAgo;
+    });
+  },
+  addP2PAlert: (alert: P2PTransactionAlert): void => {
+    if (!alert || !alert.id) return;
+    const dismissed = StorageService.getDismissedNotificationIds();
+    if (dismissed.has(alert.id)) return;
+    const list = StorageService.getP2PAlerts();
+    const updated = [alert, ...list.filter(a => a.id !== alert.id)].slice(0, 100);
+    setLocalItem(STORAGE_KEYS.P2P_ALERTS, updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('khatapro_p2p_alert_added', { detail: alert }));
+      window.dispatchEvent(new CustomEvent('khatapro_p2p_alerts_updated', { detail: updated }));
+    }
+  },
+  dismissP2PAlert: (alertId: string): void => {
+    const dismissed = StorageService.getDismissedNotificationIds();
+    dismissed.add(alertId);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(getScopedKey('skp_dismissed_notifs'), JSON.stringify(Array.from(dismissed)));
+      } catch {}
+    }
+    const list = StorageService.getP2PAlerts().filter(a => a.id !== alertId);
+    setLocalItem(STORAGE_KEYS.P2P_ALERTS, list);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('khatapro_p2p_alerts_updated', { detail: list }));
+    }
+  },
+  clearAllP2PAlerts: (): void => {
+    const all = getLocalItem<P2PTransactionAlert[]>(STORAGE_KEYS.P2P_ALERTS, []);
+    const dismissed = StorageService.getDismissedNotificationIds();
+    all.forEach(a => { if (a && a.id) dismissed.add(a.id); });
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(getScopedKey('skp_dismissed_notifs'), JSON.stringify(Array.from(dismissed)));
+      } catch {}
+    }
+    setLocalItem(STORAGE_KEYS.P2P_ALERTS, []);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('khatapro_p2p_alerts_updated', { detail: [] }));
+    }
+  },
+
   exportFullDatabaseJSON: (includeMedia: boolean = true): string => {
     const documents = StorageService.getDocuments().map((doc) => {
       if (doc.fileUrl && doc.fileUrl.startsWith('data:')) {
@@ -2315,6 +2370,7 @@ export const StorageService = {
         STORAGE_KEYS.AUTHENTICATOR,
         STORAGE_KEYS.GROUPS,
         STORAGE_KEYS.GROUP_NOTIFICATIONS,
+        STORAGE_KEYS.P2P_ALERTS,
         STORAGE_KEYS.PINNED_CHATS,
       ];
       keysToClear.forEach((k) => {

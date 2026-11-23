@@ -215,6 +215,21 @@ export interface KhataGroupNotification {
   read?: boolean;
 }
 
+export interface P2PTransactionAlert {
+  id: string;
+  peerUserId: string;
+  peerMerchantName: string;
+  peerPhone?: string;
+  customerId: string;
+  transactionId: string;
+  type: 'credit' | 'debit';
+  amount: number;
+  note?: string;
+  date: string;
+  createdAt: string;
+  isRead?: boolean;
+}
+
 export interface Transaction {
   id: string;
   type: TransactionType;
@@ -222,6 +237,9 @@ export interface Transaction {
   date: string;
   customerId?: string;
   customerName?: string;
+  customerPhone?: string;
+  peerUserId?: string;
+  peerPhone?: string;
   category: string;
   paymentMode: PaymentMode;
   note?: string;

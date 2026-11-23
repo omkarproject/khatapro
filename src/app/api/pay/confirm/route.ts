@@ -243,9 +243,30 @@ export async function POST(req: NextRequest) {
               .or(`id.eq.${invoiceId},invoice_number.eq.${invoiceId}`);
           }
         }
+
+        // Auto-remove any pending payment reminders for this paid invoice
+        try {
+          await supabase
+            .from('payment_reminders')
+            .delete()
+            .eq('user_id', merchantUserId)
+            .or(`id.eq.rem_inv_${invoiceId},note.ilike.%${invoiceId}%,message_template.ilike.%${invoiceId}%`);
+        } catch {}
       } catch (invErr) {
         console.warn('Invoice status update warning in pay/confirm:', invErr);
       }
+    }
+
+    // Auto-remove customer reminders if paid amount covers them or customer is settled
+    if (customerId && merchantUserId) {
+      try {
+        await supabase
+          .from('payment_reminders')
+          .delete()
+          .eq('user_id', merchantUserId)
+          .eq('customer_id', customerId)
+          .lte('amount', numAmount);
+      } catch {}
     }
 
     return NextResponse.json({

@@ -459,6 +459,9 @@ function transactionFromDb(row: any) {
   let groupName: string | undefined = undefined;
   let splitMembers: any[] | undefined = undefined;
   let editHistory: any[] | undefined = undefined;
+  let peerUserId: string | undefined = undefined;
+  let peerPhone: string | undefined = undefined;
+  let customerPhone: string | undefined = row.customer_phone || undefined;
 
   const cleanAttachments: string[] = [];
 
@@ -532,6 +535,12 @@ function transactionFromDb(row: any) {
       isDeleted = true;
     } else if (t.startsWith('__is_deleted:')) {
       isDeleted = true;
+    } else if (t.startsWith('__peer_user_id:')) {
+      peerUserId = t.replace('__peer_user_id:', '');
+    } else if (t.startsWith('__peer_phone:')) {
+      peerPhone = t.replace('__peer_phone:', '');
+    } else if (t.startsWith('__cust_phone:')) {
+      customerPhone = t.replace('__cust_phone:', '');
     } else {
       finalTags.push(t);
     }
@@ -544,6 +553,9 @@ function transactionFromDb(row: any) {
     date: row.date,
     customerId: row.customer_id || undefined,
     customerName: customerName || '',
+    customerPhone: customerPhone || peerPhone,
+    peerUserId,
+    peerPhone,
     category: row.category || 'General',
     paymentMode: row.payment_mode || 'cash',
     note: row.description || row.note || '',
@@ -1324,13 +1336,19 @@ async function syncPeerMerchants(
         updated_at: new Date().toISOString(),
       }, { onConflict: 'id, user_id' });
 
-      // Mirror transactions from currentUserId to peerUserId (both camelCase and snake_case customerId)
+      // Mirror transactions from currentUserId to peerUserId (match by customer ID, peer customer ID, phone, or peer ID)
       const directTxns = (transactions || []).filter((t: any) => {
         if (!t || !t.id) return false;
-        const tCustId = String(t.customerId || t.customer_id || '');
-        const isThisCust = tCustId === String(cust.id);
         const isNotMirrored = !String(t.id).startsWith('peer_txn_');
-        return isThisCust && isNotMirrored;
+        if (!isNotMirrored) return false;
+        const tCustId = String(t.customerId || t.customer_id || '');
+        const tPhone = normalizePhone((t as any).customerPhone || (t as any).customer_phone);
+        const isIdMatch = tCustId === String(cust.id) ||
+          (cust.id && String(cust.id).startsWith('peer_cust_') && tCustId === String(cust.id).replace('peer_cust_', '')) ||
+          (tCustId.startsWith('peer_cust_') && String(cust.id) === tCustId.replace('peer_cust_', ''));
+        const isPhoneMatch = Boolean(cPhone && tPhone && cPhone === tPhone);
+        const isPeerIdMatch = Boolean(peerUserId && (tCustId === peerUserId || tCustId === `peer_cust_${peerUserId}`));
+        return isIdMatch || isPhoneMatch || isPeerIdMatch;
       });
 
       const activePeerTxnIds = new Set<string>();
@@ -1357,6 +1375,15 @@ async function syncPeerMerchants(
           ? t.tags.filter((tag: string) => !tag.startsWith('__del_') && tag !== '__is_deleted:true')
           : [];
         if (!peerTags.includes('__p2p_peer')) peerTags.push('__p2p_peer');
+        if (!peerTags.some((tag: string) => tag.startsWith('__peer_user_id:'))) {
+          peerTags.push(`__peer_user_id:${currentUserId}`);
+        }
+        if (curPhone && !peerTags.some((tag: string) => tag.startsWith('__peer_phone:'))) {
+          peerTags.push(`__peer_phone:${curPhone}`);
+        }
+        if (cPhone && !peerTags.some((tag: string) => tag.startsWith('__cust_phone:'))) {
+          peerTags.push(`__cust_phone:${cPhone}`);
+        }
 
         // Preserve and sync editHistory on mirrored peer transactions
         if (Array.isArray(t.editHistory) && t.editHistory.length > 0) {
@@ -1394,6 +1421,48 @@ async function syncPeerMerchants(
           created_at: t.createdAt || t.created_at || new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }, { onConflict: 'id, user_id' });
+      }
+
+      // ⚡ Broadcast live real-time P2P alert to peer merchant's WebSocket channel
+      if (directTxns.length > 0) {
+        try {
+          const peerChan = supabase.channel(`khatapro_realtime_${peerUserId}`);
+          peerChan.subscribe((status: string) => {
+            if (status === 'SUBSCRIBED') {
+              const latestTxn = directTxns[directTxns.length - 1];
+              const invertedType = (latestTxn.type === 'credit') ? 'debit' : (latestTxn.type === 'debit' || latestTxn.type === 'collection') ? 'credit' : latestTxn.type;
+              peerChan.send({
+                type: 'broadcast',
+                event: 'khatapro_device_sync',
+                payload: {
+                  userId: peerUserId,
+                  originDeviceId: 'server_p2p_sync',
+                  action: 'p2p_transaction_alert',
+                  alert: {
+                    id: `p2p_alert_${latestTxn.id}`,
+                    peerUserId: currentUserId,
+                    peerMerchantName: curDisplayName,
+                    peerPhone: currentProfile.phone || '',
+                    customerId: reciprocalCustId,
+                    transactionId: `peer_txn_${latestTxn.id}`,
+                    type: invertedType,
+                    amount: Number(latestTxn.amount) || 0,
+                    note: latestTxn.note || '',
+                    date: latestTxn.date || new Date().toISOString().split('T')[0],
+                    createdAt: new Date().toISOString(),
+                  },
+                  timestamp: Date.now(),
+                },
+              }).finally(() => {
+                setTimeout(() => {
+                  try { supabase.removeChannel(peerChan); } catch {}
+                }, 1000);
+              });
+            }
+          });
+        } catch (bcErr) {
+          console.warn('Realtime P2P broadcast warning:', bcErr);
+        }
       }
 
       // Clean up deleted peer transactions
