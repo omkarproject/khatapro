@@ -1399,7 +1399,7 @@ export default function NotesAndTasksPage() {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               {filteredAuthenticators.map((item) => {
                 const brand = getIssuerBrand(item.issuer);
                 const code = generateTotpToken(item.secret, currentTimeSec);
@@ -1411,7 +1411,7 @@ export default function NotesAndTasksPage() {
                 return (
                   <div
                     key={item.id}
-                    className={`rounded-3xl p-5 bg-white dark:bg-slate-900 border transition-all duration-300 shadow-md flex flex-col justify-between gap-4 ${
+                    className={`rounded-2xl p-3.5 bg-white dark:bg-slate-900 border transition-all duration-300 shadow-sm flex flex-col justify-between gap-2.5 ${
                       isExpiring
                         ? 'border-rose-500/40 dark:border-rose-500/40 shadow-rose-500/5'
                         : justRegenerated
@@ -1420,36 +1420,36 @@ export default function NotesAndTasksPage() {
                     }`}
                   >
                     {/* Header Row: Brand Avatar, Issuer & Account, Actions */}
-                    <div className="flex items-start justify-between gap-2.5">
-                      <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
                         {/* Dynamic Brand Gradient Avatar */}
                         <div
-                          className={`w-11 h-11 rounded-2xl bg-gradient-to-tr ${brand.gradient} text-white font-black text-sm flex items-center justify-center shrink-0 shadow-md tracking-wider`}
+                          className={`w-8 h-8 rounded-xl bg-gradient-to-tr ${brand.gradient} text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs tracking-wider`}
                         >
                           {brand.initials}
                         </div>
                         <div className="min-w-0">
-                          <h4 className="text-sm font-black text-slate-900 dark:text-white truncate">
+                          <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
                             {item.issuer}
                           </h4>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
                             {item.accountName}
                           </p>
                         </div>
                       </div>
 
                       {/* Top Right: Category & Edit/Delete Menu */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${brand.tag}`}>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase ${brand.tag}`}>
                           {item.category || 'Other'}
                         </span>
                         <button
                           type="button"
                           onClick={() => openEditAuthModal(item)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                          className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                           title="Edit 2FA Account"
                         >
-                          <Edit2 className="w-3.5 h-3.5" />
+                          <Edit2 className="w-3 h-3" />
                         </button>
                         <button
                           type="button"
@@ -1458,10 +1458,10 @@ export default function NotesAndTasksPage() {
                               deleteAuthenticator(item.id);
                             }
                           }}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+                          className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
                           title="Delete 2FA Key"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
                     </div>
@@ -1469,18 +1469,18 @@ export default function NotesAndTasksPage() {
                     {/* Central 2FA Code Box with Interactive Click-to-Copy */}
                     <div
                       onClick={() => copyTotpCode(item)}
-                      className={`relative p-4 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 text-center cursor-pointer transition-all active:scale-[0.99] group overflow-hidden ${
+                      className={`relative p-2.5 rounded-xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 text-center cursor-pointer transition-all active:scale-[0.99] group overflow-hidden ${
                         isExpiring
-                          ? 'border-rose-500/50 shadow-lg shadow-rose-950/30'
+                          ? 'border-rose-500/50 shadow-md shadow-rose-950/30'
                           : justRegenerated
-                          ? 'border-cyan-400/60 shadow-lg shadow-cyan-950/40 ring-1 ring-cyan-400/40'
+                          ? 'border-cyan-400/60 shadow-md shadow-cyan-950/40 ring-1 ring-cyan-400/40'
                           : 'hover:border-slate-700'
                       }`}
                       title="Click to copy 6-digit code"
                     >
                       {/* Subtle Ambient Pulse Background Glow */}
                       <div
-                        className={`absolute -right-8 -top-8 w-24 h-24 rounded-full blur-2xl pointer-events-none transition-all duration-700 ${
+                        className={`absolute -right-6 -top-6 w-20 h-20 rounded-full blur-xl pointer-events-none transition-all duration-700 ${
                           isExpiring
                             ? 'bg-rose-500/25'
                             : justRegenerated
@@ -1489,11 +1489,11 @@ export default function NotesAndTasksPage() {
                         }`}
                       />
 
-                      <div className="flex items-center justify-between px-2">
+                      <div className="flex items-center justify-between px-1">
                         {/* 6-Digit Monospace Code */}
                         <div className="flex-1 text-left">
                           <span
-                            className={`font-mono text-3xl sm:text-4xl font-extrabold tracking-widest transition-all duration-300 block select-all ${
+                            className={`font-mono text-xl sm:text-2xl font-black tracking-widest transition-all duration-300 block select-all ${
                               isExpiring
                                 ? 'text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.5)]'
                                 : justRegenerated
@@ -1506,25 +1506,25 @@ export default function NotesAndTasksPage() {
                         </div>
 
                         {/* Circular 30s Countdown Ring Widget */}
-                        <div className="relative w-11 h-11 flex items-center justify-center shrink-0">
-                          <svg className="w-11 h-11 -rotate-90 transform">
+                        <div className="relative w-8 h-8 flex items-center justify-center shrink-0">
+                          <svg className="w-8 h-8 -rotate-90 transform">
                             <circle
-                              cx="22"
-                              cy="22"
-                              r="17"
+                              cx="16"
+                              cy="16"
+                              r="12"
                               stroke="currentColor"
-                              strokeWidth="3.5"
+                              strokeWidth="2.5"
                               className="text-slate-800"
                               fill="transparent"
                             />
                             <circle
-                              cx="22"
-                              cy="22"
-                              r="17"
+                              cx="16"
+                              cy="16"
+                              r="12"
                               stroke="currentColor"
-                              strokeWidth="3.5"
-                              strokeDasharray={106.8}
-                              strokeDashoffset={106.8 - (106.8 * remainingSec) / 30}
+                              strokeWidth="2.5"
+                              strokeDasharray={75.4}
+                              strokeDashoffset={75.4 - (75.4 * remainingSec) / 30}
                               className={`transition-all duration-700 ${
                                 isExpiring
                                   ? 'text-rose-500 drop-shadow-[0_0_6px_rgba(244,63,94,0.6)]'
@@ -1537,7 +1537,7 @@ export default function NotesAndTasksPage() {
                             />
                           </svg>
                           <span
-                            className={`absolute text-[11px] font-mono font-black ${
+                            className={`absolute text-[9px] font-mono font-black ${
                               isExpiring ? 'text-rose-400 animate-pulse' : 'text-white'
                             }`}
                           >
@@ -1547,68 +1547,62 @@ export default function NotesAndTasksPage() {
                       </div>
 
                       {/* Click-to-copy Status Label */}
-                      <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+                      <div className="mt-1.5 pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-[10px]">
                         {isCopied ? (
-                          <span className="flex items-center gap-1.5 text-emerald-400 font-bold animate-in fade-in">
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Copied to Clipboard!</span>
+                          <span className="flex items-center gap-1 text-emerald-400 font-bold animate-in fade-in">
+                            <Check className="w-3 h-3" />
+                            <span>Copied!</span>
                           </span>
                         ) : (
-                          <span className="flex items-center gap-1.5 text-slate-400 group-hover:text-cyan-300 transition-colors">
-                            <Copy className="w-3 h-3 text-cyan-400" />
-                            <span>Click code to copy</span>
+                          <span className="flex items-center gap-1 text-slate-400 group-hover:text-cyan-300 transition-colors">
+                            <Copy className="w-2.5 h-2.5 text-cyan-400" />
+                            <span>Click to copy</span>
                           </span>
                         )}
 
-                        <span className="text-[10px] font-mono text-slate-500">
-                          {isExpiring ? 'Expiring soon...' : '30s TOTP'}
+                        <span className="text-[9px] font-mono text-slate-500">
+                          {isExpiring ? 'Expiring' : '30s TOTP'}
                         </span>
                       </div>
                     </div>
 
-                    {/* Secret Key Row (Masked by default with toggle & copy) */}
-                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-xs">
-                      <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-                        <span className="flex items-center gap-1 font-semibold">
-                          <KeyRound className="w-3 h-3 text-cyan-500" />
-                          <span>Secret Key:</span>
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => toggleRevealSecret(item.id)}
-                            className="p-1 hover:text-cyan-500 transition-colors cursor-pointer"
-                            title={isSecretVisible ? 'Hide Secret Key' : 'Reveal Secret Key'}
-                          >
-                            {isSecretVisible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                                navigator.clipboard.writeText(item.secret);
-                                addToast('Secret Copied', 'Base32 secret key copied.', 'info');
-                              }
-                            }}
-                            className="p-1 hover:text-cyan-500 transition-colors cursor-pointer"
-                            title="Copy Secret Key"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
-                        </div>
+                    {/* Secret Key Row (Compact inline single-line) */}
+                    <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[10px]">
+                      <span className="flex items-center gap-1 font-mono text-slate-600 dark:text-slate-400 truncate max-w-[160px]">
+                        <KeyRound className="w-2.5 h-2.5 text-cyan-500 shrink-0" />
+                        <span>{isSecretVisible ? item.secret : `•••• •••• ${item.secret.slice(-4)}`}</span>
+                      </span>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => toggleRevealSecret(item.id)}
+                          className="p-1 text-slate-400 hover:text-cyan-500 transition-colors cursor-pointer"
+                          title={isSecretVisible ? 'Hide Secret Key' : 'Reveal Secret Key'}
+                        >
+                          {isSecretVisible ? <EyeOff className="w-2.5 h-2.5" /> : <Eye className="w-2.5 h-2.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                              navigator.clipboard.writeText(item.secret);
+                              addToast('Secret Copied', 'Base32 secret key copied.', 'info');
+                            }
+                          }}
+                          className="p-1 text-slate-400 hover:text-cyan-500 transition-colors cursor-pointer"
+                          title="Copy Secret Key"
+                        >
+                          <Copy className="w-2.5 h-2.5" />
+                        </button>
                       </div>
-
-                      <div className="font-mono text-[11px] text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-xl border border-slate-200/60 dark:border-slate-800 truncate">
-                        {isSecretVisible ? item.secret : `•••• •••• •••• ${item.secret.slice(-4)}`}
-                      </div>
-
-                      {/* Optional Note */}
-                      {item.notes && (
-                        <p className="text-[11px] text-slate-400 italic truncate pt-0.5">
-                          💡 {item.notes}
-                        </p>
-                      )}
                     </div>
+
+                    {/* Optional Note */}
+                    {item.notes && (
+                      <p className="text-[9px] text-slate-400 italic truncate -mt-1">
+                        💡 {item.notes}
+                      </p>
+                    )}
                   </div>
                 );
               })}

@@ -63,6 +63,7 @@ import {
   UserCheck,
   UserX,
   Trash2,
+  Pencil,
   Search,
   Filter,
   Palette,
@@ -129,6 +130,7 @@ export default function SettingsPage() {
     return settings.businessLogo || profile?.avatarUrl || '';
   });
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const [isLogoMenuOpen, setIsLogoMenuOpen] = useState(false);
 
   const [bName, setBName] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -2277,9 +2279,6 @@ export default function SettingsPage() {
           <Settings className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
           Settings & Configurations
         </h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          Manage business profile, default UPI collection QR, multi-cloud backend providers, and access control
-        </p>
       </div>
 
       {/* Primary Tabs */}
@@ -2526,64 +2525,78 @@ export default function SettingsPage() {
           </h3>
 
           {/* Business & Profile Logo Upload */}
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-center sm:items-start gap-4">
-            <div className="relative group shrink-0">
-              {bLogo ? (
-                <div className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-indigo-500/40 shadow-md bg-white dark:bg-slate-800">
-                  <img src={bLogo} alt="Profile Logo" className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={handleRemoveLogo}
-                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-lg transition-transform active:scale-90 cursor-pointer"
-                    title="Remove Logo"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ) : (
-                <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-100/60 dark:bg-slate-800/40 flex flex-col items-center justify-center text-slate-400">
-                  <Camera className="w-7 h-7 text-slate-400" />
-                  <span className="text-[9px] mt-1 font-medium">No Logo</span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex-1 text-center sm:text-left space-y-1.5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">Profile / Business Logo</h4>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Upload your profile or shop logo. Appears in the top navigation bar &amp; invoices.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 justify-center sm:justify-start">
-                  <input
-                    type="file"
-                    ref={logoInputRef}
-                    accept="image/*"
-                    onChange={handleUploadLogo}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <input
+                type="file"
+                ref={logoInputRef}
+                accept="image/*"
+                onChange={handleUploadLogo}
+                className="hidden"
+              />
+              <div className="relative group shrink-0">
+                {bLogo ? (
+                  <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-indigo-500/40 shadow-md bg-white dark:bg-slate-800">
+                    <img src={bLogo} alt="Profile Logo" className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div
                     onClick={() => logoInputRef.current?.click()}
-                    className="px-3 py-1.5 text-xs font-bold rounded-xl bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 border border-indigo-200 dark:border-indigo-800/80 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-100/60 dark:bg-slate-800/40 flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:border-indigo-500 transition-colors"
                   >
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>{bLogo ? 'Change Logo' : 'Upload Logo'}</span>
-                  </button>
-                  {bLogo && (
+                    <Camera className="w-6 h-6 sm:w-7 sm:h-7 text-slate-400" />
+                    <span className="text-[9px] mt-1 font-medium">Add Logo</span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 relative">
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">Profile / Business Logo</h4>
+                  <div className="relative">
                     <button
                       type="button"
-                      onClick={handleRemoveLogo}
-                      className="px-2.5 py-1.5 text-xs font-medium rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
+                      onClick={() => {
+                        if (!bLogo) {
+                          logoInputRef.current?.click();
+                        } else {
+                          setIsLogoMenuOpen(!isLogoMenuOpen);
+                        }
+                      }}
+                      className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900/80 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 transition-all cursor-pointer shadow-xs active:scale-95 flex items-center justify-center"
+                      title="Change or Remove Logo"
                     >
-                      Remove
+                      <Pencil className="w-3.5 h-3.5" />
                     </button>
-                  )}
+                    {isLogoMenuOpen && bLogo && (
+                      <div className="absolute left-0 mt-1.5 w-36 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1 z-30 animate-in fade-in zoom-in-95">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsLogoMenuOpen(false);
+                            logoInputRef.current?.click();
+                          }}
+                          className="w-full px-3 py-1.5 text-left text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
+                        >
+                          <Upload className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>Change Logo</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsLogoMenuOpen(false);
+                            handleRemoveLogo();
+                          }}
+                          className="w-full px-3 py-1.5 text-left text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-2 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-              <p className="text-[10px] text-slate-400 font-mono">Square PNG, JPG, or WEBP (Max 2MB)</p>
             </div>
           </div>
 
@@ -2767,9 +2780,6 @@ export default function SettingsPage() {
                     <label className="text-xs font-bold text-slate-900 dark:text-white block">
                       Login 2FA Security
                     </label>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
-                      Choose authentication mode
-                    </span>
                   </div>
                 </div>
 
@@ -4565,9 +4575,6 @@ export default function SettingsPage() {
                 <Lock className="w-4 h-4 text-indigo-500" />
                 Change &amp; Update Password
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Update your login password securely saved in Supabase Cloud database
-              </p>
             </div>
             <span className="self-start sm:self-auto text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />

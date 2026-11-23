@@ -388,9 +388,6 @@ export default function GoogleDriveBackupPanel() {
                     Active (All Users)
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Daily auto-backup runs automatically for all <strong>{totalMerchants} merchants</strong>. Isolated folders per merchant + master system archive.
-                </p>
               </div>
             </div>
 
