@@ -70,9 +70,9 @@ function DashboardDigitalClock() {
   const dateStr = `${dd}-${mo}-${yyyy}`;
 
   return (
-    <div className="group/clock flex flex-col justify-center select-none cursor-pointer transition-all duration-300">
+    <div className="group/clock flex flex-col items-center justify-center text-center select-none cursor-pointer transition-all duration-300">
       {/* 12-Hour Digital Time: hr:mm:ss AM/PM */}
-      <div className="flex items-baseline gap-1 transition-all duration-300 group-hover/clock:drop-shadow-[0_0_22px_rgba(6,182,212,0.95)]">
+      <div className="flex items-baseline justify-center gap-1 transition-all duration-300 group-hover/clock:drop-shadow-[0_0_22px_rgba(6,182,212,0.95)]">
         <span className="text-2xl sm:text-3xl lg:text-[32px] font-black font-mono tracking-tight text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.4)]">
           {hh}<span className="text-indigo-400 opacity-90 mx-0.5">:</span>{mm}<span className="text-indigo-400 opacity-90 mx-0.5">:</span>
         </span>
@@ -88,7 +88,7 @@ function DashboardDigitalClock() {
       </div>
 
       {/* dd-mm-yyyy Date beneath with subtle blinking & hover glow drop */}
-      <div className="mt-0.5 transition-all duration-300 group-hover/clock:drop-shadow-[0_0_14px_rgba(99,102,241,0.9)]">
+      <div className="mt-0.5 text-center transition-all duration-300 group-hover/clock:drop-shadow-[0_0_14px_rgba(99,102,241,0.9)]">
         <span className="animate-subtle-blink font-mono font-bold text-xs sm:text-sm tracking-widest text-indigo-200/90 group-hover/clock:text-cyan-200">
           {dateStr}
         </span>
@@ -327,17 +327,19 @@ export default function DashboardPage() {
   return (
     <div className="space-y-3 sm:space-y-3.5">
       
-      {/* Top Banner: Digital Clock & Quick Action Bar */}
-      <div className="relative overflow-hidden rounded-2xl p-3 sm:p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-md border border-slate-800">
+      {/* Top Banner: Digital Clock & Quick Action Bar (Hidden on Mobile, Visible on Desktop) */}
+      <div className="hidden md:block relative overflow-hidden rounded-2xl p-3 sm:p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-md border border-slate-800">
         <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          {/* Modern Digital Clock (12hr format hr:mm:ss AM/PM with Seconds Destroy Glow & Date dd-mm-yyyy) */}
-          <div className="min-w-0">
+        <div className="relative z-10 flex items-center justify-between gap-4">
+          <div className="w-1/4 hidden lg:block" />
+          
+          {/* Centered Modern Digital Clock */}
+          <div className="flex-1 flex justify-center items-center">
             <DashboardDigitalClock />
           </div>
 
           {/* Action Hub Buttons */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center justify-end gap-2 shrink-0 lg:w-1/4">
             <button
               onClick={() => openCollectModal()}
               className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-cyan-500 hover:opacity-95 shadow-md shadow-indigo-500/25 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
@@ -526,30 +528,25 @@ export default function DashboardPage() {
       {/* Live Support & Helpdesk Overview (Directly Below KPI Cards) - ONLY Visible to Admin */}
       {isAdmin && (
         <div className="glass-card p-2.5 sm:p-3 rounded-2xl border border-indigo-100/80 dark:border-indigo-900/40">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
             
             {/* Left: Title & Status */}
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
                 <Headphones className="w-3.5 h-3.5" />
               </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
-                    {t('supportDesk', 'Live Support & Help Desk')}
-                  </h3>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center gap-1 shrink-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    {t('online', 'Online')} 24/7
-                  </span>
-                </div>
-                <p className="text-[10.5px] text-slate-500 dark:text-slate-400 truncate">
-                  Super Admin Portal: Monitor customer queries &amp; tickets
-                </p>
+              <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
+                  {t('supportDesk', 'Live Support & Help Desk')}
+                </h3>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center gap-1 shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  {t('online', 'Online')} 24/7
+                </span>
               </div>
             </div>
 
-            {/* Right: Compact Stats + Action Button */}
+            {/* Right: Compact Stats Pill */}
             <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
               <button
                 type="button"
@@ -576,27 +573,6 @@ export default function DashboardPage() {
                   {supportStats.closed} {t('solved', 'Solved')}
                 </span>
               </button>
-
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.dispatchEvent(new CustomEvent('open_support_chat'));
-                  }}
-                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm flex items-center gap-1 shrink-0 transition-all cursor-pointer"
-                  title="Open Live Support Tickets & Customer Inquiries"
-                >
-                  <MessageSquare className="w-3 h-3" />
-                  <span>Help Desk &amp; Inquiries</span>
-                </button>
-                <Link
-                  href="/settings?tab=users"
-                  className="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 shadow-xs flex items-center gap-1 shrink-0 transition-all"
-                >
-                  <Users className="w-3 h-3" />
-                  <span>CRM</span>
-                </Link>
-              </div>
             </div>
 
           </div>
