@@ -6,6 +6,7 @@ import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, isOnlineCollectionTxn, isInvoicePaid } from '@/lib/utils';
 import { t } from '@/lib/i18n';
 import QuickAddRecordModal from '@/components/QuickAddRecordModal';
+import CustomerShareModal from '@/components/CustomerShareModal';
 import {
   TrendingUp,
   TrendingDown,
@@ -22,6 +23,7 @@ import {
   PiggyBank,
   BellRing,
   QrCode,
+  Share2,
   AlertTriangle,
   Clock,
   ArrowRight,
@@ -32,7 +34,7 @@ import {
   CheckCircle2,
   Wallet
 } from 'lucide-react';
-import { SupportTicket } from '@/types';
+import { SupportTicket, Customer } from '@/types';
 
 // Modern Digital Clock Component (12hr hr:mm:ss AM/PM with Seconds Destroy Glow Effect & dd-mm-yyyy Date)
 function DashboardDigitalClock() {
@@ -114,6 +116,7 @@ export default function DashboardPage() {
   } = useApp();
 
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [shareCustomer, setShareCustomer] = useState<Customer | null>(null);
   const [, setLangTick] = useState(0);
 
   React.useEffect(() => {
@@ -593,9 +596,6 @@ export default function DashboardPage() {
                     {t('pending', 'Follow Up')}
                   </span>
                 </h3>
-                <p className="text-[11px] text-slate-400">
-                  {t('topDebtors', 'Customers with highest pending balances in your KhataBook')}
-                </p>
               </div>
               <Link
                 href="/khata"
@@ -646,19 +646,11 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <button
-                        onClick={() =>
-                          openCollectModal({
-                            customerId: c.id,
-                            customerName: c.name,
-                            customerPhone: c.phone,
-                            amount: c.outstandingBalance,
-                            note: `Settlement for ${c.name}`,
-                          })
-                        }
-                        className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-400 transition-colors cursor-pointer"
-                        title="Quick UPI Collection"
+                        onClick={() => setShareCustomer(c)}
+                        className="p-1.5 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer"
+                        title="Share"
                       >
-                        <QrCode className="w-3.5 h-3.5" />
+                        <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 dark:text-emerald-400" />
                       </button>
                     </div>
                   </div>
@@ -819,6 +811,13 @@ export default function DashboardPage() {
       <QuickAddRecordModal
         isOpen={isQuickAddOpen}
         onClose={() => setIsQuickAddOpen(false)}
+      />
+
+      {/* Customer Universal Share Modal (Digital KhataBook Style) */}
+      <CustomerShareModal
+        isOpen={!!shareCustomer}
+        onClose={() => setShareCustomer(null)}
+        customer={shareCustomer}
       />
     </div>
   );
