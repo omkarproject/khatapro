@@ -296,6 +296,7 @@ export default function InvoicesPage() {
       ...current,
       productId: prod.id,
       name: prod.name,
+      description: current.description || (prod as any).description || '',
       quantity: qty,
       unitPrice: price,
       discountPercent: disc,
@@ -313,6 +314,7 @@ export default function InvoicesPage() {
       {
         id: Math.random().toString(36).substring(2, 7),
         name: '',
+        description: '',
         quantity: 1,
         unitPrice: 0,
         discountPercent: 0,
@@ -486,6 +488,7 @@ export default function InvoicesPage() {
       {
         id: '1',
         name: '',
+        description: '',
         quantity: 1,
         unitPrice: 0,
         discountPercent: 0,
@@ -520,6 +523,7 @@ export default function InvoicesPage() {
         ? inv.items.map((it, i) => ({
             ...it,
             id: it.id || `item_${i}`,
+            description: it.description || '',
             taxPercent: it.taxPercent || 0,
             total: it.total || (it.quantity || 1) * (it.unitPrice || 0),
           }))
@@ -527,6 +531,7 @@ export default function InvoicesPage() {
             {
               id: '1',
               name: '',
+              description: '',
               quantity: 1,
               unitPrice: 0,
               discountPercent: 0,
@@ -1467,7 +1472,10 @@ export default function InvoicesPage() {
                   {activeInvoice.items.map((item, idx) => (
                     <tr key={idx}>
                       <td className="py-2.5 px-3 font-semibold text-slate-800">
-                        {item.name}
+                        <div>{item.name}</div>
+                        {item.description && (
+                          <div className="text-[11px] font-normal text-slate-500 mt-0.5 whitespace-pre-wrap">{item.description}</div>
+                        )}
                       </td>
                       <td className="py-2.5 px-2 text-center font-mono">
                         {item.quantity}
@@ -1672,146 +1680,161 @@ export default function InvoicesPage() {
                   {items.map((item, idx) => (
                     <div
                       key={item.id}
-                      className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 grid grid-cols-12 gap-2 items-center relative"
+                      className="p-2 sm:p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1.5 relative transition-all"
                       style={{ zIndex: openProductDropdownIndex === idx ? 40 : 1 }}
                     >
-                      <div className="col-span-5 relative">
-                        <div className="relative flex items-center">
-                          <input
-                            type="text"
-                            required
-                            placeholder="Item Name / SKU"
-                            value={item.name}
-                            onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
-                            className="w-full pl-2.5 pr-8 py-1.5 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setOpenProductDropdownIndex(
-                                openProductDropdownIndex === idx ? null : idx
-                              )
-                            }
-                            className="absolute right-1 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
-                            title="Select product from Inventory & Stock"
-                          >
-                            <ChevronDown
-                              className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                                openProductDropdownIndex === idx ? 'rotate-180 text-indigo-500' : ''
-                              }`}
+                      {/* Row 1: Item Name / SKU, Qty, Price, Total, Trash */}
+                      <div className="grid grid-cols-12 gap-1.5 sm:gap-2 items-center">
+                        <div className="col-span-5 relative">
+                          <div className="relative flex items-center">
+                            <input
+                              type="text"
+                              required
+                              placeholder="Item Name / SKU *"
+                              value={item.name}
+                              onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
+                              className="w-full pl-2.5 pr-7 py-1 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-slate-400"
                             />
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setOpenProductDropdownIndex(
+                                  openProductDropdownIndex === idx ? null : idx
+                                )
+                              }
+                              className="absolute right-1 p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+                              title="Select product from Inventory & Stock"
+                            >
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                                  openProductDropdownIndex === idx ? 'rotate-180 text-indigo-500' : ''
+                                }`}
+                              />
+                            </button>
+                          </div>
+
+                          {/* Product Dropdown from Inventory */}
+                          {openProductDropdownIndex === idx && (
+                            <div className="absolute left-0 top-full mt-1.5 w-72 sm:w-80 max-h-56 overflow-y-auto bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl z-50 p-1.5 space-y-1">
+                              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                                <span className="flex items-center gap-1">
+                                  <Package className="w-3 h-3 text-indigo-500" />
+                                  Inventory Products ({products.length})
+                                </span>
+                                <span className="text-[9px] text-indigo-500 font-semibold">
+                                  Click to Select
+                                </span>
+                              </div>
+
+                              {products.length === 0 ? (
+                                <div className="p-3 text-center text-xs text-slate-400">
+                                  No products found in Inventory.
+                                </div>
+                              ) : (
+                                (() => {
+                                  const q = (item.name || '').toLowerCase().trim();
+                                  const matches = products.filter(
+                                    (p) =>
+                                      !q ||
+                                      p.name.toLowerCase().includes(q) ||
+                                      p.sku.toLowerCase().includes(q)
+                                  );
+                                  const list = matches.length > 0 ? matches : products;
+
+                                  return (
+                                    <>
+                                      {matches.length === 0 && q && (
+                                        <div className="px-2 py-1 text-[10px] text-amber-500 font-semibold">
+                                          No exact match for &ldquo;{item.name}&rdquo;. Showing all products:
+                                        </div>
+                                      )}
+                                      {list.map((prod) => (
+                                        <button
+                                          key={prod.id}
+                                          type="button"
+                                          onClick={() => handleSelectProductForLineItem(idx, prod)}
+                                          className="w-full text-left p-2 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/60 flex items-center justify-between transition-colors cursor-pointer group"
+                                        >
+                                          <div className="min-w-0 flex-1 pr-2">
+                                            <div className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate">
+                                              {prod.name}
+                                            </div>
+                                            <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                                              {prod.sku && (
+                                                <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1 py-0.2 rounded text-[9px]">
+                                                  {prod.sku}
+                                                </span>
+                                              )}
+                                              <span>•</span>
+                                              <span
+                                                className={
+                                                  prod.currentStock <= prod.minStock
+                                                    ? 'text-amber-500 font-semibold'
+                                                    : 'text-emerald-500 font-semibold'
+                                                }
+                                              >
+                                                Stock: {prod.currentStock} {prod.unit || 'pcs'}
+                                              </span>
+                                            </div>
+                                          </div>
+                                          <div className="text-right shrink-0">
+                                            <div className="text-xs font-mono font-bold text-slate-900 dark:text-white">
+                                              {formatINR(prod.sellingPrice)}
+                                            </div>
+                                            <div className="text-[9px] text-slate-400">Selling Price</div>
+                                          </div>
+                                        </button>
+                                      ))}
+                                    </>
+                                  );
+                                })()
+                              )}
+                            </div>
+                          )}
                         </div>
 
-                        {/* Product Dropdown from Inventory */}
-                        {openProductDropdownIndex === idx && (
-                          <div className="absolute left-0 top-full mt-1.5 w-72 sm:w-80 max-h-56 overflow-y-auto bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl z-50 p-1.5 space-y-1">
-                            <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                              <span className="flex items-center gap-1">
-                                <Package className="w-3 h-3 text-indigo-500" />
-                                Inventory Products ({products.length})
-                              </span>
-                              <span className="text-[9px] text-indigo-500 font-semibold">
-                                Click to Select
-                              </span>
-                            </div>
-
-                            {products.length === 0 ? (
-                              <div className="p-3 text-center text-xs text-slate-400">
-                                No products found in Inventory.
-                              </div>
-                            ) : (
-                              (() => {
-                                const q = (item.name || '').toLowerCase().trim();
-                                const matches = products.filter(
-                                  (p) =>
-                                    !q ||
-                                    p.name.toLowerCase().includes(q) ||
-                                    p.sku.toLowerCase().includes(q)
-                                );
-                                const list = matches.length > 0 ? matches : products;
-
-                                return (
-                                  <>
-                                    {matches.length === 0 && q && (
-                                      <div className="px-2 py-1 text-[10px] text-amber-500 font-semibold">
-                                        No exact match for &ldquo;{item.name}&rdquo;. Showing all products:
-                                      </div>
-                                    )}
-                                    {list.map((prod) => (
-                                      <button
-                                        key={prod.id}
-                                        type="button"
-                                        onClick={() => handleSelectProductForLineItem(idx, prod)}
-                                        className="w-full text-left p-2 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/60 flex items-center justify-between transition-colors cursor-pointer group"
-                                      >
-                                        <div className="min-w-0 flex-1 pr-2">
-                                          <div className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate">
-                                            {prod.name}
-                                          </div>
-                                          <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                                            {prod.sku && (
-                                              <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1 py-0.2 rounded text-[9px]">
-                                                {prod.sku}
-                                              </span>
-                                            )}
-                                            <span>•</span>
-                                            <span
-                                              className={
-                                                prod.currentStock <= prod.minStock
-                                                  ? 'text-amber-500 font-semibold'
-                                                  : 'text-emerald-500 font-semibold'
-                                              }
-                                            >
-                                              Stock: {prod.currentStock} {prod.unit || 'pcs'}
-                                            </span>
-                                          </div>
-                                        </div>
-                                        <div className="text-right shrink-0">
-                                          <div className="text-xs font-mono font-bold text-slate-900 dark:text-white">
-                                            {formatINR(prod.sellingPrice)}
-                                          </div>
-                                          <div className="text-[9px] text-slate-400">Selling Price</div>
-                                        </div>
-                                      </button>
-                                    ))}
-                                  </>
-                                );
-                              })()
-                            )}
-                          </div>
-                        )}
+                        <div className="col-span-2">
+                          <input
+                            type="number"
+                            placeholder="Qty"
+                            value={item.quantity}
+                            onChange={(e) => handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
+                            className="w-full px-1.5 py-1 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-center font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <input
+                            type="number"
+                            placeholder="Price"
+                            value={item.unitPrice || ''}
+                            onChange={(e) => handleItemChange(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
+                            className="w-full px-1.5 py-1 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-right font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+                        <div className="col-span-2 text-right font-mono font-bold text-xs text-slate-900 dark:text-white truncate">
+                          {formatINR(item.total)}
+                        </div>
+                        <div className="col-span-1 text-center">
+                          <button
+                            type="button"
+                            onClick={() => removeItemRow(idx)}
+                            className="p-1 rounded text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                            title="Remove item"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="col-span-2">
+                      {/* Row 2: Description Option */}
+                      <div className="w-full">
                         <input
-                          type="number"
-                          placeholder="Qty"
-                          value={item.quantity}
-                          onChange={(e) => handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
-                          className="w-full px-2 py-1.5 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-center font-bold"
+                          type="text"
+                          placeholder="Description / HSN / Serial No. / Notes (Optional)..."
+                          value={item.description || ''}
+                          onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
+                          className="w-full px-2.5 py-1 text-[11px] rounded-lg bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         />
-                      </div>
-                      <div className="col-span-2">
-                        <input
-                          type="number"
-                          placeholder="Price"
-                          value={item.unitPrice || ''}
-                          onChange={(e) => handleItemChange(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
-                          className="w-full px-2 py-1.5 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-right font-bold"
-                        />
-                      </div>
-                      <div className="col-span-2 text-right font-mono font-bold text-xs">
-                        {formatINR(item.total)}
-                      </div>
-                      <div className="col-span-1 text-center">
-                        <button
-                          type="button"
-                          onClick={() => removeItemRow(idx)}
-                          className="text-slate-400 hover:text-rose-500"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
                       </div>
                     </div>
                   ))}

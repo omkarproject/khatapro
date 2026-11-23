@@ -295,7 +295,10 @@ export async function generateInvoicePdfBlob(
 
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 23, 42);
-    doc.text((item.description || 'Item').slice(0, 42), colDescX, rowY);
+    const itemLabel = item.name
+      ? (item.description ? `${item.name} (${item.description})` : item.name)
+      : (item.description || 'Item');
+    doc.text(itemLabel.slice(0, 48), colDescX, rowY);
 
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(51, 65, 85);

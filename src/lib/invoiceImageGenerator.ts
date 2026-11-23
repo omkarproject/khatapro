@@ -24,7 +24,7 @@ export async function generateInvoiceImageDataUrl(
 
   const items = Array.isArray(invoice.items) && invoice.items.length > 0
     ? invoice.items
-    : [{ name: 'Products / Services', quantity: 1, unitPrice: invoice.total, discountPercent: 0, taxPercent: 0, total: invoice.total }];
+    : [{ name: 'Products / Services', description: '', quantity: 1, unitPrice: invoice.total, discountPercent: 0, taxPercent: 0, total: invoice.total }];
 
   // Canvas Geometry
   const width = 800;
@@ -175,7 +175,11 @@ export async function generateInvoiceImageDataUrl(
 
     ctx.fillStyle = '#0F172A';
     ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText((item.name || 'Item').slice(0, 42), 46, itemY + 6);
+    const itm = item as any;
+    const itemLabel = itm.name
+      ? (itm.description ? `${itm.name} (${itm.description})` : itm.name)
+      : (itm.description || 'Item');
+    ctx.fillText(itemLabel.slice(0, 48), 46, itemY + 6);
 
     ctx.fillStyle = '#475569';
     ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
