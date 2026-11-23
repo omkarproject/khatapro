@@ -817,7 +817,34 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
             setSavingsGoals(merged);
           }
           if (Array.isArray(d.reminders)) {
-            const merged = mergeEntities(StorageService.getReminders(), d.reminders, 'reminders');
+            let merged = mergeEntities(StorageService.getReminders(), d.reminders, 'reminders');
+            // Auto-clean reminders if customer is settled (<= 0 due) or invoice is paid
+            const currentCusts = StorageService.getCustomers();
+            const currentInvs = StorageService.getInvoices();
+            const settledCustIds = new Set(currentCusts.filter(c => (c.outstandingBalance ?? 0) <= 0).map(c => c.id));
+            const paidInvIds = new Set<string>();
+            currentInvs.forEach(inv => {
+              if (isInvoicePaid(inv)) {
+                paidInvIds.add(inv.id);
+                if (inv.invoiceNumber) paidInvIds.add(inv.invoiceNumber);
+              }
+            });
+
+            merged = merged.filter(rem => {
+              if (rem.customerId && settledCustIds.has(rem.customerId)) return false;
+              if (rem.id.startsWith('rem_inv_')) {
+                const targetId = rem.id.replace('rem_inv_', '');
+                if (paidInvIds.has(targetId)) return false;
+              }
+              if (rem.note || rem.messageTemplate) {
+                const text = `${rem.note || ''} ${rem.messageTemplate || ''}`;
+                for (const invNum of paidInvIds) {
+                  if (text.includes(invNum)) return false;
+                }
+              }
+              return true;
+            });
+
             StorageService.setReminders(merged);
             setReminders(merged);
           }
@@ -1311,24 +1338,58 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       }
     }, 60000);
 
-    // 5. Tab Focus & Visibility Change Listeners (wakes up mobile device / inactive tab)
+    // 5. Tab Focus & Visibility Change Listeners (wakes up mobile device / inactive tab with rocket speed)
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
+        // Ensure Realtime channel is alive
+        if (realtimeChannelRef.current) {
+          const chanState = realtimeChannelRef.current.state;
+          if (chanState === 'closed' || chanState === 'errored' || chanState === 'leaving') {
+            try { realtimeChannelRef.current.subscribe(); } catch {}
+          }
+        }
+        // Rapid sub-25ms version check to see if remote device pushed updates
+        fetch(`/api/db/sync?userId=${encodeURIComponent(userId)}&checkVersion=true`, {
+          headers: { 'X-Auth-Session': userId },
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data?.version) {
+              if (lastKnownCloudVersionRef.current && data.version !== lastKnownCloudVersionRef.current) {
+                lastKnownCloudVersionRef.current = data.version;
+                debouncedLoadFromCloud(userId, 'version_change_on_visible');
+              } else if (!lastKnownCloudVersionRef.current) {
+                lastKnownCloudVersionRef.current = data.version;
+              }
+            }
+          })
+          .catch(() => {});
+
         const elapsed = Date.now() - lastCloudSyncTimestampRef.current;
-        if (elapsed > 4000) {
+        if (elapsed > 1500) {
           debouncedLoadFromCloud(userId, 'visibility_change');
         }
         refreshActiveDevicesCount();
       }
     };
     const handleFocus = () => {
+      // Re-verify realtime subscription on window focus
+      if (realtimeChannelRef.current) {
+        const chanState = realtimeChannelRef.current.state;
+        if (chanState === 'closed' || chanState === 'errored' || chanState === 'leaving') {
+          try { realtimeChannelRef.current.subscribe(); } catch {}
+        }
+      }
       const elapsed = Date.now() - lastCloudSyncTimestampRef.current;
-      if (elapsed > 4000) {
+      if (elapsed > 1500) {
         debouncedLoadFromCloud(userId, 'window_focus');
       }
       refreshActiveDevicesCount();
     };
     const handleOnline = () => {
+      if (realtimeChannelRef.current) {
+        try { realtimeChannelRef.current.subscribe(); } catch {}
+      }
       debouncedLoadFromCloud(userId, 'network_online');
       refreshActiveDevicesCount();
     };
@@ -2213,6 +2274,48 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     const updatedTxns = StorageService.addTransaction(txn);
     setTransactions(updatedTxns);
     setCustomers(StorageService.getCustomers()); // balance changed
+
+    // Auto-remove Schedule Payment Reminder if payment received or customer is settled
+    const txnType = txn.type as string;
+    if (txnType === 'collection' || txnType === 'credit' || txnType === 'income' || txnType === 'debit' || txnType === 'got') {
+      const curCust = StorageService.getCustomers().find(c => c.id === txn.customerId);
+      const isSettled = curCust ? (curCust.outstandingBalance ?? 0) <= 0 : false;
+      const allReminders = StorageService.getReminders();
+      const remindersToKeep = allReminders.filter(r => {
+        if (txn.customerId && r.customerId === txn.customerId) {
+          if (isSettled) return false;
+          if (r.amount === txn.amount || r.transactionId === txn.id) return false;
+        }
+        if (txn.referenceNo && (r.note?.includes(txn.referenceNo) || r.messageTemplate?.includes(txn.referenceNo) || r.id.includes(txn.referenceNo))) {
+          return false;
+        }
+        return true;
+      });
+
+      if (remindersToKeep.length !== allReminders.length) {
+        StorageService.setReminders(remindersToKeep);
+        setReminders(remindersToKeep);
+      }
+
+      // If this transaction pays off a pending invoice, mark invoice as paid
+      if (txn.referenceNo || txn.customerId) {
+        const allInvs = StorageService.getInvoices();
+        const matchingInv = allInvs.find(i =>
+          (txn.referenceNo && (i.invoiceNumber === txn.referenceNo || i.id === txn.referenceNo)) ||
+          (i.customerId === txn.customerId && i.total === txn.amount && !isInvoicePaid(i))
+        );
+        if (matchingInv && !isInvoicePaid(matchingInv)) {
+          StorageService.saveInvoice({
+            ...matchingInv,
+            status: 'paid',
+            paidAmount: matchingInv.total,
+            paymentDate: txn.date || new Date().toISOString().split('T')[0],
+          });
+          setInvoices(StorageService.getInvoices());
+        }
+      }
+    }
+
     syncWithDatabase();
 
     if (txn.groupId) {

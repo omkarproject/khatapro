@@ -5,6 +5,7 @@ import { useApp } from '@/context/AppContext';
 import { formatDate } from '@/lib/utils';
 import { NoteItem, TaskItem, PasswordItem, AuthenticatorItem } from '@/types';
 import { generateTotpToken, formatTotpCode, parseOtpAuthUri } from '@/lib/totp';
+import { compressImage } from '@/lib/imageCompressor';
 import {
   NotebookPen,
   CheckSquare,
@@ -148,17 +149,24 @@ export default function NotesAndTasksPage() {
   const [copiedField, setCopiedField] = useState<{ id: string; field: 'user' | 'pass' | 'recovery' } | null>(null);
   const passFileInputRef = React.useRef<HTMLInputElement>(null);
 
-  // Image upload handler helper
-  const handleProcessImage = (file: File, callback: (base64: string) => void) => {
-    if (file.size > 8 * 1024 * 1024) {
-      addToast('File Too Large', 'Please upload an image smaller than 8MB.', 'error');
+  // Image upload handler helper with automatic compression (<80KB)
+  const handleProcessImage = async (file: File, callback: (base64: string) => void) => {
+    if (file.size > 15 * 1024 * 1024) {
+      addToast('File Too Large', 'Please upload an image smaller than 15MB.', 'error');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      callback(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const { dataUrl } = await compressImage(file, 1200, 1200, 0.75);
+      if (dataUrl) {
+        callback(dataUrl);
+      }
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        callback(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // --- Copy Helper ---

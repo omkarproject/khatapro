@@ -4,6 +4,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
 import { generateInvoicePdfBlob, generateInvoiceQrWithLogo } from '@/lib/invoicePdfGenerator';
+import { generateInvoiceImageDataUrl } from '@/lib/invoiceImageGenerator';
 import { getActiveCurrency, t } from '@/lib/i18n';
 import { uploadToDriveFiles } from '@/lib/driveUploadClient';
 import {
@@ -620,21 +621,15 @@ export default function InvoicesPage() {
             '/brand-logo.png'
           ).trim();
           const qrDataUrl = await generateInvoiceQrWithLogo(upiUri, merchantLogo, 320);
-          const pdfBlob = await generateInvoicePdfBlob(updatedInvoice, settings, profile, qrDataUrl);
-          const pdfDataUrl = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = () => resolve('');
-            reader.readAsDataURL(pdfBlob);
-          });
-          if (pdfDataUrl) {
+          const { dataUrl: invoiceImgUrl } = await generateInvoiceImageDataUrl(updatedInvoice, settings, profile, qrDataUrl);
+          if (invoiceImgUrl) {
             updatedAttachments = [
               JSON.stringify({
                 id: `att_${updatedInvoice.id}`,
-                name: `Tax_Invoice_${updatedInvoice.invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`,
-                url: pdfDataUrl,
-                type: 'pdf',
-                size: 'Tax Invoice (PDF)',
+                name: `Tax_Invoice_${updatedInvoice.invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, '_')}.png`,
+                url: invoiceImgUrl,
+                type: 'image',
+                size: 'Tax Invoice (Image)',
               }),
             ];
           }
@@ -716,8 +711,8 @@ export default function InvoicesPage() {
 
     saveInvoice(newInvoice);
 
-    // Generate Invoice PDF and record in Customer Digital Khatabook as "GIVEN" (Credit)
-    const invoicePdfName = `Tax_Invoice_${newInvoice.invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+    // Generate Invoice Image and record in Customer Digital Khatabook as "GIVEN" (Credit)
+    const invoiceImgName = `Tax_Invoice_${newInvoice.invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, '_')}.png`;
     const invoiceAttachments: string[] = [];
 
     try {
@@ -735,28 +730,21 @@ export default function InvoicesPage() {
         '/brand-logo.png'
       ).trim();
       const qrDataUrl = await generateInvoiceQrWithLogo(upiUri, merchantLogo, 320);
-      const pdfBlob = await generateInvoicePdfBlob(newInvoice, settings, profile, qrDataUrl);
+      const { dataUrl: invoiceImgUrl } = await generateInvoiceImageDataUrl(newInvoice, settings, profile, qrDataUrl);
 
-      const pdfDataUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = () => resolve('');
-        reader.readAsDataURL(pdfBlob);
-      });
-
-      if (pdfDataUrl) {
+      if (invoiceImgUrl) {
         invoiceAttachments.push(
           JSON.stringify({
             id: `att_${newInvoice.id}`,
-            name: invoicePdfName,
-            url: pdfDataUrl,
-            type: 'pdf',
-            size: 'Tax Invoice (PDF)',
+            name: invoiceImgName,
+            url: invoiceImgUrl,
+            type: 'image',
+            size: 'Tax Invoice (Image)',
           })
         );
       }
-    } catch (pdfErr) {
-      console.warn('Could not generate PDF attachment for ledger:', pdfErr);
+    } catch (imgErr) {
+      console.warn('Could not generate Image attachment for ledger:', imgErr);
     }
 
     const d = new Date(newInvoice.dueDate);

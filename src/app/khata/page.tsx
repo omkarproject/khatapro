@@ -9,6 +9,7 @@ import { getActiveCurrency, t } from '@/lib/i18n';
 import { convertCurrency, getExcelNumFmt, formatMoney } from '@/lib/currencyService';
 import { Customer, Transaction, TransactionType, PaymentReminder, KhataGroup, KhataGroupNotification, TransactionSplitMember, TransactionEditAudit, KhataGroupJoinRequest, KhataGroupBlockedMerchant } from '@/types';
 import { uploadToDriveFiles, deleteFromDriveFiles } from '@/lib/driveUploadClient';
+import { compressImage } from '@/lib/imageCompressor';
 import { generateInvoiceHtml } from '@/lib/invoiceTemplates';
 import { StorageService } from '@/services/storage';
 import QRCode from 'qrcode';
@@ -2398,12 +2399,20 @@ function KhataPageInner() {
             : `${Math.round(file.size / 1024)} KB`;
 
           try {
-            const base64Data = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = reject;
-              reader.readAsDataURL(file);
-            });
+            let base64Data: string;
+            let displaySize = sizeFormatted;
+            if (isPdf) {
+              base64Data = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+              });
+            } else {
+              const comp = await compressImage(file, 1200, 1200, 0.75);
+              base64Data = comp.dataUrl;
+              displaySize = `${Math.round(comp.size / 1024)} KB`;
+            }
 
             const attId = `att_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
 
@@ -2412,7 +2421,7 @@ function KhataPageInner() {
               url: base64Data,
               name: file.name,
               type: isPdf ? 'pdf' : 'image',
-              size: sizeFormatted,
+              size: displaySize,
             };
             newItems.push(billItem);
           } catch (err) {
@@ -2457,12 +2466,7 @@ function KhataPageInner() {
 
     setIsUpdatingAvatarInReview(true);
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      const { dataUrl: base64 } = await compressImage(file, 400, 400, 0.8);
 
       const ext = file.name.split('.').pop() || 'jpg';
       const photoFileName = `${reviewAvatarCustomer.name.replace(/\s+/g, '_')}_profile_picture.${ext}`;

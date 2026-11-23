@@ -87,7 +87,7 @@ function transactionToDb(t: any, userId: string) {
     tags: baseTags,
   };
 
-  // Strip large base64 data URLs from attachments so database strictly holds metadata records
+  // Persist attachments safely across schema variations; retain files whether Drive is ON or OFF
   const sanitizedAttachments = (t.attachments || []).map((att: any) => {
     let obj: any = null;
     if (typeof att === 'object' && att !== null) {
@@ -98,7 +98,6 @@ function transactionToDb(t: any, userId: string) {
       try {
         obj = JSON.parse(att);
       } catch {
-        if (att.startsWith('data:')) return '';
         return att;
       }
     } else {
@@ -107,10 +106,8 @@ function transactionToDb(t: any, userId: string) {
 
     if (obj) {
       let safeUrl = obj.url || '';
-      if (safeUrl.startsWith('data:')) {
-        if (safeUrl.length > 500000) {
-          safeUrl = obj.driveFileId ? `https://drive.google.com/file/d/${obj.driveFileId}/view` : '';
-        }
+      if (safeUrl.startsWith('data:') && obj.driveFileId && !obj.driveFileId.startsWith('file_')) {
+        safeUrl = `/api/backup/google-drive/view-file?fileId=${obj.driveFileId}`;
       }
       return JSON.stringify({
         ...obj,
@@ -144,7 +141,7 @@ function transactionToDb(t: any, userId: string) {
 function productToDb(p: any, userId: string) {
   const images = Array.isArray(p.images) && p.images.length > 0 
     ? p.images 
-    : (p.imageUrl && !p.imageUrl.startsWith('data:') ? [p.imageUrl] : []);
+    : (p.imageUrl ? [p.imageUrl] : []);
 
   return {
     id: String(p.id),
@@ -245,7 +242,7 @@ function savingsGoalToDb(s: any, userId: string) {
     deadline: s.deadline || s.targetDate || '',
     notes: s.notes || s.note || null,
     icon: s.icon || s.color || null,
-    document_url: s.documentUrl && !s.documentUrl.startsWith('data:') ? s.documentUrl : null,
+    document_url: s.documentUrl || null,
     document_name: s.documentName || null,
     document_type: s.documentType || null,
     deposits: Array.isArray(s.deposits) ? s.deposits : [],
@@ -275,10 +272,10 @@ function reminderToDb(r: any, userId: string) {
 
 function documentToDb(d: any, userId: string) {
   let fileUrl = d.fileUrl || '';
-  if (fileUrl.startsWith('data:')) {
-    fileUrl = d.driveFileId ? `/api/backup/google-drive/view-file?fileId=${d.driveFileId}` : '';
+  if (fileUrl.startsWith('data:') && d.driveFileId && !d.driveFileId.startsWith('file_')) {
+    fileUrl = `/api/backup/google-drive/view-file?fileId=${d.driveFileId}`;
   }
-  if (!fileUrl && d.driveFileId) {
+  if (!fileUrl && d.driveFileId && !d.driveFileId.startsWith('file_')) {
     fileUrl = `/api/backup/google-drive/view-file?fileId=${d.driveFileId}`;
   }
   if (!fileUrl) {
@@ -379,12 +376,9 @@ function customerDriveFolderToDb(f: any, userId: string) {
 }
 
 function customerDriveFileToDb(f: any, userId: string) {
-  let safeUrl = f.url && !f.url.startsWith('data:') ? f.url : '';
-  if (!safeUrl && f.driveFileId) {
-    safeUrl = `https://drive.google.com/file/d/${f.driveFileId}/view`;
-  }
   const driveId = f.driveFileId || f.fileId || f.id || '';
-  const proxyUrl = driveId ? `/api/backup/google-drive/view-file?fileId=${driveId}` : '';
+  const proxyUrl = (driveId && !driveId.startsWith('file_')) ? `/api/backup/google-drive/view-file?fileId=${driveId}` : '';
+  const safeUrl = f.dataUrl || f.url || '';
   const finalUrl = proxyUrl || safeUrl || '';
 
   return {
@@ -938,15 +932,18 @@ export async function GET(req: NextRequest) {
 
     // Fast sub-25ms version check for lightweight cross-device change detection
     if (searchParams.get('checkVersion') === 'true') {
-      const { data: setRow } = await supabase
-        .from('system_settings')
-        .select('updated_at')
-        .eq('user_id', userId)
-        .maybeSingle();
+      const [setRes, txnRes] = await Promise.all([
+        supabase.from('system_settings').select('updated_at').eq('user_id', userId).maybeSingle(),
+        supabase.from('transactions').select('updated_at').eq('user_id', userId).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+      ]);
+
+      const v1 = setRes.data?.updated_at || '';
+      const v2 = txnRes.data?.updated_at || '';
+      const finalVersion = v1 > v2 ? v1 : (v2 || v1);
 
       return NextResponse.json({
         success: true,
-        version: setRow?.updated_at || '',
+        version: finalVersion,
         timestamp: Date.now(),
       });
     }

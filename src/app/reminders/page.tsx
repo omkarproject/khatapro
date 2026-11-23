@@ -57,6 +57,18 @@ export default function RemindersPage() {
 
   // Auto-schedule payment reminders for any unpaid invoices & clean up paid/settled ones
   useEffect(() => {
+    // 1. Clean up reminders for customers who have cleared their dues (settled in Khatabook / Online Pay)
+    if (customers && customers.length > 0) {
+      customers.forEach((cust) => {
+        if ((cust.outstandingBalance ?? 0) <= 0) {
+          const toDelete = reminders.filter((r) => r.customerId === cust.id);
+          toDelete.forEach((r) => {
+            deleteReminder(r.id);
+          });
+        }
+      });
+    }
+
     if (!invoices || invoices.length === 0) return;
     invoices.forEach((inv) => {
       const remId = `rem_inv_${inv.id}`;
