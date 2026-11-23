@@ -2277,7 +2277,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
     // Auto-remove Schedule Payment Reminder if payment received or customer is settled
     const txnType = txn.type as string;
-    if (txnType === 'collection' || txnType === 'credit' || txnType === 'income' || txnType === 'debit' || txnType === 'got') {
+    const isPaymentReceived = txnType === 'debit' || txnType === 'collection' || txnType === 'payment' || txnType === 'income' || txnType === 'got';
+    const isInvoiceCreationTxn = Boolean(txn.id?.startsWith('txn_inv_') || txn.category === 'Sales Invoice' || txnType === 'credit');
+
+    if (isPaymentReceived && !isInvoiceCreationTxn) {
       const curCust = StorageService.getCustomers().find(c => c.id === txn.customerId);
       const isSettled = curCust ? (curCust.outstandingBalance ?? 0) <= 0 : false;
       const allReminders = StorageService.getReminders();
