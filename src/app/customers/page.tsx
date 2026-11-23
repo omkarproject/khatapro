@@ -1410,9 +1410,6 @@ export default function CustomersPage() {
             <Users className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
             Customer Relationship Management
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            360-degree customer profiling, credit risk scoring, purchase history, and direct collections
-          </p>
         </div>
 
         <button
@@ -1472,7 +1469,7 @@ export default function CustomersPage() {
       </div>
 
       {/* Customers Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
         {filteredCustomers.map((cust) => {
           const isCustDeleted = Boolean(cust.isDeleted || cust.status === 'deleted');
           const creditUtilization = cust.creditLimit > 0
@@ -1482,23 +1479,23 @@ export default function CustomersPage() {
           return (
             <div
               key={cust.id}
-              className={`glass-card p-5 space-y-4 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all flex flex-col justify-between ${
+              className={`glass-card p-3.5 space-y-2.5 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all flex flex-col justify-between ${
                 isCustDeleted ? 'border-dashed border-rose-300 dark:border-rose-800/80 bg-rose-50/20 dark:bg-rose-950/15' : ''
               }`}
             >
               <div>
                 {/* Header */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <div
                       onClick={(e) => {
                         e.stopPropagation();
                         handleOpenAvatarReview(cust);
                       }}
-                      className="w-12 h-12 rounded-full fintech-gradient-primary text-white font-extrabold flex items-center justify-center text-base shadow-md overflow-hidden relative shrink-0 aspect-square border border-slate-200/60 dark:border-slate-700/60 cursor-pointer hover:ring-2 hover:ring-indigo-500 hover:scale-105 transition-all group"
+                      className="w-10 h-10 rounded-full fintech-gradient-primary text-white font-extrabold flex items-center justify-center text-sm shadow-md overflow-hidden relative shrink-0 aspect-square border border-slate-200/60 dark:border-slate-700/60 cursor-pointer hover:ring-2 hover:ring-indigo-500 hover:scale-105 transition-all group"
                       title="Click to view full photo / change / delete"
                     >
-                      <span className="font-extrabold text-base select-none">{cust.name?.charAt(0)?.toUpperCase() || 'C'}</span>
+                      <span className="font-extrabold text-sm select-none">{cust.name?.charAt(0)?.toUpperCase() || 'C'}</span>
                       {(cust.avatar || cust.avatarUrl) && (
                         <img
                           src={cust.avatar || cust.avatarUrl}
@@ -1508,35 +1505,35 @@ export default function CustomersPage() {
                         />
                       )}
                     </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <div className="min-w-0">
+                      <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1">
                         <span className="truncate">{cust.name}</span>
                         {(cust.category === 'Merchant' || cust.id.startsWith('peer_cust_')) && (
                           <span title="Verified Merchant" className="inline-flex items-center text-emerald-500 shrink-0">
-                            <BadgeCheck className="w-4 h-4 text-emerald-500 fill-emerald-500/20" />
+                            <BadgeCheck className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500/20" />
                           </span>
                         )}
                       </h3>
-                      <div className="text-[11px] text-slate-400 flex items-center gap-1">
-                        <Building className="w-3 h-3 text-slate-400" />
-                        <span>{cust.businessName || 'Individual Client'}</span>
+                      <div className="text-[10px] text-slate-400 flex items-center gap-1 truncate">
+                        <Building className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                        <span className="truncate">{cust.businessName || 'Individual Client'}</span>
                       </div>
                     </div>
                   </div>
 
                   {isCustDeleted ? (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400 border border-rose-200 dark:border-rose-900">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400 border border-rose-200 dark:border-rose-900 shrink-0">
                       Deleted
                     </span>
                   ) : (
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase inline-flex items-center gap-1 ${
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase inline-flex items-center gap-0.5 shrink-0 ${
                       cust.category === 'VIP' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' :
                       cust.category === 'Wholesale' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400' :
                       cust.category === 'Merchant' || cust.id.startsWith('peer_cust_') ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' :
                       'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
                     }`}>
                       {(cust.category === 'Merchant' || cust.id.startsWith('peer_cust_')) && (
-                        <BadgeCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400 fill-emerald-500/20 shrink-0" />
+                        <BadgeCheck className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 fill-emerald-500/20 shrink-0" />
                       )}
                       {cust.category === 'Merchant' || cust.id.startsWith('peer_cust_') ? 'VERIFIED' : cust.category}
                     </span>
@@ -1544,55 +1541,55 @@ export default function CustomersPage() {
                 </div>
 
                 {/* Contact & GST info */}
-                <div className="mt-4 space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
+                <div className="mt-2 space-y-1 text-[11px] text-slate-600 dark:text-slate-400">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex items-center gap-1.5">
-                      <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <div className="flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-slate-400 shrink-0" />
                       <span>{cust.phone}</span>
                     </div>
                     {cust.email && (
-                      <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                      <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400 min-w-0">
                         <span className="text-slate-300 dark:text-slate-600">•</span>
-                        <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate max-w-[200px]" title={cust.email}>{cust.email}</span>
+                        <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="truncate max-w-[140px]" title={cust.email}>{cust.email}</span>
                       </div>
                     )}
                   </div>
                   {cust.gstNumber && (
-                    <div className="flex items-center gap-2 text-[11px] font-mono">
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                    <div className="flex items-center gap-1 text-[10px] font-mono">
+                      <ShieldCheck className="w-3 h-3 text-emerald-500 shrink-0" />
                       <span>GST: {cust.gstNumber}</span>
                     </div>
                   )}
                   {cust.city && (
-                    <div className="flex items-center gap-2 text-[11px]">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                    <div className="flex items-center gap-1 text-[10px]">
+                      <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
                       <span>{cust.city}, {cust.state || 'India'}</span>
                     </div>
                   )}
                 </div>
 
                 {/* Financial Balance & Credit Utilization */}
-                <div className="mt-4 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
+                <div className="mt-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
                     <span className="text-slate-500">Outstanding Balance</span>
                     <span className={`font-mono font-bold ${
                       cust.outstandingBalance > 0 ? 'text-rose-600' :
                       cust.outstandingBalance < 0 ? 'text-emerald-600' : 'text-slate-400'
                     }`}>
                       {formatINR(Math.abs(cust.outstandingBalance))}
-                      <span className="text-[10px] ml-1 uppercase">
+                      <span className="text-[9px] ml-1 uppercase">
                         {cust.outstandingBalance > 0 ? 'Due' : cust.outstandingBalance < 0 ? 'Advance' : 'Nil'}
                       </span>
                     </span>
                   </div>
 
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[10px] text-slate-400">
-                      <span>Credit Used: {creditUtilization}%</span>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center justify-between text-[9px] text-slate-400 font-mono">
+                      <span>Credit: {creditUtilization}%</span>
                       <span>Limit: {formatINR(cust.creditLimit)}</span>
                     </div>
-                    <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                    <div className="w-full h-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
                       <div
                         className={`h-full rounded-full ${
                           creditUtilization > 80 ? 'bg-rose-500' : creditUtilization > 50 ? 'bg-amber-500' : 'bg-indigo-500'
@@ -1605,7 +1602,7 @@ export default function CustomersPage() {
               </div>
 
               {/* Action Buttons */}
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5">
                 {isCustDeleted ? (
                   <>
                     <div className="flex items-center gap-2">

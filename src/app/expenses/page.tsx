@@ -869,8 +869,62 @@ export default function ExpensesPage() {
         </div>
       </div>
 
-      {/* Analytics Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      {/* Mobile Top Slim Budget Cap Bar ("Patli Patti" - Visible on Mobile only) */}
+      <div className="md:hidden glass-card p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2 shadow-xs">
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Budget Cap:
+            </span>
+            <span className="font-mono font-bold text-slate-900 dark:text-white">
+              {formatINR(budgetCap)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-right shrink-0">
+            <span className="text-[10px] text-slate-400">Available:</span>
+            <span className={`font-mono text-xs font-bold ${
+              percentUsed > 70
+                ? 'text-rose-600 dark:text-rose-400'
+                : percentUsed > 50
+                ? 'text-amber-500'
+                : 'text-emerald-600 dark:text-emerald-400'
+            }`}>
+              {formatINR(Math.max(0, budgetCap - totalExpense))}
+            </span>
+          </div>
+        </div>
+
+        {/* Progress Bar 1 to 100%: <=50% green, 50%+ yellow, 70%+ red */}
+        <div className="space-y-1">
+          <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                percentUsed > 70
+                  ? 'bg-rose-500'
+                  : percentUsed > 50
+                  ? 'bg-amber-400'
+                  : 'bg-emerald-500'
+              }`}
+              style={{ width: `${Math.min(100, Math.max(1, percentUsed))}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500">
+            <span>Spend: {formatINR(totalExpense)} ({percentUsed}%)</span>
+            <span className={
+              percentUsed > 70
+                ? 'text-rose-500 font-bold'
+                : percentUsed > 50
+                ? 'text-amber-500 font-bold'
+                : 'text-emerald-500 font-bold'
+            }>
+              {percentUsed > 70 ? 'Budget Risk' : percentUsed > 50 ? 'Budget Warning' : 'Under Control'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Analytics Overview Cards (Desktop Only - Hidden on Mobile) */}
+      <div className="hidden md:grid md:grid-cols-3 gap-5">
         <div className="glass-card p-5">
           <div className="flex items-center justify-between">
             <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -943,20 +997,20 @@ export default function ExpensesPage() {
                 {formatINR(budgetCap)}
               </div>
               <div className="flex items-center justify-between text-[11px] font-semibold mt-2">
-                <span className={percentUsed >= 100 ? 'text-rose-500' : percentUsed >= 80 ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'}>
+                <span className={percentUsed > 70 ? 'text-rose-500 font-bold' : percentUsed > 50 ? 'text-amber-500 font-bold' : 'text-emerald-600 dark:text-emerald-400'}>
                   {percentUsed}% of recommended budget utilized
                 </span>
               </div>
               <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full mt-2 overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
-                    percentUsed >= 100
+                    percentUsed > 70
                       ? 'bg-rose-500'
-                      : percentUsed >= 80
-                      ? 'bg-amber-500'
+                      : percentUsed > 50
+                      ? 'bg-amber-400'
                       : 'bg-emerald-500'
                   }`}
-                  style={{ width: `${Math.min(100, Math.max(0, percentUsed))}%` }}
+                  style={{ width: `${Math.min(100, Math.max(1, percentUsed))}%` }}
                 />
               </div>
             </>

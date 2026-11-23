@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import {
@@ -91,6 +91,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     clearAllP2PAlerts,
     saveSavingsGoal,
     addToast,
+    expenses,
     settings,
     updateSettings,
     currentUser,
@@ -558,6 +559,37 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     dismissGroupNotification(notifId);
   };
 
+  // Monthly Expense Budget Alert (2-Day Cadence Notification)
+  const currentMonthExpenses = useMemo(() => {
+    if (!expenses || expenses.length === 0) return 0;
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth();
+    return expenses
+      .filter((e) => {
+        try {
+          const d = new Date(e.date);
+          return d.getFullYear() === curYear && d.getMonth() === curMonth;
+        } catch {
+          return false;
+        }
+      })
+      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  }, [expenses]);
+
+  const monthlyBudgetCap = Number(settings?.monthlyBudgetCap) || 150000;
+  const budgetPercentUsed = monthlyBudgetCap > 0 ? (currentMonthExpenses / monthlyBudgetCap) * 100 : 0;
+  const availableBudget = Math.max(0, monthlyBudgetCap - currentMonthExpenses);
+
+  // 2-day period bucket so a fresh alert appears every 2 days if budget is in risk/warning (>=50%)
+  const twoDayPeriod = Math.floor(Date.now() / (2 * 24 * 60 * 60 * 1000));
+  const budgetRiskLevel = budgetPercentUsed >= 70 ? 'danger' : budgetPercentUsed >= 50 ? 'warning' : 'ok';
+  const budgetAlertId = `budget_${budgetRiskLevel}_period_${twoDayPeriod}`;
+
+  const isBudgetRiskAlert =
+    budgetPercentUsed >= 50 &&
+    !dismissedAlerts.includes(budgetAlertId);
+
   const totalAlerts =
     lowStockProducts.length +
     overdueReminders.length +
@@ -567,6 +599,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     unreadSupportTickets.length +
     unreadGroupAlerts.length +
     unreadP2PAlerts.length +
+    (isBudgetRiskAlert ? 1 : 0) +
     (isBackupRunning || isBackupCompletedAlert || isBackupFailedAlert ? 1 : 0) +
     (isDriveUploadRunning || isDriveUploadCompletedAlert ? 1 : 0);
 
@@ -588,6 +621,9 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
     if (isBackupFailedAlert) currentAlertIds.add(`backup_failed_${autoBackupProgress?.date || todayStr}`);
     if (isDriveUploadCompletedAlert && customerDriveProgress?.batchId) {
       currentAlertIds.add(`drive_upload_${customerDriveProgress.batchId}`);
+    }
+    if (isBudgetRiskAlert) {
+      currentAlertIds.add(budgetAlertId);
     }
 
     if (knownAlertIdsRef.current === null) {
@@ -638,6 +674,9 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
       `backup_${autoBackupProgress?.date || todayStr}`,
       `backup_failed_${autoBackupProgress?.date || todayStr}`,
     ];
+    if (isBudgetRiskAlert) {
+      allIds.push(budgetAlertId);
+    }
     if (customerDriveProgress?.batchId) {
       allIds.push(`drive_upload_${customerDriveProgress.batchId}`);
     }
@@ -1505,6 +1544,73 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                             </div>
                           );
                         })}
+                      </div>
+                    )}
+
+                    {/* Monthly Expense Budget Risk / Warning Alert (2-Day Cadence) */}
+                    {isBudgetRiskAlert && (
+                      <div className={`p-2.5 sm:p-3 rounded-2xl flex items-start justify-between gap-2 shadow-xs ${
+                        budgetPercentUsed >= 70
+                          ? 'bg-rose-50/90 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800'
+                          : 'bg-amber-50/90 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800'
+                      }`}>
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                            budgetPercentUsed >= 70
+                              ? 'bg-rose-500 text-white'
+                              : 'bg-amber-500 text-white'
+                          }`}>
+                            <AlertTriangle className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-xs font-bold ${
+                                budgetPercentUsed >= 70
+                                  ? 'text-rose-900 dark:text-rose-200'
+                                  : 'text-amber-900 dark:text-amber-200'
+                              }`}>
+                                {budgetPercentUsed >= 70
+                                  ? 'Budget Risk: Control Your Expense!'
+                                  : 'Control Your Expense Budget'}
+                              </span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
+                                budgetPercentUsed >= 70
+                                  ? 'bg-rose-600 text-white animate-pulse'
+                                  : 'bg-amber-500 text-white'
+                              }`}>
+                                {budgetPercentUsed >= 70 ? 'BUDGET RISK' : 'WARNING'}
+                              </span>
+                            </div>
+                            <div className={`text-[11px] mt-0.5 leading-relaxed ${
+                              budgetPercentUsed >= 70
+                                ? 'text-rose-800 dark:text-rose-300'
+                                : 'text-amber-800 dark:text-amber-300'
+                            }`}>
+                              Budget utilized: <strong className="font-mono">{Math.round(budgetPercentUsed)}%</strong> ({formatINR(currentMonthExpenses)} of {formatINR(monthlyBudgetCap)}). Available budget: <strong className="font-mono">{formatINR(availableBudget)}</strong>.
+                            </div>
+                            <div className="mt-2 flex items-center gap-2">
+                              <Link
+                                href="/expenses"
+                                onClick={() => setIsNotificationsOpen(false)}
+                                className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition-colors inline-flex items-center gap-1 ${
+                                  budgetPercentUsed >= 70
+                                    ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                                    : 'bg-amber-600 hover:bg-amber-700 text-white'
+                                }`}
+                              >
+                                View Expenses & Budget →
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDismissAlert(budgetAlertId)}
+                          title="Dismiss"
+                          className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     )}
 
