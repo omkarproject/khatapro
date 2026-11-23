@@ -153,45 +153,20 @@ function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
         </div>
 
         {/* Bottom Section */}
-        <div className={`pt-2.5 border-t border-slate-200/80 dark:border-slate-800 space-y-2 ${collapsed ? 'p-1' : ''}`}>
+        <div className={`pt-2.5 border-t border-slate-200/80 dark:border-slate-800 ${collapsed ? 'p-1' : ''}`}>
           {!collapsed ? (
-            <>
-              <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-indigo-50/80 to-cyan-50/40 dark:from-slate-800/60 dark:to-indigo-950/30 border border-indigo-100/80 dark:border-indigo-900/30">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                    {t('status', 'Status')}
-                  </span>
-                  <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    {t('online', 'ONLINE')}
-                  </span>
-                </div>
-                <div className="text-xs font-bold text-slate-900 dark:text-white truncate leading-tight" suppressHydrationWarning>
-                  {settings.businessName || profile?.businessName || currentUser?.businessName || settings.websiteName || 'Merchant'}
-                </div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate font-mono mt-0.5" suppressHydrationWarning>
-                  {settings.paymentSettings?.upiId || settings.businessPhone || profile?.phone || currentUser?.phone || 'Configure in Settings'}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between text-[10px] text-slate-400 px-1">
-                <span className="flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3 text-emerald-500" />
-                  {t('secure100', '100% Secure')}
-                </span>
-                <span className="text-[9px] font-mono">
-                  v1.0{settings.websiteBadgeText ? ` ${settings.websiteBadgeText.trim()}` : ''}
-                </span>
-              </div>
-            </>
+            <div className="flex items-center justify-between text-[10px] text-slate-400 px-1 py-1">
+              <span className="flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-emerald-500" />
+                {t('secure100', '100% Secure')}
+              </span>
+              <span className="text-[9px] font-mono">
+                v1.0{settings.websiteBadgeText ? ` ${settings.websiteBadgeText.trim()}` : ''}
+              </span>
+            </div>
           ) : (
-            <div className="flex flex-col items-center gap-1 py-1">
-              <div
-                className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center cursor-pointer"
-                title={`Status: Online${settings.businessName || settings.websiteName ? ` (${settings.businessName || settings.websiteName})` : ''}`}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              </div>
+            <div className="flex flex-col items-center justify-center py-1 text-slate-400" title="100% Secure">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
             </div>
           )}
         </div>

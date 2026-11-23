@@ -700,28 +700,15 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
             </button>
 
             <Link href="/" prefetch={true} className="flex items-center gap-2 sm:gap-2.5 group">
-              {websiteLogo ? (
-                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl overflow-hidden shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform shrink-0 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center">
-                  <img
-                    src={websiteLogo}
-                    alt={websiteName || 'Logo'}
-                    className="w-full h-full object-contain"
-                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                  />
+              <div className="block min-w-0">
+                <div className="flex items-center gap-1 sm:gap-1.5 font-black tracking-tight text-slate-900 dark:text-white text-sm sm:text-base leading-tight">
+                  <span className="truncate max-w-[180px] sm:max-w-xs md:max-w-sm" suppressHydrationWarning>
+                    {settings?.businessName || profile?.businessName || currentUser?.businessName || 'My Business'}
+                  </span>
                 </div>
-              ) : null}
-              <div className="block">
-                <div className="flex items-center gap-1 sm:gap-1.5 font-black tracking-tight text-slate-900 dark:text-white text-sm sm:text-base">
-                  <span>{websiteName || ''}</span>
-                  {websiteBadgeText?.trim() && (
-                    <span className={`text-[7px] sm:text-[7.5px] px-1 py-[1px] rounded font-bold uppercase tracking-wider leading-none text-white shadow-xs ${websiteBadgeBg || 'fintech-gradient-primary'}`}>
-                      {websiteBadgeText.trim()}
-                    </span>
-                  )}
-                </div>
-                {websiteTagline?.trim() && (
-                  <div className="hidden sm:block text-[10px] text-slate-400 font-medium tracking-tight">
-                    {websiteTagline.trim()}
+                {(settings?.businessEmail || profile?.email || currentUser?.email) && (
+                  <div className="text-[10px] sm:text-[11px] text-slate-400 dark:text-slate-400 font-mono tracking-tight truncate max-w-[180px] sm:max-w-xs md:max-w-sm leading-tight mt-0.5" suppressHydrationWarning>
+                    {settings?.businessEmail || profile?.email || currentUser?.email}
                   </div>
                 )}
               </div>
@@ -1738,32 +1725,28 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                         <button
                           type="button"
                           onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                          className="flex items-center gap-2 p-1 pl-1.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60 transition-all cursor-pointer group"
-                          title="User Profile"
+                          className="flex items-center gap-1.5 p-1 pl-1.5 pr-2 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60 transition-all cursor-pointer group"
+                          title={`User Profile (${isOnline ? 'Online' : 'Offline'})`}
                         >
-                          {activeAvatar ? (
-                            <img
-                              src={activeAvatar}
-                              alt="Profile Logo"
-                              className="w-8 h-8 rounded-xl object-cover shadow-sm border border-indigo-200 dark:border-indigo-800 shrink-0"
+                          <div className="relative shrink-0">
+                            {activeAvatar ? (
+                              <img
+                                src={activeAvatar}
+                                alt="Profile Logo"
+                                className="w-8 h-8 rounded-xl object-cover shadow-sm border border-indigo-200 dark:border-indigo-800 shrink-0"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 text-white font-extrabold text-xs flex items-center justify-center shadow-sm">
+                                {currentUser.name.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <span
+                              className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-900 ${
+                                isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
+                              }`}
                             />
-                          ) : (
-                            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 text-white font-extrabold text-xs flex items-center justify-center shadow-sm">
-                              {currentUser.name.charAt(0).toUpperCase()}
-                            </div>
-                          )}
-                          <div className="hidden xl:block text-left pr-1 min-w-0">
-                            <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[110px]">
-                              {currentUser.name}
-                            </div>
-                            <div className={`text-[10px] font-mono font-semibold flex items-center gap-1 ${
-                              isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'
-                            }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-                              {isOnline ? t('online', 'Online') : t('offline', 'Offline')}
-                            </div>
                           </div>
-                          <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 hidden sm:block" />
+                          <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200" />
                         </button>
 
                         {/* Dropdown Menu */}

@@ -102,7 +102,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
         </div>
 
         <div className="print:hidden">
-          <Footer />
+          {/* Footer is hidden for authenticated/logged-in users */}
           {currentUser && <MobileNav />}
           <QuickUPICollectModal />
           <PaymentDetailsModal />
