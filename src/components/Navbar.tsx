@@ -324,38 +324,85 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
   );
 
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
+  const prevTicketsCountRef = useRef<number | null>(null);
 
-  const fetchSupportTickets = React.useCallback(async () => {
+  const fetchSupportTickets = React.useCallback(async (isSilent = false) => {
     if (!currentUser) return;
     try {
       const res = await fetch(`/api/support/tickets?userId=${encodeURIComponent(currentUser.id)}&isAdmin=${isAdmin}`);
       const data = await res.json();
       if (data && data.success && Array.isArray(data.tickets)) {
         setSupportTickets(data.tickets);
+        // Instant Alert: notify admin when a new unread inquiry arrives
+        if (isAdmin && isSilent && prevTicketsCountRef.current !== null) {
+          const prevCount = prevTicketsCountRef.current;
+          const unreadList = data.tickets.filter((t: SupportTicket) => t.unreadByAdmin);
+          if (unreadList.length > prevCount) {
+            const newest = unreadList[0];
+            addToast('New Support Inquiry! 🎫', `${newest.userName || 'Customer'}: ${newest.subject}`, 'warning');
+          }
+        }
+        prevTicketsCountRef.current = data.tickets.filter((t: SupportTicket) => isAdmin ? t.unreadByAdmin : t.unreadByMerchant).length;
       }
     } catch (e) {
       // Ignore
     }
-  }, [currentUser, isAdmin]);
+  }, [currentUser, isAdmin, addToast]);
 
   useEffect(() => {
     if (currentUser) {
       fetchSupportTickets();
+      // Near real-time polling (12s for admin, 30s for merchant)
+      const pollMs = isAdmin ? 12000 : 30000;
       const interval = setInterval(() => {
         if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-          fetchSupportTickets();
+          fetchSupportTickets(true);
         }
-      }, 120000); // 2 minutes background poll
-      const ticketCreatedHandler = () => {
-        fetchSupportTickets();
+      }, pollMs);
+
+      const ticketCreatedHandler = (e?: any) => {
+        fetchSupportTickets(true);
+        if (isAdmin && e?.detail) {
+          addToast('New Support Inquiry! 🎫', `${e.detail.userName || 'Customer'}: ${e.detail.subject}`, 'warning');
+        }
       };
+
+      const storageHandler = (e: StorageEvent) => {
+        if (e.key === 'khatapro_last_ticket_created' && e.newValue) {
+          fetchSupportTickets(true);
+          try {
+            const parsed = JSON.parse(e.newValue);
+            if (isAdmin && parsed.ticket) {
+              addToast('New Support Inquiry! 🎫', `${parsed.ticket.userName || 'Customer'}: ${parsed.ticket.subject}`, 'warning');
+            }
+          } catch {}
+        }
+      };
+
+      let bc: BroadcastChannel | null = null;
+      try {
+        bc = new BroadcastChannel('khatapro_support_channel');
+        bc.onmessage = (event) => {
+          if (event.data?.type === 'ticket_created') {
+            fetchSupportTickets(true);
+            if (isAdmin && event.data.ticket) {
+              addToast('New Support Inquiry! 🎫', `${event.data.ticket.userName || 'Customer'}: ${event.data.ticket.subject}`, 'warning');
+            }
+          }
+        };
+      } catch {}
+
       window.addEventListener('khatapro_ticket_created', ticketCreatedHandler);
+      window.addEventListener('storage', storageHandler);
+
       return () => {
         clearInterval(interval);
         window.removeEventListener('khatapro_ticket_created', ticketCreatedHandler);
+        window.removeEventListener('storage', storageHandler);
+        if (bc) bc.close();
       };
     }
-  }, [currentUser, fetchSupportTickets]);
+  }, [currentUser, fetchSupportTickets, isAdmin, addToast]);
 
   const unreadSupportTickets = supportTickets.filter((t) => {
     const isUnread = isAdmin ? t.unreadByAdmin : t.unreadByMerchant;

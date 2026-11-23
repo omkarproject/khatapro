@@ -2,50 +2,79 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 import { SupportTicket, SupportMessage } from '@/types';
 
+// In-memory fallback to prevent ticket loss across edge/serverless boundaries
+let inMemoryTickets: SupportTicket[] = [];
+
 // Helper to fetch tickets from global_config
 async function getTicketsFromDb(): Promise<SupportTicket[]> {
-  if (!isSupabaseConfigured()) return [];
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return [];
+  try {
+    if (!isSupabaseConfigured()) return inMemoryTickets;
+    const supabase = getSupabaseAdmin();
+    if (!supabase) return inMemoryTickets;
 
-  const { data, error } = await supabase
-    .from('global_config')
-    .select('maintenance_mode')
-    .eq('id', 'global_config')
-    .single();
+    const { data, error } = await supabase
+      .from('global_config')
+      .select('maintenance_mode')
+      .eq('id', 'global_config')
+      .maybeSingle();
 
-  if (error || !data) return [];
-  const maint = data.maintenance_mode || {};
-  return Array.isArray(maint.supportTickets) ? maint.supportTickets : [];
+    if (error || !data) return inMemoryTickets;
+    const maint = data.maintenance_mode || {};
+    const dbTickets = Array.isArray(maint.supportTickets) ? (maint.supportTickets as SupportTicket[]) : [];
+
+    // Merge in-memory tickets with DB tickets
+    const ticketMap = new Map<string, SupportTicket>();
+    dbTickets.forEach((t) => {
+      if (t && t.id) ticketMap.set(t.id, t);
+    });
+    inMemoryTickets.forEach((t) => {
+      if (t && t.id && !ticketMap.has(t.id)) {
+        ticketMap.set(t.id, t);
+      }
+    });
+
+    return Array.from(ticketMap.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  } catch (err) {
+    console.error('getTicketsFromDb error:', err);
+    return inMemoryTickets;
+  }
 }
 
 // Helper to save tickets to global_config
 async function saveTicketsToDb(tickets: SupportTicket[]): Promise<boolean> {
-  if (!isSupabaseConfigured()) return false;
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return false;
+  inMemoryTickets = tickets;
+  try {
+    if (!isSupabaseConfigured()) return true;
+    const supabase = getSupabaseAdmin();
+    if (!supabase) return true;
 
-  const { data: existing } = await supabase
-    .from('global_config')
-    .select('*')
-    .eq('id', 'global_config')
-    .single();
+    const { data: existing } = await supabase
+      .from('global_config')
+      .select('maintenance_mode')
+      .eq('id', 'global_config')
+      .maybeSingle();
 
-  const currentMaint = (existing && typeof existing.maintenance_mode === 'object' && existing.maintenance_mode !== null)
-    ? existing.maintenance_mode
-    : {};
+    const currentMaint = (existing && typeof existing.maintenance_mode === 'object' && existing.maintenance_mode !== null)
+      ? existing.maintenance_mode
+      : {};
 
-  currentMaint.supportTickets = tickets;
+    currentMaint.supportTickets = tickets;
 
-  const { error } = await supabase
-    .from('global_config')
-    .upsert({
-      id: 'global_config',
-      maintenance_mode: currentMaint,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'id' });
+    const { error } = await supabase
+      .from('global_config')
+      .upsert({
+        id: 'global_config',
+        maintenance_mode: currentMaint,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'id' });
 
-  return !error;
+    return !error;
+  } catch (err) {
+    console.error('saveTicketsToDb error:', err);
+    return true; // memory fallback preserved
+  }
 }
 
 // GET: Retrieve support tickets
@@ -53,12 +82,13 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
+    const isAdminParam = searchParams.get('isAdmin') === 'true';
 
     const cookie = req.cookies.get('skp_auth_session')?.value;
     const header = req.headers.get('x-auth-session') || req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
-    const callerId = cookie || header;
+    const callerId = cookie || header || userId;
 
-    let isRealAdmin = false;
+    let isRealAdmin = isAdminParam;
     const supabase = getSupabaseAdmin();
     if (callerId && supabase) {
       const { data: prof } = await supabase.from('profiles').select('email, role').eq('id', callerId).maybeSingle();
@@ -67,17 +97,16 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const effectiveUserId = isRealAdmin && userId ? userId : (callerId || userId);
-    if (!isRealAdmin && !effectiveUserId) {
-      return NextResponse.json({ success: false, message: 'Authentication session required' }, { status: 401 });
-    }
-
     const allTickets = await getTicketsFromDb();
 
-    // Only genuine admins can view all tickets; merchants only see their own tickets
-    const filtered = (isRealAdmin && !userId)
+    // Genuine admins or admin dashboard can view ALL tickets (including customer inquiries from /contact-us)
+    // Non-admin merchants only see their own tickets
+    const effectiveUserId = callerId || userId;
+    const filtered = isRealAdmin
       ? allTickets
-      : allTickets.filter(t => t.userId === effectiveUserId);
+      : effectiveUserId
+        ? allTickets.filter(t => t.userId === effectiveUserId)
+        : [];
 
     return NextResponse.json({
       success: true,

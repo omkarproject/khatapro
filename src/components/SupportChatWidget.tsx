@@ -72,11 +72,28 @@ export default function SupportChatWidget() {
       fetchTickets();
     };
 
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'khatapro_last_ticket_created') {
+        fetchTickets();
+      }
+    };
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('khatapro_support_channel');
+      bc.onmessage = () => {
+        fetchTickets();
+      };
+    } catch {}
+
     window.addEventListener('open_support_chat', handleOpenSupport);
     window.addEventListener('khatapro_ticket_created', handleTicketCreated);
+    window.addEventListener('storage', handleStorage);
     return () => {
       window.removeEventListener('open_support_chat', handleOpenSupport);
       window.removeEventListener('khatapro_ticket_created', handleTicketCreated);
+      window.removeEventListener('storage', handleStorage);
+      if (bc) bc.close();
     };
   }, [isAdmin]);
 
@@ -144,7 +161,7 @@ export default function SupportChatWidget() {
         if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
           fetchTickets(true);
         }
-      }, isOpen ? 30000 : 180000); // 30s when chatting, 3 minutes when closed
+      }, isOpen ? 10000 : (isAdmin ? 15000 : 60000)); // 10s when open, 15s for admin, 60s for merchant
       return () => clearInterval(interval);
     }
   }, [currentUser, isAdmin, isOpen]);

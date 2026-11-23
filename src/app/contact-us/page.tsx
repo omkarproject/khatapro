@@ -114,6 +114,12 @@ export default function ContactUsPage() {
         setSubmitted(true);
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('khatapro_ticket_created', { detail: data.ticket }));
+          try {
+            const bc = new BroadcastChannel('khatapro_support_channel');
+            bc.postMessage({ type: 'ticket_created', ticket: data.ticket });
+            bc.close();
+            localStorage.setItem('khatapro_last_ticket_created', JSON.stringify({ ticket: data.ticket, time: Date.now() }));
+          } catch {}
         }
         addToast('Inquiry Submitted! 🎫', `Ticket #${data.ticket.ticketNo} has been forwarded to the admin live support desk.`, 'success');
       } else {

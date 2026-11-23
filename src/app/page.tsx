@@ -157,14 +157,30 @@ export default function DashboardPage() {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         fetchSupportTickets();
       }
-    }, 120000); // 2 minutes background poll
+    }, isAdmin ? 15000 : 45000);
+
     const handleTicketCreated = () => fetchSupportTickets();
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'khatapro_last_ticket_created') {
+        fetchSupportTickets();
+      }
+    };
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('khatapro_support_channel');
+      bc.onmessage = () => fetchSupportTickets();
+    } catch {}
+
     window.addEventListener('khatapro_ticket_created', handleTicketCreated);
+    window.addEventListener('storage', handleStorage);
     return () => {
       clearInterval(interval);
       window.removeEventListener('khatapro_ticket_created', handleTicketCreated);
+      window.removeEventListener('storage', handleStorage);
+      if (bc) bc.close();
     };
-  }, [fetchSupportTickets]);
+  }, [fetchSupportTickets, isAdmin]);
 
   const supportStats = useMemo(() => {
     const open = supportTickets.filter(t => t.status === 'open').length;
