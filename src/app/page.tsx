@@ -618,11 +618,11 @@ export default function DashboardPage() {
                         <img
                           src={c.avatarUrl || (c as any).avatar}
                           alt={c.name}
-                          className="w-8 h-8 rounded-xl object-cover object-center border border-slate-200 dark:border-slate-800 shrink-0 aspect-square shadow-xs"
+                          className="w-8 h-8 rounded-full object-cover object-center border border-slate-200 dark:border-slate-800 shrink-0 aspect-square shadow-xs"
                           onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                         />
                       ) : (
-                        <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex items-center justify-center shrink-0 aspect-square">
+                        <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex items-center justify-center shrink-0 aspect-square">
                           {c.name.charAt(0)}
                         </div>
                       )}

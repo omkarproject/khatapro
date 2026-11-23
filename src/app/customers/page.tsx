@@ -1495,7 +1495,7 @@ export default function CustomersPage() {
                         e.stopPropagation();
                         handleOpenAvatarReview(cust);
                       }}
-                      className="w-12 h-12 rounded-2xl fintech-gradient-primary text-white font-extrabold flex items-center justify-center text-base shadow-md overflow-hidden relative shrink-0 aspect-square border border-slate-200/60 dark:border-slate-700/60 cursor-pointer hover:ring-2 hover:ring-indigo-500 hover:scale-105 transition-all group"
+                      className="w-12 h-12 rounded-full fintech-gradient-primary text-white font-extrabold flex items-center justify-center text-base shadow-md overflow-hidden relative shrink-0 aspect-square border border-slate-200/60 dark:border-slate-700/60 cursor-pointer hover:ring-2 hover:ring-indigo-500 hover:scale-105 transition-all group"
                       title="Click to view full photo / change / delete"
                     >
                       <span className="font-extrabold text-base select-none">{cust.name?.charAt(0)?.toUpperCase() || 'C'}</span>
@@ -1503,7 +1503,7 @@ export default function CustomersPage() {
                         <img
                           src={cust.avatar || cust.avatarUrl}
                           alt={cust.name}
-                          className="w-full h-full object-cover object-center rounded-2xl absolute inset-0"
+                          className="w-full h-full object-cover object-center rounded-full absolute inset-0"
                           onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                         />
                       )}
@@ -1743,7 +1743,7 @@ export default function CustomersPage() {
               <div className="flex items-center gap-3">
                 <div 
                   onClick={() => handleOpenAvatarReview(activeCustomer)}
-                  className="w-12 h-12 rounded-2xl fintech-gradient-primary text-white font-black flex items-center justify-center text-lg overflow-hidden relative shrink-0 shadow-md cursor-pointer hover:ring-2 hover:ring-emerald-500/50 transition-all group"
+                  className="w-12 h-12 rounded-full fintech-gradient-primary text-white font-black flex items-center justify-center text-lg overflow-hidden relative shrink-0 shadow-md cursor-pointer hover:ring-2 hover:ring-emerald-500/50 transition-all group"
                   title="Click to view, change, or remove profile picture"
                 >
                   <span className="font-black select-none text-lg">{activeCustomer.name?.charAt(0)?.toUpperCase() || 'C'}</span>
@@ -1751,7 +1751,7 @@ export default function CustomersPage() {
                     <img
                       src={activeCustomer.avatar || activeCustomer.avatarUrl}
                       alt={activeCustomer.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform absolute inset-0 rounded-2xl"
+                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform absolute inset-0 rounded-full"
                       onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                     />
                   )}
@@ -1913,7 +1913,7 @@ export default function CustomersPage() {
               {/* Profile Picture Uploader */}
               <div className="flex items-center gap-4 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80">
                 <div className="relative shrink-0">
-                  <div className="w-16 h-16 rounded-2xl fintech-gradient-primary text-white font-black text-xl flex items-center justify-center shadow-md overflow-hidden relative border-2 border-white dark:border-slate-800">
+                  <div className="w-16 h-16 rounded-full fintech-gradient-primary text-white font-black text-xl flex items-center justify-center shadow-md overflow-hidden relative border-2 border-white dark:border-slate-800 shrink-0 aspect-square">
                     <span className="font-extrabold text-xl select-none">
                       {formName.trim() ? formName.trim().charAt(0).toUpperCase() : <Camera className="w-7 h-7 text-white/80" />}
                     </span>
@@ -1921,7 +1921,7 @@ export default function CustomersPage() {
                       <img
                         src={formAvatar}
                         alt="Profile preview"
-                        className="w-full h-full object-cover absolute inset-0"
+                        className="w-full h-full object-cover object-center rounded-full absolute inset-0"
                         onError={(e) => {
                           (e.target as HTMLElement).style.display = 'none';
                         }}
@@ -3930,7 +3930,7 @@ export default function CustomersPage() {
             </div>
 
             {/* Photo View Box */}
-            <div className="relative mx-auto w-56 h-56 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-inner group">
+            <div className="relative mx-auto w-56 h-56 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-inner group shrink-0 aspect-square">
               <div className="text-center p-4">
                 <div className="w-20 h-20 mx-auto rounded-full fintech-gradient-primary text-white font-black text-3xl flex items-center justify-center shadow-lg mb-2">
                   {reviewAvatarCustomer.name?.charAt(0)?.toUpperCase() || 'C'}
@@ -3941,7 +3941,7 @@ export default function CustomersPage() {
                 <img
                   src={reviewAvatarCustomer.avatar || reviewAvatarCustomer.avatarUrl}
                   alt={reviewAvatarCustomer.name}
-                  className="w-full h-full object-cover absolute inset-0 rounded-2xl"
+                  className="w-full h-full object-cover object-center absolute inset-0 rounded-full"
                   onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                 />
               )}

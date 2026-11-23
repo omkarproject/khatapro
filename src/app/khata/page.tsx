@@ -7424,12 +7424,12 @@ function KhataPageInner() {
             </div>
 
             {/* Photo View Box */}
-            <div className="relative mx-auto w-56 h-56 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-inner group">
+            <div className="relative mx-auto w-56 h-56 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-inner group shrink-0 aspect-square">
               {(reviewAvatarCustomer.avatar || reviewAvatarCustomer.avatarUrl) ? (
                 <img
                   src={reviewAvatarCustomer.avatar || reviewAvatarCustomer.avatarUrl}
                   alt={reviewAvatarCustomer.name}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover object-center rounded-full"
                 />
               ) : (
                 <div className="text-center p-4">
