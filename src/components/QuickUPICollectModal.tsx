@@ -579,21 +579,14 @@ export default function QuickUPICollectModal() {
       <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden flex flex-col max-h-[94vh]">
         
         {/* Header - Compact, Neat, Clean */}
-        <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-xl fintech-gradient-primary flex items-center justify-center text-white shadow-sm shrink-0">
-              <QrCode className="w-4 h-4" />
+        <div className="flex items-center justify-between px-3.5 sm:px-5 py-2.5 sm:py-3 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl fintech-gradient-primary flex items-center justify-center text-white shadow-sm shrink-0">
+              <QrCode className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white truncate">
-                  Collect Payment
-                </h2>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
-                  Active Mode
-                </span>
-              </div>
-            </div>
+            <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white truncate">
+              Collect Payment
+            </h2>
           </div>
           
           <div className="flex items-center gap-1.5 shrink-0">
@@ -607,7 +600,7 @@ export default function QuickUPICollectModal() {
                   setActiveTab('history');
                 }
               }}
-              className={`relative p-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`relative p-1.5 sm:p-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'history'
                   ? 'bg-amber-600 text-white shadow-sm'
                   : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
@@ -623,7 +616,7 @@ export default function QuickUPICollectModal() {
             </button>
             <button
               onClick={closeCollectModal}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -1145,40 +1138,40 @@ export default function QuickUPICollectModal() {
               </div>
             </div>
           ) : (
-            /* TAB 1: DEFAULT SHOP UPI & QR (STREAMLINED & RESPONSIVE) */
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-5">
+            /* TAB 1: DEFAULT SHOP UPI & QR (STREAMLINED & RESPONSIVE - COMPACT) */
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 sm:gap-4 items-start">
               
               {/* Left / Mobile Top: Compact Standee QR Card with Center Profile Logo */}
-              <div className="md:col-span-5 flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl bg-gradient-to-b from-slate-50 to-indigo-50/30 dark:from-slate-800/60 dark:to-indigo-950/20 border border-indigo-100/70 dark:border-indigo-900/30 text-center">
+              <div className="md:col-span-5 flex flex-col items-center justify-center p-2.5 sm:p-3.5 rounded-2xl bg-gradient-to-b from-slate-50 to-indigo-50/30 dark:from-slate-800/60 dark:to-indigo-950/20 border border-indigo-100/70 dark:border-indigo-900/30 text-center">
                 
                 {/* Standee Card */}
-                <div className="w-full max-w-[210px] sm:max-w-[240px] bg-white rounded-2xl p-3 sm:p-4 shadow-lg border border-slate-200/80 flex flex-col items-center">
-                  <div className="text-xs sm:text-sm font-black text-slate-900 truncate max-w-[190px]">
+                <div className="w-full max-w-[175px] sm:max-w-[210px] bg-white rounded-xl sm:rounded-2xl p-2 sm:p-3 shadow-md border border-slate-200/80 flex flex-col items-center">
+                  <div className="text-[11px] sm:text-xs font-black text-slate-900 truncate max-w-[160px]">
                     {payeeName}
                   </div>
-                  <div className="text-[10px] font-mono text-slate-500 truncate max-w-[190px] mt-0.5">
+                  <div className="text-[9px] sm:text-[10px] font-mono text-slate-500 truncate max-w-[160px] mt-0.5">
                     {upiId}
                   </div>
 
                   {/* QR Image with Center Logo & Lock Tag */}
-                  <div className="my-2.5 p-1.5 bg-white rounded-xl border border-slate-100 shadow-inner flex items-center justify-center relative">
+                  <div className="my-1.5 sm:my-2 p-1 bg-white rounded-lg sm:rounded-xl border border-slate-100 shadow-inner flex items-center justify-center relative">
                     <img
                       src={displayQr}
                       alt="UPI QR Code"
-                      className="w-32 h-32 sm:w-40 sm:h-40 object-contain rounded-lg"
+                      className="w-24 h-24 sm:w-36 sm:h-36 object-contain rounded-md"
                     />
 
                     {/* Center Avatar / Merchant Logo */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="p-0.5 rounded-xl bg-white shadow-md border border-slate-200">
+                      <div className="p-0.5 rounded-lg bg-white shadow-md border border-slate-200">
                         {merchantLogo ? (
                           <img
                             src={merchantLogo}
                             alt="Logo"
-                            className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-cover bg-white"
+                            className="w-6 h-6 sm:w-7 sm:h-7 rounded-md object-cover bg-white"
                           />
                         ) : (
-                          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-cyan-500 text-white font-black text-xs flex items-center justify-center">
+                          <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-gradient-to-tr from-indigo-600 to-cyan-500 text-white font-black text-[10px] flex items-center justify-center">
                             {payeeName ? payeeName[0].toUpperCase() : '₹'}
                           </div>
                         )}
@@ -1187,8 +1180,8 @@ export default function QuickUPICollectModal() {
 
                     {/* Amount Locked Badge */}
                     {isAmountLocked && (
-                      <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-black shadow-md flex items-center gap-0.5 animate-pulse">
-                        <Lock className="w-2.5 h-2.5" /> {formatINR(numAmount)}
+                      <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-emerald-600 text-white text-[8px] font-black shadow-md flex items-center gap-0.5 animate-pulse">
+                        <Lock className="w-2 h-2" /> {formatINR(numAmount)}
                       </div>
                     )}
                   </div>
@@ -1196,29 +1189,29 @@ export default function QuickUPICollectModal() {
                   {/* Bottom Text in Standee */}
                   <div className="text-center w-full">
                     {isAmountLocked ? (
-                      <div className="text-xs font-black text-emerald-600 flex items-center justify-center gap-1">
-                        <Lock className="w-3 h-3 text-emerald-600 inline" />
+                      <div className="text-[11px] font-black text-emerald-600 flex items-center justify-center gap-1">
+                        <Lock className="w-2.5 h-2.5 text-emerald-600 inline" />
                         AMOUNT: {formatINR(numAmount)}
                       </div>
                     ) : (
-                      <div className="text-[11px] font-bold text-slate-800">
+                      <div className="text-[10px] font-bold text-slate-800">
                         Scan &amp; Pay Any Amount
                       </div>
                     )}
-                    <div className="text-[9px] text-slate-400 mt-0.5">
+                    <div className="text-[8.5px] text-slate-400 mt-0.5">
                       PhonePe • GPay • Paytm • BHIM
                     </div>
                   </div>
                 </div>
 
                 {/* QR Actions: Download & Reset */}
-                <div className="w-full flex items-center justify-center gap-1.5 mt-2.5">
+                <div className="w-full flex items-center justify-center gap-1.5 mt-2">
                   <button
                     type="button"
                     onClick={handleDownloadActiveQr}
-                    className="flex-1 py-1.5 px-2.5 text-[11px] font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center justify-center gap-1 shadow-xs transition-all cursor-pointer"
+                    className="flex-1 py-1.5 px-2 text-[10px] sm:text-[11px] font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl flex items-center justify-center gap-1 shadow-xs transition-all cursor-pointer"
                   >
-                    <Download className="w-3.5 h-3.5 text-indigo-500" />
+                    <Download className="w-3 h-3 text-indigo-500" />
                     <span>Download QR</span>
                   </button>
 
@@ -1226,24 +1219,24 @@ export default function QuickUPICollectModal() {
                     <button
                       type="button"
                       onClick={handleResetLockedQr}
-                      className="py-1.5 px-2.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center gap-1 cursor-pointer"
+                      className="py-1.5 px-2 text-[10px] sm:text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl flex items-center gap-1 cursor-pointer"
                       title="Reset back to counter QR"
                     >
-                      <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
+                      <RotateCcw className="w-3 h-3 text-amber-500" />
                       <span>Reset</span>
                     </button>
                   )}
                 </div>
 
                 {/* Quick Copy UPI ID */}
-                <div className="w-full flex items-center justify-between bg-white dark:bg-slate-900 px-2.5 py-1.5 rounded-xl border border-slate-200/80 dark:border-slate-700 text-[11px] mt-2">
+                <div className="w-full flex items-center justify-between bg-white dark:bg-slate-900 px-2.5 py-1 rounded-lg sm:rounded-xl border border-slate-200/80 dark:border-slate-700 text-[10px] sm:text-[11px] mt-1.5">
                   <span className="font-mono text-slate-600 dark:text-slate-400 truncate mr-2">
                     {upiId}
                   </span>
                   <button
                     type="button"
                     onClick={handleCopyUpi}
-                    className="flex items-center gap-1 font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 cursor-pointer shrink-0"
+                    className="flex items-center gap-0.5 font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 cursor-pointer shrink-0"
                   >
                     {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                     <span>{copied ? 'Copied' : 'Copy'}</span>

@@ -1049,48 +1049,48 @@ export default function UpiCollectionPage() {
               </div>
 
               {/* Standee Card */}
-              <div className="w-full max-w-[240px] sm:max-w-xs bg-white rounded-2xl sm:rounded-3xl p-3 sm:p-5 shadow-xl border border-slate-200/80 my-2 sm:my-3 flex flex-col items-center">
-                <div className="text-xs sm:text-sm font-black text-slate-900 truncate max-w-[220px]">
+              <div className="w-full max-w-[200px] sm:max-w-[260px] bg-white rounded-2xl p-2.5 sm:p-4 shadow-lg border border-slate-200/80 my-2 sm:my-2.5 flex flex-col items-center">
+                <div className="text-xs sm:text-sm font-black text-slate-900 truncate max-w-[180px] sm:max-w-[220px]">
                   {payeeName}
                 </div>
-                <div className="text-[10px] sm:text-[11px] font-mono text-slate-500 truncate max-w-[220px] mt-0.5">
+                <div className="text-[10px] sm:text-[11px] font-mono text-slate-500 truncate max-w-[180px] sm:max-w-[220px] mt-0.5">
                   {upiId}
                 </div>
 
-                <div className="my-2.5 sm:my-4 p-1.5 sm:p-2 bg-white rounded-2xl border border-slate-100 shadow-inner flex items-center justify-center relative">
+                <div className="my-2 sm:my-3 p-1.5 bg-white rounded-xl sm:rounded-2xl border border-slate-100 shadow-inner flex items-center justify-center relative">
                   <img
                     src={activeQrDisplay}
                     alt="Merchant UPI QR"
-                    className="w-36 h-36 sm:w-52 sm:h-52 object-contain rounded-xl"
+                    className="w-28 h-28 sm:w-44 sm:h-44 object-contain rounded-lg sm:rounded-xl"
                   />
                   {/* Center Business / User Profile Logo */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="p-1 rounded-2xl bg-white shadow-lg border border-slate-200">
+                    <div className="p-0.5 sm:p-1 rounded-xl bg-white shadow-lg border border-slate-200">
                       {merchantLogo ? (
                         <img
                           src={merchantLogo}
                           alt="Merchant Logo"
-                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover bg-white"
+                          className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg object-cover bg-white"
                         />
                       ) : (
-                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 text-white font-black text-sm flex items-center justify-center">
+                        <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg bg-gradient-to-tr from-indigo-600 to-cyan-500 text-white font-black text-xs flex items-center justify-center">
                           {payeeName ? payeeName[0].toUpperCase() : '₹'}
                         </div>
                       )}
                     </div>
                   </div>
                   {isAmountLocked && (
-                    <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-black shadow-md flex items-center gap-1">
-                      <Lock className="w-2.5 h-2.5" /> {formatINR(numCollectAmount)}
+                    <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-black shadow-md flex items-center gap-1">
+                      <Lock className="w-2 h-2" /> {formatINR(numCollectAmount)}
                     </div>
                   )}
                 </div>
 
                 <div className="text-center w-full">
-                  <div className="text-base sm:text-lg font-black text-slate-900">
+                  <div className="text-xs sm:text-base font-black text-slate-900">
                     {isAmountLocked ? (
-                      <span className="text-emerald-600 flex items-center justify-center gap-1.5">
-                        <Lock className="w-4 h-4 text-emerald-600 inline" />
+                      <span className="text-emerald-600 flex items-center justify-center gap-1">
+                        <Lock className="w-3.5 h-3.5 text-emerald-600 inline" />
                         AMOUNT: {formatINR(numCollectAmount)}
                       </span>
                     ) : (
@@ -1098,26 +1098,26 @@ export default function UpiCollectionPage() {
                     )}
                   </div>
                   {isAmountLocked && (
-                    <div className="text-[11px] text-emerald-700 font-semibold mt-0.5">
+                    <div className="text-[10px] text-emerald-700 font-semibold mt-0.5">
                       Amount locked in UPI apps (PhonePe, GPay, Paytm)
                     </div>
                   )}
 
                   {/* Customer Name in Standee Card */}
                   {selectedCust && (
-                    <div className="mt-2 py-1 px-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] flex items-center justify-center gap-1.5 text-slate-700 mx-auto max-w-[240px]">
-                      <span className="text-slate-400 font-bold uppercase text-[9px]">Billed To:</span>
-                      <span className="font-extrabold text-slate-900 truncate max-w-[150px]">{selectedCust.name}</span>
+                    <div className="mt-1.5 py-0.5 px-2.5 rounded-lg bg-slate-50 border border-slate-200 text-[10px] flex items-center justify-center gap-1 text-slate-700 mx-auto max-w-[200px]">
+                      <span className="text-slate-400 font-bold uppercase text-[8.5px]">Billed To:</span>
+                      <span className="font-extrabold text-slate-900 truncate max-w-[130px]">{selectedCust.name}</span>
                     </div>
                   )}
 
-                  <div className="flex items-center justify-center gap-2 mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <div className="flex items-center justify-center gap-1.5 mt-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
                     <span>GPay</span> • <span>PhonePe</span> • <span>Paytm</span> • <span>BHIM</span>
                   </div>
 
                   {/* Footer website Brand Display Name */}
-                  <div className="mt-3 pt-2 border-t border-slate-100 w-full flex items-center justify-between text-[9px] text-slate-400 font-bold tracking-wider uppercase px-1">
-                    <span className="truncate max-w-[150px]">{brandDisplayName}</span>
+                  <div className="mt-2 pt-1.5 border-t border-slate-100 w-full flex items-center justify-between text-[8.5px] text-slate-400 font-bold tracking-wider uppercase px-0.5">
+                    <span className="truncate max-w-[130px]">{brandDisplayName}</span>
                     <span className="text-indigo-600 font-extrabold">NPCI UPI QR</span>
                   </div>
                 </div>
@@ -1162,24 +1162,11 @@ export default function UpiCollectionPage() {
             {/* Right: Collect from Customer & Generate Amount-Locked QR */}
             <div className="lg:col-span-7">
               <div className="glass-card p-4 sm:p-6 rounded-2xl sm:rounded-3xl space-y-4">
-                <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-                  <div>
-                    <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                      <DollarSign className="w-4 h-4 text-emerald-500" />
-                      Collect from Customer
-                    </h3>
-                    <p className="text-[11px] sm:text-xs text-slate-400">
-                      Select customer, set amount, and generate an amount-locked UPI QR or share direct payment link.
-                    </p>
-                  </div>
-                  <Link
-                    href="/settings"
-                    className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-semibold text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors shrink-0"
-                    title="Configure UPI VPA & Merchant Name in Settings"
-                  >
-                    <SettingsIcon className="w-3.5 h-3.5" />
-                    <span>UPI Settings</span>
-                  </Link>
+                <div className="pb-2.5 mb-1 border-b border-slate-100 dark:border-slate-800">
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-emerald-500" />
+                    Collect from Customer
+                  </h3>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
