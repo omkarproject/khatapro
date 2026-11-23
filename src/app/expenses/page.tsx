@@ -779,9 +779,14 @@ export default function ExpensesPage() {
               uploadedAt: new Date().toISOString(),
             }
           );
-          if (uploadRes.success && uploadRes.fileId) {
-            uploadedReceipts.push(`/api/backup/google-drive/view-file?fileId=${uploadRes.fileId}`);
-            continue;
+          if (uploadRes.success) {
+            if (uploadRes.publicUrl && !uploadRes.publicUrl.startsWith('data:') && !uploadRes.publicUrl.includes('fileId=file_')) {
+              uploadedReceipts.push(uploadRes.publicUrl);
+              continue;
+            } else if (uploadRes.uploadedToDrive && uploadRes.fileId && !uploadRes.fileId.startsWith('file_')) {
+              uploadedReceipts.push(`/api/backup/google-drive/view-file?fileId=${uploadRes.fileId}`);
+              continue;
+            }
           }
         } catch (err) {
           console.warn('Error uploading expense receipt to drive:', err);

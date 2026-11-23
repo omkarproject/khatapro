@@ -428,6 +428,16 @@ export const StorageService = {
             resultMap.set(id, localItem);
           } else {
             // Cloud is newer or equal -> Cloud wins
+            if (tableName === 'expenses') {
+              const localExp = localItem as any;
+              const cloudExp = cloudItem as any;
+              const localHasReceipts = (Array.isArray(localExp?.receiptUrls) && localExp.receiptUrls.length > 0) || Boolean(localExp?.receiptUrl);
+              const cloudHasReceipts = (Array.isArray(cloudExp?.receiptUrls) && cloudExp.receiptUrls.length > 0) || Boolean(cloudExp?.receiptUrl);
+              if (localHasReceipts && !cloudHasReceipts) {
+                cloudExp.receiptUrl = localExp.receiptUrl;
+                cloudExp.receiptUrls = localExp.receiptUrls;
+              }
+            }
             resultMap.set(id, cloudItem);
           }
         }

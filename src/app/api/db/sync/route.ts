@@ -209,6 +209,12 @@ function invoiceToDb(inv: any, userId: string) {
 }
 
 function expenseToDb(e: any, userId: string) {
+  const safeReceiptUrls = Array.isArray(e.receiptUrls) && e.receiptUrls.length > 0
+    ? e.receiptUrls.filter((u: any) => typeof u === 'string' && u.trim().length > 0)
+    : (e.receiptUrl && typeof e.receiptUrl === 'string' && e.receiptUrl.trim().length > 0 ? [e.receiptUrl.trim()] : []);
+
+  const safeReceiptUrl = e.receiptUrl || safeReceiptUrls[0] || null;
+
   return {
     id: String(e.id),
     user_id: userId,
@@ -218,8 +224,8 @@ function expenseToDb(e: any, userId: string) {
     date: e.date || new Date().toISOString().split('T')[0],
     payment_mode: e.paymentMode || 'cash',
     notes: e.notes || e.note || (e.paidTo ? `Paid to: ${e.paidTo}` : ''),
-    receipt_url: e.receiptUrl && !e.receiptUrl.startsWith('data:') ? e.receiptUrl : null,
-    receipt_urls: Array.isArray(e.receiptUrls) ? e.receiptUrls.filter((u: any) => typeof u === 'string' && !u.startsWith('data:')) : [],
+    receipt_url: safeReceiptUrl,
+    receipt_urls: safeReceiptUrls,
     is_recurring: Boolean(e.isRecurring),
     recurring_frequency: e.recurringFrequency || null,
     tags: Array.isArray(e.tags) ? e.tags : [],
@@ -658,13 +664,17 @@ function expenseFromDb(row: any) {
     if (match) receiptUrl = `/api/backup/google-drive/view-file?fileId=${match[1]}`;
   }
 
-  const receiptUrls = (row.receipt_urls || []).map((u: string) => {
+  const receiptUrls = (Array.isArray(row.receipt_urls) ? row.receipt_urls : []).map((u: string) => {
     if (u && u.includes('/file/d/')) {
       const match = u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
       if (match) return `/api/backup/google-drive/view-file?fileId=${match[1]}`;
     }
     return u;
-  });
+  }).filter((u: any) => typeof u === 'string' && u.trim().length > 0);
+
+  const finalReceiptUrls = receiptUrls.length > 0
+    ? receiptUrls
+    : (receiptUrl ? [receiptUrl] : []);
 
   return {
     id: row.id,
@@ -674,8 +684,8 @@ function expenseFromDb(row: any) {
     date: row.date,
     paymentMode: row.payment_mode || 'cash',
     notes: row.notes || undefined,
-    receiptUrl: receiptUrl,
-    receiptUrls: receiptUrls,
+    receiptUrl: receiptUrl || finalReceiptUrls[0] || undefined,
+    receiptUrls: finalReceiptUrls,
     isRecurring: Boolean(row.is_recurring),
     recurringFrequency: row.recurring_frequency || undefined,
     tags: row.tags || [],
