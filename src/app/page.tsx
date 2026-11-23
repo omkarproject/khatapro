@@ -52,9 +52,9 @@ function DashboardDigitalClock() {
 
   if (!mounted) {
     return (
-      <div className="flex flex-col justify-center min-h-[50px] animate-pulse">
-        <div className="h-7 w-48 bg-slate-800/60 rounded-lg mb-1" />
-        <div className="h-3.5 w-28 bg-slate-800/40 rounded-md" />
+      <div className="flex flex-col justify-center min-h-[38px] animate-pulse">
+        <div className="h-5 w-40 bg-slate-800/60 rounded-lg mb-0.5" />
+        <div className="h-3 w-24 bg-slate-800/40 rounded-md" />
       </div>
     );
   }
@@ -74,24 +74,24 @@ function DashboardDigitalClock() {
   return (
     <div className="group/clock flex flex-col items-center justify-center text-center select-none cursor-pointer transition-all duration-300">
       {/* 12-Hour Digital Time: hr:mm:ss AM/PM */}
-      <div className="flex items-baseline justify-center gap-1 transition-all duration-300 group-hover/clock:drop-shadow-[0_0_22px_rgba(6,182,212,0.95)]">
-        <span className="text-2xl sm:text-3xl lg:text-[32px] font-black font-mono tracking-tight text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.4)]">
+      <div className="flex items-baseline justify-center gap-0.5 transition-all duration-300 group-hover/clock:drop-shadow-[0_0_20px_rgba(6,182,212,0.95)]">
+        <span className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]">
           {hh}<span className="text-indigo-400 opacity-90 mx-0.5">:</span>{mm}<span className="text-indigo-400 opacity-90 mx-0.5">:</span>
         </span>
         <span
           key={ss}
-          className="inline-block text-2xl sm:text-3xl lg:text-[32px] font-black font-mono tracking-tight text-cyan-400 animate-sec-destroy drop-shadow-[0_0_12px_rgba(6,182,212,0.85)]"
+          className="inline-block text-xl sm:text-2xl font-black font-mono tracking-tight text-cyan-400 animate-sec-destroy drop-shadow-[0_0_12px_rgba(6,182,212,0.85)]"
         >
           {ss}
         </span>
-        <span className="ml-1.5 text-[11px] sm:text-xs font-black font-mono px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-cyan-300 border border-cyan-500/30 tracking-wider shadow-xs group-hover/clock:border-cyan-400">
+        <span className="ml-1 text-[10px] font-black font-mono px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-cyan-300 border border-cyan-500/30 tracking-wider shadow-xs group-hover/clock:border-cyan-400">
           {ampm}
         </span>
       </div>
 
       {/* dd-mm-yyyy Date beneath with subtle blinking & hover glow drop */}
-      <div className="mt-0.5 text-center transition-all duration-300 group-hover/clock:drop-shadow-[0_0_14px_rgba(99,102,241,0.9)]">
-        <span className="animate-subtle-blink font-mono font-bold text-xs sm:text-sm tracking-widest text-indigo-200/90 group-hover/clock:text-cyan-200">
+      <div className="-mt-0.5 text-center transition-all duration-300 group-hover/clock:drop-shadow-[0_0_12px_rgba(99,102,241,0.9)]">
+        <span className="animate-subtle-blink font-mono font-bold text-[11px] sm:text-xs tracking-widest text-indigo-200/90 group-hover/clock:text-cyan-200">
           {dateStr}
         </span>
       </div>
@@ -330,8 +330,8 @@ export default function DashboardPage() {
   return (
     <div className="space-y-3 sm:space-y-3.5">
       
-      {/* Top Banner: Digital Clock & Quick Action Bar (Hidden on Mobile, Visible on Desktop) */}
-      <div className="hidden md:block relative overflow-hidden rounded-2xl p-3 sm:p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-md border border-slate-800">
+      {/* Top Banner: Digital Clock & Quick Action Bar (Hidden on Mobile, Visible on Desktop - Slim & Stylish Corner Curve) */}
+      <div className="hidden md:block relative overflow-hidden rounded-[26px] py-2 px-4 sm:py-2.5 sm:px-6 bg-gradient-to-r from-slate-950 via-[#0d1226] to-slate-950 text-white shadow-lg shadow-slate-950/20 border border-slate-800/90 hover:border-indigo-500/30 transition-all duration-300">
         <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex items-center justify-between gap-4">
           <div className="w-1/4 hidden lg:block" />
