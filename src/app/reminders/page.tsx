@@ -57,24 +57,25 @@ export default function RemindersPage() {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // Auto-schedule payment reminders for any unpaid invoices & clean up paid/settled ones
+  // Auto-schedule payment reminders for any unpaid invoices & clean up paid ones
   useEffect(() => {
     if (!invoices || invoices.length === 0) return;
+    const currentReminders = StorageService.getReminders();
+
     invoices.forEach((inv) => {
       const remId = `rem_inv_${inv.id}`;
       const isPaid = isInvoicePaid(inv);
 
       if (isPaid) {
-        // Find and remove ANY scheduled reminder for this paid invoice
-        const toDelete = reminders.filter(
+        // Find and remove scheduled reminder for this paid invoice
+        const toDelete = currentReminders.filter(
           (r) =>
             r.id === remId ||
             r.id === `rem_inv_${inv.invoiceNumber}` ||
-            (inv.invoiceNumber && (r.note?.includes(inv.invoiceNumber) || r.messageTemplate?.includes(inv.invoiceNumber))) ||
-            (r.customerId === inv.customerId && r.amount === inv.total)
+            (inv.invoiceNumber && (r.note?.includes(inv.invoiceNumber) || r.messageTemplate?.includes(inv.invoiceNumber)))
         );
         toDelete.forEach((r) => {
-          deleteReminder(r.id);
+          deleteReminder(r.id, true);
         });
       } else {
         // Unpaid invoice: check if user already dismissed or deleted this reminder
@@ -86,7 +87,7 @@ export default function RemindersPage() {
 
         if (isDismissed) return;
 
-        const alreadyExists = reminders.some(
+        const alreadyExists = currentReminders.some(
           (r) =>
             r.id === remId ||
             r.id === `rem_inv_${inv.invoiceNumber}` ||
@@ -112,33 +113,11 @@ export default function RemindersPage() {
             messageTemplate: `Payment reminder for Tax Invoice #${inv.invoiceNumber} of ₹${inv.total}. Due Date: ${formattedDueDate}. Kindly settle to keep your ledger up to date. Thank you!`,
             note: `Tax Invoice #${inv.invoiceNumber} (${formattedDueDate})`,
           };
-          saveReminder(newRem);
+          saveReminder(newRem, true);
         }
       }
     });
-
-    // Auto-clean reminders for customers that are fully settled in KhataBook with no pending unpaid invoices
-    if (customers && customers.length > 0) {
-      customers.forEach((cust) => {
-        const normPhone = cust.phone ? cust.phone.replace(/\D/g, '').slice(-10) : '';
-        const hasUnpaidInvoice = invoices.some(
-          (i) =>
-            (i.customerId === cust.id || (normPhone && i.customerPhone && i.customerPhone.replace(/\D/g, '').slice(-10) === normPhone)) &&
-            !isInvoicePaid(i)
-        );
-        if (cust.outstandingBalance <= 0 && !hasUnpaidInvoice) {
-          const settledReminders = reminders.filter(
-            (r) =>
-              r.customerId === cust.id ||
-              (normPhone && r.customerPhone && r.customerPhone.replace(/\D/g, '').slice(-10) === normPhone)
-          );
-          settledReminders.forEach((r) => {
-            deleteReminder(r.id);
-          });
-        }
-      });
-    }
-  }, [invoices, reminders, customers, todayStr, saveReminder, deleteReminder]);
+  }, [invoices, customers, todayStr, saveReminder, deleteReminder]);
 
   const handleDeleteReminder = (rem: PaymentReminder) => {
     if (typeof window !== 'undefined') {
@@ -184,7 +163,12 @@ export default function RemindersPage() {
         if (!hasUnpaidSameAmount) return false;
       }
 
-      // 3. If customer's Digital KhataBook balance is SETTLED (<= 0) and has no unpaid invoices
+      // 3. For invoice reminders, they remain active as long as the invoice is unpaid
+      if (r.id.startsWith('rem_inv_')) {
+        return true;
+      }
+
+      // 4. For Khata reminders: If customer's Digital KhataBook balance is SETTLED (<= 0) and has no unpaid invoices
       const cust = customers.find(
         (c) =>
           c.id === r.customerId ||
@@ -200,7 +184,7 @@ export default function RemindersPage() {
         if (!hasPendingUnpaid) return false;
       }
 
-      // 4. If manually deleted/dismissed, hide immediately
+      // 5. If manually deleted/dismissed, hide immediately
       if (typeof window !== 'undefined') {
         if (localStorage.getItem(`skp_dismissed_reminder_${r.id}`) === 'true') return false;
       }
@@ -245,7 +229,7 @@ export default function RemindersPage() {
       ...rem,
       status: 'sent',
       sentAt: new Date().toISOString(),
-    });
+    }, true);
     addToast('Reminder Sent', `WhatsApp message opened for ${rem.customerName}.`, 'success');
   };
 

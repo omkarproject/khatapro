@@ -95,8 +95,8 @@ interface AppContextType {
   deleteExpense: (id: string) => void;
   saveSavingsGoal: (goal: SavingsGoal) => void;
   deleteSavingsGoal: (id: string) => void;
-  saveReminder: (rem: PaymentReminder) => void;
-  deleteReminder: (id: string) => void;
+  saveReminder: (rem: PaymentReminder, silent?: boolean) => void;
+  deleteReminder: (id: string, silent?: boolean) => void;
   addDocument: (doc: DocumentItem) => void;
   deleteDocument: (id: string) => void;
   saveNote: (note: NoteItem) => void;
@@ -2655,17 +2655,21 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     syncWithDatabase();
   };
 
-  const saveReminder = (rem: PaymentReminder) => {
+  const saveReminder = (rem: PaymentReminder, silent = false) => {
     const updated = StorageService.saveReminder(rem);
     setReminders(updated);
-    addToast('Reminder Scheduled', `Reminder for ${rem.customerName} saved.`, 'info');
+    if (!silent) {
+      addToast('Reminder Scheduled', `Reminder for ${rem.customerName} saved.`, 'info');
+    }
     syncWithDatabase();
   };
 
-  const deleteReminder = (id: string) => {
+  const deleteReminder = (id: string, silent = false) => {
     const updated = StorageService.deleteReminder(id);
     setReminders(updated);
-    addToast('Reminder Removed', 'Reminder deleted.', 'info');
+    if (!silent) {
+      addToast('Reminder Removed', 'Reminder deleted.', 'info');
+    }
     syncWithDatabase();
   };
 
@@ -2707,10 +2711,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         note: `Note Reminder (${note.reminderTime || 'All Day'})`,
         createdAt: new Date().toISOString(),
       };
-      saveReminder(noteRem);
+      saveReminder(noteRem, true);
     } else {
       if (StorageService.getReminders().some(r => r.id === linkedRemId)) {
-        deleteReminder(linkedRemId);
+        deleteReminder(linkedRemId, true);
       }
     }
     syncWithDatabase();
@@ -2721,7 +2725,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setNotes(updated);
     const linkedRemId = `note_rem_${id}`;
     if (StorageService.getReminders().some(r => r.id === linkedRemId)) {
-      deleteReminder(linkedRemId);
+      deleteReminder(linkedRemId, true);
     }
     addToast('Note Deleted', 'Note removed.', 'info');
     syncWithDatabase();
@@ -2747,10 +2751,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         note: `Task Priority: ${task.priority.toUpperCase()}${task.reminderTime ? ` • Time: ${task.reminderTime}` : ''}`,
         createdAt: new Date().toISOString(),
       };
-      saveReminder(taskRem);
+      saveReminder(taskRem, true);
     } else {
       if (StorageService.getReminders().some(r => r.id === linkedRemId)) {
-        deleteReminder(linkedRemId);
+        deleteReminder(linkedRemId, true);
       }
     }
     syncWithDatabase();
@@ -2769,7 +2773,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         ...linkedRem,
         status: target?.isCompleted ? 'sent' : 'pending',
         sentAt: target?.isCompleted ? new Date().toISOString() : undefined,
-      });
+      }, true);
     }
     syncWithDatabase();
   };

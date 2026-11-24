@@ -1786,7 +1786,7 @@ function KhataPageInner() {
       createdAt: new Date().toISOString(),
     };
 
-    saveReminder(newRem);
+    saveReminder(newRem, true);
     addToast('Reminder Set', `Reminder scheduled for ${activeCustomer.name} on ${formatDate(reminderDate)}.`, 'success');
     setIsReminderModalOpen(false);
     setReminderTxn(null);
@@ -2140,11 +2140,11 @@ function KhataPageInner() {
         transactionId: finalTxnId,
         createdAt: new Date().toISOString(),
       };
-      saveReminder(rem);
+      saveReminder(rem, true);
     } else if (!isEntryReminderEnabled && editingTxnId) {
       const existingRem = reminders.find(r => r.transactionId === editingTxnId);
       if (existingRem) {
-        deleteReminder(existingRem.id);
+        deleteReminder(existingRem.id, true);
       }
     }
 

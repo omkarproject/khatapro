@@ -691,7 +691,7 @@ export default function InvoicesPage() {
             status: 'scheduled',
             messageTemplate: `Payment reminder for Tax Invoice #${updatedInvoice.invoiceNumber} of ₹${updatedInvoice.total}. Due Date: ${formattedDueDate}. Kindly settle to keep your ledger up to date. Thank you!`,
             note: `Tax Invoice #${updatedInvoice.invoiceNumber} (${formattedDueDate})`,
-          });
+          }, true);
         } catch (remErr) {
           console.warn('Could not update reminder for invoice:', remErr);
         }
@@ -814,7 +814,7 @@ export default function InvoicesPage() {
         messageTemplate: `Payment reminder for Tax Invoice #${newInvoice.invoiceNumber} of ₹${newInvoice.total}. Due Date: ${formattedDueDate}. Kindly settle to keep your ledger up to date. Thank you!`,
         note: `Tax Invoice #${newInvoice.invoiceNumber} (${formattedDueDate})`,
       };
-      saveReminder(scheduledReminder);
+      saveReminder(scheduledReminder, true);
     } catch (remErr) {
       console.warn('Could not schedule payment reminder for invoice:', remErr);
     }
