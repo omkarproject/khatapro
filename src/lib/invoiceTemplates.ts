@@ -142,6 +142,80 @@ export interface InvoiceRenderData {
     accountNo?: string;
     ifsc?: string;
   };
+  items?: Array<{
+    name: string;
+    description?: string;
+    quantity: number;
+    unitPrice: number;
+    discountPercent?: number;
+    taxPercent?: number;
+    total: number;
+  }>;
+}
+
+export function formatInvoiceToRenderData(
+  invoice: any,
+  settings: any = {},
+  profile: any = {}
+): InvoiceRenderData {
+  const upiId = settings.paymentSettings?.upiId || '';
+  const payeeName = settings.paymentSettings?.payeeName || settings.businessName || profile.businessName || 'SmartKhata Merchant';
+  const qrUrl =
+    settings.paymentSettings?.customQrUrl ||
+    `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
+      `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${invoice.total}&tr=${encodeURIComponent(invoice.invoiceNumber || 'INV')}`
+    )}`;
+
+  return {
+    merchant: {
+      name: profile.fullName || 'Store Owner',
+      businessName: settings.businessName || profile.businessName || 'SmartKhata Merchant',
+      address: settings.businessAddress || profile.businessAddress || '',
+      phone: settings.businessPhone || profile.phone || '',
+      email: settings.businessEmail || profile.email || '',
+      gst: settings.businessGst || settings.paymentSettings?.businessGst || profile.businessGst || '',
+      logo: settings.businessLogo || profile.avatarUrl || '',
+    },
+    customer: {
+      name: invoice.customerName || 'Valued Customer',
+      phone: invoice.customerPhone || '',
+      address: invoice.customerAddress || '',
+      businessName: invoice.customerName,
+      gst: invoice.customerGstin || '',
+    },
+    txn: {
+      id: invoice.id,
+      docNo: invoice.invoiceNumber,
+      title: invoice.status === 'paid' ? 'TAX INVOICE & OFFICIAL RECEIPT (PAID)' : 'TAX INVOICE & BILL OF SUPPLY',
+      date: invoice.issueDate || invoice.createdAt || new Date().toISOString(),
+      amount: invoice.total,
+      amountWords: `Rupees ${Number(invoice.total || 0).toLocaleString('en-IN')} Only`,
+      note: invoice.notes || (invoice.items?.map((i: any) => i.name).join(', ')) || 'Tax Invoice',
+      isGot: invoice.status === 'paid',
+      type: 'credit',
+      status: invoice.status ? invoice.status.toUpperCase() : 'UNPAID',
+      currencySymbol: '₹',
+    },
+    payment: {
+      upiId,
+      payeeName,
+      qrUrl,
+      bankName: settings.paymentSettings?.bankName,
+      accountNo: settings.paymentSettings?.accountNumber,
+      ifsc: settings.paymentSettings?.ifscCode,
+    },
+    items: Array.isArray(invoice.items) && invoice.items.length > 0
+      ? invoice.items.map((it: any) => ({
+          name: it.name || 'Product / Service',
+          description: it.description || '',
+          quantity: Number(it.quantity) || 1,
+          unitPrice: Number(it.unitPrice) || 0,
+          discountPercent: Number(it.discountPercent) || 0,
+          taxPercent: Number(it.taxPercent) || 0,
+          total: Number(it.total) || 0,
+        }))
+      : undefined,
+  };
 }
 
 export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData): string {
@@ -890,19 +964,38 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td style="color: #b45309; font-weight: bold;">01</td>
-            <td>
-              <div style="font-weight: bold; font-size: 13px; color: #18181b;">${data.txn.note || 'Boutique Collection Item'}</div>
-              <div style="font-size: 11px; color: #78716c;">Date: ${dateFormatted}</div>
-            </td>
-            <td style="text-align: center; font-weight: bold; color: ${isGot ? '#047857' : '#b45309'};">
-              ${isGot ? 'PAYMENT RECEIVED' : 'STORE CREDIT'}
-            </td>
-            <td style="text-align: right; font-family: monospace; font-size: 15px; font-weight: 900; color: #18181b;">
-              ${amountFormatted}
-            </td>
-          </tr>
+          ${Array.isArray(data.items) && data.items.length > 0
+            ? data.items.map((it, idx) => `
+              <tr>
+                <td style="color: #b45309; font-weight: bold; text-align: center;">${String(idx + 1).padStart(2, '0')}</td>
+                <td>
+                  <div style="font-weight: bold; font-size: 13px; color: #18181b;">${it.name}</div>
+                  ${it.description ? `<div style="font-size: 10.5px; color: #78716c; margin-top: 2px;">${it.description}</div>` : ''}
+                </td>
+                <td style="text-align: center; font-size: 11px; color: #78716c;">
+                  ${it.quantity} × ${currencySymbol}${it.unitPrice.toLocaleString('en-IN')}${it.taxPercent ? ` (+${it.taxPercent}% GST)` : ''}
+                </td>
+                <td style="text-align: right; font-family: monospace; font-size: 14px; font-weight: 900; color: #18181b;">
+                  ${currencySymbol}${it.total.toLocaleString('en-IN')}
+                </td>
+              </tr>
+            `).join('')
+            : `
+              <tr>
+                <td style="color: #b45309; font-weight: bold;">01</td>
+                <td>
+                  <div style="font-weight: bold; font-size: 13px; color: #18181b;">${data.txn.note || 'Boutique Collection Item'}</div>
+                  <div style="font-size: 11px; color: #78716c;">Date: ${dateFormatted}</div>
+                </td>
+                <td style="text-align: center; font-weight: bold; color: ${isGot ? '#047857' : '#b45309'};">
+                  ${isGot ? 'PAYMENT RECEIVED' : 'STORE CREDIT'}
+                </td>
+                <td style="text-align: right; font-family: monospace; font-size: 15px; font-weight: 900; color: #18181b;">
+                  ${amountFormatted}
+                </td>
+              </tr>
+            `
+          }
         </tbody>
       </table>
 

@@ -92,6 +92,133 @@ export async function generateInvoiceQrWithLogo(
   }
 }
 
+export interface InvoicePdfTheme {
+  primary: [number, number, number];
+  titleText: string;
+  tableHeaderBg: [number, number, number];
+  tableHeaderText: [number, number, number];
+  totalBoxBg: [number, number, number];
+  totalBoxBorder: [number, number, number];
+  totalTextColor: [number, number, number];
+  topBarColor?: [number, number, number];
+}
+
+export function getInvoicePdfTheme(templateId?: string): InvoicePdfTheme {
+  switch (templateId) {
+    case 'template_gold_luxury':
+      return {
+        primary: [180, 83, 9], // #b45309 Warm Gold
+        titleText: 'GOLD LUXURY BOUTIQUE INVOICE',
+        tableHeaderBg: [254, 243, 199], // #fef3c7
+        tableHeaderText: [146, 64, 14], // #92400e
+        totalBoxBg: [255, 251, 235], // #fffbeb
+        totalBoxBorder: [217, 119, 6], // #d97706
+        totalTextColor: [180, 83, 9],
+        topBarColor: [217, 119, 6],
+      };
+    case 'template_emerald':
+      return {
+        primary: [6, 95, 70], // #065f46
+        titleText: 'EMERALD ROYAL WEALTH INVOICE',
+        tableHeaderBg: [236, 253, 245],
+        tableHeaderText: [6, 78, 59],
+        totalBoxBg: [236, 253, 245],
+        totalBoxBorder: [6, 95, 70],
+        totalTextColor: [6, 95, 70],
+        topBarColor: [6, 95, 70],
+      };
+    case 'template_fintech':
+      return {
+        primary: [5, 150, 105], // #059669
+        titleText: 'FINTECH CYBER TECH INVOICE',
+        tableHeaderBg: [15, 23, 42],
+        tableHeaderText: [255, 255, 255],
+        totalBoxBg: [15, 23, 42],
+        totalBoxBorder: [5, 150, 105],
+        totalTextColor: [52, 211, 153],
+        topBarColor: [15, 23, 42],
+      };
+    case 'template_corporate':
+      return {
+        primary: [30, 58, 138], // #1e3a8a
+        titleText: 'CORPORATE B2B TAX INVOICE',
+        tableHeaderBg: [239, 246, 255],
+        tableHeaderText: [30, 58, 138],
+        totalBoxBg: [239, 246, 255],
+        totalBoxBorder: [30, 58, 138],
+        totalTextColor: [30, 58, 138],
+        topBarColor: [30, 58, 138],
+      };
+    case 'template_startup_gradient':
+      return {
+        primary: [124, 58, 237], // #7c3aed
+        titleText: 'STARTUP RIBBON INVOICE',
+        tableHeaderBg: [245, 243, 255],
+        tableHeaderText: [109, 40, 217],
+        totalBoxBg: [245, 243, 255],
+        totalBoxBorder: [124, 58, 237],
+        totalTextColor: [124, 58, 237],
+        topBarColor: [124, 58, 237],
+      };
+    case 'template_gst_compliant':
+      return {
+        primary: [37, 99, 235], // #2563eb
+        titleText: 'OFFICIAL GST TAX INVOICE',
+        tableHeaderBg: [239, 246, 255],
+        tableHeaderText: [29, 78, 216],
+        totalBoxBg: [239, 246, 255],
+        totalBoxBorder: [37, 99, 235],
+        totalTextColor: [29, 78, 216],
+        topBarColor: [37, 99, 235],
+      };
+    case 'template_swiss_monochrome':
+      return {
+        primary: [0, 0, 0],
+        titleText: 'SWISS MONOCHROME INVOICE',
+        tableHeaderBg: [0, 0, 0],
+        tableHeaderText: [255, 255, 255],
+        totalBoxBg: [248, 250, 252],
+        totalBoxBorder: [0, 0, 0],
+        totalTextColor: [0, 0, 0],
+        topBarColor: [0, 0, 0],
+      };
+    case 'template_pos_receipt':
+      return {
+        primary: [15, 23, 42],
+        titleText: 'THERMAL POS RETAIL BILL',
+        tableHeaderBg: [241, 245, 249],
+        tableHeaderText: [15, 23, 42],
+        totalBoxBg: [248, 250, 252],
+        totalBoxBorder: [15, 23, 42],
+        totalTextColor: [15, 23, 42],
+        topBarColor: [15, 23, 42],
+      };
+    case 'template_ribbon_accent':
+      return {
+        primary: [2, 132, 199], // #0284c7
+        titleText: 'SCAN & PAY UPI TAX INVOICE',
+        tableHeaderBg: [240, 249, 255],
+        tableHeaderText: [3, 105, 161],
+        totalBoxBg: [240, 249, 255],
+        totalBoxBorder: [2, 132, 199],
+        totalTextColor: [2, 132, 199],
+        topBarColor: [2, 132, 199],
+      };
+    case 'template_minimal':
+    default:
+      return {
+        primary: [79, 70, 229], // #4f46e5
+        titleText: 'TAX INVOICE',
+        tableHeaderBg: [248, 250, 252],
+        tableHeaderText: [71, 85, 105],
+        totalBoxBg: [241, 245, 249],
+        totalBoxBorder: [226, 232, 240],
+        totalTextColor: [79, 70, 229],
+        topBarColor: [79, 70, 229],
+      };
+  }
+}
+
 /**
  * Creates an official, high-resolution vector Tax Invoice PDF document.
  */
@@ -99,8 +226,17 @@ export async function generateInvoicePdfBlob(
   invoice: Invoice,
   settings: SystemSettings,
   profile: Partial<UserProfile> = {},
-  qrDataUrl?: string
+  qrDataUrl?: string,
+  templateId?: string
 ): Promise<Blob> {
+  const activeTemplateId =
+    templateId ||
+    settings.selectedInvoiceTemplate ||
+    (typeof window !== 'undefined' ? localStorage.getItem('skp_invoice_template') || localStorage.getItem('selectedInvoiceTemplate') : null) ||
+    'template_minimal';
+
+  const theme = getInvoicePdfTheme(activeTemplateId);
+
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -119,6 +255,12 @@ export async function generateInvoicePdfBlob(
   const pageWidth = 210;
   const contentWidth = pageWidth - marginX * 2;
   let currentY = 16;
+
+  // Draw Luxury Brand Top Bar if specified
+  if (theme.topBarColor) {
+    doc.setFillColor(theme.topBarColor[0], theme.topBarColor[1], theme.topBarColor[2]);
+    doc.rect(0, 0, pageWidth, 3.5, 'F');
+  }
 
   // --- 1. HEADER SECTION ---
   // If merchant has a logo, try to load and draw it
@@ -175,9 +317,9 @@ export async function generateInvoicePdfBlob(
   // Invoice Title & Meta on right
   const rightX = pageWidth - marginX;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.setTextColor(79, 70, 229); // indigo-600
-  doc.text('TAX INVOICE', rightX, currentY + 4, { align: 'right' });
+  doc.setFontSize(16);
+  doc.setTextColor(theme.primary[0], theme.primary[1], theme.primary[2]);
+  doc.text(theme.titleText, rightX, currentY + 4, { align: 'right' });
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
@@ -262,13 +404,13 @@ export async function generateInvoicePdfBlob(
   const colTotalX = rightX - 3;
 
   // Table Header Background
-  doc.setFillColor(248, 250, 252); // slate-50
-  doc.setDrawColor(226, 232, 240);
+  doc.setFillColor(theme.tableHeaderBg[0], theme.tableHeaderBg[1], theme.tableHeaderBg[2]);
+  doc.setDrawColor(theme.totalBoxBorder[0], theme.totalBoxBorder[1], theme.totalBoxBorder[2]);
   doc.roundedRect(marginX, tableHeaderY, contentWidth, 8, 1, 1, 'FD');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.setTextColor(71, 85, 105);
+  doc.setTextColor(theme.tableHeaderText[0], theme.tableHeaderText[1], theme.tableHeaderText[2]);
   doc.text('#', colIndexX, tableHeaderY + 5.2);
   doc.text('ITEM DESCRIPTION', colDescX, tableHeaderY + 5.2);
   doc.text('QTY', colQtyX, tableHeaderY + 5.2, { align: 'right' });
@@ -399,14 +541,15 @@ export async function generateInvoicePdfBlob(
 
   // Grand Total Highlight Bar
   sumY += 2;
-  doc.setFillColor(241, 245, 249);
-  doc.roundedRect(sumStartX - 2, sumY - 1, (sumValX - sumStartX) + 4, 9, 1.5, 1.5, 'F');
+  doc.setFillColor(theme.totalBoxBg[0], theme.totalBoxBg[1], theme.totalBoxBg[2]);
+  doc.setDrawColor(theme.totalBoxBorder[0], theme.totalBoxBorder[1], theme.totalBoxBorder[2]);
+  doc.roundedRect(sumStartX - 2, sumY - 1, (sumValX - sumStartX) + 4, 9, 1.5, 1.5, 'FD');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(15, 23, 42);
   doc.text('Total Amount:', sumStartX, sumY + 5.5);
-  doc.setTextColor(79, 70, 229);
+  doc.setTextColor(theme.totalTextColor[0], theme.totalTextColor[1], theme.totalTextColor[2]);
   doc.text(`₹${invoice.total.toLocaleString('en-IN')}`, sumValX, sumY + 5.5, { align: 'right' });
 
   currentY = Math.max(bottomBoxY + qrBoxHeight, sumY + 12) + 6;

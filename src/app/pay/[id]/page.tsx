@@ -662,7 +662,10 @@ function CustomerPayInvoiceContent() {
         status: isPaid ? 'paid' : (invoice.status || 'unpaid'),
         paidAmount: isPaid ? invoice.total : (invoice.paidAmount || 0),
       };
-      const pdfBlob = await generateInvoicePdfBlob(targetInv, settings, profile, qrDataUrl);
+      const activeTmpl = (settings as any)?.selectedInvoiceTemplate || 
+        (typeof window !== 'undefined' ? (localStorage.getItem('skp_invoice_template') || localStorage.getItem('selectedInvoiceTemplate')) : null) || 
+        'template_minimal';
+      const pdfBlob = await generateInvoicePdfBlob(targetInv, settings, profile, qrDataUrl, activeTmpl);
       const safeInvNum = (invoice.invoiceNumber || 'INV').replace(/[^a-zA-Z0-9_-]/g, '_');
       const fileName = `Tax_Invoice_${safeInvNum}${isPaid ? '_PAID' : ''}.pdf`;
       const blobUrl = URL.createObjectURL(pdfBlob);

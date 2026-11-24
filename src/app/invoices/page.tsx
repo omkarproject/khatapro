@@ -5,6 +5,8 @@ import { useApp } from '@/context/AppContext';
 import { formatINR, formatDate, buildUpiUri, getQrCodeUrl, openWhatsApp } from '@/lib/utils';
 import { generateInvoicePdfBlob, generateInvoiceQrWithLogo } from '@/lib/invoicePdfGenerator';
 import { generateInvoiceImageDataUrl } from '@/lib/invoiceImageGenerator';
+import { generateInvoiceHtml, formatInvoiceToRenderData, INVOICE_TEMPLATES } from '@/lib/invoiceTemplates';
+import { InvoiceTemplatesModal } from '@/components/InvoiceTemplatesModal';
 import { getActiveCurrency, t } from '@/lib/i18n';
 import { uploadToDriveFiles } from '@/lib/driveUploadClient';
 import {
@@ -95,6 +97,22 @@ export default function InvoicesPage() {
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
+  const [isTemplateStudioOpen, setIsTemplateStudioOpen] = useState<boolean>(false);
+  const [activeTemplateTick, setActiveTemplateTick] = useState<number>(0);
+
+  useEffect(() => {
+    const handleTmplChange = () => setActiveTemplateTick(prev => prev + 1);
+    window.addEventListener('smartkhata_template_changed', handleTmplChange);
+    return () => window.removeEventListener('smartkhata_template_changed', handleTmplChange);
+  }, []);
+
+  const activeTemplateId = useMemo(() => {
+    return (
+      (settings as any)?.selectedInvoiceTemplate ||
+      (typeof window !== 'undefined' ? localStorage.getItem('skp_invoice_template') || localStorage.getItem('selectedInvoiceTemplate') : null) ||
+      'template_minimal'
+    );
+  }, [settings?.selectedInvoiceTemplate, activeTemplateTick]);
 
   // Status Update Modal State
   const [statusModalInvoice, setStatusModalInvoice] = useState<Invoice | null>(null);
@@ -838,7 +856,7 @@ export default function InvoicesPage() {
           : await generateInvoiceQrWithLogo(upiUri, merchantLogo, 320);
 
       // 2. Generate PDF Document Blob
-      const pdfBlob = await generateInvoicePdfBlob(inv, settings, profile, qrDataUrl);
+      const pdfBlob = await generateInvoicePdfBlob(inv, settings, profile, qrDataUrl, activeTemplateId);
       const safeInvNum = (inv.invoiceNumber || 'INV').replace(/[^a-zA-Z0-9_-]/g, '_');
       const fileName = `Tax_Invoice_${safeInvNum}.pdf`;
 
@@ -912,6 +930,50 @@ export default function InvoicesPage() {
     setIsShareModalOpen(true);
   };
 
+  // Print official invoice using the selected active luxury template via hidden iframe
+  const handlePrintActiveInvoice = (inv: Invoice) => {
+    try {
+      const renderData = formatInvoiceToRenderData(inv, settings, profile);
+      const html = generateInvoiceHtml(activeTemplateId, renderData);
+
+      const oldFrame = document.getElementById('smartkhata-active-invoice-print-frame');
+      if (oldFrame) oldFrame.remove();
+
+      const printFrame = document.createElement('iframe');
+      printFrame.id = 'smartkhata-active-invoice-print-frame';
+      printFrame.style.position = 'fixed';
+      printFrame.style.right = '0';
+      printFrame.style.bottom = '0';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.style.border = '0';
+      printFrame.style.visibility = 'hidden';
+      document.body.appendChild(printFrame);
+
+      const doc = printFrame.contentWindow?.document || printFrame.contentDocument;
+      if (!doc) {
+        window.print();
+        return;
+      }
+
+      doc.open();
+      doc.write(html);
+      doc.close();
+
+      setTimeout(() => {
+        try {
+          printFrame.contentWindow?.focus();
+          printFrame.contentWindow?.print();
+        } catch {
+          window.print();
+        }
+      }, 350);
+    } catch (e) {
+      console.error('Print invoice error:', e);
+      window.print();
+    }
+  };
+
   // Download High-Res Vector Tax Invoice PDF
   const handleDownloadInvoicePdf = async (inv: Invoice) => {
     try {
@@ -934,7 +996,7 @@ export default function InvoicesPage() {
           ? invoiceQrDataUrl
           : await generateInvoiceQrWithLogo(upiUri, merchantLogo, 320);
 
-      const pdfBlob = await generateInvoicePdfBlob(inv, settings, profile, qrDataUrl);
+      const pdfBlob = await generateInvoicePdfBlob(inv, settings, profile, qrDataUrl, activeTemplateId);
       const safeInvNum = (inv.invoiceNumber || 'INV').replace(/[^a-zA-Z0-9_-]/g, '_');
       const fileName = `Tax_Invoice_${safeInvNum}.pdf`;
 
@@ -975,7 +1037,7 @@ export default function InvoicesPage() {
           ? invoiceQrDataUrl
           : await generateInvoiceQrWithLogo(upiUri, merchantLogo, 320);
 
-      const pdfBlob = await generateInvoicePdfBlob(inv, settings, profile, qrDataUrl);
+      const pdfBlob = await generateInvoicePdfBlob(inv, settings, profile, qrDataUrl, activeTemplateId);
       const safeInvNum = (inv.invoiceNumber || 'INV').replace(/[^a-zA-Z0-9_-]/g, '_');
       const fileName = `Tax_Invoice_${safeInvNum}.pdf`;
 
@@ -1343,239 +1405,77 @@ export default function InvoicesPage() {
         </div>
       </div>
 
-      {/* Printable / View Luxury Invoice Modal */}
+      {/* Printable / View Luxury Invoice Modal (Renders the Active Default Template) */}
       {activeInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 sm:p-8 max-w-3xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-6 max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-4 sm:p-6 max-w-4xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[94vh] flex flex-col overflow-hidden">
             
-            {/* Modal Controls */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 print:hidden">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Tax Invoice Preview
-              </span>
-              <div className="flex items-center gap-2">
+            {/* Modal Controls Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                  Active Template: <strong className="text-indigo-600 dark:text-indigo-400 font-extrabold">{INVOICE_TEMPLATES.find(t => t.id === activeTemplateId)?.name || 'Default Luxury'}</strong>
+                </span>
                 <button
-                  onClick={() => window.print()}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                  type="button"
+                  onClick={() => setIsTemplateStudioOpen(true)}
+                  className="px-2 py-0.5 rounded-lg text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 transition-colors cursor-pointer"
+                  title="Switch or customize invoice templates"
                 >
-                  <Printer className="w-3.5 h-3.5" /> Print
+                  Change Template
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handlePrintActiveInvoice(activeInvoice)}
+                  className="px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-xs"
+                  title="Print official invoice using selected template"
+                >
+                  <Printer className="w-3.5 h-3.5" /> Print Bill
                 </button>
                 <button
+                  type="button"
+                  onClick={() => handleDownloadInvoicePdf(activeInvoice)}
+                  className="px-3 py-1.5 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-xs"
+                  title="Download vector PDF in selected template"
+                >
+                  <Download className="w-3.5 h-3.5" /> Download PDF
+                </button>
+                <button
+                  type="button"
                   onClick={() => handleOpenInvoiceShare(activeInvoice)}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-xs"
+                  className="px-3 py-1.5 text-xs font-bold rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-xs"
                   title="Share invoice with PDF attached & Pay link"
                 >
                   <Share2 className="w-3.5 h-3.5" /> Share
                 </button>
                 <button
+                  type="button"
                   onClick={() => setActiveInvoice(null)}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 cursor-pointer"
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* The Actual Luxury Invoice Document Container */}
-            <div className="p-6 bg-white text-slate-900 rounded-2xl border border-slate-200 shadow-sm space-y-6 print:border-none print:shadow-none">
-              
-              {/* Header: Company & Invoice Meta */}
-              <div className="flex justify-between items-start gap-4">
-                <div className="flex items-start gap-3.5">
-                  {(settings.businessLogo || profile.avatarUrl || currentUser?.avatarUrl) && (
-                    <img
-                      src={settings.businessLogo || profile.avatarUrl || currentUser?.avatarUrl}
-                      alt="Business Logo"
-                      className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-contain border border-slate-200 p-1 bg-white shrink-0 shadow-xs print:w-16 print:h-16"
-                    />
-                  )}
-                  <div>
-                    <h2 className="text-xl font-black text-slate-900 tracking-tight">
-                      {settings.businessName || profile.businessName}
-                    </h2>
-                    <p className="text-xs text-slate-500 max-w-sm mt-0.5">
-                      {settings.businessAddress || profile.businessAddress}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Phone: {settings.businessPhone || profile.phone} • Email: {settings.businessEmail || profile.email}
-                    </p>
-                    {(settings.paymentSettings?.businessGst || profile.businessGst) && (
-                      <p className="text-xs font-mono font-semibold text-indigo-700 mt-0.5">
-                        GSTIN: {settings.paymentSettings?.businessGst || profile.businessGst}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <div className="text-2xl font-black text-indigo-600 uppercase tracking-tight">
-                    TAX INVOICE
-                  </div>
-                  <div className="text-sm font-bold font-mono text-slate-800 mt-1">
-                    {activeInvoice.invoiceNumber}
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    Date: <span className="font-mono">{formatDate(activeInvoice.issueDate)}</span>
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    Due: <span className="font-mono">{formatDate(activeInvoice.dueDate)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bill To */}
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex justify-between">
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Billed To:
-                  </div>
-                  <div className="text-sm font-bold text-slate-900 mt-1">
-                    {activeInvoice.customerName}
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {activeInvoice.customerAddress || 'Customer Address on Record'}
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    Phone: {activeInvoice.customerPhone || '-'}
-                  </div>
-                  {activeInvoice.customerGst && (
-                    <div className="text-xs font-mono font-semibold text-slate-700 mt-0.5">
-                      GST: {activeInvoice.customerGst}
-                    </div>
-                  )}
-                </div>
-
-                {/* Status Pill */}
-                <div className="text-right">
-                  <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase ${
-                    activeInvoice.status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                  }`}>
-                    {activeInvoice.status}
-                  </span>
-                </div>
-              </div>
-
-              {/* Items Table */}
-              <table className="w-full text-left text-xs border border-slate-200 rounded-lg overflow-hidden">
-                <thead className="bg-slate-100 text-slate-600 font-bold uppercase text-[10px]">
-                  <tr>
-                    <th className="py-2.5 px-3">{t('itemDescription', 'Item Description')}</th>
-                    <th className="py-2.5 px-2 text-center">{t('quantity', 'Qty')}</th>
-                    <th className="py-2.5 px-3 text-right">{t('unitPrice', 'Unit Price')}</th>
-                    <th className="py-2.5 px-2 text-center">GST %</th>
-                    <th className="py-2.5 px-3 text-right">{t('total', 'Total')} ({getActiveCurrency().symbol})</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {activeInvoice.items.map((item, idx) => (
-                    <tr key={idx}>
-                      <td className="py-2.5 px-3 font-semibold text-slate-800">
-                        <div>{item.name}</div>
-                        {item.description && (
-                          <div className="text-[11px] font-normal text-slate-500 mt-0.5 whitespace-pre-wrap">{item.description}</div>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-2 text-center font-mono">
-                        {item.quantity}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono">
-                        {formatINR(item.unitPrice)}
-                      </td>
-                      <td className="py-2.5 px-2 text-center font-mono">
-                        {item.taxPercent ? `${item.taxPercent}%` : '-'}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold">
-                        {formatINR(item.total)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* Totals & Integrated Payment UPI QR Box */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
-                
-                {/* Embedded Merchant UPI QR Code for Instant Pay */}
-                <div className="p-4 rounded-xl bg-indigo-50/60 border border-indigo-100 flex items-center gap-4">
-                  <img
-                    src={
-                      invoiceQrDataUrl ||
-                      getQrCodeUrl(
-                        buildUpiUri(settings.paymentSettings.upiId, settings.paymentSettings.payeeName, activeInvoice.total, activeInvoice.invoiceNumber),
-                        200
-                      )
-                    }
-                    alt="Scan & Pay UPI"
-                    className="w-24 h-24 object-contain rounded-lg border border-slate-200 bg-white p-1"
-                  />
-                  <div>
-                    <div className="text-xs font-bold text-slate-900">
-                      Scan to Pay via UPI
-                    </div>
-                    <div className="text-[10px] text-slate-500 font-mono mt-0.5 truncate max-w-[170px]">
-                      {settings.paymentSettings.upiId}
-                    </div>
-                    <div className="text-[10px] text-indigo-600 font-semibold mt-1">
-                      GPay • PhonePe • Paytm • BHIM
-                    </div>
-                  </div>
-                </div>
-
-                {/* Subtotal / Tax Summary */}
-                <div className="space-y-1.5 text-xs text-slate-600">
-                  <div className="flex justify-between">
-                    <span>{t('subtotal', 'Subtotal')}:</span>
-                    <span className="font-mono font-semibold">{formatINR(activeInvoice.subtotal)}</span>
-                  </div>
-                  {activeInvoice.discountAmount > 0 && (
-                    <div className="flex justify-between text-emerald-600">
-                      <span>{t('discount', 'Discount')}:</span>
-                      <span className="font-mono font-semibold">-{formatINR(activeInvoice.discountAmount)}</span>
-                    </div>
-                  )}
-                  {activeInvoice.cgst > 0 && (
-                    <div className="flex justify-between">
-                      <span>CGST:</span>
-                      <span className="font-mono">+{formatINR(activeInvoice.cgst)}</span>
-                    </div>
-                  )}
-                  {activeInvoice.sgst > 0 && (
-                    <div className="flex justify-between">
-                      <span>SGST:</span>
-                      <span className="font-mono">+{formatINR(activeInvoice.sgst)}</span>
-                    </div>
-                  )}
-                  {activeInvoice.igst > 0 && (
-                    <div className="flex justify-between">
-                      <span>IGST:</span>
-                      <span className="font-mono">+{formatINR(activeInvoice.igst)}</span>
-                    </div>
-                  )}
-                  {activeInvoice.appliedCharges && activeInvoice.appliedCharges.map((chg) => (
-                    <div key={chg.id} className="flex justify-between text-indigo-700 dark:text-indigo-400">
-                      <span>{chg.name} ({chg.type === 'percentage' ? `${chg.rate}%` : 'Fixed'}):</span>
-                      <span className="font-mono font-semibold">+{formatINR(chg.amount)}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between text-base font-black text-slate-900 pt-2 border-t border-slate-200">
-                    <span>{t('total', 'Invoice Total')}:</span>
-                    <span className="font-mono text-indigo-700">{formatINR(activeInvoice.total)}</span>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Notes & Terms */}
-              <div className="text-[10px] text-slate-400 border-t border-slate-100 pt-3 space-y-1">
-                <div><strong>Terms:</strong> {activeInvoice.terms}</div>
-                <div><strong>Notes:</strong> {activeInvoice.notes}</div>
-              </div>
-
+            {/* The Live Rendered Template Container */}
+            <div className="flex-1 w-full bg-slate-100/60 dark:bg-slate-950/60 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-inner flex flex-col">
+              <iframe
+                srcDoc={generateInvoiceHtml(activeTemplateId, formatInvoiceToRenderData(activeInvoice, settings, profile))}
+                className="w-full h-full min-h-[580px] border-0 rounded-2xl bg-white"
+                title={`Invoice_${activeInvoice.invoiceNumber}`}
+              />
             </div>
 
           </div>
         </div>
       )}
+
+
 
       {/* Create New Invoice Modal */}
       {isCreateModalOpen && (
@@ -2995,6 +2895,12 @@ export default function InvoicesPage() {
           </div>
         </div>
       )}
+
+      {/* Invoice Templates Studio Modal */}
+      <InvoiceTemplatesModal
+        isOpen={isTemplateStudioOpen}
+        onClose={() => setIsTemplateStudioOpen(false)}
+      />
 
     </div>
   );
