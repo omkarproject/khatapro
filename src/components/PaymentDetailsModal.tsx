@@ -139,7 +139,7 @@ export default function PaymentDetailsModal() {
 
           </div>
 
-          {txn.note && (
+          {Boolean(formatTransactionNote(txn)) && (
             <div className="p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 space-y-1">
               <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400 block">
                 Payment Description / Note

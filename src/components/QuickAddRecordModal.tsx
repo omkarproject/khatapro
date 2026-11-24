@@ -210,7 +210,7 @@ export default function QuickAddRecordModal({
       customerName: finalCustomerName,
       category: khataType === 'debit' ? 'Credit Given (उधार)' : 'Payment Received (मिला)',
       paymentMode: khataMode,
-      note: khataNote.trim() || (khataType === 'debit' ? 'Credit given from dashboard' : 'Payment received'),
+      note: khataNote.trim(),
       status: 'completed',
       createdBy: 'Dashboard Quick Add',
       createdAt: new Date().toISOString(),

@@ -5401,7 +5401,7 @@ function KhataPageInner() {
                                   ) : null}
 
                                   {/* Note Text (e.g. "bhopal jana tha isliye liya" or "Sumant Admission Diploma...") */}
-                                  {t.note && (
+                                  {Boolean(formatTransactionNote(t)) && (
                                     <div className="text-[13px] text-slate-700 dark:text-slate-300 px-0.5 pt-0.5 leading-snug whitespace-pre-line font-medium">
                                       {formatTransactionNote(t)}
                                     </div>

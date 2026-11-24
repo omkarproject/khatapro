@@ -504,6 +504,7 @@ export default function QuickUPICollectModal() {
       return;
     }
     const cat = activeTab === 'cashfree' ? 'Cashfree PG' : activeTab === 'razorpay' ? 'Razorpay PG' : 'UPI Direct Collection';
+    const trimmedNote = note.trim();
     addTransaction({
       id: `txn_${Date.now()}`,
       type: 'collection',
@@ -513,8 +514,8 @@ export default function QuickUPICollectModal() {
       customerName: customerDisplayName,
       category: cat,
       paymentMode: 'upi',
-      referenceNo: `UPI-${Math.floor(100000000 + Math.random() * 900000000)}`,
-      note: note || 'Collected via Shop UPI QR',
+      referenceNo: '',
+      note: trimmedNote,
       status: 'completed',
       createdBy: settings.businessName,
       createdAt: new Date().toISOString(),

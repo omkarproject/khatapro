@@ -476,150 +476,45 @@ export function getGatewayModeInfo(txn: any): { label: string; badgeClass: strin
 }
 
 /**
- * Formats a transaction note to the clean requested format:
- * Receipt ID: SKP-REC-2026-384103
- * Cashfree - Bank Ref / UTR: 669202538794
- * Transaction ID: 7063709457
+ * Formats a transaction note to show the actual note entered by the user.
+ * Never fabricates fake gateway UTRs, Receipt IDs, or synthetic text.
+ * Leaves blank if no note was provided.
  */
 export function formatTransactionNote(noteOrTxn: any): string {
-  const note = typeof noteOrTxn === 'string' ? noteOrTxn : (noteOrTxn?.note || noteOrTxn?.description || '');
-  if (!note && typeof noteOrTxn !== 'object') return '-';
+  if (!noteOrTxn) return '';
+  const rawNote = typeof noteOrTxn === 'string' ? noteOrTxn : (noteOrTxn?.note || noteOrTxn?.description || '');
+  if (!rawNote || typeof rawNote !== 'string' || !rawNote.trim()) return '';
 
-  // Fallback map for historical transactions
-  const knownTxnMap: Record<string, { receiptNo?: string; txnId?: string; gw?: string }> = {
-    '669202538794': { receiptNo: 'SKP-REC-2026-384103', txnId: '7063709457', gw: 'Cashfree' },
-    '669101698983': { receiptNo: 'SKP-REC-2026-698983', txnId: '7058630573', gw: 'Cashfree' },
-    '669103103383': { receiptNo: 'SKP-REC-2026-310179', txnId: '7058946079', gw: 'Cashfree' },
-    '669102397152': { receiptNo: 'SKP-REC-2026-397152', txnId: '7058721940', gw: 'Cashfree' },
-  };
+  const trimmed = rawNote.trim();
 
-  let receiptNo = '';
-  let utr = '';
-  let gw = 'Cashfree';
-  let txnId = '';
+  // 1. If this is an invoice transaction with the old synthetic "Receipt ID: SKP-REC-..." placeholder
+  if (
+    typeof noteOrTxn === 'object' &&
+    (noteOrTxn.category === 'Sales Invoice' || noteOrTxn.id?.startsWith('txn_inv_') || noteOrTxn.type === 'credit') &&
+    trimmed.startsWith('Receipt ID: SKP-REC-') &&
+    trimmed.includes('Due Date:')
+  ) {
+    const lines = trimmed.split('\n');
+    const customLines = lines.filter(l => !l.startsWith('Receipt ID:') && !l.startsWith('Due Date:'));
+    return customLines.join('\n').trim();
+  }
 
-  // 1. Extract from object properties if available
-  if (typeof noteOrTxn === 'object' && noteOrTxn !== null) {
-    if (noteOrTxn.gatewayTxnId) txnId = String(noteOrTxn.gatewayTxnId).trim();
-    if (noteOrTxn.bill_number) utr = String(noteOrTxn.bill_number).trim();
-    if (noteOrTxn.referenceNo) utr = utr || String(noteOrTxn.referenceNo).trim();
-    if (noteOrTxn.receiptNo || noteOrTxn.receipt_no) receiptNo = String(noteOrTxn.receiptNo || noteOrTxn.receipt_no).trim();
-
-    if (Array.isArray(noteOrTxn.attachments)) {
-      for (const att of noteOrTxn.attachments) {
-        try {
-          const parsed = typeof att === 'string' ? JSON.parse(att) : att;
-          if (parsed && parsed.__sk_meta) {
-            if (parsed.receiptNo && !receiptNo) receiptNo = String(parsed.receiptNo).trim();
-            if (parsed.gatewayTxnId && !txnId) txnId = String(parsed.gatewayTxnId).trim();
-            if (parsed.referenceNo && !utr) utr = String(parsed.referenceNo).trim();
-          }
-        } catch {}
+  // 2. If this is a synthetic Cashfree receipt note auto-generated for manual collections (e.g. PAY- or UPI-)
+  if (
+    trimmed.startsWith('Receipt ID: SKP-REC-') &&
+    (trimmed.includes('Bank Ref / UTR: PAY-') || trimmed.includes('Bank Ref / UTR: UPI-') || trimmed.includes('Cashfree - Bank Ref / UTR:'))
+  ) {
+    // Only keep if it was an actual online checkout payment with a real gateway transaction ID
+    if (typeof noteOrTxn === 'object' && noteOrTxn !== null) {
+      if ((noteOrTxn.category?.includes('Online Checkout') || noteOrTxn.category === 'Payment Received') && noteOrTxn.gatewayTxnId) {
+        return trimmed;
       }
     }
+    return '';
   }
 
-  // 2. Extract from note string
-  if (note) {
-    // Check for Receipt ID
-    const rMatch = note.match(/Receipt\s*(?:ID|id)[\s:-]+([A-Za-z0-9_/-]+)/i);
-    if (rMatch && !receiptNo) {
-      receiptNo = rMatch[1].trim();
-    }
-
-    // Check for Transaction ID / Gateway Txn ID
-    const tMatch = note.match(/(?:Gateway\s*)?Transaction\s*(?:ID|id)[\s:-]+([A-Za-z0-9_-]+)/i);
-    if (tMatch && !txnId) {
-      txnId = tMatch[1].trim();
-    }
-
-    // Check for Gateway and Bank Ref / UTR
-    const gwMatch = note.match(/([A-Za-z0-9\s]+?)\s*[-:]+\s*(?:Bank Ref \/ UTR|Bank Ref|UTR|Ref ID)[:\s]+([A-Za-z0-9_-]+)/i);
-    if (gwMatch) {
-      let extractedGw = gwMatch[1].trim();
-      if (extractedGw.toLowerCase().includes('cashfree')) gw = 'Cashfree';
-      else if (extractedGw.toLowerCase().includes('razorpay')) gw = 'Razorpay';
-      else if (extractedGw.toLowerCase().includes('upi')) gw = 'UPI PG';
-      else if (extractedGw.toLowerCase().includes('default')) gw = 'Default UPI';
-      else gw = extractedGw;
-
-      if (!utr) utr = gwMatch[2].trim();
-    } else {
-      const legacyMatch = note.match(/Payment Received via\s+([A-Za-z0-9\s]+?)\s*(?:Official PG|PG)?\s*\[(?:Bank Ref \/ UTR|Bank Ref|UTR|Ref ID)[:\s]+([A-Za-z0-9_-]+)\]/i);
-      if (legacyMatch) {
-        let extractedGw = legacyMatch[1].trim();
-        if (extractedGw.toLowerCase().includes('cashfree')) gw = 'Cashfree';
-        else if (extractedGw.toLowerCase().includes('razorpay')) gw = 'Razorpay';
-        else if (extractedGw.toLowerCase().includes('upi')) gw = 'UPI PG';
-        else gw = extractedGw;
-
-        if (!utr) utr = legacyMatch[2].trim();
-      }
-    }
-  }
-
-  // 3. Known fallback map
-  if (utr && knownTxnMap[utr]) {
-    if (!receiptNo) receiptNo = knownTxnMap[utr].receiptNo || '';
-    if (!txnId) txnId = knownTxnMap[utr].txnId || '';
-    if (knownTxnMap[utr].gw) gw = knownTxnMap[utr].gw || gw;
-  }
-
-  // 4. Check if this is an Invoice / Given entry (Sales Invoice)
-  const dMatch = note.match(/Due\s*Date[:\s\t]+([^\n\r]+)/i);
-  let extractedDueDate = dMatch ? dMatch[1].trim() : '';
-
-  const isInvoiceGiven =
-    extractedDueDate !== '' ||
-    (typeof noteOrTxn === 'object' &&
-      noteOrTxn !== null &&
-      noteOrTxn.type === 'credit' &&
-      (noteOrTxn.category === 'Sales Invoice' ||
-       String(noteOrTxn.referenceNo || '').toUpperCase().startsWith('SKP') ||
-       String(note || '').toLowerCase().includes('tax invoice') ||
-       String(note || '').toLowerCase().includes('invoice')));
-
-  if (isInvoiceGiven) {
-    if (!receiptNo) {
-      const year = new Date().getFullYear();
-      const hash = utr ? utr.slice(-6) : (noteOrTxn?.id ? String(noteOrTxn.id).slice(-6) : 'INV');
-      receiptNo = `SKP-REC-${year}-${hash}`;
-    }
-
-    if (!extractedDueDate) {
-      if (typeof noteOrTxn === 'object' && noteOrTxn?.dueDate) {
-        const d = new Date(noteOrTxn.dueDate);
-        extractedDueDate = isNaN(d.getTime())
-          ? noteOrTxn.dueDate
-          : `${String(d.getDate()).padStart(2, '0')}-${d.toLocaleString('en-US', { month: 'short' })}-${d.getFullYear()}`;
-      } else {
-        const baseDate = noteOrTxn?.date ? new Date(noteOrTxn.date) : new Date();
-        const d = new Date(baseDate.getTime() + 15 * 24 * 60 * 60 * 1000);
-        extractedDueDate = `${String(d.getDate()).padStart(2, '0')}-${d.toLocaleString('en-US', { month: 'short' })}-${d.getFullYear()}`;
-      }
-    }
-
-    return `Receipt ID: ${receiptNo}\nDue Date: \t${extractedDueDate}`;
-  }
-
-  // 5. Return formatted 3-line note if online collection
-  if (utr || receiptNo) {
-    if (!receiptNo) {
-      const year = new Date().getFullYear();
-      const hash = utr ? utr.slice(-6) : '310179';
-      receiptNo = `SKP-REC-${year}-${hash}`;
-    }
-    const lines = [`Receipt ID: ${receiptNo}`];
-    if (utr) {
-      lines.push(`${gw} - Bank Ref / UTR: ${utr}`);
-    }
-    if (txnId) {
-      lines.push(`Transaction ID: ${txnId}`);
-    }
-    return lines.join('\n');
-  }
-
-  return note || '-';
+  // 3. Return the actual note entered by the user
+  return trimmed;
 }
 
 /**

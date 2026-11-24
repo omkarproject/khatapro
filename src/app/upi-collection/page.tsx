@@ -819,6 +819,7 @@ export default function UpiCollectionPage() {
       addToast('Amount Required', 'Enter amount to record settlement.', 'warning');
       return;
     }
+    const trimmedNote = collectNote.trim();
     addTransaction({
       id: `txn_${Date.now()}`,
       type: 'collection',
@@ -828,13 +829,14 @@ export default function UpiCollectionPage() {
       customerName: customerDisplayName || 'Walk-in Customer',
       category: `${modeName} Collection`,
       paymentMode: 'upi',
-      referenceNo: `PAY-${Math.floor(100000000 + Math.random() * 900000000)}`,
-      note: collectNote,
+      referenceNo: '',
+      note: trimmedNote,
       status: 'completed',
       createdBy: settings.businessName,
       createdAt: new Date().toISOString(),
     });
     setCollectAmount('');
+    setCollectNote('');
     addToast('Recorded in Khata! 📒', `${formatINR(numCollectAmount)} recorded successfully.`, 'success');
   };
 

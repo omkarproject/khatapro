@@ -496,7 +496,7 @@ export default function InvoicesPage() {
         total: 0,
       },
     ]);
-    setNotes('Thank you for your business!');
+    setNotes('');
     setTerms('Payment due within 15 days. Subject to local jurisdiction.');
 
     const initialCharges: { [id: string]: { enabled: boolean; value: number; type: 'percentage' | 'fixed' } } = {};
@@ -644,9 +644,7 @@ export default function InvoicesPage() {
         const formattedDueDate = isNaN(d.getTime())
           ? updatedInvoice.dueDate
           : `${String(d.getDate()).padStart(2, '0')}-${d.toLocaleString('en-US', { month: 'short' })}-${d.getFullYear()}`;
-        const invoiceReceiptId = `SKP-REC-${new Date().getFullYear()}-${updatedInvoice.invoiceNumber.slice(-6)}`;
-        const invoiceNote = `Receipt ID: ${invoiceReceiptId}\nDue Date: \t${formattedDueDate}`;
-
+        const invoiceNote = updatedInvoice.notes?.trim() || '';
         updateTransaction({
           ...existingTxn,
           amount: updatedInvoice.total,
@@ -757,8 +755,7 @@ export default function InvoicesPage() {
       ? newInvoice.dueDate
       : `${String(d.getDate()).padStart(2, '0')}-${d.toLocaleString('en-US', { month: 'short' })}-${d.getFullYear()}`;
 
-    const invoiceReceiptId = `SKP-REC-${new Date().getFullYear()}-${newInvoice.invoiceNumber.slice(-6)}`;
-    const invoiceNote = `Receipt ID: ${invoiceReceiptId}\nDue Date: \t${formattedDueDate}`;
+    const invoiceNote = newInvoice.notes?.trim() || '';
 
     const txnId = `txn_inv_${newInvoice.id}`;
     const invoiceGivenTxn: Transaction = {
