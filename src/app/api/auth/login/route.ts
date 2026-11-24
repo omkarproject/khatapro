@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
-import { sendWelcomeEmailDirect, getActiveSmtpConfig } from '@/lib/emailService';
+import { getActiveSmtpConfig } from '@/lib/emailService';
 import { resolveUserEmail, verifyUserCredentials } from '@/lib/authHelpers';
 
 export async function POST(req: NextRequest) {
@@ -93,16 +93,6 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
-    // If new user logs in for the first time after signup, ensure welcome email is delivered
-    if (profile && !profile.welcome_email_sent && (sbUser.email || resolvedEmail)) {
-      sendWelcomeEmailDirect({
-        to: sbUser.email || resolvedEmail,
-        recipientName: profile.name || '',
-      }).catch(() => null);
-      try {
-        await supabase.from('profiles').update({ welcome_email_sent: true }).eq('id', sbUser.id);
-      } catch {}
-    }
 
     const isDark = (userSettings?.dark_mode !== undefined && userSettings?.dark_mode !== null)
       ? Boolean(userSettings.dark_mode)

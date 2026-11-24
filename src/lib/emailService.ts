@@ -255,24 +255,29 @@ export function generateOtpEmailHtml(params: OtpEmailTemplateParams): { subject:
 
   let title = 'Verification Code';
   let introMessage = 'Use the verification code below to complete your authentication:';
-  let subject = `${cleanBrandName}: ${otp} is your verification code`;
+  let subject = `${cleanBrandName} - Your verification code is ${otp}`;
+  let purposeBadge = 'Verification Code';
 
   if (purpose === 'signup') {
     title = 'Verify Your Email Address';
-    introMessage = `Welcome${recipientName ? ' ' + recipientName : ''}! Please enter the one-time verification code below to activate your account:`;
-    subject = `${cleanBrandName}: ${otp} is your account verification code`;
+    purposeBadge = 'Account Activation';
+    introMessage = `Welcome${recipientName ? ' ' + recipientName : ''}! Thank you for creating an account. Please enter the verification code below to verify your email address:`;
+    subject = `${cleanBrandName} - Your verification code is ${otp}`;
   } else if (purpose === 'login') {
-    title = 'Sign-In Security Verification';
-    introMessage = `A sign-in attempt was initiated for your account (${recipientEmail}). Enter the verification code below to proceed:`;
-    subject = `${cleanBrandName}: ${otp} is your sign-in verification code`;
+    title = 'Sign-In Verification';
+    purposeBadge = 'Sign-In Security';
+    introMessage = `A sign-in request was initiated for your account (${recipientEmail}). Enter the verification code below to complete your sign-in:`;
+    subject = `${cleanBrandName} - Your sign-in code is ${otp}`;
   } else if (purpose === 'forgot_password') {
     title = 'Password Reset Request';
+    purposeBadge = 'Password Reset';
     introMessage = `We received a request to reset your password for ${cleanBrandName}. Enter the verification code below to set up a new password:`;
-    subject = `${cleanBrandName}: ${otp} is your password reset code`;
+    subject = `${cleanBrandName} - Password reset code: ${otp}`;
   } else if (purpose === 'resend') {
     title = 'New Verification Code';
+    purposeBadge = 'New Code';
     introMessage = 'Here is your new one-time verification code:';
-    subject = `${cleanBrandName}: ${otp} is your new verification code`;
+    subject = `${cleanBrandName} - Your verification code is ${otp}`;
   }
 
   const html = `<!DOCTYPE html>
@@ -283,37 +288,38 @@ export function generateOtpEmailHtml(params: OtpEmailTemplateParams): { subject:
   <title>${title}</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
-  <div style="display: none; font-size: 1px; color: #f8fafc; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden;">
-    ${otp} is your ${cleanBrandName} verification code.
-  </div>
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; padding: 32px 16px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 480px; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 480px; background-color: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; overflow: hidden;">
           <tr>
-            <td style="padding: 32px 28px 20px 28px; text-align: left;">
-              <div style="font-size: 20px; font-weight: 700; color: #0f172a; margin-bottom: 20px; letter-spacing: -0.3px;">
+            <td style="padding: 28px 28px 20px 28px; text-align: left;">
+              <div style="font-size: 20px; font-weight: 700; color: #0f172a; margin-bottom: 18px;">
                 ${cleanBrandName}
               </div>
-              <h2 style="font-size: 17px; font-weight: 600; color: #1e293b; margin: 0 0 10px 0;">
+              <h1 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0 0 12px 0;">
                 ${title}
-              </h2>
+              </h1>
               <p style="font-size: 14px; color: #475569; line-height: 1.5; margin: 0 0 20px 0;">
                 ${introMessage}
               </p>
-              <div style="background-color: #f1f5f9; border-radius: 8px; border: 1px solid #cbd5e1; padding: 18px; text-align: center; margin: 20px 0;">
+              <div style="background-color: #f1f5f9; border-radius: 6px; border: 1px solid #cbd5e1; padding: 18px; text-align: center; margin: 20px 0;">
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #64748b; margin-bottom: 6px; font-weight: 600;">
+                  ${purposeBadge}
+                </div>
                 <span style="font-family: 'Courier New', Courier, monospace; font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #0f172a; display: inline-block;">
                   ${otp}
                 </span>
               </div>
               <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin: 20px 0 0 0;">
-                This code will expire in 10 minutes. If you did not request this verification, no action is required.
+                This code is valid for 10 minutes. If you did not make this request, please ignore this email.
               </p>
             </td>
           </tr>
           <tr>
-            <td style="padding: 16px 28px 24px 28px; border-top: 1px solid #f1f5f9; text-align: left; font-size: 12px; color: #94a3b8;">
-              &copy; ${new Date().getFullYear()} ${cleanBrandName}. All rights reserved.
+            <td style="padding: 16px 28px; background-color: #f8fafc; border-top: 1px solid #f1f5f9; text-align: left; font-size: 12px; color: #94a3b8; line-height: 1.4;">
+              &copy; ${new Date().getFullYear()} ${cleanBrandName}. All rights reserved.<br>
+              Automated message sent to ${recipientEmail}.
             </td>
           </tr>
         </table>
@@ -323,7 +329,7 @@ export function generateOtpEmailHtml(params: OtpEmailTemplateParams): { subject:
 </body>
 </html>`;
 
-  const text = `${cleanBrandName} - ${title}\n\n${introMessage}\n\nVERIFICATION CODE: ${otp}\n\nThis code will expire in 10 minutes.\nIf you did not request this verification code, please ignore this email.`;
+  const text = `${cleanBrandName} - ${title}\n\n${introMessage}\n\nVERIFICATION CODE: ${otp}\n\nThis code is valid for 10 minutes.\nIf you did not make this request, please ignore this email.\n\n© ${new Date().getFullYear()} ${cleanBrandName}. All rights reserved.`;
 
   return { subject, html, text };
 }
@@ -410,9 +416,11 @@ export async function sendOtpEmailDirect(params: {
     const info = await transporter.sendMail({
       from: formattedFrom,
       to: params.to,
+      replyTo: senderEmail,
       subject,
       text,
       html,
+      attachments: logoAttachments && logoAttachments.length > 0 ? logoAttachments : undefined,
       messageId: cleanMessageId,
       envelope: {
         from: senderEmail,
@@ -440,7 +448,8 @@ export async function sendOtpEmailDirect(params: {
 
 
 /**
- * Modern, Cool & Responsive HTML Welcome Email for New Signups & First Login
+ * Simple, Clean & Responsive HTML Welcome Email for New Signups
+ * Designed to ensure high deliverability and avoid spam/junk filters
  */
 export function generateWelcomeEmailHtml(params: {
   recipientEmail: string;
@@ -451,254 +460,73 @@ export function generateWelcomeEmailHtml(params: {
   logoImgTag?: string;
   portalUrl?: string;
 }): { subject: string; html: string; text: string } {
-  const { recipientEmail, recipientName, brandName = 'KhataPro', badgeText: customBadgeText, brandLogo, logoImgTag: customLogoImgTag, portalUrl } = params;
+  const { recipientEmail, recipientName, brandName = 'KhataPro', portalUrl } = params;
   const cleanBrandName = brandName.trim() || 'KhataPro';
-  const cleanBadgeText = customBadgeText?.trim() || '';
-  const greeting = recipientName ? `Hello ${recipientName},` : 'Hello Business Owner,';
-  const subject = `${cleanBrandName} Account Activated — Welcome aboard`;
+  const greeting = recipientName ? `Hello ${recipientName},` : 'Hello,';
+  const subject = `Welcome to ${cleanBrandName} - Your account is ready`;
+  const targetUrl = portalUrl || 'https://smartkhata.netsell.in/login';
 
-  const effectiveLogoTag = customLogoImgTag !== undefined 
-    ? customLogoImgTag 
-    : (brandLogo ? resolveEmailLogo(brandLogo, cleanBrandName).imgTag : '');
-
-  const html = `
-<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Welcome to ${cleanBrandName}</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      background-color: #0b0f19;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      color: #e2e8f0;
-      -webkit-font-smoothing: antialiased;
-    }
-    .wrapper {
-      width: 100%;
-      background-color: #0b0f19;
-      padding: 40px 15px;
-      box-sizing: border-box;
-    }
-    .container {
-      max-width: 580px;
-      margin: 0 auto;
-      background: linear-gradient(180deg, #161e2e 0%, #0f172a 100%);
-      border-radius: 24px;
-      border: 1px solid #1e293b;
-      overflow: hidden;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
-    }
-    .header-bar {
-      height: 6px;
-      background: linear-gradient(90deg, #10b981 0%, #06b6d4 50%, #6366f1 100%);
-    }
-    .content {
-      padding: 40px 36px 36px;
-      text-align: center;
-    }
-    .brand-logo-area {
-      margin-bottom: 24px;
-    }
-    .brand-header-row {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    .brand-name {
-      font-size: 24px;
-      font-weight: 800;
-      color: #ffffff;
-      letter-spacing: -0.5px;
-      display: inline-block;
-      vertical-align: middle;
-    }
-    .brand-badge-tag {
-      display: inline-block;
-      vertical-align: middle;
-      padding: 3px 10px;
-      font-size: 11px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      border-radius: 9999px;
-      background: rgba(16, 185, 129, 0.2);
-      color: #6ee7b7;
-      border: 1px solid rgba(110, 231, 183, 0.35);
-    }
-    .badge {
-      display: inline-block;
-      padding: 6px 14px;
-      border-radius: 9999px;
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      background-color: rgba(16, 185, 129, 0.15);
-      color: #10b981;
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      margin-bottom: 20px;
-    }
-    .title {
-      font-size: 26px;
-      font-weight: 800;
-      color: #ffffff;
-      margin: 0 0 12px 0;
-      line-height: 1.3;
-    }
-    .description {
-      font-size: 14px;
-      line-height: 1.6;
-      color: #94a3b8;
-      margin: 0 0 32px 0;
-    }
-    .features-grid {
-      text-align: left;
-      margin: 0 0 32px 0;
-      display: block;
-    }
-    .feature-card {
-      background: rgba(15, 23, 42, 0.7);
-      border: 1px solid #1e293b;
-      border-radius: 14px;
-      padding: 16px 18px;
-      margin-bottom: 12px;
-      display: flex;
-      align-items: flex-start;
-      gap: 14px;
-    }
-    .feature-icon {
-      font-size: 22px;
-      line-height: 1;
-      padding-top: 2px;
-    }
-    .feature-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: #f1f5f9;
-      margin-bottom: 3px;
-    }
-    .feature-desc {
-      font-size: 11.5px;
-      color: #94a3b8;
-      line-height: 1.45;
-    }
-    .action-btn {
-      display: inline-block;
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      color: #ffffff !important;
-      font-weight: 700;
-      font-size: 14px;
-      padding: 14px 32px;
-      border-radius: 14px;
-      text-decoration: none;
-      box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.4);
-      margin-bottom: 28px;
-    }
-    .security-notice {
-      background-color: rgba(30, 41, 59, 0.5);
-      border-radius: 12px;
-      padding: 14px 18px;
-      font-size: 12px;
-      line-height: 1.5;
-      color: #94a3b8;
-      text-align: left;
-      border-left: 3px solid #10b981;
-    }
-    .footer {
-      border-top: 1px solid #1e293b;
-      padding: 24px 32px;
-      background-color: #0b1120;
-      text-align: center;
-      font-size: 11px;
-      color: #475569;
-    }
-  </style>
 </head>
-<body>
-  <!-- Preheader text to optimize email deliverability and avoid spam classification -->
-  <div style="display:none;font-size:1px;color:#0b0f19;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
-    Welcome to ${cleanBrandName}! Your business ledger and billing account is now activated. Log in to explore your dashboard.&#847; &zwnj; &nbsp; &#8199;
-  </div>
-  <div class="wrapper">
-    <div class="container">
-      <div class="header-bar"></div>
-      
-      <div class="content">
-        <div class="brand-logo-area">
-          ${effectiveLogoTag}
-          <div class="brand-header-row">
-            <span class="brand-name">⚡ ${cleanBrandName}</span>
-            ${cleanBadgeText ? `<span class="brand-badge-tag">${cleanBadgeText}</span>` : ''}
-          </div>
-        </div>
-
-        <div>
-          <span class="badge">Merchant Account Live</span>
-        </div>
-
-        <h1 class="title">Welcome Aboard! 🎉</h1>
-        <p class="description">
-          ${greeting} Congratulations! Your business ledger account has been successfully registered and activated on <strong>${cleanBrandName}</strong>.
-        </p>
-
-        <div class="features-grid">
-          <div class="feature-card">
-            <div class="feature-icon">📊</div>
-            <div>
-              <div class="feature-title">Smart Khata &amp; Ledger Automation</div>
-              <div class="feature-desc">Track customer debts, credit limits, payments, and instant WhatsApp payment reminders with ease.</div>
-            </div>
-          </div>
-
-          <div class="feature-card">
-            <div class="feature-icon">⚡</div>
-            <div>
-              <div class="feature-title">Instant UPI &amp; Payment Gateway</div>
-              <div class="feature-desc">Collect payments seamlessly via Dynamic QR, Razorpay, Cashfree, PhonePe, and Direct UPI.</div>
-            </div>
-          </div>
-
-          <div class="feature-card">
-            <div class="feature-icon">☁️</div>
-            <div>
-              <div class="feature-title">Zero-Shared Private Google Drive Storage</div>
-              <div class="feature-desc">Your customer bills, receipts, and images stay strictly encrypted in your own private Google Drive.</div>
-            </div>
-          </div>
-
-          <div class="feature-card">
-            <div class="feature-icon">🧾</div>
-            <div>
-              <div class="feature-title">Professional GST Billing &amp; Invoices</div>
-              <div class="feature-desc">Create, print, and export high-resolution bills, quotation receipts, and thermal slips in 5 seconds.</div>
-            </div>
-          </div>
-        </div>
-
-        ${portalUrl ? `<a href="${portalUrl}" class="action-btn">Launch Your Dashboard &rarr;</a>` : ''}
-
-        <div class="security-notice">
-          🛡️ <strong>Security Tip:</strong> Keep your login credentials confidential. ${cleanBrandName} support will never ask for your password or verification codes.
-        </div>
-      </div>
-
-      <div class="footer">
-        &copy; ${new Date().getFullYear()} ${cleanBrandName}${cleanBadgeText ? ' &bull; ' + cleanBadgeText : ''}. All rights reserved.<br>
-        Autonomous Financial Operating System &bull; Next-Gen Business Intelligence
-      </div>
-    </div>
-  </div>
+<body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; padding: 32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 520px; background-color: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; overflow: hidden;">
+          <tr>
+            <td style="padding: 28px 28px 20px 28px; text-align: left;">
+              <div style="font-size: 20px; font-weight: 700; color: #0f172a; margin-bottom: 18px;">
+                ${cleanBrandName}
+              </div>
+              <h1 style="font-size: 18px; font-weight: 600; color: #1e293b; margin: 0 0 12px 0;">
+                Welcome to ${cleanBrandName}
+              </h1>
+              <p style="font-size: 14px; color: #475569; line-height: 1.5; margin: 0 0 16px 0;">
+                ${greeting}
+              </p>
+              <p style="font-size: 14px; color: #475569; line-height: 1.5; margin: 0 0 20px 0;">
+                Your merchant account has been registered and activated successfully. You can now manage your digital ledger, track customer payments, and create GST invoices with ease.
+              </p>
+              <div style="background-color: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; padding: 16px 20px; margin: 20px 0;">
+                <div style="font-size: 13px; font-weight: 600; color: #0f172a; margin-bottom: 8px;">
+                  What you can do with your account:
+                </div>
+                <ul style="margin: 0; padding-left: 18px; font-size: 13px; color: #475569; line-height: 1.6;">
+                  <li>Digital Khata &amp; customer credit tracking</li>
+                  <li>Instant UPI collections with dynamic QR</li>
+                  <li>GST billing, invoices, and payment receipts</li>
+                </ul>
+              </div>
+              <div style="text-align: center; margin: 24px 0 16px 0;">
+                <a href="${targetUrl}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: 600; font-size: 14px;">
+                  Sign In to Your Dashboard &rarr;
+                </a>
+              </div>
+              <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin: 20px 0 0 0;">
+                Registered Email: <strong>${recipientEmail}</strong><br>
+                For your security, never share your login credentials or verification codes with anyone.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 16px 28px; background-color: #f8fafc; border-top: 1px solid #f1f5f9; text-align: left; font-size: 12px; color: #94a3b8; line-height: 1.4;">
+              &copy; ${new Date().getFullYear()} ${cleanBrandName}. All rights reserved.<br>
+              This is an automated account notification.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
-</html>
-  `;
+</html>`;
 
-  const text = `Welcome to ${cleanBrandName}!\n\n${greeting} Your merchant ledger account has been activated.\n\nFeatures available:\n- Smart Khata & Customer Ledger\n- Instant UPI Collections\n- Private Google Drive Cloud Backup\n- Professional GST Billing\n\nThank you for choosing ${cleanBrandName}!`;
+  const text = `Welcome to ${cleanBrandName}!\n\n${greeting}\n\nYour merchant account has been registered and activated successfully.\n\nWith ${cleanBrandName}, you can:\n- Manage customer credit & khata ledger\n- Collect instant UPI payments via QR\n- Generate GST invoices & receipts\n\nSign in to your dashboard here:\n${targetUrl}\n\nRegistered Email: ${recipientEmail}\n\n© ${new Date().getFullYear()} ${cleanBrandName}. All rights reserved.`;
 
   return { subject, html, text };
 }
@@ -777,9 +605,11 @@ export async function sendWelcomeEmailDirect(params: {
     const info = await transporter.sendMail({
       from: formattedFrom,
       to: params.to,
+      replyTo: senderEmail,
       subject,
       text,
       html,
+      attachments: logoAttachments && logoAttachments.length > 0 ? logoAttachments : undefined,
       messageId: cleanMessageId,
       envelope: {
         from: senderEmail,

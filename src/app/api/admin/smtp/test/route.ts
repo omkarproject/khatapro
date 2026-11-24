@@ -67,10 +67,15 @@ export async function POST(req: NextRequest) {
     const info = await transporter.sendMail({
       from: formattedFrom,
       to: testEmail,
+      replyTo: senderEmail,
       subject: `[SMTP Test Successful] ${subject}`,
       text,
       html,
       attachments: logoAttachments.length > 0 ? logoAttachments : undefined,
+      headers: {
+        'Auto-Submitted': 'auto-generated',
+        'X-Auto-Response-Suppress': 'All',
+      },
     });
 
     return NextResponse.json({
