@@ -534,21 +534,15 @@ export function isInvoicePaid(inv: any): boolean {
   if (total > 0 && paid >= total) return true;
 
   if (typeof window !== 'undefined') {
-    if (inv.id) {
-      if (
-        localStorage.getItem(`sk_destroyed_pay_link_${inv.id}`) === 'true' ||
-        localStorage.getItem(`sk_invoice_settled_${inv.id}`)
-      ) {
-        return true;
-      }
-    }
-    if (inv.invoiceNumber) {
-      if (
-        localStorage.getItem(`sk_destroyed_pay_link_${inv.invoiceNumber}`) === 'true' ||
-        localStorage.getItem(`sk_invoice_settled_${inv.invoiceNumber}`)
-      ) {
-        return true;
-      }
+    // Only consider settled if a real confirmed payment receipt object exists
+    const settledId = inv.id ? localStorage.getItem(`sk_invoice_settled_${inv.id}`) : null;
+    const settledInvNo = inv.invoiceNumber ? localStorage.getItem(`sk_invoice_settled_${inv.invoiceNumber}`) : null;
+    const settledRaw = settledId || settledInvNo;
+    if (settledRaw) {
+      try {
+        const s = JSON.parse(settledRaw);
+        if (s && (s.referenceNo || s.cfPaymentId || s.settledAt)) return true;
+      } catch {}
     }
   }
   return false;

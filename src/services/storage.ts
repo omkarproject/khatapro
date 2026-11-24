@@ -1390,32 +1390,30 @@ export const StorageService = {
         }
       }
     }
-    // Check if any invoice was settled/destroyed via link or settled receipt
+    // Check if any invoice was settled via confirmed receipt/payment proof
     if (Array.isArray(list) && typeof window !== 'undefined') {
       let modified = false;
       list = list.map(inv => {
         if (inv.status === 'paid') return inv;
-        const isDestroyed =
-          localStorage.getItem('sk_destroyed_pay_link_' + inv.id) === 'true' ||
-          localStorage.getItem('sk_destroyed_pay_link_' + inv.invoiceNumber) === 'true';
         const settledRaw =
           localStorage.getItem('sk_invoice_settled_' + inv.id) ||
           (inv.invoiceNumber ? localStorage.getItem('sk_invoice_settled_' + inv.invoiceNumber) : null);
-        if (isDestroyed || settledRaw) {
-          modified = true;
-          let settledData: any = null;
+        if (settledRaw) {
           try {
-            settledData = settledRaw ? JSON.parse(settledRaw) : null;
+            const settledData = JSON.parse(settledRaw);
+            if (settledData && (settledData.referenceNo || settledData.cfPaymentId || settledData.settledAt)) {
+              modified = true;
+              return {
+                ...inv,
+                status: 'paid',
+                paidAmount: inv.total,
+                paymentDate: settledData?.settledAt
+                  ? settledData.settledAt.split('T')[0]
+                  : (inv.paymentDate || new Date().toISOString().split('T')[0]),
+                receiptUrl: settledData?.receiptUrl || inv.receiptUrl,
+              };
+            }
           } catch {}
-          return {
-            ...inv,
-            status: 'paid',
-            paidAmount: inv.total,
-            paymentDate: settledData?.settledAt
-              ? settledData.settledAt.split('T')[0]
-              : (inv.paymentDate || new Date().toISOString().split('T')[0]),
-            receiptUrl: settledData?.receiptUrl || inv.receiptUrl,
-          };
         }
         return inv;
       });

@@ -4388,6 +4388,11 @@ function KhataPageInner() {
                               <span className={`text-xs font-bold truncate ${getCustomerRatingColor(cust.rating)}`}>
                                 {cust.name}
                               </span>
+                              {cust.excludeTransactions && (
+                                <span title="Transactions Excluded" className="inline-flex items-center text-rose-500 shrink-0">
+                                  <Ban className="w-3 h-3 text-rose-500 stroke-[2.5]" />
+                                </span>
+                              )}
                               {isPinned && (
                                 <span
                                   title="Pinned chat on top"
@@ -4616,6 +4621,11 @@ function KhataPageInner() {
                             </div>
                             <span className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                               <span>{activeCustomer.name}</span>
+                              {activeCustomer.excludeTransactions && (
+                                <span title="Transactions Excluded" className="inline-flex items-center text-rose-500 shrink-0">
+                                  <Ban className="w-3.5 h-3.5 text-rose-500 stroke-[2.5]" />
+                                </span>
+                              )}
                               {(activeCustomer.category === 'Merchant' || activeCustomer.id.startsWith('peer_cust_')) && (
                                 <span title="Verified Merchant" className="inline-flex items-center text-emerald-500 shrink-0">
                                   <BadgeCheck className="w-4 h-4 text-emerald-500 fill-emerald-500/20" />
@@ -4930,14 +4940,19 @@ function KhataPageInner() {
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span
                                 onClick={() => setScreenView('profile')}
-                                className={`text-[17px] font-black leading-tight truncate cursor-pointer hover:opacity-85 transition-opacity ${getCustomerRatingColor(activeCustomer.rating)}`}
+                                className={`text-sm font-bold leading-tight truncate cursor-pointer hover:opacity-85 transition-opacity ${getCustomerRatingColor(activeCustomer.rating)}`}
                                 title="Click to view/edit profile"
                               >
                                 {activeCustomer.name}
                               </span>
+                              {activeCustomer.excludeTransactions && (
+                                <span title="Transactions Excluded from overall hisab" className="inline-flex items-center text-rose-500 shrink-0">
+                                  <Ban className="w-3.5 h-3.5 text-rose-500 stroke-[2.5]" />
+                                </span>
+                              )}
                               {(activeCustomer.category === 'Merchant' || activeCustomer.id.startsWith('peer_cust_')) && (
                                 <span title="Verified Merchant" className="inline-flex items-center text-emerald-500 shrink-0">
-                                  <BadgeCheck className="w-5 h-5 text-emerald-500 fill-emerald-500/20" />
+                                  <BadgeCheck className="w-4 h-4 text-emerald-500 fill-emerald-500/20" />
                                 </span>
                               )}
                             </div>
@@ -4950,7 +4965,7 @@ function KhataPageInner() {
                               {[1, 2, 3, 4, 5].map((star) => (
                                 <Star
                                   key={star}
-                                  className={`w-3.5 h-3.5 ${
+                                  className={`w-2.5 h-2.5 ${
                                     star <= (activeCustomer.rating || 5)
                                       ? 'fill-amber-400 text-amber-400'
                                       : 'text-slate-300 dark:text-slate-600'

@@ -59,18 +59,6 @@ export default function RemindersPage() {
 
   // Auto-schedule payment reminders for any unpaid invoices & clean up paid/settled ones
   useEffect(() => {
-    // 1. Clean up reminders for customers who have cleared their dues (settled in Khatabook / Online Pay)
-    if (customers && customers.length > 0) {
-      customers.forEach((cust) => {
-        if ((cust.outstandingBalance ?? 0) <= 0) {
-          const toDelete = reminders.filter((r) => r.customerId === cust.id);
-          toDelete.forEach((r) => {
-            deleteReminder(r.id);
-          });
-        }
-      });
-    }
-
     if (!invoices || invoices.length === 0) return;
     invoices.forEach((inv) => {
       const remId = `rem_inv_${inv.id}`;
@@ -168,14 +156,6 @@ export default function RemindersPage() {
 
   const activeReminders = React.useMemo(() => {
     return reminders.filter((r) => {
-      // 0. If customer is marked as Exclude Transactions, hide reminder
-      const custCheck = customers.find(
-        (c) =>
-          c.id === r.customerId ||
-          (r.customerPhone && c.phone && c.phone.replace(/\D/g, '').slice(-10) === r.customerPhone.replace(/\D/g, '').slice(-10))
-      );
-      if (custCheck?.excludeTransactions) return false;
-
       // 1. If linked invoice is paid, hide immediately
       const linkedInvoice = invoices.find(
         (i) =>

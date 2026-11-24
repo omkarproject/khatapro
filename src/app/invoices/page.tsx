@@ -233,24 +233,25 @@ export default function InvoicesPage() {
   const filteredInvoices = useMemo(() => {
     return invoices.map(inv => {
       if (inv.status !== 'paid' && typeof window !== 'undefined') {
-        const isDestroyed =
-          localStorage.getItem(`sk_destroyed_pay_link_${inv.id}`) === 'true' ||
-          localStorage.getItem(`sk_destroyed_pay_link_${inv.invoiceNumber}`) === 'true';
-        const settledRaw = localStorage.getItem(`sk_invoice_settled_${inv.id}`);
-        if (isDestroyed || settledRaw) {
+        const settledRaw =
+          localStorage.getItem(`sk_invoice_settled_${inv.id}`) ||
+          (inv.invoiceNumber ? localStorage.getItem(`sk_invoice_settled_${inv.invoiceNumber}`) : null);
+        if (settledRaw) {
           let s: any = null;
           try {
-            s = settledRaw ? JSON.parse(settledRaw) : null;
+            s = JSON.parse(settledRaw);
           } catch {}
-          return {
-            ...inv,
-            status: 'paid' as const,
-            paidAmount: inv.total,
-            paymentDate: s?.settledAt
-              ? s.settledAt.split('T')[0]
-              : (inv.paymentDate || new Date().toISOString().split('T')[0]),
-            receiptUrl: s?.receiptUrl || inv.receiptUrl,
-          };
+          if (s && (s.referenceNo || s.cfPaymentId || s.settledAt)) {
+            return {
+              ...inv,
+              status: 'paid' as const,
+              paidAmount: inv.total,
+              paymentDate: s?.settledAt
+                ? s.settledAt.split('T')[0]
+                : (inv.paymentDate || new Date().toISOString().split('T')[0]),
+              receiptUrl: s?.receiptUrl || inv.receiptUrl,
+            };
+          }
         }
       }
       return inv;
