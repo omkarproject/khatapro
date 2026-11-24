@@ -85,7 +85,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
 
         <div className="flex-1 flex w-full print:block">
           {currentUser && (
-            <div className="print:hidden">
+            <div className="print:hidden shrink-0">
               <Sidebar
                 isOpenMobile={mobileSidebarOpen}
                 onCloseMobile={() => setMobileSidebarOpen(false)}
