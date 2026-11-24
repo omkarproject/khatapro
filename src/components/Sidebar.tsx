@@ -19,10 +19,11 @@ import {
   LineChart,
   Settings,
   ShieldCheck,
-  Zap,
   ChevronLeft,
   ChevronRight,
-  ClipboardList
+  ClipboardList,
+  Pin,
+  PinOff
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -32,8 +33,11 @@ interface SidebarProps {
 
 function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
-  const { settings, profile, currentUser, activeLanguage, activeCurrency } = useApp();
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const { settings, activeLanguage } = useApp();
+  
+  // Auto-hide & Hover-to-expand state for desktop
+  const [isHovered, setIsHovered] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
   const [, setLangTick] = useState(0);
 
   useEffect(() => {
@@ -44,18 +48,19 @@ function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('smartkhata_sidebar_collapsed');
-      if (saved !== null) {
-        setIsCollapsed(saved === 'true');
+      const savedPin = localStorage.getItem('smartkhata_sidebar_pinned');
+      if (savedPin !== null) {
+        setIsPinned(savedPin === 'true');
       }
     } catch {}
   }, []);
 
-  const toggleCollapse = () => {
-    setIsCollapsed(prev => {
+  const togglePin = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsPinned((prev) => {
       const next = !prev;
       try {
-        localStorage.setItem('smartkhata_sidebar_collapsed', String(next));
+        localStorage.setItem('smartkhata_sidebar_pinned', String(next));
       } catch {}
       return next;
     });
@@ -77,30 +82,36 @@ function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
     { label: t('settings', 'Settings'), href: '/settings', icon: Settings },
   ], [activeLanguage]);
 
-  const renderSidebarContent = (isMobileView: boolean) => {
-    const collapsed = !isMobileView && isCollapsed;
+  // Is expanded either on mobile, or when pinned, or when hovered
+  const isExpandedDesktop = isPinned || isHovered;
+
+  const renderContent = (isMobileView: boolean) => {
+    const expanded = isMobileView || isExpandedDesktop;
 
     return (
-      <div className={`flex flex-col h-full justify-between transition-all duration-300 ${collapsed ? 'p-2' : 'p-4'}`}>
+      <div className={`flex flex-col h-full justify-between transition-all duration-300 ${expanded ? 'p-3.5 sm:p-4' : 'p-2'}`}>
         {/* Top Section: Nav Links */}
         <div className="space-y-1 overflow-y-auto pr-1 scrollbar-thin">
-          <div className={`flex items-center justify-between py-2 ${collapsed ? 'px-1 justify-center' : 'px-3'}`}>
-            {!collapsed && (
-              <span className="text-[11px] font-bold uppercase tracking-wider text-black dark:text-slate-400 truncate">
+          <div className={`flex items-center justify-between py-2 mb-1 ${expanded ? 'px-3' : 'px-1 justify-center'}`}>
+            {expanded ? (
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-black dark:text-slate-300 truncate select-none">
                 {t('mainModules', 'Main Modules')}
               </span>
+            ) : (
+              <div className="w-2 h-2 rounded-full bg-indigo-500/60 dark:bg-indigo-400/60 animate-pulse my-1" />
             )}
+
             {!isMobileView && (
               <button
                 type="button"
-                onClick={toggleCollapse}
-                className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                title={collapsed ? "Unhide / Expand Sidebar" : "Hide / Collapse Sidebar"}
+                onClick={togglePin}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                title={isPinned ? 'Unpin Sidebar (Enable Auto-Hide on Hover)' : 'Pin Sidebar Open'}
               >
-                {collapsed ? (
-                  <ChevronRight className="w-4 h-4" />
+                {isPinned ? (
+                  <Pin className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 ) : (
-                  <ChevronLeft className="w-4 h-4" />
+                  <PinOff className="w-3.5 h-3.5 text-slate-400 hover:text-indigo-500" />
                 )}
               </button>
             )}
@@ -116,32 +127,36 @@ function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
                 href={item.href}
                 prefetch={true}
                 onClick={onCloseMobile}
-                title={collapsed ? item.label : undefined}
-                className={`flex items-center rounded-xl text-xs font-bold transition-all group ${
-                  collapsed
-                    ? 'justify-center p-2 my-0.5'
-                    : 'justify-between px-3 py-2 my-0.5'
+                title={!expanded ? item.label : undefined}
+                className={`flex items-center rounded-xl text-xs font-bold transition-all group duration-200 ${
+                  !expanded
+                    ? 'justify-center p-2.5 my-1'
+                    : 'justify-between px-3 py-2.5 my-0.5'
                 } ${
                   isActive
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                    : 'text-black dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400/40'
+                    : 'text-black dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100/90 dark:hover:bg-slate-800/70 hover:shadow-sm'
                 }`}
               >
-                <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
+                <div className={`flex items-center ${!expanded ? 'justify-center' : 'gap-3 min-w-0'}`}>
                   <Icon
                     className={`w-4 h-4 transition-transform group-hover:scale-110 shrink-0 ${
                       isActive ? 'text-white' : 'text-slate-900 dark:text-slate-400 group-hover:text-indigo-500'
                     }`}
                   />
-                  {!collapsed && <span className="truncate">{item.label}</span>}
+                  {expanded && (
+                    <span className="truncate whitespace-nowrap animate-in fade-in duration-200">
+                      {item.label}
+                    </span>
+                  )}
                 </div>
 
-                {!collapsed && item.badge && (
+                {expanded && item.badge && (
                   <span
-                    className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-md uppercase tracking-wider ${
+                    className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0 animate-in fade-in duration-200 ${
                       isActive
                         ? 'bg-white/20 text-white'
-                        : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400'
+                        : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400 ring-1 ring-indigo-500/20'
                     }`}
                   >
                     {item.badge}
@@ -153,12 +168,12 @@ function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
         </div>
 
         {/* Bottom Section */}
-        <div className={`pt-2.5 border-t border-slate-200/80 dark:border-slate-800 ${collapsed ? 'p-1' : ''}`}>
-          {!collapsed ? (
-            <div className="flex items-center justify-between text-[10px] text-black dark:text-slate-400 font-medium px-1 py-1">
-              <span className="flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-emerald-500" />
-                {t('secure100', '100% Secure')}
+        <div className={`pt-2.5 border-t border-slate-200/80 dark:border-slate-800/80 ${expanded ? 'p-1' : 'p-1'}`}>
+          {expanded ? (
+            <div className="flex items-center justify-between text-[10px] text-black dark:text-slate-400 font-medium px-1 py-1 animate-in fade-in duration-200">
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span>{t('secure100', '100% Secure')}</span>
               </span>
               <span className="text-[9px] font-mono text-black dark:text-slate-400 font-semibold">
                 v1.0{settings.websiteBadgeText ? ` ${settings.websiteBadgeText.trim()}` : ''}
@@ -176,12 +191,33 @@ function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
 
   return (
     <>
-      {/* Desktop Persistent Sidebar (Collapsible) */}
-      <aside className={`hidden lg:flex flex-col shrink-0 h-[calc(100vh-4rem)] sticky top-16 border-r border-slate-200/80 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl transition-all duration-300 ${
-        isCollapsed ? 'w-16' : 'w-64'
-      }`}>
-        {renderSidebarContent(false)}
-      </aside>
+      {/* Desktop Auto-Hide Sidebar with Hover-to-Expand, Translucent Glass & Ambient Glow */}
+      <div className="relative shrink-0 hidden lg:block">
+        {/* Layout Spacer so page content remains completely stable and doesn't reflow */}
+        <div
+          className={`h-[calc(100vh-4rem)] transition-all duration-300 ease-in-out ${
+            isPinned ? 'w-64' : 'w-16'
+          }`}
+        />
+
+        {/* Floating Expanding Sidebar */}
+        <aside
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          className={`fixed top-16 left-0 h-[calc(100vh-4rem)] z-30 flex flex-col justify-between transition-all duration-300 ease-in-out border-r ${
+            isExpandedDesktop
+              ? 'w-64 bg-white/92 dark:bg-[#0B101D]/92 backdrop-blur-2xl border-indigo-400/40 dark:border-indigo-500/30 shadow-2xl shadow-indigo-600/15 dark:shadow-indigo-950/50'
+              : 'w-16 bg-white/70 dark:bg-[#0B0F19]/70 backdrop-blur-xl border-slate-200/80 dark:border-slate-800/80 shadow-xs'
+          }`}
+        >
+          {/* Subtle Right Border Glow Accent when Expanded */}
+          {isExpandedDesktop && (
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-[2px] bg-gradient-to-b from-transparent via-indigo-500/50 to-transparent" />
+          )}
+
+          {renderContent(false)}
+        </aside>
+      </div>
 
       {/* Mobile & Tablet Drawer */}
       {isOpenMobile && (
@@ -190,8 +226,8 @@ function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
             className="fixed inset-0 bg-black/60 backdrop-blur-sm"
             onClick={onCloseMobile}
           />
-          <div className="relative w-72 max-w-[85vw] h-full bg-white dark:bg-slate-900 shadow-2xl z-10 border-r border-slate-200 dark:border-slate-800">
-            {renderSidebarContent(true)}
+          <div className="relative w-72 max-w-[85vw] h-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl shadow-2xl z-10 border-r border-slate-200 dark:border-slate-800">
+            {renderContent(true)}
           </div>
         </div>
       )}
