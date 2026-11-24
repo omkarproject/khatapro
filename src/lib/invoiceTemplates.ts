@@ -17,7 +17,7 @@ export const INVOICE_TEMPLATES: InvoiceTemplateMeta[] = [
     tagline: 'Clean, borderless typography with subtle indigo accents',
     category: 'Modern',
     accentColor: '#4f46e5',
-    description: 'Perfect for modern businesses, consultants, and agencies seeking high elegance with minimal ink usage.',
+    description: 'Clean borderless typography with subtle indigo accents.',
     badge: 'Popular',
   },
   {
@@ -26,7 +26,7 @@ export const INVOICE_TEMPLATES: InvoiceTemplateMeta[] = [
     tagline: 'Formal double-border B2B structured layout',
     category: 'Corporate',
     accentColor: '#1e3a8a',
-    description: 'Traditional enterprise and wholesale layout with structured billing boxes and formal signatory columns.',
+    description: 'Formal double-border B2B structured layout.',
     badge: 'B2B Standard',
   },
   {
@@ -35,7 +35,7 @@ export const INVOICE_TEMPLATES: InvoiceTemplateMeta[] = [
     tagline: 'Dark tech accents with neon emerald highlights',
     category: 'High-Tech',
     accentColor: '#059669',
-    description: 'Ultra-modern tech invoice with monospace data badges, cyber security verification tag, and sleek aesthetics.',
+    description: 'Dark tech accents with neon emerald highlights.',
     badge: 'Trending',
   },
   {
@@ -44,7 +44,7 @@ export const INVOICE_TEMPLATES: InvoiceTemplateMeta[] = [
     tagline: 'Deep forest emerald green with luxury gold touches',
     category: 'Luxury',
     accentColor: '#065f46',
-    description: 'Aristocratic financial aesthetic with serif headlines, regal balance cards, and premium border trims.',
+    description: 'Deep forest emerald green with luxury gold touches.',
     badge: 'Executive',
   },
   {
@@ -53,7 +53,7 @@ export const INVOICE_TEMPLATES: InvoiceTemplateMeta[] = [
     tagline: 'Retail slip format with barcode and dashed receipt lines',
     category: 'Retail POS',
     accentColor: '#0f172a',
-    description: 'Designed for fast retail billing, supermarket checkouts, and 80mm or compact A4 single-column slips.',
+    description: 'Retail slip format with barcode and dashed receipt lines.',
     badge: 'Retail Fast',
   },
   {
@@ -62,7 +62,7 @@ export const INVOICE_TEMPLATES: InvoiceTemplateMeta[] = [
     tagline: 'Modern violet-to-cyan mesh gradient header',
     category: 'Creative',
     accentColor: '#7c3aed',
-    description: 'Youthful and energetic styling with rounded cards, pill badges, and distinctive gradient branding.',
+    description: 'Modern violet-to-cyan mesh gradient header.',
     badge: 'Creative',
   },
   {
@@ -71,7 +71,7 @@ export const INVOICE_TEMPLATES: InvoiceTemplateMeta[] = [
     tagline: 'Warm charcoal with champagne gold foil styling',
     category: 'Luxury',
     accentColor: '#d97706',
-    description: 'Tailored for jewelry, fashion boutiques, premium hospitality, and luxury service providers.',
+    description: 'Warm charcoal with champagne gold foil styling.',
     badge: 'Premium',
   },
   {
@@ -80,7 +80,7 @@ export const INVOICE_TEMPLATES: InvoiceTemplateMeta[] = [
     tagline: 'Government compliant GST invoice with tax breakdown',
     category: 'Compliance',
     accentColor: '#2563eb',
-    description: 'Comprehensive Indian GST format with HSN code, CGST/SGST/IGST breakdown, state codes, and legal declaration.',
+    description: 'Government compliant GST invoice with tax breakdown.',
     badge: 'GST Ready',
   },
   {
@@ -89,7 +89,7 @@ export const INVOICE_TEMPLATES: InvoiceTemplateMeta[] = [
     tagline: 'Timeless Swiss international typographic style',
     category: 'Minimalist',
     accentColor: '#000000',
-    description: 'Strict architectural grid, razor-sharp black dividers, bold numbers, and zero visual distractions.',
+    description: 'Timeless Swiss international typographic style.',
     badge: 'Timeless',
   },
   {
@@ -98,7 +98,7 @@ export const INVOICE_TEMPLATES: InvoiceTemplateMeta[] = [
     tagline: 'Prominent UPI QR spotlight for instant payment recovery',
     category: 'Payments',
     accentColor: '#0284c7',
-    description: 'Engineered specifically for credit collection with an eye-catching instant scan-and-pay UPI ribbon.',
+    description: 'Prominent UPI QR spotlight for instant payment recovery.',
     badge: 'High Recovery',
   },
 ];
@@ -160,17 +160,27 @@ export function formatInvoiceToRenderData(
 ): InvoiceRenderData {
   const upiId = settings.paymentSettings?.upiId || '';
   const payeeName = settings.paymentSettings?.payeeName || settings.businessName || profile.businessName || 'SmartKhata Merchant';
-  const qrUrl =
-    settings.paymentSettings?.customQrUrl ||
-    `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
+  let qrUrl = settings.paymentSettings?.customQrUrl || '';
+  if (!qrUrl && upiId) {
+    qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
       `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${invoice.total}&tr=${encodeURIComponent(invoice.invoiceNumber || 'INV')}`
     )}`;
+  }
+
+  const resolvedAddress = (
+    settings.businessAddress ||
+    profile.businessAddress ||
+    settings.address ||
+    (profile as any)?.address ||
+    settings.websiteSupportLocation ||
+    ''
+  ).trim() || 'Registered Office Address';
 
   return {
     merchant: {
-      name: profile.fullName || 'Store Owner',
+      name: profile.fullName || profile.name || 'Store Owner',
       businessName: settings.businessName || profile.businessName || 'SmartKhata Merchant',
-      address: settings.businessAddress || profile.businessAddress || '',
+      address: resolvedAddress,
       phone: settings.businessPhone || profile.phone || '',
       email: settings.businessEmail || profile.email || '',
       gst: settings.businessGst || settings.paymentSettings?.businessGst || profile.businessGst || '',
@@ -218,6 +228,79 @@ export function formatInvoiceToRenderData(
   };
 }
 
+// Helper to render line items rows uniformly across all templates
+function renderItemsRowsHtml(
+  data: InvoiceRenderData,
+  theme: {
+    accentColor: string;
+    numColor?: string;
+    currencySymbol: string;
+    amountFormatted: string;
+    isGot: boolean;
+    dateFormatted: string;
+  }
+): string {
+  if (Array.isArray(data.items) && data.items.length > 0) {
+    return data.items.map((it, idx) => `
+      <tr>
+        <td style="text-align: center; color: ${theme.numColor || '#64748b'}; font-weight: bold;">${String(idx + 1).padStart(2, '0')}</td>
+        <td>
+          <div style="font-weight: 800; font-size: 13px; color: #0f172a;">${it.name}</div>
+          ${it.description ? `<div style="font-size: 10.5px; color: #64748b; margin-top: 2px;">${it.description}</div>` : ''}
+        </td>
+        <td style="text-align: center; font-size: 11px; color: #64748b; font-family: monospace;">
+          ${it.quantity} × ${theme.currencySymbol}${it.unitPrice.toLocaleString('en-IN')}${it.taxPercent ? ` (+${it.taxPercent}% GST)` : ''}
+        </td>
+        <td style="text-align: right; font-family: monospace; font-size: 14px; font-weight: 900; color: #0f172a;">
+          ${theme.currencySymbol}${it.total.toLocaleString('en-IN')}
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  return `
+    <tr>
+      <td style="text-align: center; color: ${theme.numColor || '#64748b'}; font-weight: bold;">01</td>
+      <td>
+        <div style="font-weight: 800; font-size: 13px; color: #0f172a;">${data.txn.note || (theme.isGot ? 'Payment Received' : 'Goods / Service Supplied')}</div>
+        <div style="font-size: 10.5px; color: #64748b; margin-top: 2px;">Txn Ref: ${data.txn.id} • ${theme.dateFormatted}</div>
+      </td>
+      <td style="text-align: center; font-weight: bold; color: ${theme.isGot ? '#047857' : theme.accentColor}; font-size: 11px;">
+        ${theme.isGot ? 'PAYMENT RECEIVED' : 'CREDIT SUPPLY'}
+      </td>
+      <td style="text-align: right; font-family: monospace; font-size: 14px; font-weight: 900; color: #0f172a;">
+        ${theme.amountFormatted}
+      </td>
+    </tr>
+  `;
+}
+
+// Helper to render Default UPI & QR Instant Payment box
+function renderDefaultUpiQrBoxHtml(
+  upiId: string,
+  qrUrl: string,
+  bankInfo?: { bankName?: string; accountNo?: string; ifsc?: string },
+  theme?: { accentColor?: string; bgColor?: string; borderColor?: string }
+): string {
+  if (!qrUrl && !upiId) return '';
+  const accent = theme?.accentColor || '#4f46e5';
+  const bg = theme?.bgColor || '#f8fafc';
+  const border = theme?.borderColor || '#cbd5e1';
+
+  return `
+    <div style="margin-top: 22px; padding: 14px 18px; border-radius: 12px; background: ${bg}; border: 1.5px dashed ${border}; display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; background: ${accent}; color: #ffffff; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">DEFAULT UPI & INSTANT QR</span>
+        <div style="font-size: 13px; font-weight: 900; color: #0f172a; margin-top: 5px;">Scan & Pay via Any UPI App</div>
+        <div style="font-size: 10.5px; color: #64748b; margin-top: 2px;">Google Pay • PhonePe • Paytm • BHIM • Banking UPI</div>
+        ${upiId ? `<div style="font-size: 12px; font-family: monospace; font-weight: 800; color: ${accent}; margin-top: 4px;">UPI ID: ${upiId}</div>` : ''}
+        ${bankInfo?.bankName ? `<div style="font-size: 10.5px; color: #64748b; margin-top: 2px;">Bank: ${bankInfo.bankName} | A/C: ${bankInfo.accountNo || ''} | IFSC: ${bankInfo.ifsc || ''}</div>` : ''}
+      </div>
+      ${qrUrl ? `<img src="${qrUrl}" alt="Scan to Pay UPI" style="width: 82px; height: 82px; border-radius: 8px; border: 1px solid ${border}; background: #fff; padding: 3px;" />` : ''}
+    </div>
+  `;
+}
+
 export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData): string {
   const tId = templateId || 'template_minimal';
   const isGot = !!data.txn.isGot || data.txn.type === 'debit' || data.txn.type === 'collection';
@@ -234,7 +317,7 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
   const mOwnerName = data.merchant.name || 'Store Owner';
   const mPhone = data.merchant.phone || '';
   const mEmail = data.merchant.email || '';
-  const mAddress = data.merchant.address || '';
+  const mAddress = (data.merchant.address || '').trim() || 'Registered Office Address';
   const mGst = data.merchant.gst || '';
 
   const cName = data.customer.name || 'Valued Customer';
@@ -242,8 +325,15 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
   const cAddress = data.customer.address || '';
   const cBiz = data.customer.businessName || '';
 
-  const qrUrl = data.payment?.qrUrl || '';
   const upiId = data.payment?.upiId || '';
+  const payeeName = data.payment?.payeeName || mBizName;
+  let qrUrl = data.payment?.qrUrl || '';
+
+  if (!qrUrl && upiId) {
+    qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
+      `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${data.txn.amount}&tr=${encodeURIComponent(docNo)}`
+    )}`;
+  }
 
   const commonPrintCss = `
     @page { size: A4 portrait; margin: 10mm 12mm; }
@@ -285,9 +375,10 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
       <div class="min-header">
         <div>
           <div class="min-biz">${mBizName}</div>
-          <div style="font-size: 11.5px; color: #64748b; margin-top: 4px;">${mAddress || 'Official Verified Merchant'}</div>
+          <div style="font-size: 11.5px; color: #64748b; margin-top: 4px;">${mAddress}</div>
           <div style="font-size: 11.5px; color: #64748b; margin-top: 2px;">
             Phone: <strong style="color: #334155;">${mPhone || 'N/A'}</strong>
+            ${mEmail ? ` • Email: ${mEmail}` : ''}
             ${mGst ? ` • GSTIN: <strong style="color: #4f46e5; font-family: monospace;">${mGst}</strong>` : ''}
           </div>
         </div>
@@ -301,18 +392,20 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
 
       <div class="min-parties">
         <div class="min-party-box">
-          <div class="min-label">Billed By (Merchant)</div>
+          <div class="min-label">ENTERPRISE / BILLED BY</div>
           <div style="font-weight: 800; font-size: 14px; color: #0f172a;">${mBizName}</div>
-          <div style="font-size: 11px; color: #475569; margin-top: 3px;">Owner: ${mOwnerName}</div>
+          <div style="font-size: 11px; color: #475569; margin-top: 3px;">Proprietor: ${mOwnerName}</div>
+          <div style="font-size: 11px; color: #475569; margin-top: 1px;">Address: ${mAddress}</div>
           <div style="font-size: 11px; color: #475569; margin-top: 1px;">Phone: ${mPhone}</div>
-          ${mEmail ? `<div style="font-size: 11px; color: #64748b; margin-top: 1px;">Email: ${mEmail}</div>` : ''}
+          ${mGst ? `<div style="font-size: 11px; font-family: monospace; font-weight: bold; color: #4f46e5; margin-top: 1px;">GSTIN: ${mGst}</div>` : ''}
         </div>
         <div class="min-party-box">
-          <div class="min-label">Billed To (Customer)</div>
+          <div class="min-label">BILLED TO / CUSTOMER</div>
           <div style="font-weight: 800; font-size: 14px; color: #0f172a;">${cName}</div>
           <div style="font-size: 11px; color: #475569; margin-top: 3px;">Phone: <strong>${cPhone || 'N/A'}</strong></div>
-          ${cBiz ? `<div style="font-size: 11px; color: #4f46e5; font-weight: 600; margin-top: 1px;">Business: ${cBiz}</div>` : ''}
           ${cAddress ? `<div style="font-size: 11px; color: #64748b; margin-top: 1px;">Address: ${cAddress}</div>` : ''}
+          ${cBiz ? `<div style="font-size: 11px; color: #4f46e5; font-weight: 600; margin-top: 1px;">Business: ${cBiz}</div>` : ''}
+          ${data.customer.gst ? `<div style="font-size: 11px; font-family: monospace; color: #64748b; margin-top: 1px;">GSTIN: ${data.customer.gst}</div>` : ''}
         </div>
       </div>
 
@@ -320,25 +413,19 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
         <thead>
           <tr>
             <th style="width: 8%; text-align: center;">#</th>
-            <th style="width: 54%;">Particulars / Item Description</th>
-            <th style="width: 18%; text-align: center;">Entry Mode</th>
+            <th style="width: 52%;">Particulars / Item Description</th>
+            <th style="width: 20%; text-align: center;">Qty & Rate</th>
             <th style="width: 20%; text-align: right;">Amount</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td style="text-align: center; color: #94a3b8; font-weight: bold;">1</td>
-            <td>
-              <div style="font-weight: 800; font-size: 13.5px; color: #0f172a;">${data.txn.note || (isGot ? 'Payment Received' : 'Goods / Service Supplied')}</div>
-              <div style="font-size: 10.5px; color: #64748b; margin-top: 3px;">Trans ID: ${data.txn.id} • Status: ${data.txn.status || 'Settled'}</div>
-            </td>
-            <td style="text-align: center; font-weight: bold; color: ${isGot ? '#047857' : '#be123c'};">
-              ${isGot ? '↓ Debit (You Got)' : '↑ Credit (You Gave)'}
-            </td>
-            <td style="text-align: right; font-family: monospace; font-size: 15px; font-weight: 900; color: ${isGot ? '#047857' : '#be123c'};">
-              ${amountFormatted}
-            </td>
-          </tr>
+          ${renderItemsRowsHtml(data, {
+            accentColor: '#4f46e5',
+            currencySymbol,
+            amountFormatted,
+            isGot,
+            dateFormatted,
+          })}
         </tbody>
       </table>
 
@@ -352,20 +439,11 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
         </div>
       </div>
 
-      ${qrUrl ? `
-      <div style="margin-top: 20px; padding: 14px 18px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
-        <div>
-          <div style="font-size: 12px; font-weight: 800; color: #0f172a;">Instant Scan & Pay via UPI</div>
-          <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Scan using PhonePe, Google Pay, Paytm, or BHIM</div>
-          <div style="font-size: 11px; font-family: monospace; font-weight: bold; color: #4f46e5; margin-top: 4px;">UPI ID: ${upiId}</div>
-        </div>
-        <img src="${qrUrl}" alt="UPI QR" style="width: 80px; height: 80px; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; padding: 4px;" />
-      </div>
-      ` : ''}
+      ${renderDefaultUpiQrBoxHtml(upiId, qrUrl, data.payment, { accentColor: '#4f46e5', bgColor: '#f8fafc', borderColor: '#cbd5e1' })}
 
       <div class="min-footer">
         <div>
-          <div style="font-weight: 700; color: #0f172a;">SmartKhata Pro • Cloud Verified Record</div>
+          <div style="font-weight: 700; color: #0f172a;">SmartKhata Pro • Verified Enterprise Record</div>
           <div style="margin-top: 2px;">This is a computer generated invoice and does not require physical signature.</div>
         </div>
         <div style="text-align: right;">
@@ -399,7 +477,7 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
     .corp-table th { background: #1e3a8a; color: #ffffff; font-weight: 800; font-size: 11px; text-transform: uppercase; padding: 8px 12px; border: 1px solid #1e3a8a; }
     .corp-table td { padding: 12px; border: 1px solid #cbd5e1; font-size: 12px; }
     .corp-total-row { background: #f8fafc; font-weight: 800; }
-    .corp-sign-grid { display: grid; grid-template-columns: 1fr 1fr; margin-top: 40px; gap: 24px; }
+    .corp-sign-grid { display: grid; grid-template-columns: 1fr 1fr; margin-top: 30px; gap: 24px; }
   </style>
 </head>
 <body>
@@ -407,7 +485,7 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
     <div class="corp-card">
       <div class="corp-header">
         <div class="corp-title">${mBizName}</div>
-        <div style="font-size: 12px; color: #475569; margin-top: 4px;">${mAddress || 'Registered Commercial Entity'}</div>
+        <div style="font-size: 12px; color: #475569; margin-top: 4px;">${mAddress}</div>
         <div style="font-size: 11.5px; color: #475569; margin-top: 2px;">
           Telephone: <strong>${mPhone}</strong> • Email: ${mEmail || 'N/A'} ${mGst ? ` • GSTIN: <strong>${mGst}</strong>` : ''}
         </div>
@@ -418,22 +496,27 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
 
       <div class="corp-meta-grid">
         <div class="corp-meta-cell">
-          <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Invoice / Receipt No:</span><br/>
+          <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">ENTERPRISE / ISSUED BY:</span><br/>
+          <strong style="font-size: 13px; color: #1e3a8a;">${mBizName}</strong>
+          <div style="font-size: 11px; color: #475569; margin-top: 1px;">Proprietor: ${mOwnerName} • Tel: ${mPhone}</div>
+          <div style="font-size: 11px; color: #475569;">${mAddress}</div>
+        </div>
+        <div class="corp-meta-cell">
+          <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">INVOICE DETAILS:</span><br/>
           <strong style="font-size: 13px; color: #1e3a8a; font-family: monospace;">${docNo}</strong>
+          <div style="font-size: 11px; color: #475569; margin-top: 1px;">Date: ${dateFormatted} (${timeFormatted})</div>
+          ${mGst ? `<div style="font-size: 11px; color: #1e3a8a; font-weight: bold;">GSTIN: ${mGst}</div>` : ''}
         </div>
         <div class="corp-meta-cell">
-          <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Date of Issue:</span><br/>
-          <strong style="font-size: 13px; color: #0f172a;">${dateFormatted} (${timeFormatted})</strong>
-        </div>
-        <div class="corp-meta-cell">
-          <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Customer Name & Details:</span><br/>
+          <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">BILLED TO / CUSTOMER:</span><br/>
           <strong style="font-size: 13px; color: #0f172a;">${cName}</strong>
           ${cBiz ? `<div style="font-size: 11px; color: #475569;">Firm: ${cBiz}</div>` : ''}
           <div style="font-size: 11px; color: #475569;">Contact: ${cPhone || 'N/A'}</div>
         </div>
         <div class="corp-meta-cell">
-          <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Customer Billing Address:</span><br/>
-          <span style="font-size: 12px; color: #334155;">${cAddress || 'Not Provided / Over Counter Sale'}</span>
+          <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">CUSTOMER ADDRESS:</span><br/>
+          <span style="font-size: 12px; color: #334155;">${cAddress || 'Customer Address on Record'}</span>
+          ${data.customer.gst ? `<div style="font-size: 11px; color: #475569; font-weight: bold; margin-top: 2px;">GSTIN: ${data.customer.gst}</div>` : ''}
         </div>
       </div>
 
@@ -442,24 +525,18 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
           <tr>
             <th style="width: 8%; text-align: center;">Item</th>
             <th style="width: 52%; text-align: left;">Description of Goods / Services</th>
-            <th style="width: 20%; text-align: center;">Classification</th>
+            <th style="width: 20%; text-align: center;">Classification / Rate</th>
             <th style="width: 20%; text-align: right;">Amount (INR)</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td style="text-align: center; font-weight: bold;">01</td>
-            <td>
-              <div style="font-weight: 800; color: #0f172a; font-size: 13px;">${data.txn.note || (isGot ? 'Customer Payment Received' : 'Credit Supply of Material')}</div>
-              <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Voucher Ref: ${data.txn.id}</div>
-            </td>
-            <td style="text-align: center; font-weight: bold; color: ${isGot ? '#166534' : '#991b1b'};">
-              ${isGot ? 'PAYMENT CREDIT' : 'DEBIT OUTSTANDING'}
-            </td>
-            <td style="text-align: right; font-family: monospace; font-size: 14px; font-weight: 900;">
-              ${amountFormatted}
-            </td>
-          </tr>
+          ${renderItemsRowsHtml(data, {
+            accentColor: '#1e3a8a',
+            currencySymbol,
+            amountFormatted,
+            isGot,
+            dateFormatted,
+          })}
           <tr class="corp-total-row">
             <td colspan="3" style="text-align: right; padding: 12px; font-size: 12px; text-transform: uppercase;">
               Net Payable / Settled Total:
@@ -477,17 +554,19 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
       </div>
       ` : ''}
 
+      ${renderDefaultUpiQrBoxHtml(upiId, qrUrl, data.payment, { accentColor: '#1e3a8a', bgColor: '#f8fafc', borderColor: '#93c5fd' })}
+
       <div class="corp-sign-grid">
         <div style="border: 1px solid #e2e8f0; padding: 12px; font-size: 11px;">
           <strong>Terms & Conditions:</strong>
           <ol style="margin: 4px 0 0 16px; padding: 0; color: #64748b; line-height: 1.5;">
             <li>Payment is due according to mutually agreed credit terms.</li>
             <li>Subject to local jurisdiction for any dispute settlement.</li>
-            <li>Interest @ 18% p.a. applicable on overdue invoices.</li>
+            <li>Computer generated invoice verified by SmartKhata Pro.</li>
           </ol>
         </div>
         <div style="display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; padding-right: 16px;">
-          <div style="font-size: 12px; font-weight: 800; color: #0f172a; margin-bottom: 50px;">For ${mBizName}</div>
+          <div style="font-size: 12px; font-weight: 800; color: #0f172a; margin-bottom: 45px;">For ${mBizName}</div>
           <div style="width: 160px; border-bottom: 1.5px solid #0f172a; margin-bottom: 4px;"></div>
           <div style="font-size: 11px; font-weight: 700; color: #64748b;">Authorised Signatory</div>
         </div>
@@ -512,7 +591,6 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
     .ft-header { background: #0f172a; color: #fff; padding: 24px 28px; display: flex; justify-content: space-between; align-items: center; }
     .ft-badge { background: #059669; color: #fff; font-size: 10px; font-weight: 900; letter-spacing: 0.1em; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; }
     .ft-body { padding: 24px 28px; }
-    .ft-data-pill { background: #f1f5f9; padding: 8px 12px; border-radius: 8px; font-family: monospace; font-size: 11px; }
     .ft-table { width: 100%; border-collapse: collapse; margin-top: 18px; }
     .ft-table th { background: #1e293b; color: #94a3b8; font-family: monospace; font-size: 10.5px; text-transform: uppercase; padding: 10px 14px; text-align: left; }
     .ft-table td { padding: 14px; border-bottom: 1px solid #e2e8f0; font-size: 12px; }
@@ -525,59 +603,58 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
       <div class="ft-header">
         <div>
           <div style="font-size: 24px; font-weight: 900; letter-spacing: -0.02em; color: #f8fafc;">${mBizName}</div>
-          <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">SECURE DIGITAL FINTECH INVOICE • SMARTKHATA ENGINE</div>
+          <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">${mAddress}</div>
         </div>
         <div style="text-align: right;">
           <span class="ft-badge">${billTitle}</span>
           <div style="font-family: monospace; font-size: 14px; font-weight: 800; color: #38bdf8; margin-top: 6px;">${docNo}</div>
+          <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">${dateFormatted}</div>
         </div>
       </div>
 
       <div class="ft-body">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 14px; border-radius: 10px;">
-            <div style="font-size: 9.5px; font-weight: 800; color: #059669; text-transform: uppercase; letter-spacing: 0.08em;">// MERCHANT PROFILE</div>
+            <div style="font-size: 9.5px; font-weight: 800; color: #059669; text-transform: uppercase; letter-spacing: 0.08em;">ENTERPRISE / BILLED BY</div>
             <div style="font-weight: 800; font-size: 13.5px; color: #0f172a; margin-top: 4px;">${mBizName}</div>
-            <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Phone: ${mPhone} • ${mEmail}</div>
-            ${mGst ? `<div style="font-size: 11px; font-family: monospace; color: #059669; font-weight: bold;">GSTIN: ${mGst}</div>` : ''}
+            <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Proprietor: ${mOwnerName}</div>
+            <div style="font-size: 11px; color: #64748b; margin-top: 1px;">Address: ${mAddress}</div>
+            <div style="font-size: 11px; color: #64748b; margin-top: 1px;">Phone: ${mPhone} • ${mEmail}</div>
+            ${mGst ? `<div style="font-size: 11px; font-family: monospace; color: #059669; font-weight: bold; margin-top: 2px;">GSTIN: ${mGst}</div>` : ''}
           </div>
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 14px; border-radius: 10px;">
-            <div style="font-size: 9.5px; font-weight: 800; color: #0284c7; text-transform: uppercase; letter-spacing: 0.08em;">// COUNTERPARTY CLIENT</div>
+            <div style="font-size: 9.5px; font-weight: 800; color: #0284c7; text-transform: uppercase; letter-spacing: 0.08em;">BILLED TO / CUSTOMER</div>
             <div style="font-weight: 800; font-size: 13.5px; color: #0f172a; margin-top: 4px;">${cName}</div>
-            <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Phone: ${cPhone || 'N/A'}</div>
-            ${cBiz ? `<div style="font-size: 11px; color: #0284c7; font-weight: 600;">Entity: ${cBiz}</div>` : ''}
+            <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Contact: ${cPhone || 'N/A'}</div>
+            ${cAddress ? `<div style="font-size: 11px; color: #64748b; margin-top: 1px;">Address: ${cAddress}</div>` : ''}
+            ${cBiz ? `<div style="font-size: 11px; color: #0284c7; font-weight: 600; margin-top: 1px;">Entity: ${cBiz}</div>` : ''}
+            ${data.customer.gst ? `<div style="font-size: 11px; font-family: monospace; color: #64748b; margin-top: 1px;">GSTIN: ${data.customer.gst}</div>` : ''}
           </div>
         </div>
 
         <table class="ft-table">
           <thead>
             <tr>
-              <th style="width: 10%;">TXN ID</th>
-              <th style="width: 50%;">PAYLOAD DESCRIPTION</th>
-              <th style="width: 20%; text-align: center;">LEDGER ACTION</th>
+              <th style="width: 8%; text-align: center;">#</th>
+              <th style="width: 52%;">PARTICULARS / ITEM DESCRIPTION</th>
+              <th style="width: 20%; text-align: center;">RATE & QUANTITY</th>
               <th style="width: 20%; text-align: right;">SUM</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td style="font-family: monospace; font-size: 11px; color: #64748b;">${data.txn.id.slice(-6)}</td>
-              <td>
-                <div style="font-weight: 800; font-size: 13px; color: #0f172a;">${data.txn.note || 'Digital Khata Entry'}</div>
-                <div style="font-size: 10.5px; color: #64748b; font-family: monospace; margin-top: 2px;">Timestamp: ${dateFormatted} ${timeFormatted}</div>
-              </td>
-              <td style="text-align: center; font-weight: bold; color: ${isGot ? '#059669' : '#e11d48'}; font-family: monospace; font-size: 11px;">
-                [${isGot ? 'CREDIT_INFLOW' : 'DEBIT_OUTFLOW'}]
-              </td>
-              <td style="text-align: right; font-family: monospace; font-size: 15px; font-weight: 900; color: #0f172a;">
-                ${amountFormatted}
-              </td>
-            </tr>
+            ${renderItemsRowsHtml(data, {
+              accentColor: '#059669',
+              currencySymbol,
+              amountFormatted,
+              isGot,
+              dateFormatted,
+            })}
           </tbody>
         </table>
 
         <div class="ft-total-box">
           <div>
-            <div style="font-size: 10px; font-family: monospace; color: #34d399; letter-spacing: 0.1em; text-transform: uppercase;">VERIFIED TOTAL BALANCE</div>
+            <div style="font-size: 10px; font-family: monospace; color: #34d399; letter-spacing: 0.1em; text-transform: uppercase;">TOTAL VERIFIED BALANCE</div>
             <div style="font-size: 11px; color: #cbd5e1; margin-top: 2px;">${data.txn.amountWords || 'Confirmed'}</div>
           </div>
           <div style="font-size: 26px; font-weight: 900; font-family: monospace; color: #38bdf8;">
@@ -585,20 +662,11 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
           </div>
         </div>
 
-        ${qrUrl ? `
-        <div style="margin-top: 18px; padding: 14px; border-radius: 10px; background: #f8fafc; border: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; background: #059669; color: #fff; font-size: 9px; font-weight: bold;">UPI DIRECT LINK</span>
-            <div style="font-size: 11.5px; font-weight: bold; color: #0f172a; margin-top: 4px;">VPA ID: ${upiId}</div>
-            <div style="font-size: 10px; color: #64748b;">Zero MDR • Instant Settlement via UPI QR</div>
-          </div>
-          <img src="${qrUrl}" alt="QR" style="width: 70px; height: 70px; border-radius: 6px; border: 1px solid #cbd5e1;" />
-        </div>
-        ` : ''}
+        ${renderDefaultUpiQrBoxHtml(upiId, qrUrl, data.payment, { accentColor: '#059669', bgColor: '#f8fafc', borderColor: '#10b981' })}
 
         <div style="margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 12px; display: flex; justify-content: space-between; font-size: 10.5px; color: #94a3b8; font-family: monospace;">
-          <span>HASH: sha256_${data.txn.id.slice(0, 16)}</span>
-          <span>SMARTKHATA SECURED ENGINE</span>
+          <span>SmartKhata Pro • Verified Enterprise Record</span>
+          <span>Authorized Signatory</span>
         </div>
       </div>
     </div>
@@ -607,7 +675,7 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
 </html>`;
 
     // -------------------------------------------------------------------------------------------------
-    // 4. EMERALD ROYAL WEALTH (Deep Forest & Gold luxury)
+    // 4. EMERALD ROYAL WEALTH (Deep Forest & Gold Luxury)
     // -------------------------------------------------------------------------------------------------
     case 'template_emerald':
       return `<!DOCTYPE html>
@@ -633,7 +701,7 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
       <div class="em-header">
         <div>
           <div class="em-biz">${mBizName}</div>
-          <div style="font-size: 12px; color: #475569; margin-top: 3px;">${mAddress || 'Premier Commercial Establishment'}</div>
+          <div style="font-size: 12px; color: #475569; margin-top: 3px;">${mAddress}</div>
           <div style="font-size: 11.5px; color: #64748b; margin-top: 1px;">Phone: ${mPhone} ${mGst ? ` • GSTIN: ${mGst}` : ''}</div>
         </div>
         <div style="text-align: right;">
@@ -645,14 +713,20 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
 
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
         <div style="border-left: 3px solid #064e3b; padding-left: 12px;">
-          <div style="font-size: 10px; font-weight: bold; color: #064e3b; text-transform: uppercase;">Issued By:</div>
-          <div style="font-weight: 800; font-size: 14px; color: #0f172a;">${mBizName}</div>
+          <div style="font-size: 10px; font-weight: bold; color: #064e3b; text-transform: uppercase;">ENTERPRISE / BILLED BY:</div>
+          <div style="font-weight: 800; font-size: 14px; color: #0f172a; margin-top: 2px;">${mBizName}</div>
           <div style="font-size: 11px; color: #64748b;">Proprietor: ${mOwnerName}</div>
+          <div style="font-size: 11px; color: #64748b;">Address: ${mAddress}</div>
+          <div style="font-size: 11px; color: #64748b;">Phone: ${mPhone}</div>
+          ${mGst ? `<div style="font-size: 11px; color: #064e3b; font-weight: bold;">GSTIN: ${mGst}</div>` : ''}
         </div>
         <div style="border-left: 3px solid #047857; padding-left: 12px;">
-          <div style="font-size: 10px; font-weight: bold; color: #047857; text-transform: uppercase;">Issued To:</div>
-          <div style="font-weight: 800; font-size: 14px; color: #0f172a;">${cName}</div>
-          <div style="font-size: 11px; color: #64748b;">Phone: ${cPhone || 'N/A'} • ${cAddress || 'Over Counter'}</div>
+          <div style="font-size: 10px; font-weight: bold; color: #047857; text-transform: uppercase;">BILLED TO / CUSTOMER:</div>
+          <div style="font-weight: 800; font-size: 14px; color: #0f172a; margin-top: 2px;">${cName}</div>
+          <div style="font-size: 11px; color: #64748b;">Contact: ${cPhone || 'N/A'}</div>
+          ${cAddress ? `<div style="font-size: 11px; color: #64748b;">Address: ${cAddress}</div>` : ''}
+          ${cBiz ? `<div style="font-size: 11px; color: #047857; font-weight: bold;">Firm: ${cBiz}</div>` : ''}
+          ${data.customer.gst ? `<div style="font-size: 11px; color: #64748b;">GSTIN: ${data.customer.gst}</div>` : ''}
         </div>
       </div>
 
@@ -661,24 +735,18 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
           <tr>
             <th style="width: 8%; text-align: center;">Item</th>
             <th style="width: 52%;">Description</th>
-            <th style="width: 20%; text-align: center;">Type</th>
+            <th style="width: 20%; text-align: center;">Rate & Quantity</th>
             <th style="width: 20%; text-align: right;">Amount</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td style="text-align: center; color: #64748b; font-weight: bold;">1</td>
-            <td>
-              <div style="font-weight: bold; font-size: 13px; color: #064e3b;">${data.txn.note || 'Commercial Transaction'}</div>
-              <div style="font-size: 11px; color: #64748b;">Ref: ${data.txn.id}</div>
-            </td>
-            <td style="text-align: center; font-weight: bold; color: ${isGot ? '#065f46' : '#991b1b'};">
-              ${isGot ? 'Debit Received' : 'Credit Given'}
-            </td>
-            <td style="text-align: right; font-family: monospace; font-size: 15px; font-weight: 900; color: #064e3b;">
-              ${amountFormatted}
-            </td>
-          </tr>
+          ${renderItemsRowsHtml(data, {
+            accentColor: '#065f46',
+            currencySymbol,
+            amountFormatted,
+            isGot,
+            dateFormatted,
+          })}
         </tbody>
       </table>
 
@@ -692,8 +760,10 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
         </div>
       </div>
 
+      ${renderDefaultUpiQrBoxHtml(upiId, qrUrl, data.payment, { accentColor: '#065f46', bgColor: '#ecfdf5', borderColor: '#047857' })}
+
       <div style="margin-top: 36px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 11px; color: #64748b;">
-        <div>Certified Official Financial Documentation</div>
+        <div>SmartKhata Pro • Verified Enterprise Record</div>
         <div style="text-align: right;">
           <div style="width: 140px; border-bottom: 1.5px solid #064e3b; margin-bottom: 4px;"></div>
           <div style="font-weight: bold; color: #064e3b;">Authorized Representative</div>
@@ -728,7 +798,7 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
   <div class="pos-wrap">
     <div class="pos-center">
       <div style="font-size: 16px; font-weight: 900; text-transform: uppercase;">${mBizName}</div>
-      <div style="font-size: 10px; margin-top: 2px;">${mAddress || 'Retail Store'}</div>
+      <div style="font-size: 10px; margin-top: 2px;">${mAddress}</div>
       <div style="font-size: 10px;">TEL: ${mPhone}</div>
       ${mGst ? `<div style="font-size: 10px;">GSTIN: ${mGst}</div>` : ''}
     </div>
@@ -766,13 +836,26 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
 
     <div class="pos-divider"></div>
 
-    <div style="margin: 6px 0;">
-      <div style="font-weight: bold;">${data.txn.note || (isGot ? 'PAYMENT RECEIVED' : 'CREDIT PURCHASE')}</div>
-      <div class="pos-row" style="font-size: 10px; color: #444; margin-top: 2px;">
-        <span>TYPE: ${isGot ? 'YOU GOT' : 'YOU GAVE'}</span>
-        <strong>${amountFormatted}</strong>
-      </div>
-    </div>
+    ${Array.isArray(data.items) && data.items.length > 0
+      ? data.items.map((it) => `
+        <div style="margin: 4px 0;">
+          <div style="font-weight: bold;">${it.name}</div>
+          <div class="pos-row" style="font-size: 10px; color: #444;">
+            <span>${it.quantity} × ${currencySymbol}${it.unitPrice.toLocaleString('en-IN')}</span>
+            <strong>${currencySymbol}${it.total.toLocaleString('en-IN')}</strong>
+          </div>
+        </div>
+      `).join('')
+      : `
+        <div style="margin: 6px 0;">
+          <div style="font-weight: bold;">${data.txn.note || (isGot ? 'PAYMENT RECEIVED' : 'CREDIT PURCHASE')}</div>
+          <div class="pos-row" style="font-size: 10px; color: #444; margin-top: 2px;">
+            <span>TYPE: ${isGot ? 'YOU GOT' : 'YOU GAVE'}</span>
+            <strong>${amountFormatted}</strong>
+          </div>
+        </div>
+      `
+    }
 
     <div class="pos-double-divider"></div>
 
@@ -783,11 +866,11 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
 
     <div class="pos-divider"></div>
 
-    ${qrUrl ? `
+    ${(qrUrl || upiId) ? `
     <div class="pos-center" style="margin: 10px 0;">
-      <img src="${qrUrl}" alt="QR" style="width: 90px; height: 90px; margin: 0 auto; display: block;" />
-      <div style="font-size: 9px; margin-top: 4px;">SCAN & PAY VIA UPI</div>
-      <div style="font-size: 9px; font-weight: bold;">${upiId}</div>
+      ${qrUrl ? `<img src="${qrUrl}" alt="QR" style="width: 90px; height: 90px; margin: 0 auto; display: block;" />` : ''}
+      <div style="font-size: 9px; margin-top: 4px; font-weight: bold;">DEFAULT UPI & QR PAYMENT</div>
+      <div style="font-size: 9px;">${upiId}</div>
     </div>
     <div class="pos-divider"></div>
     ` : ''}
@@ -827,8 +910,8 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
       <div class="st-header">
         <div>
           <div class="st-biz">${mBizName}</div>
-          <div style="font-size: 12px; color: #64748b; margin-top: 3px;">${mAddress || 'Creative Studio & Enterprise'}</div>
-          <div style="font-size: 11.5px; color: #64748b;">Phone: ${mPhone} • Email: ${mEmail || 'contact@merchant.com'}</div>
+          <div style="font-size: 12px; color: #64748b; margin-top: 3px;">${mAddress}</div>
+          <div style="font-size: 11.5px; color: #64748b;">Phone: ${mPhone} • Email: ${mEmail || 'N/A'} ${mGst ? ` • GSTIN: ${mGst}` : ''}</div>
         </div>
         <div style="text-align: right;">
           <div style="display: inline-block; padding: 4px 14px; border-radius: 999px; background: #f3e8ff; color: #7c3aed; font-weight: 800; font-size: 11px;">
@@ -842,40 +925,38 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
       <div style="padding: 0 30px 30px;">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; background: #faf5ff; border: 1px solid #f3e8ff; border-radius: 14px; padding: 16px;">
           <div>
-            <span style="font-size: 10px; font-weight: 800; color: #7c3aed; text-transform: uppercase;">ISSUER</span>
+            <span style="font-size: 10px; font-weight: 800; color: #7c3aed; text-transform: uppercase;">ENTERPRISE / BILLED BY</span>
             <div style="font-weight: 800; font-size: 14px; color: #0f172a; margin-top: 2px;">${mBizName}</div>
-            <div style="font-size: 11px; color: #64748b;">${mOwnerName}</div>
+            <div style="font-size: 11px; color: #64748b;">Proprietor: ${mOwnerName}</div>
+            <div style="font-size: 11px; color: #64748b;">Address: ${mAddress}</div>
+            <div style="font-size: 11px; color: #64748b;">Phone: ${mPhone}</div>
           </div>
           <div>
-            <span style="font-size: 10px; font-weight: 800; color: #7c3aed; text-transform: uppercase;">RECIPIENT</span>
+            <span style="font-size: 10px; font-weight: 800; color: #7c3aed; text-transform: uppercase;">BILLED TO / CUSTOMER</span>
             <div style="font-weight: 800; font-size: 14px; color: #0f172a; margin-top: 2px;">${cName}</div>
-            <div style="font-size: 11px; color: #64748b;">Phone: ${cPhone || 'N/A'}</div>
+            <div style="font-size: 11px; color: #64748b;">Contact: ${cPhone || 'N/A'}</div>
+            ${cAddress ? `<div style="font-size: 11px; color: #64748b;">Address: ${cAddress}</div>` : ''}
+            ${cBiz ? `<div style="font-size: 11px; color: #7c3aed; font-weight: bold;">Firm: ${cBiz}</div>` : ''}
           </div>
         </div>
 
         <table class="st-table">
           <thead>
             <tr>
-              <th style="width: 10%;">#</th>
-              <th style="width: 50%;">PARTICULAR</th>
-              <th style="width: 20%; text-align: center;">STATUS</th>
+              <th style="width: 8%; text-align: center;">#</th>
+              <th style="width: 52%;">PARTICULAR / ITEM DESCRIPTION</th>
+              <th style="width: 20%; text-align: center;">QTY & RATE</th>
               <th style="width: 20%; text-align: right;">TOTAL</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td style="color: #94a3b8; font-weight: bold;">01</td>
-              <td>
-                <div style="font-weight: 800; font-size: 13.5px; color: #0f172a;">${data.txn.note || 'Service Item'}</div>
-                <div style="font-size: 11px; color: #64748b;">Ref #${data.txn.id.slice(-6)}</div>
-              </td>
-              <td style="text-align: center; font-weight: bold; color: ${isGot ? '#059669' : '#7c3aed'};">
-                ${isGot ? 'PAYMENT RECEIVED' : 'BILL ISSUED'}
-              </td>
-              <td style="text-align: right; font-family: monospace; font-size: 15px; font-weight: 900; color: #7c3aed;">
-                ${amountFormatted}
-              </td>
-            </tr>
+            ${renderItemsRowsHtml(data, {
+              accentColor: '#7c3aed',
+              currencySymbol,
+              amountFormatted,
+              isGot,
+              dateFormatted,
+            })}
           </tbody>
         </table>
 
@@ -889,15 +970,15 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
           </div>
         </div>
 
-        ${qrUrl ? `
-        <div style="margin-top: 20px; padding: 14px 18px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <div style="font-size: 12px; font-weight: 800; color: #0f172a;">UPI Express Checkout</div>
-            <div style="font-size: 11px; color: #7c3aed; font-family: monospace; font-weight: bold; margin-top: 2px;">${upiId}</div>
+        ${renderDefaultUpiQrBoxHtml(upiId, qrUrl, data.payment, { accentColor: '#7c3aed', bgColor: '#faf5ff', borderColor: '#c084fc' })}
+
+        <div style="margin-top: 24px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 11px; color: #64748b;">
+          <div>SmartKhata Pro • Verified Enterprise Record</div>
+          <div style="text-align: right;">
+            <div style="width: 140px; border-bottom: 1.5px solid #7c3aed; margin-bottom: 4px;"></div>
+            <div style="font-weight: bold; color: #7c3aed;">Authorized Signatory</div>
           </div>
-          <img src="${qrUrl}" alt="QR" style="width: 75px; height: 75px; border-radius: 8px;" />
         </div>
-        ` : ''}
       </div>
     </div>
   </div>
@@ -916,9 +997,9 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
   <style>
     ${commonPrintCss}
     .gl-card { border: 2px solid #b45309; border-radius: 14px; padding: 28px; background: #fff; }
-    .gl-header { border-bottom: 2px solid #d97706; padding-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-    .gl-biz { font-family: "Times New Roman", Times, serif; font-size: 28px; font-weight: 900; color: #18181b; letter-spacing: 0.05em; }
-    .gl-badge { background: #b45309; color: #fff; padding: 5px 16px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; border-radius: 4px; }
+    .gl-header { border-bottom: 2px solid #d97706; padding-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .gl-biz { font-family: "Times New Roman", Times, serif; font-size: 28px; font-weight: 900; color: #18181b; letter-spacing: 0.04em; }
+    .gl-badge { background: #b45309; color: #fff; padding: 5px 16px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; border-radius: 4px; }
     .gl-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
     .gl-table th { background: #18181b; color: #fef3c7; font-size: 11px; text-transform: uppercase; padding: 10px 14px; letter-spacing: 0.08em; text-align: left; }
     .gl-table td { padding: 14px; border-bottom: 1px solid #fef3c7; font-size: 12px; }
@@ -931,77 +1012,63 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
       <div class="gl-header">
         <div>
           <div class="gl-biz">${mBizName}</div>
-          <div style="font-size: 11.5px; color: #78716c; margin-top: 4px; letter-spacing: 0.02em;">${mAddress || 'Haute Couture & Luxury Boutique'}</div>
-          <div style="font-size: 11px; color: #78716c;">Tel: ${mPhone} ${mGst ? ` • GSTIN: ${mGst}` : ''}</div>
+          <div style="font-size: 11.5px; color: #78716c; margin-top: 4px; letter-spacing: 0.02em;">${mAddress}</div>
+          <div style="font-size: 11px; color: #78716c; margin-top: 2px;">
+            Phone: <strong style="color: #18181b;">${mPhone || 'N/A'}</strong>
+            ${mEmail ? ` • Email: ${mEmail}` : ''}
+            ${mGst ? ` • GSTIN: <strong style="color: #b45309; font-family: monospace;">${mGst}</strong>` : ''}
+          </div>
         </div>
         <div style="text-align: right;">
           <span class="gl-badge">${billTitle}</span>
           <div style="font-size: 13px; font-weight: bold; color: #b45309; margin-top: 8px; font-family: monospace;">${docNo}</div>
-          <div style="font-size: 11px; color: #78716c; margin-top: 2px;">${dateFormatted}</div>
+          <div style="font-size: 11px; color: #78716c; margin-top: 2px;">Date: <strong style="color: #18181b;">${dateFormatted}</strong></div>
+          <div style="font-size: 10.5px; color: #a8a29e; margin-top: 1px;">Time: ${timeFormatted}</div>
         </div>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 24px 0; border: 1px solid #fde68a; padding: 16px; border-radius: 8px; background: #fffdf5;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 24px 0; border: 1.5px solid #fde68a; padding: 16px; border-radius: 10px; background: #fffdf5;">
         <div>
-          <span style="font-size: 10px; font-weight: 800; color: #b45309; text-transform: uppercase;">BOUTIQUE</span>
+          <span style="font-size: 10px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.06em;">ENTERPRISE / BILLED BY</span>
           <div style="font-weight: 800; font-size: 14px; color: #18181b; margin-top: 3px;">${mBizName}</div>
-          <div style="font-size: 11px; color: #78716c;">Client Advisor: ${mOwnerName}</div>
+          <div style="font-size: 11px; color: #78716c; margin-top: 2px;">Proprietor: ${mOwnerName}</div>
+          <div style="font-size: 11px; color: #78716c; margin-top: 1px;">Address: ${mAddress}</div>
+          <div style="font-size: 11px; color: #78716c; margin-top: 1px;">Phone: ${mPhone}</div>
+          ${mGst ? `<div style="font-size: 11px; font-family: monospace; font-weight: bold; color: #b45309; margin-top: 1px;">GSTIN: ${mGst}</div>` : ''}
         </div>
         <div>
-          <span style="font-size: 10px; font-weight: 800; color: #b45309; text-transform: uppercase;">PATRON</span>
+          <span style="font-size: 10px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.06em;">BILLED TO / CUSTOMER</span>
           <div style="font-weight: 800; font-size: 14px; color: #18181b; margin-top: 3px;">${cName}</div>
-          <div style="font-size: 11px; color: #78716c;">Contact: ${cPhone || 'N/A'}</div>
+          <div style="font-size: 11px; color: #78716c; margin-top: 2px;">Contact: ${cPhone || 'N/A'}</div>
+          ${cAddress ? `<div style="font-size: 11px; color: #78716c; margin-top: 1px;">Address: ${cAddress}</div>` : ''}
+          ${cBiz ? `<div style="font-size: 11px; color: #b45309; font-weight: 600; margin-top: 1px;">Firm: ${cBiz}</div>` : ''}
+          ${data.customer.gst ? `<div style="font-size: 11px; font-family: monospace; font-weight: bold; color: #78716c; margin-top: 1px;">GSTIN: ${data.customer.gst}</div>` : ''}
         </div>
       </div>
 
       <table class="gl-table">
         <thead>
           <tr>
-            <th style="width: 10%;">REF</th>
-            <th style="width: 50%;">ACQUISITION / SERVICE</th>
-            <th style="width: 20%; text-align: center;">NATURE</th>
+            <th style="width: 8%; text-align: center;">#</th>
+            <th style="width: 52%;">PARTICULARS / ITEM DESCRIPTION</th>
+            <th style="width: 20%; text-align: center;">QUANTITY & RATE</th>
             <th style="width: 20%; text-align: right;">AMOUNT</th>
           </tr>
         </thead>
         <tbody>
-          ${Array.isArray(data.items) && data.items.length > 0
-            ? data.items.map((it, idx) => `
-              <tr>
-                <td style="color: #b45309; font-weight: bold; text-align: center;">${String(idx + 1).padStart(2, '0')}</td>
-                <td>
-                  <div style="font-weight: bold; font-size: 13px; color: #18181b;">${it.name}</div>
-                  ${it.description ? `<div style="font-size: 10.5px; color: #78716c; margin-top: 2px;">${it.description}</div>` : ''}
-                </td>
-                <td style="text-align: center; font-size: 11px; color: #78716c;">
-                  ${it.quantity} × ${currencySymbol}${it.unitPrice.toLocaleString('en-IN')}${it.taxPercent ? ` (+${it.taxPercent}% GST)` : ''}
-                </td>
-                <td style="text-align: right; font-family: monospace; font-size: 14px; font-weight: 900; color: #18181b;">
-                  ${currencySymbol}${it.total.toLocaleString('en-IN')}
-                </td>
-              </tr>
-            `).join('')
-            : `
-              <tr>
-                <td style="color: #b45309; font-weight: bold;">01</td>
-                <td>
-                  <div style="font-weight: bold; font-size: 13px; color: #18181b;">${data.txn.note || 'Boutique Collection Item'}</div>
-                  <div style="font-size: 11px; color: #78716c;">Date: ${dateFormatted}</div>
-                </td>
-                <td style="text-align: center; font-weight: bold; color: ${isGot ? '#047857' : '#b45309'};">
-                  ${isGot ? 'PAYMENT RECEIVED' : 'STORE CREDIT'}
-                </td>
-                <td style="text-align: right; font-family: monospace; font-size: 15px; font-weight: 900; color: #18181b;">
-                  ${amountFormatted}
-                </td>
-              </tr>
-            `
-          }
+          ${renderItemsRowsHtml(data, {
+            accentColor: '#b45309',
+            currencySymbol,
+            amountFormatted,
+            isGot,
+            dateFormatted,
+          })}
         </tbody>
       </table>
 
       <div class="gl-total-card">
         <div>
-          <div style="font-size: 11px; font-weight: 800; color: #b45309; text-transform: uppercase;">TOTAL VALUE</div>
+          <div style="font-size: 11px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.05em;">TOTAL VALUE / NET AMOUNT</div>
           <div style="font-size: 11.5px; color: #78716c; margin-top: 2px;">${data.txn.amountWords || ''}</div>
         </div>
         <div style="font-size: 26px; font-weight: 900; color: #b45309; font-family: monospace;">
@@ -1009,10 +1076,16 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
         </div>
       </div>
 
-      <div style="margin-top: 40px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 11px; color: #78716c;">
-        <div>Thank you for choosing our boutique experience.</div>
+      <!-- Default UPI & QR Instant Payment Spotlight -->
+      ${renderDefaultUpiQrBoxHtml(upiId, qrUrl, data.payment, { accentColor: '#b45309', bgColor: '#fffdf5', borderColor: '#d97706' })}
+
+      <div style="margin-top: 32px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 11px; color: #78716c;">
+        <div>
+          <div style="font-weight: 700; color: #18181b;">SmartKhata Pro • Verified Enterprise Record</div>
+          <div style="margin-top: 2px;">This is a computer generated invoice and does not require physical signature.</div>
+        </div>
         <div style="text-align: right;">
-          <div style="width: 150px; border-bottom: 1px solid #b45309; margin-bottom: 4px;"></div>
+          <div style="width: 150px; border-bottom: 1.5px solid #b45309; margin-bottom: 4px;"></div>
           <div style="font-weight: bold; color: #18181b;">Authorized Signature</div>
         </div>
       </div>
@@ -1044,9 +1117,9 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
       <div style="text-align: center; border-bottom: 1.5px solid #0f172a; padding-bottom: 12px;">
         <div style="font-size: 13px; font-weight: 900; letter-spacing: 0.1em; color: #2563eb;">TAX INVOICE / CASH MEMO</div>
         <div style="font-size: 22px; font-weight: 900; color: #0f172a; margin-top: 4px;">${mBizName}</div>
-        <div style="font-size: 11px; color: #475569;">${mAddress || 'Merchant Establishment'}</div>
+        <div style="font-size: 11px; color: #475569;">${mAddress}</div>
         <div style="font-size: 11px; color: #0f172a; font-weight: bold; margin-top: 2px;">
-          GSTIN: ${mGst || 'UNREGISTERED'} • STATE CODE: 09 • PHONE: ${mPhone}
+          GSTIN: ${mGst || 'UNREGISTERED'} • PHONE: ${mPhone} • EMAIL: ${mEmail || 'N/A'}
         </div>
       </div>
 
@@ -1055,13 +1128,13 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
           <div style="font-weight: bold; color: #64748b; font-size: 10px;">DETAILS OF BUYER / RECIPIENT:</div>
           <div style="font-weight: 900; font-size: 13px; color: #0f172a; margin-top: 2px;">${cName}</div>
           <div>Phone: ${cPhone || 'N/A'}</div>
-          <div>Address: ${cAddress || 'Over Counter Delivery'}</div>
+          <div>Address: ${cAddress || 'Customer Address on Record'}</div>
           <div>Buyer GSTIN: ${data.customer.gst || 'URP (Unregistered Person)'}</div>
         </div>
         <div style="padding: 10px;">
           <div>Invoice No: <strong style="font-family: monospace; font-size: 12px;">${docNo}</strong></div>
           <div>Invoice Date: <strong>${dateFormatted}</strong></div>
-          <div>Place of Supply: <strong>Uttar Pradesh (09)</strong></div>
+          <div>Supply Mode: <strong>${isGot ? 'PAYMENT RECEIPT' : 'REGULAR TAX INVOICE'}</strong></div>
           <div>Reverse Charge: <strong>NO</strong></div>
         </div>
       </div>
@@ -1070,33 +1143,33 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
         <thead>
           <tr>
             <th style="width: 5%;">SN</th>
-            <th style="width: 45%; text-align: left;">Description of Goods / Services</th>
-            <th style="width: 15%;">HSN/SAC</th>
-            <th style="width: 15%;">Taxable Val</th>
-            <th style="width: 20%; text-align: right;">Total Amount (₹)</th>
+            <th style="width: 50%; text-align: left;">Description of Goods / Services</th>
+            <th style="width: 20%;">Qty & Rate</th>
+            <th style="width: 25%; text-align: right;">Total Amount (₹)</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td style="text-align: center;">1</td>
-            <td>
-              <strong>${data.txn.note || (isGot ? 'Payment Settlement' : 'Commercial Supplies')}</strong>
-              <div style="font-size: 9.5px; color: #64748b;">Txn Ref: ${data.txn.id}</div>
-            </td>
-            <td style="text-align: center; font-family: monospace;">998319</td>
-            <td style="text-align: right; font-family: monospace;">${amountFormatted}</td>
-            <td style="text-align: right; font-family: monospace; font-weight: 900;">${amountFormatted}</td>
-          </tr>
+          ${renderItemsRowsHtml(data, {
+            accentColor: '#2563eb',
+            currencySymbol,
+            amountFormatted,
+            isGot,
+            dateFormatted,
+          })}
           <tr style="background: #f8fafc; font-weight: bold;">
-            <td colspan="4" style="text-align: right; padding: 8px;">TOTAL INVOICE VALUE (ROUNDED OFF):</td>
+            <td colspan="3" style="text-align: right; padding: 8px;">TOTAL INVOICE VALUE (ROUNDED OFF):</td>
             <td style="text-align: right; font-family: monospace; font-size: 14px; color: #2563eb;">${amountFormatted}</td>
           </tr>
         </tbody>
       </table>
 
+      ${data.txn.amountWords ? `
       <div style="margin-top: 10px; font-size: 11px; padding: 8px; background: #f8fafc; border: 1px solid #e2e8f0;">
-        <strong>Total Amount in Words:</strong> ${data.txn.amountWords || ''}
+        <strong>Total Amount in Words:</strong> ${data.txn.amountWords}
       </div>
+      ` : ''}
+
+      ${renderDefaultUpiQrBoxHtml(upiId, qrUrl, data.payment, { accentColor: '#2563eb', bgColor: '#eff6ff', borderColor: '#60a5fa' })}
 
       <div style="margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 10.5px;">
         <div>
@@ -1105,7 +1178,7 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
         </div>
         <div style="text-align: right;">
           <div style="font-weight: bold;">For ${mBizName}</div>
-          <div style="margin-top: 40px; border-bottom: 1px solid #0f172a; width: 140px; margin-left: auto;"></div>
+          <div style="margin-top: 35px; border-bottom: 1px solid #0f172a; width: 140px; margin-left: auto;"></div>
           <div style="margin-top: 4px;">Authorized Signatory</div>
         </div>
       </div>
@@ -1139,7 +1212,7 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
       <div class="sw-grid">
         <div>
           <div class="sw-biz">${mBizName}</div>
-          <div style="font-size: 12px; color: #333; margin-top: 6px;">${mAddress || 'Commercial Registry'}</div>
+          <div style="font-size: 12px; color: #333; margin-top: 6px;">${mAddress}</div>
           <div style="font-size: 12px; color: #333;">T: ${mPhone} • E: ${mEmail || 'N/A'}</div>
           ${mGst ? `<div style="font-size: 12px; font-weight: bold; margin-top: 2px;">GST: ${mGst}</div>` : ''}
         </div>
@@ -1152,10 +1225,11 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
 
       <div style="display: grid; grid-template-columns: 1fr 1fr; margin: 24px 0;">
         <div>
-          <div style="font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #666;">CLIENT</div>
+          <div style="font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #666;">CLIENT / BILLED TO</div>
           <div style="font-size: 16px; font-weight: 900; color: #000; margin-top: 4px;">${cName}</div>
-          <div style="font-size: 12px; color: #333;">${cPhone || 'N/A'}</div>
+          <div style="font-size: 12px; color: #333;">Contact: ${cPhone || 'N/A'}</div>
           <div style="font-size: 12px; color: #333;">${cAddress || ''}</div>
+          ${cBiz ? `<div style="font-size: 12px; color: #000; font-weight: bold;">${cBiz}</div>` : ''}
         </div>
         <div style="text-align: right;">
           <div style="font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #666;">TOTAL PAYABLE</div>
@@ -1166,27 +1240,27 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
       <table class="sw-table">
         <thead>
           <tr>
-            <th style="width: 10%;">POS</th>
-            <th style="width: 60%;">SPECIFICATION</th>
-            <th style="width: 30%; text-align: right;">NET AMOUNT</th>
+            <th style="width: 8%; text-align: center;">POS</th>
+            <th style="width: 52%;">SPECIFICATION / ITEM DESCRIPTION</th>
+            <th style="width: 20%; text-align: center;">QTY & RATE</th>
+            <th style="width: 20%; text-align: right;">NET AMOUNT</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td style="font-weight: 900;">01</td>
-            <td>
-              <div style="font-weight: 900; font-size: 14px;">${data.txn.note || 'Supply Transaction'}</div>
-              <div style="font-size: 11px; color: #666; margin-top: 2px;">Ref: ${data.txn.id}</div>
-            </td>
-            <td style="text-align: right; font-size: 16px; font-weight: 900;">
-              ${amountFormatted}
-            </td>
-          </tr>
+          ${renderItemsRowsHtml(data, {
+            accentColor: '#000000',
+            currencySymbol,
+            amountFormatted,
+            isGot,
+            dateFormatted,
+          })}
         </tbody>
       </table>
 
-      <div style="margin-top: 60px; border-top: 2px solid #000; padding-top: 14px; display: flex; justify-content: space-between; font-size: 11px; font-weight: bold;">
-        <span>SWISS MINIMAL DESIGN • SMARTKHATA ENGINE</span>
+      ${renderDefaultUpiQrBoxHtml(upiId, qrUrl, data.payment, { accentColor: '#000000', bgColor: '#f8fafc', borderColor: '#000000' })}
+
+      <div style="margin-top: 40px; border-top: 2px solid #000; padding-top: 14px; display: flex; justify-content: space-between; font-size: 11px; font-weight: bold;">
+        <span>SmartKhata Pro • Verified Enterprise Record</span>
         <span>APPROVED BY ${mOwnerName.toUpperCase()}</span>
       </div>
     </div>
@@ -1209,6 +1283,9 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
     .rb-top { background: #0284c7; color: #fff; padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; }
     .rb-biz { font-size: 24px; font-weight: 900; letter-spacing: -0.02em; }
     .rb-qr-banner { margin: 20px; background: #f0f9ff; border: 2px dashed #0284c7; border-radius: 14px; padding: 18px 24px; display: flex; justify-content: space-between; align-items: center; }
+    .rb-table { width: 100%; border-collapse: collapse; margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+    .rb-table th { background: #f8fafc; color: #64748b; font-size: 11px; text-transform: uppercase; padding: 10px 14px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+    .rb-table td { padding: 14px; border-bottom: 1px solid #f1f5f9; font-size: 12.5px; }
   </style>
 </head>
 <body>
@@ -1217,7 +1294,7 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
       <div class="rb-top">
         <div>
           <div class="rb-biz">${mBizName}</div>
-          <div style="font-size: 12px; opacity: 0.9; margin-top: 2px;">${mAddress || 'Merchant Partner Store'}</div>
+          <div style="font-size: 12px; opacity: 0.9; margin-top: 2px;">${mAddress}</div>
           <div style="font-size: 11.5px; opacity: 0.9;">Phone: ${mPhone} ${mGst ? ` • GSTIN: ${mGst}` : ''}</div>
         </div>
         <div style="text-align: right;">
@@ -1232,45 +1309,53 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
       <div style="padding: 20px 24px 0;">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px;">
-            <div style="font-size: 10px; font-weight: 800; color: #0284c7; text-transform: uppercase;">MERCHANT:</div>
+            <div style="font-size: 10px; font-weight: 800; color: #0284c7; text-transform: uppercase;">ENTERPRISE / BILLED BY:</div>
             <div style="font-weight: 800; font-size: 14px; color: #0f172a; margin-top: 2px;">${mBizName}</div>
-            <div style="font-size: 11px; color: #64748b;">${mPhone}</div>
+            <div style="font-size: 11px; color: #64748b;">Proprietor: ${mOwnerName}</div>
+            <div style="font-size: 11px; color: #64748b;">Address: ${mAddress}</div>
+            <div style="font-size: 11px; color: #64748b;">Phone: ${mPhone}</div>
           </div>
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px;">
-            <div style="font-size: 10px; font-weight: 800; color: #0284c7; text-transform: uppercase;">CUSTOMER:</div>
+            <div style="font-size: 10px; font-weight: 800; color: #0284c7; text-transform: uppercase;">BILLED TO / CUSTOMER:</div>
             <div style="font-weight: 800; font-size: 14px; color: #0f172a; margin-top: 2px;">${cName}</div>
-            <div style="font-size: 11px; color: #64748b;">${cPhone || 'N/A'}</div>
+            <div style="font-size: 11px; color: #64748b;">Contact: ${cPhone || 'N/A'}</div>
+            ${cAddress ? `<div style="font-size: 11px; color: #64748b;">Address: ${cAddress}</div>` : ''}
+            ${cBiz ? `<div style="font-size: 11px; color: #0284c7; font-weight: bold;">Firm: ${cBiz}</div>` : ''}
           </div>
         </div>
       </div>
 
-      <!-- Prominent QR Spotlight -->
-      ${qrUrl ? `
-      <div class="rb-qr-banner">
-        <div>
-          <span style="background: #0284c7; color: #fff; font-size: 10px; font-weight: 900; padding: 3px 8px; border-radius: 4px;">FAST PAYMENT</span>
-          <div style="font-size: 15px; font-weight: 900; color: #0369a1; margin-top: 6px;">Scan with Any UPI App & Pay</div>
-          <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Google Pay • PhonePe • Paytm • BHIM • Cred</div>
-          <div style="font-size: 12px; font-family: monospace; font-weight: bold; color: #0f172a; margin-top: 4px;">UPI ID: ${upiId}</div>
-        </div>
-        <img src="${qrUrl}" alt="UPI QR" style="width: 95px; height: 95px; border-radius: 8px; border: 1.5px solid #0284c7; background: #fff; padding: 4px;" />
-      </div>
-      ` : ''}
+      <!-- Prominent Default UPI & QR Spotlight -->
+      ${renderDefaultUpiQrBoxHtml(upiId, qrUrl, data.payment, { accentColor: '#0284c7', bgColor: '#f0f9ff', borderColor: '#0284c7' })}
 
       <div style="padding: 0 24px 24px;">
-        <div style="border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;">
-          <div style="display: flex; justify-content: space-between; padding: 12px 16px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 11px; font-weight: bold; color: #64748b;">
-            <span>TRANSACTION DETAILS</span>
-            <span>AMOUNT</span>
+        <table class="rb-table">
+          <thead>
+            <tr>
+              <th style="width: 8%; text-align: center;">#</th>
+              <th style="width: 52%;">PARTICULAR / DESCRIPTION</th>
+              <th style="width: 20%; text-align: center;">QTY & RATE</th>
+              <th style="width: 20%; text-align: right;">AMOUNT</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${renderItemsRowsHtml(data, {
+              accentColor: '#0284c7',
+              currencySymbol,
+              amountFormatted,
+              isGot,
+              dateFormatted,
+            })}
+          </tbody>
+        </table>
+
+        <div style="margin-top: 16px; padding: 16px; border-radius: 10px; background: #f8fafc; border: 1.5px solid #0284c7; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase;">GRAND TOTAL VALUE</div>
+            <div style="font-size: 11px; color: #64748b; margin-top: 2px;">${data.txn.amountWords || ''}</div>
           </div>
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px;">
-            <div>
-              <div style="font-size: 14px; font-weight: 800; color: #0f172a;">${data.txn.note || (isGot ? 'Payment Settlement' : 'Sales Transaction')}</div>
-              <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Ref: ${data.txn.id} • ${dateFormatted}</div>
-            </div>
-            <div style="font-size: 20px; font-weight: 900; color: #0284c7; font-family: monospace;">
-              ${amountFormatted}
-            </div>
+          <div style="font-size: 24px; font-weight: 900; color: #0284c7; font-family: monospace;">
+            ${amountFormatted}
           </div>
         </div>
 
@@ -1278,7 +1363,7 @@ export function generateInvoiceHtml(templateId: string, data: InvoiceRenderData)
           <div>SmartKhata Pro • Zero Fraud Protected Record</div>
           <div style="text-align: right;">
             <div style="width: 140px; border-bottom: 1.5px solid #0284c7; margin-bottom: 4px;"></div>
-            <div style="font-weight: bold; color: #0284c7;">Authorized Merchant Sign</div>
+            <div style="font-weight: bold; color: #0284c7;">Authorized Signatory</div>
           </div>
         </div>
       </div>

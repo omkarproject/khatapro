@@ -108,7 +108,7 @@ export function getInvoicePdfTheme(templateId?: string): InvoicePdfTheme {
     case 'template_gold_luxury':
       return {
         primary: [180, 83, 9], // #b45309 Warm Gold
-        titleText: 'GOLD LUXURY BOUTIQUE INVOICE',
+        titleText: 'TAX INVOICE & BILL OF SUPPLY',
         tableHeaderBg: [254, 243, 199], // #fef3c7
         tableHeaderText: [146, 64, 14], // #92400e
         totalBoxBg: [255, 251, 235], // #fffbeb
@@ -119,7 +119,7 @@ export function getInvoicePdfTheme(templateId?: string): InvoicePdfTheme {
     case 'template_emerald':
       return {
         primary: [6, 95, 70], // #065f46
-        titleText: 'EMERALD ROYAL WEALTH INVOICE',
+        titleText: 'TAX INVOICE & BILL OF SUPPLY',
         tableHeaderBg: [236, 253, 245],
         tableHeaderText: [6, 78, 59],
         totalBoxBg: [236, 253, 245],
@@ -130,7 +130,7 @@ export function getInvoicePdfTheme(templateId?: string): InvoicePdfTheme {
     case 'template_fintech':
       return {
         primary: [5, 150, 105], // #059669
-        titleText: 'FINTECH CYBER TECH INVOICE',
+        titleText: 'TAX INVOICE & BILL OF SUPPLY',
         tableHeaderBg: [15, 23, 42],
         tableHeaderText: [255, 255, 255],
         totalBoxBg: [15, 23, 42],
@@ -141,7 +141,7 @@ export function getInvoicePdfTheme(templateId?: string): InvoicePdfTheme {
     case 'template_corporate':
       return {
         primary: [30, 58, 138], // #1e3a8a
-        titleText: 'CORPORATE B2B TAX INVOICE',
+        titleText: 'TAX INVOICE & BILL OF SUPPLY',
         tableHeaderBg: [239, 246, 255],
         tableHeaderText: [30, 58, 138],
         totalBoxBg: [239, 246, 255],
@@ -152,7 +152,7 @@ export function getInvoicePdfTheme(templateId?: string): InvoicePdfTheme {
     case 'template_startup_gradient':
       return {
         primary: [124, 58, 237], // #7c3aed
-        titleText: 'STARTUP RIBBON INVOICE',
+        titleText: 'TAX INVOICE & BILL OF SUPPLY',
         tableHeaderBg: [245, 243, 255],
         tableHeaderText: [109, 40, 217],
         totalBoxBg: [245, 243, 255],
@@ -163,7 +163,7 @@ export function getInvoicePdfTheme(templateId?: string): InvoicePdfTheme {
     case 'template_gst_compliant':
       return {
         primary: [37, 99, 235], // #2563eb
-        titleText: 'OFFICIAL GST TAX INVOICE',
+        titleText: 'TAX INVOICE & BILL OF SUPPLY',
         tableHeaderBg: [239, 246, 255],
         tableHeaderText: [29, 78, 216],
         totalBoxBg: [239, 246, 255],
@@ -174,7 +174,7 @@ export function getInvoicePdfTheme(templateId?: string): InvoicePdfTheme {
     case 'template_swiss_monochrome':
       return {
         primary: [0, 0, 0],
-        titleText: 'SWISS MONOCHROME INVOICE',
+        titleText: 'TAX INVOICE & BILL OF SUPPLY',
         tableHeaderBg: [0, 0, 0],
         tableHeaderText: [255, 255, 255],
         totalBoxBg: [248, 250, 252],
@@ -185,7 +185,7 @@ export function getInvoicePdfTheme(templateId?: string): InvoicePdfTheme {
     case 'template_pos_receipt':
       return {
         primary: [15, 23, 42],
-        titleText: 'THERMAL POS RETAIL BILL',
+        titleText: 'TAX INVOICE & RETAIL RECEIPT',
         tableHeaderBg: [241, 245, 249],
         tableHeaderText: [15, 23, 42],
         totalBoxBg: [248, 250, 252],
@@ -196,7 +196,7 @@ export function getInvoicePdfTheme(templateId?: string): InvoicePdfTheme {
     case 'template_ribbon_accent':
       return {
         primary: [2, 132, 199], // #0284c7
-        titleText: 'SCAN & PAY UPI TAX INVOICE',
+        titleText: 'TAX INVOICE & BILL OF SUPPLY',
         tableHeaderBg: [240, 249, 255],
         tableHeaderText: [3, 105, 161],
         totalBoxBg: [240, 249, 255],
@@ -208,7 +208,7 @@ export function getInvoicePdfTheme(templateId?: string): InvoicePdfTheme {
     default:
       return {
         primary: [79, 70, 229], // #4f46e5
-        titleText: 'TAX INVOICE',
+        titleText: 'TAX INVOICE & BILL OF SUPPLY',
         tableHeaderBg: [248, 250, 252],
         tableHeaderText: [71, 85, 105],
         totalBoxBg: [241, 245, 249],
@@ -244,7 +244,7 @@ export async function generateInvoicePdfBlob(
   });
 
   const businessName = settings.businessName || profile.businessName || 'SmartKhata Merchant';
-  const businessAddress = settings.businessAddress || (profile as any)?.address || '';
+  const businessAddress = settings.businessAddress || profile.businessAddress || (profile as any)?.address || settings.websiteSupportLocation || 'Registered Office Address';
   const businessPhone = settings.businessPhone || profile.phone || '';
   const businessEmail = settings.businessEmail || profile.email || '';
   const businessGst = (settings as any).businessGst || settings.paymentSettings?.businessGst || (settings as any)?.gstin || '';

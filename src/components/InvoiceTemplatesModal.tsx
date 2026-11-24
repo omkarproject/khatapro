@@ -22,12 +22,12 @@ export const InvoiceTemplatesModal: React.FC<InvoiceTemplatesModalProps> = ({ is
   // Build sample data for preview using merchant's real info
   const sampleData: InvoiceRenderData = {
     merchant: {
-      name: currentUser?.name || 'Store Owner',
+      name: (profile as any)?.fullName || profile?.name || currentUser?.name || 'Store Owner',
       businessName: profile?.businessName || settings?.businessName || currentUser?.businessName || 'SmartKhata Super Store',
-      address: profile?.businessAddress || settings?.businessAddress || '104 Commercial Complex, MG Road',
-      phone: profile?.phone || currentUser?.phone || '+91 98765 43210',
-      email: currentUser?.email || 'contact@smartkhata.pro',
-      gst: profile?.businessGst || settings?.paymentSettings?.businessGst || '09AAAAA0000A1Z5',
+      address: profile?.businessAddress || settings?.businessAddress || 'Registered Office Address',
+      phone: settings?.businessPhone || profile?.phone || currentUser?.phone || '+91 98765 43210',
+      email: settings?.businessEmail || currentUser?.email || 'contact@smartkhata.pro',
+      gst: (settings as any)?.businessGst || profile?.businessGst || settings?.paymentSettings?.businessGst || '',
     },
     customer: {
       name: 'Rahul Sharma',
