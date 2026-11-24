@@ -804,11 +804,6 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                     {settings?.businessName || profile?.businessName || currentUser?.businessName || 'My Business'}
                   </span>
                 </div>
-                {(settings?.businessEmail || profile?.email || currentUser?.email) && (
-                  <div className="text-[10px] sm:text-[11px] text-black dark:text-slate-300 font-mono font-medium tracking-tight truncate max-w-[180px] sm:max-w-xs md:max-w-sm leading-tight mt-0.5" suppressHydrationWarning>
-                    {settings?.businessEmail || profile?.email || currentUser?.email}
-                  </div>
-                )}
               </div>
             </Link>
           </div>
