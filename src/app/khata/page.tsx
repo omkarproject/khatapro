@@ -660,21 +660,32 @@ function KhataPageInner() {
   }, [enrichedTransactions, chatSearchQuery]);
 
   // Auto-scroll chat transactions to bottom ("last me") isolatedly without scrolling the entire page / window
-  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+  const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
     if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTo({
-        top: chatContainerRef.current.scrollHeight,
-        behavior,
-      });
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+    if (chatEndRef.current) {
+      try {
+        chatEndRef.current.scrollIntoView({ behavior, block: 'end' });
+      } catch {}
     }
   };
 
   useEffect(() => {
-    if (screenView === 'chat') {
-      const timer = setTimeout(() => scrollToBottom('smooth'), 120);
-      return () => clearTimeout(timer);
+    if (screenView === 'chat' && (mobileActivePanel === 'ledger' || typeof window === 'undefined' || window.innerWidth >= 1024)) {
+      scrollToBottom('auto');
+      const t1 = setTimeout(() => scrollToBottom('auto'), 40);
+      const t2 = setTimeout(() => scrollToBottom('auto'), 120);
+      const t3 = setTimeout(() => scrollToBottom('auto'), 250);
+      const t4 = setTimeout(() => scrollToBottom('smooth'), 500);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+        clearTimeout(t4);
+      };
     }
-  }, [screenView, activeTransactions.length, selectedCustomerId, selectedGroupId, selectedMemberFilterId]);
+  }, [screenView, mobileActivePanel, activeTransactions.length, selectedCustomerId, selectedGroupId, selectedMemberFilterId]);
 
 
 
@@ -4189,6 +4200,8 @@ function KhataPageInner() {
                         setSelectedMemberFilterId(null);
                         setScreenView('chat');
                         setMobileActivePanel('ledger');
+                        setTimeout(() => scrollToBottom('auto'), 20);
+                        setTimeout(() => scrollToBottom('auto'), 120);
                       }}
                       className={`smooth-list-item p-3 rounded-2xl cursor-pointer transition-all border select-none relative ${
                         isSelected
@@ -4316,6 +4329,8 @@ function KhataPageInner() {
                         setSelectedGroupId(null);
                         setScreenView('chat');
                         setMobileActivePanel('ledger');
+                        setTimeout(() => scrollToBottom('auto'), 20);
+                        setTimeout(() => scrollToBottom('auto'), 120);
                       }}
                       className={`smooth-list-item p-3 rounded-2xl cursor-pointer transition-all border select-none relative ${
                         isSelected
@@ -4823,7 +4838,7 @@ function KhataPageInner() {
                       ) : (
                         <>
                           {/* Circular Avatar (with rating-based colored round border) - Click opens Review Modal */}
-                          <div className="relative group shrink-0">
+                          <div className="relative shrink-0">
                             <div
                               onClick={() => handleOpenAvatarReview(activeCustomer)}
                               className={`w-10 h-10 rounded-full bg-[#E57373] text-white font-extrabold flex items-center justify-center text-base shadow-xs shrink-0 select-none cursor-pointer hover:opacity-90 active:scale-95 transition-all overflow-hidden relative ${getCustomerRatingBorder(activeCustomer.rating)}`}
@@ -4839,17 +4854,6 @@ function KhataPageInner() {
                                 />
                               )}
                             </div>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenAvatarReview(activeCustomer);
-                              }}
-                              className="absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-md border border-white dark:border-slate-900 transition-transform hover:scale-110 cursor-pointer"
-                              title="View, change, or remove profile photo"
-                            >
-                              <Camera className="w-2.5 h-2.5" />
-                            </button>
                           </div>
 
                           {/* Customer Name (Color based on rating) + CRM Star Rating - Click opens View Profile */}
@@ -5152,7 +5156,7 @@ function KhataPageInner() {
                                 {/* The Bubble Card */}
                                 <div
                                   onClick={isTxnDeleted ? () => setInspectDeletedTxn(t) : undefined}
-                                  className={`w-full max-w-[85%] sm:max-w-sm rounded-2xl shadow-xs overflow-hidden p-3 space-y-2 transition-all ${
+                                  className={`w-full max-w-[85%] sm:max-w-sm rounded-xl shadow-xs overflow-hidden p-3 space-y-2 transition-all ${
                                     isTxnDeleted
                                       ? 'bg-slate-100/90 dark:bg-slate-900/80 border border-dashed border-rose-300 dark:border-rose-900 opacity-75 cursor-pointer hover:border-rose-400'
                                       : 'bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80'
@@ -5327,7 +5331,7 @@ function KhataPageInner() {
                                             {firstItem.type === 'image' ? (
                                               <div
                                                 onClick={() => setPreviewGallery({ items: parsedList, currentIndex: 0, transactionId: t.id })}
-                                                className="relative group cursor-pointer rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 min-h-[90px] max-h-52 flex items-center justify-center shadow-xs"
+                                                className="relative group cursor-pointer rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 min-h-[90px] max-h-52 flex items-center justify-center shadow-xs"
                                               >
                                                 {/* Clean fallback card with icon and name */}
                                                 <div className="flex flex-col items-center justify-center p-3 text-center space-y-1">
@@ -5345,6 +5349,7 @@ function KhataPageInner() {
                                                   alt={firstItem.name}
                                                   className="w-full h-full max-h-52 object-cover absolute inset-0 group-hover:scale-102 transition-transform duration-200"
                                                   onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                                                  onLoad={() => scrollToBottom('auto')}
                                                 />
 
                                                 {/* Multiple Images Counter Tag (e.g. +1 or +4) */}
@@ -5361,7 +5366,7 @@ function KhataPageInner() {
                                             ) : (
                                               <div
                                                 onClick={() => setPreviewGallery({ items: parsedList, currentIndex: 0, transactionId: t.id })}
-                                                className="relative group cursor-pointer p-3 rounded-xl bg-rose-50/90 dark:bg-rose-950/40 border border-rose-200/80 dark:border-rose-900/60 flex items-center justify-between hover:bg-rose-100/80 transition-colors shadow-xs"
+                                                className="relative group cursor-pointer p-3 rounded-lg bg-rose-50/90 dark:bg-rose-950/40 border border-rose-200/80 dark:border-rose-900/60 flex items-center justify-between hover:bg-rose-100/80 transition-colors shadow-xs"
                                               >
                                                 <div className="flex items-center gap-3 min-w-0">
                                                   <div className="w-9 h-9 rounded-xl bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-xs">
@@ -5440,7 +5445,7 @@ function KhataPageInner() {
                                     return (
                                       <div
                                         onClick={() => handleOpenReminderModal(t)}
-                                        className="mt-1.5 p-2 rounded-xl bg-amber-50/90 dark:bg-amber-950/60 border border-amber-200/80 dark:border-amber-800/60 flex items-center justify-between text-[11px] text-amber-800 dark:text-amber-300 cursor-pointer hover:bg-amber-100/80 dark:hover:bg-amber-900/40 transition-colors"
+                                        className="mt-1.5 p-2 rounded-lg bg-amber-50/90 dark:bg-amber-950/60 border border-amber-200/80 dark:border-amber-800/60 flex items-center justify-between text-[11px] text-amber-800 dark:text-amber-300 cursor-pointer hover:bg-amber-100/80 dark:hover:bg-amber-900/40 transition-colors"
                                         title="Click to view/update reminder"
                                       >
                                         <div className="flex items-center gap-1.5 min-w-0">
