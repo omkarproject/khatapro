@@ -4,13 +4,13 @@
 
 :root {
   --background: #F8FAFC;
-  --foreground: #0F172A;
+  --foreground: #000000;
   --card: rgba(255, 255, 255, 0.85);
   --card-border: rgba(226, 232, 240, 0.8);
   --card-hover: rgba(255, 255, 255, 0.95);
   --glass-bg: rgba(255, 255, 255, 0.7);
   --glass-border: rgba(255, 255, 255, 0.4);
-  --muted: #64748B;
+  --muted: #000000;
   --primary: #4F46E5;
 }
 
@@ -24,6 +24,49 @@
   --glass-border: rgba(255, 255, 255, 0.08);
   --muted: #94A3B8;
   --primary: #6366F1;
+}
+
+/* Global High-Contrast Pure Black Typography for Light Mode across entire website */
+html:not(.dark) {
+  color: #000000;
+}
+
+html:not(.dark) body {
+  color: #000000;
+}
+
+/* Transform all faded/washed-out grey text into solid pure black in light mode */
+html:not(.dark) .text-slate-400:not(:hover),
+html:not(.dark) .text-slate-500:not(:hover),
+html:not(.dark) .text-slate-600:not(:hover),
+html:not(.dark) .text-slate-700:not(:hover),
+html:not(.dark) .text-slate-900:not(:hover),
+html:not(.dark) .text-gray-400:not(:hover),
+html:not(.dark) .text-gray-500:not(:hover),
+html:not(.dark) .text-gray-600:not(:hover),
+html:not(.dark) .text-gray-700:not(:hover),
+html:not(.dark) .text-gray-900:not(:hover),
+html:not(.dark) .text-zinc-400:not(:hover),
+html:not(.dark) .text-zinc-500:not(:hover),
+html:not(.dark) .text-zinc-600:not(:hover),
+html:not(.dark) .text-zinc-700:not(:hover),
+html:not(.dark) .text-zinc-900:not(:hover),
+html:not(.dark) .text-neutral-400:not(:hover),
+html:not(.dark) .text-neutral-500:not(:hover),
+html:not(.dark) .text-neutral-600:not(:hover),
+html:not(.dark) .text-neutral-700:not(:hover),
+html:not(.dark) .text-neutral-900:not(:hover),
+html:not(.dark) .text-muted:not(:hover) {
+  color: #000000 !important;
+}
+
+/* Ensure placeholder text is solid and readable */
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder,
+html:not(.dark) .placeholder-slate-400::placeholder,
+html:not(.dark) .placeholder-gray-400::placeholder {
+  color: #000000 !important;
+  opacity: 0.65 !important;
 }
 
 * {
