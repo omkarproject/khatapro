@@ -747,8 +747,21 @@ function PayRedirectContent() {
     }
   };
 
-  // Payment Confirmation Processor (Idempotent & Multi-Sync Protected)
-  const handlePaymentSuccess = async (gatewayName: string, customTxnId?: string, gatewayTxnId?: string) => {
+  // Payment Confirmation Processor (Idempotent & Multi-Sync Protected with Server Verification)
+  const handlePaymentSuccess = async (
+    gatewayName: string,
+    customTxnId?: string,
+    gatewayTxnId?: string,
+    extraVerifyPayload?: {
+      orderId?: string;
+      razorpayOrderId?: string;
+      razorpayPaymentId?: string;
+      razorpaySignature?: string;
+      cashfreeAppId?: string;
+      cashfreeSecretKey?: string;
+      cashfreeEnv?: string;
+    }
+  ) => {
     if (isPaymentHandledRef.current) return;
     isPaymentHandledRef.current = true;
 
@@ -883,6 +896,13 @@ function PayRedirectContent() {
           receiptUrl: receiptImgUrl,
           paymentToken: pathPid || pParam || '',
           tokenTimestamp: (pathPid ? (Number(pathPid) > 1000000000 && Number(pathPid) < 9999999999 ? Number(pathPid) * 1000 : Number(pathPid)) : (decodedToken?.timestamp || 0)),
+          orderId: extraVerifyPayload?.orderId,
+          razorpayOrderId: extraVerifyPayload?.razorpayOrderId,
+          razorpayPaymentId: extraVerifyPayload?.razorpayPaymentId,
+          razorpaySignature: extraVerifyPayload?.razorpaySignature,
+          cashfreeAppId: extraVerifyPayload?.cashfreeAppId,
+          cashfreeSecretKey: extraVerifyPayload?.cashfreeSecretKey,
+          cashfreeEnv: extraVerifyPayload?.cashfreeEnv,
         }),
       });
     } catch (e) {
@@ -951,7 +971,44 @@ function PayRedirectContent() {
     });
   };
 
-  // 3. Execute Cashfree API & Real Modal Checkout
+  // 3. Check for Cashfree mobile redirect / return URL parameter (e.g. ?order_id=ORD_...) across iOS, Android & Windows
+  const redirectOrderId = searchParams?.get('order_id') || searchParams?.get('cf_order_id');
+  useEffect(() => {
+    if (!redirectOrderId || isPaymentHandledRef.current) return;
+    let isMounted = true;
+
+    async function checkRedirectPayment() {
+      setIsCfLoading(true);
+      try {
+        const verifyRes = await fetch('/api/cashfree/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: redirectOrderId }),
+        });
+        const verifyData = await verifyRes.json();
+        if (isMounted && verifyData.success && verifyData.paymentStatus === 'SUCCESS') {
+          const realBankRef = String(verifyData.bankReference || verifyData.cfPaymentId || redirectOrderId).trim();
+          const cfTxnId = String(verifyData.cfPaymentId || '').trim();
+          await handlePaymentSuccess('Cashfree Official PG', realBankRef, cfTxnId, {
+            orderId: redirectOrderId || undefined,
+          });
+        } else if (isMounted) {
+          setCfError(verifyData.message || 'Payment was not confirmed. If money was debited, it will reflect once confirmed by your bank.');
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          setCfError('Could not verify redirect payment with gateway.');
+        }
+      } finally {
+        if (isMounted) setIsCfLoading(false);
+      }
+    }
+
+    checkRedirectPayment();
+    return () => { isMounted = false; };
+  }, [redirectOrderId]);
+
+  // 4. Execute Cashfree API & Real Modal Checkout
   const executeCashfreeCheckout = async () => {
     setIsCfLoading(true);
     setCfError('');
@@ -970,6 +1027,7 @@ function PayRedirectContent() {
     ).trim();
 
     try {
+      const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
       const res = await fetch('/api/cashfree/order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -984,6 +1042,7 @@ function PayRedirectContent() {
           appId: appId || undefined,
           secretKey: secretKey || undefined,
           env,
+          returnUrl: currentUrl,
         }),
       });
 
@@ -994,7 +1053,6 @@ function PayRedirectContent() {
         console.warn('Cashfree order initialization:', errorMsg);
         setCfError(errorMsg);
         setIsCfLoading(false);
-        setIsOnlineGatewayOpen(true);
         return;
       }
 
@@ -1002,7 +1060,6 @@ function PayRedirectContent() {
       if (!sdkLoaded || !(window as any).Cashfree) {
         setCfError('Unable to load Cashfree checkout SDK. Please check your internet connection.');
         setIsCfLoading(false);
-        setIsOnlineGatewayOpen(true);
         return;
       }
 
@@ -1022,7 +1079,7 @@ function PayRedirectContent() {
         }
 
         if (result.paymentDetails) {
-          // Real server verification with Cashfree to extract real Bank UTR / Reference No
+          // STRICT Server-side verification with Cashfree
           try {
             const verifyRes = await fetch('/api/cashfree/verify', {
               method: 'POST',
@@ -1035,18 +1092,26 @@ function PayRedirectContent() {
               }),
             });
             const verifyData = await verifyRes.json();
-            // Prioritize bankReference (the real 12-digit Bank UTR e.g. 669101698983)
-            const realBankRef =
-              (verifyData.bankReference ? String(verifyData.bankReference).trim() : '') ||
-              (result.paymentDetails.bankReference ? String(result.paymentDetails.bankReference).trim() : '') ||
-              (verifyData.cfPaymentId ? String(verifyData.cfPaymentId).trim() : '') ||
-              (result.paymentDetails.cfPaymentId ? String(result.paymentDetails.cfPaymentId).trim() : '') ||
-              `CF_${Date.now()}`;
-            const cfTxnId = (verifyData.cfPaymentId ? String(verifyData.cfPaymentId).trim() : '') || (result.paymentDetails.cfPaymentId ? String(result.paymentDetails.cfPaymentId).trim() : '');
-            await handlePaymentSuccess('Cashfree Official PG', realBankRef, cfTxnId);
-          } catch {
-            const fallbackRef = (result.paymentDetails.bankReference ? String(result.paymentDetails.bankReference).trim() : '') || (result.paymentDetails.cfPaymentId ? String(result.paymentDetails.cfPaymentId).trim() : '') || `CF_TXN_${Date.now().toString().slice(-8)}`;
-            await handlePaymentSuccess('Cashfree PG', fallbackRef);
+            if (verifyData.success && verifyData.paymentStatus === 'SUCCESS') {
+              const realBankRef =
+                (verifyData.bankReference ? String(verifyData.bankReference).trim() : '') ||
+                (result.paymentDetails.bankReference ? String(result.paymentDetails.bankReference).trim() : '') ||
+                (verifyData.cfPaymentId ? String(verifyData.cfPaymentId).trim() : '') ||
+                (result.paymentDetails.cfPaymentId ? String(result.paymentDetails.cfPaymentId).trim() : '') ||
+                `CF_${Date.now()}`;
+              const cfTxnId = (verifyData.cfPaymentId ? String(verifyData.cfPaymentId).trim() : '') || (result.paymentDetails.cfPaymentId ? String(result.paymentDetails.cfPaymentId).trim() : '');
+              await handlePaymentSuccess('Cashfree Official PG', realBankRef, cfTxnId, {
+                orderId: data.orderId || newOrderId,
+                cashfreeAppId: appId || undefined,
+                cashfreeSecretKey: secretKey || undefined,
+                cashfreeEnv: checkoutEnv,
+              });
+            } else {
+              setCfError(verifyData.message || 'Payment not verified by Cashfree. If money was debited, it will reflect shortly.');
+            }
+          } catch (vErr: any) {
+            console.error('Cashfree verification failed:', vErr);
+            setCfError('Unable to verify payment status with Cashfree.');
           }
         }
       });
@@ -1055,11 +1120,10 @@ function PayRedirectContent() {
       const errMsg = err.message || 'Error communicating with Cashfree API.';
       setCfError(errMsg);
       setIsCfLoading(false);
-      setIsOnlineGatewayOpen(true);
     }
   };
 
-  // 4. Execute Razorpay Real Popup Checkout
+  // 5. Execute Razorpay Real Popup Checkout
   const executeRazorpayCheckout = async () => {
     setIsCfLoading(true);
     setCfError('');
@@ -1069,7 +1133,6 @@ function PayRedirectContent() {
       if (!isLoaded || !(window as any).Razorpay) {
         setCfError('Unable to load Razorpay Checkout SDK.');
         setIsCfLoading(false);
-        setIsOnlineGatewayOpen(true);
         return;
       }
 
@@ -1082,9 +1145,32 @@ function PayRedirectContent() {
         description: paymentNote || `Settlement for ${targetCustomerName}`,
         image: merchantLogo || websiteLogo || undefined,
         handler: async function (response: any) {
-          setIsCfLoading(false);
-          const paymentId = response.razorpay_payment_id || `pay_rzp_${Date.now()}`;
-          await handlePaymentSuccess('Razorpay Official PG', paymentId);
+          setIsCfLoading(true);
+          try {
+            const vRes = await fetch('/api/razorpay/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                orderId: response.razorpay_order_id,
+                paymentId: response.razorpay_payment_id,
+                signature: response.razorpay_signature,
+              }),
+            });
+            const vData = await vRes.json();
+            if (vData.success && vData.verified) {
+              await handlePaymentSuccess('Razorpay Official PG', response.razorpay_payment_id, response.razorpay_order_id, {
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
+              });
+            } else {
+              setCfError(vData.message || 'Razorpay payment signature verification failed.');
+            }
+          } catch {
+            setCfError('Error verifying Razorpay payment.');
+          } finally {
+            setIsCfLoading(false);
+          }
         },
         prefill: {
           name: targetCustomerName,
@@ -1106,7 +1192,6 @@ function PayRedirectContent() {
       console.error('Razorpay launch error:', e);
       setCfError(e.message || 'Failed to initialize Razorpay checkout.');
       setIsCfLoading(false);
-      setIsOnlineGatewayOpen(true);
     }
   };
 
@@ -1116,8 +1201,6 @@ function PayRedirectContent() {
       await executeCashfreeCheckout();
     } else if (activeGateway === 'razorpay') {
       await executeRazorpayCheckout();
-    } else if (activeGateway === 'upi_gateway') {
-      setIsOnlineGatewayOpen(true);
     } else {
       // Direct UPI: Trigger standard UPI intent
       if (typeof window !== 'undefined') {
@@ -1693,7 +1776,7 @@ function PayRedirectContent() {
                     {activeGateway === 'cashfree' ? 'Cashfree Payment Gateway' : activeGateway === 'razorpay' ? 'Razorpay Payment Gateway' : 'Online Payment Gateway'}
                   </h3>
                   <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5">
-                    <ShieldCheck className="w-3 h-3" /> Official Active Gateway
+                    <ShieldCheck className="w-3 h-3" /> Official Secure Checkout
                   </p>
                 </div>
               </div>
@@ -1725,174 +1808,42 @@ function PayRedirectContent() {
               </div>
             )}
 
-            {/* Active Cashfree Quick Checkout Trigger */}
-            {activeGateway === 'cashfree' && (
-              <div className="px-3 pt-3">
+            <div className="p-4 space-y-3">
+              {activeGateway === 'cashfree' && (
                 <button
                   type="button"
                   onClick={executeCashfreeCheckout}
                   disabled={isCfLoading}
-                  className="w-full py-2.5 px-3 rounded-xl bg-violet-600 hover:bg-violet-500 active:scale-98 text-white font-black text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                  className="w-full py-3 px-4 rounded-xl bg-violet-600 hover:bg-violet-500 active:scale-98 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-violet-600/20 transition-all cursor-pointer"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isCfLoading ? 'animate-spin' : ''}`} />
-                  <span>Launch Cashfree Official Modal Popup</span>
+                  <RefreshCw className={`w-4 h-4 ${isCfLoading ? 'animate-spin' : ''}`} />
+                  <span>{isCfLoading ? 'Connecting to Cashfree...' : 'Open Cashfree Gateway'}</span>
                 </button>
-              </div>
-            )}
-
-            {/* Tabs for Payment Mode */}
-            <div className="p-3 space-y-3">
-              <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-[10px] font-bold">
-                <button
-                  type="button"
-                  onClick={() => setOnlineTab('upi')}
-                  className={`py-1.5 rounded-lg transition-all ${onlineTab === 'upi' ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs' : 'text-slate-500'}`}
-                >
-                  UPI
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOnlineTab('cards')}
-                  className={`py-1.5 rounded-lg transition-all ${onlineTab === 'cards' ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs' : 'text-slate-500'}`}
-                >
-                  Cards
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOnlineTab('netbanking')}
-                  className={`py-1.5 rounded-lg transition-all ${onlineTab === 'netbanking' ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs' : 'text-slate-500'}`}
-                >
-                  Banking
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOnlineTab('wallets')}
-                  className={`py-1.5 rounded-lg transition-all ${onlineTab === 'wallets' ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs' : 'text-slate-500'}`}
-                >
-                  Wallets
-                </button>
-              </div>
-
-              {/* Tab 1: UPI ID Collect */}
-              {onlineTab === 'upi' && (
-                <div className="space-y-2 pt-1 text-left">
-                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                    Enter your Virtual Payment Address (UPI ID)
-                  </label>
-                  <input
-                    type="text"
-                    value={gatewayVpaInput}
-                    onChange={(e) => setGatewayVpaInput(e.target.value)}
-                    placeholder="e.g. mobile@upi, name@okhdfcbank"
-                    className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 outline-none focus:border-indigo-500 text-slate-800 dark:text-slate-100"
-                  />
-                  <p className="text-[10px] text-slate-400">
-                    A collect request will be instantly dispatched to your UPI banking app.
-                  </p>
-                </div>
               )}
 
-              {/* Tab 2: Debit / Credit Card */}
-              {onlineTab === 'cards' && (
-                <div className="space-y-2 pt-1 text-left">
-                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                    Card Number
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={19}
-                    value={gatewayCardNumber}
-                    onChange={(e) => setGatewayCardNumber(e.target.value)}
-                    placeholder="4532 •••• •••• 8892"
-                    className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 outline-none focus:border-indigo-500 text-slate-800 dark:text-slate-100 font-mono"
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      maxLength={5}
-                      value={gatewayCardExpiry}
-                      onChange={(e) => setGatewayCardExpiry(e.target.value)}
-                      placeholder="MM/YY"
-                      className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 outline-none focus:border-indigo-500 font-mono"
-                    />
-                    <input
-                      type="password"
-                      maxLength={4}
-                      value={gatewayCardCvv}
-                      onChange={(e) => setGatewayCardCvv(e.target.value)}
-                      placeholder="CVV"
-                      className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 outline-none focus:border-indigo-500 font-mono"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Tab 3: NetBanking */}
-              {onlineTab === 'netbanking' && (
-                <div className="space-y-2 pt-1 text-left">
-                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                    Select Your Bank
-                  </label>
-                  <select
-                    value={gatewayBank}
-                    onChange={(e) => setGatewayBank(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 outline-none focus:border-indigo-500 text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="HDFC Bank">HDFC Bank</option>
-                    <option value="State Bank of India (SBI)">State Bank of India (SBI)</option>
-                    <option value="ICICI Bank">ICICI Bank</option>
-                    <option value="Axis Bank">Axis Bank</option>
-                    <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
-                    <option value="Punjab National Bank">Punjab National Bank</option>
-                  </select>
-                </div>
-              )}
-
-              {/* Tab 4: Wallets */}
-              {onlineTab === 'wallets' && (
-                <div className="space-y-2 pt-1 text-left">
-                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                    Select Wallet
-                  </label>
-                  <select
-                    value={gatewayWallet}
-                    onChange={(e) => setGatewayWallet(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 outline-none focus:border-indigo-500 text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="Paytm Wallet">Paytm Wallet</option>
-                    <option value="PhonePe Wallet">PhonePe Wallet</option>
-                    <option value="Amazon Pay Balance">Amazon Pay Balance</option>
-                    <option value="Mobikwik">Mobikwik</option>
-                  </select>
-                </div>
-              )}
-
-              {/* Confirm Pay Button */}
-              <div className="pt-2">
+              {activeGateway === 'razorpay' && (
                 <button
                   type="button"
-                  onClick={() => {
-                    const methodLabel =
-                      onlineTab === 'upi' ? `UPI (${gatewayVpaInput || 'Collect'})` :
-                      onlineTab === 'cards' ? 'Debit/Credit Card' :
-                      onlineTab === 'netbanking' ? `NetBanking (${gatewayBank})` :
-                      `Wallet (${gatewayWallet})`;
-                    handlePaymentSuccess(methodLabel);
-                  }}
-                  disabled={isProcessingPayment}
-                  className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-98 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+                  onClick={executeRazorpayCheckout}
+                  disabled={isCfLoading}
+                  className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-98 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
                 >
-                  {isProcessingPayment ? (
-                    <span>Verifying with Gateway...</span>
-                  ) : (
-                    <>
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>Pay {formatINR(effectiveAmount)} Securely</span>
-                    </>
-                  )}
+                  <RefreshCw className={`w-4 h-4 ${isCfLoading ? 'animate-spin' : ''}`} />
+                  <span>{isCfLoading ? 'Connecting to Razorpay...' : 'Open Razorpay Gateway'}</span>
                 </button>
-              </div>
+              )}
 
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center leading-relaxed">
+                You can also pay directly via UPI app or scan the QR code on the payment page for 0% convenience fee.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setIsOnlineGatewayOpen(false)}
+                className="w-full py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer"
+              >
+                Close & Return to QR
+              </button>
             </div>
 
           </div>

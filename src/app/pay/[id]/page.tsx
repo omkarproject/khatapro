@@ -334,7 +334,16 @@ function CustomerPayInvoiceContent() {
   const handleCompletePayment = async (
     gatewayName: string,
     bankRef: string,
-    gatewayTxnId?: string
+    gatewayTxnId?: string,
+    extraVerifyPayload?: {
+      orderId?: string;
+      razorpayOrderId?: string;
+      razorpayPaymentId?: string;
+      razorpaySignature?: string;
+      cashfreeAppId?: string;
+      cashfreeSecretKey?: string;
+      cashfreeEnv?: string;
+    }
   ) => {
     if (!invoice) return;
     if (isPaymentHandledRef.current) return;
@@ -553,7 +562,7 @@ function CustomerPayInvoiceContent() {
       console.warn('Direct storage sync warning for transactions:', syncErr);
     }
 
-    // 4. Server-side Supabase sync via /api/pay/confirm
+    // 4. Server-side Supabase sync via /api/pay/confirm with gateway verification
     try {
       await fetch('/api/pay/confirm', {
         method: 'POST',
@@ -571,6 +580,13 @@ function CustomerPayInvoiceContent() {
           receiptUrl: receiptImgUrl,
           invoiceId: invoice.id,
           txnId: onlineTxnId,
+          orderId: extraVerifyPayload?.orderId,
+          razorpayOrderId: extraVerifyPayload?.razorpayOrderId,
+          razorpayPaymentId: extraVerifyPayload?.razorpayPaymentId,
+          razorpaySignature: extraVerifyPayload?.razorpaySignature,
+          cashfreeAppId: extraVerifyPayload?.cashfreeAppId,
+          cashfreeSecretKey: extraVerifyPayload?.cashfreeSecretKey,
+          cashfreeEnv: extraVerifyPayload?.cashfreeEnv,
         }),
       });
     } catch (confirmErr) {
@@ -665,10 +681,32 @@ function CustomerPayInvoiceContent() {
         description: `Payment for Tax Invoice #${invoice.invoiceNumber}`,
         image: merchantLogo || 'https://cdn-icons-png.flaticon.com/512/9131/9131529.png',
         handler: async function (response: any) {
-          setIsRazorpayLoading(false);
-          const paymentId = response.razorpay_payment_id || `pay_rzp_${Date.now()}`;
-          const rzpOrderId = response.razorpay_order_id || '';
-          await handleCompletePayment('Razorpay PG', paymentId, rzpOrderId);
+          setIsRazorpayLoading(true);
+          try {
+            const vRes = await fetch('/api/razorpay/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                orderId: response.razorpay_order_id,
+                paymentId: response.razorpay_payment_id,
+                signature: response.razorpay_signature,
+              }),
+            });
+            const vData = await vRes.json();
+            if (vData.success && vData.verified) {
+              await handleCompletePayment('Razorpay PG', response.razorpay_payment_id, response.razorpay_order_id, {
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
+              });
+            } else {
+              addToast('Payment Error', vData.message || 'Razorpay payment verification failed.', 'error');
+            }
+          } catch {
+            addToast('Verification Error', 'Unable to verify payment with Razorpay.', 'error');
+          } finally {
+            setIsRazorpayLoading(false);
+          }
         },
         prefill: {
           name: invoice.customerName || '',
@@ -742,6 +780,45 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
     }
   };
 
+  // Check for Cashfree mobile redirect / return URL parameter (e.g. ?order_id=INV_...) across iOS, Android & Windows
+  const redirectOrderId = searchParams?.get('order_id') || searchParams?.get('cf_order_id');
+  useEffect(() => {
+    if (!redirectOrderId || isPaymentHandledRef.current || !invoice) return;
+    let isMounted = true;
+
+    async function checkRedirectPayment() {
+      setIsCfLoading(true);
+      try {
+        const verifyRes = await fetch('/api/cashfree/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: redirectOrderId }),
+        });
+        const verifyData = await verifyRes.json();
+        if (isMounted && verifyData.success && verifyData.paymentStatus === 'SUCCESS') {
+          const realBankRef = String(verifyData.bankReference || verifyData.cfPaymentId || redirectOrderId).trim();
+          const cfTxnId = String(verifyData.cfPaymentId || '').trim();
+          await handleCompletePayment('Cashfree Official PG', realBankRef, cfTxnId, {
+            orderId: redirectOrderId || undefined,
+          });
+        } else if (isMounted) {
+          const msg = verifyData.message || 'Payment not verified by gateway.';
+          setCfApiError(msg);
+          addToast('Payment Notice', msg, 'info');
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          setCfApiError('Could not verify return payment status.');
+        }
+      } finally {
+        if (isMounted) setIsCfLoading(false);
+      }
+    }
+
+    checkRedirectPayment();
+    return () => { isMounted = false; };
+  }, [redirectOrderId, invoice]);
+
   // REAL CASHFREE API EXECUTION FUNCTION
   const executeCashfreeApiCheckout = async (
     customAmount?: number,
@@ -761,6 +838,7 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
 
     try {
       // 1. Create order on Cashfree server via our API route
+      const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
       const res = await fetch('/api/cashfree/order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -775,6 +853,7 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
           appId: appId || undefined,
           secretKey: secretKey || undefined,
           env,
+          returnUrl: currentUrl,
         }),
       });
 
@@ -813,7 +892,7 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
         }
 
         if (result.paymentDetails) {
-          // 4. Verify payment with Cashfree Server API
+          // 4. STRICT verify payment with Cashfree Server API
           try {
             const verifyRes = await fetch('/api/cashfree/verify', {
               method: 'POST',
@@ -826,23 +905,30 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
               }),
             });
             const verifyData = await verifyRes.json();
-            const realBankRef =
-              (verifyData.bankReference ? String(verifyData.bankReference).trim() : '') ||
-              (result.paymentDetails?.bankReference ? String(result.paymentDetails.bankReference).trim() : '') ||
-              (verifyData.cfPaymentId ? String(verifyData.cfPaymentId).trim() : '') ||
-              (result.paymentDetails?.cfPaymentId ? String(result.paymentDetails.cfPaymentId).trim() : '') ||
-              `CF_${Date.now()}`;
-            const cfTxnId =
-              (verifyData.cfPaymentId ? String(verifyData.cfPaymentId).trim() : '') ||
-              (result.paymentDetails?.cfPaymentId ? String(result.paymentDetails.cfPaymentId).trim() : '');
+            if (verifyData.success && verifyData.paymentStatus === 'SUCCESS') {
+              const realBankRef =
+                (verifyData.bankReference ? String(verifyData.bankReference).trim() : '') ||
+                (result.paymentDetails?.bankReference ? String(result.paymentDetails.bankReference).trim() : '') ||
+                (verifyData.cfPaymentId ? String(verifyData.cfPaymentId).trim() : '') ||
+                (result.paymentDetails?.cfPaymentId ? String(result.paymentDetails.cfPaymentId).trim() : '') ||
+                `CF_${Date.now()}`;
+              const cfTxnId =
+                (verifyData.cfPaymentId ? String(verifyData.cfPaymentId).trim() : '') ||
+                (result.paymentDetails?.cfPaymentId ? String(result.paymentDetails.cfPaymentId).trim() : '');
 
-            await handleCompletePayment('Cashfree Official PG', realBankRef, cfTxnId);
+              await handleCompletePayment('Cashfree Official PG', realBankRef, cfTxnId, {
+                orderId: data.orderId || newOrderId,
+                cashfreeAppId: appId || undefined,
+                cashfreeSecretKey: secretKey || undefined,
+                cashfreeEnv: checkoutEnv,
+              });
+            } else {
+              const msg = verifyData.message || 'Payment not verified by gateway.';
+              setCfApiError(msg);
+              addToast('Payment Notice', msg, 'info');
+            }
           } catch {
-            const fallbackRef =
-              (result.paymentDetails?.bankReference ? String(result.paymentDetails.bankReference).trim() : '') ||
-              (result.paymentDetails?.cfPaymentId ? String(result.paymentDetails.cfPaymentId).trim() : '') ||
-              `CF_TXN_${Date.now().toString().slice(-8)}`;
-            await handleCompletePayment('Cashfree PG', fallbackRef);
+            setCfApiError('Could not verify payment with Cashfree server.');
           }
         }
       });

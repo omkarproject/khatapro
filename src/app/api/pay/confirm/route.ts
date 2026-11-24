@@ -90,7 +90,169 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, message: 'No target merchant user found' });
     }
 
-    const finalRef = referenceNo || `TXN_${Date.now()}`;
+    // 2. STRICT SERVER-SIDE PAYMENT GATEWAY VERIFICATION
+    // All online payments submitted to /api/pay/confirm MUST be confirmed by Cashfree or Razorpay.
+    // Unverified requests or mock simulations are strictly rejected to prevent fraudulent settlement.
+    const gwLower = (gateway || '').toLowerCase();
+    let verifiedRef = referenceNo || '';
+    let verifiedGatewayTxnId = gatewayTxnId || '';
+
+    if (gwLower.includes('cashfree')) {
+      const cfOrderId = body.orderId || referenceNo || gatewayTxnId;
+      if (!cfOrderId) {
+        return NextResponse.json(
+          { error: 'Missing Cashfree order ID for payment verification. Settlement rejected.' },
+          { status: 400 }
+        );
+      }
+
+      // Resolve Cashfree credentials for this merchant
+      let finalAppId = (body.cashfreeAppId || process.env.CASHFREE_APP_ID || '').trim();
+      let finalSecretKey = (body.cashfreeSecretKey || process.env.CASHFREE_SECRET_KEY || '').trim();
+      let finalEnv = (body.cashfreeEnv || process.env.CASHFREE_ENV || 'production') as 'sandbox' | 'production';
+
+      if ((!finalAppId || !finalSecretKey) && isSupabaseConfigured()) {
+        try {
+          const { data: setRow } = await supabase
+            .from('system_settings')
+            .select('payment_settings')
+            .eq('user_id', merchantUserId)
+            .maybeSingle();
+
+          if (setRow?.payment_settings) {
+            if (!finalAppId && setRow.payment_settings.cashfreeAppId) {
+              finalAppId = setRow.payment_settings.cashfreeAppId.trim();
+            }
+            if (!finalSecretKey && setRow.payment_settings.cashfreeSecretKey) {
+              finalSecretKey = setRow.payment_settings.cashfreeSecretKey.trim();
+            }
+            if (setRow.payment_settings.cashfreeEnv) {
+              finalEnv = setRow.payment_settings.cashfreeEnv;
+            }
+          }
+        } catch {}
+      }
+
+      if (!finalAppId || !finalSecretKey) {
+        try {
+          const { data: anySet } = await supabase
+            .from('system_settings')
+            .select('payment_settings')
+            .limit(1)
+            .maybeSingle();
+          if (anySet?.payment_settings) {
+            if (!finalAppId && anySet.payment_settings.cashfreeAppId) finalAppId = anySet.payment_settings.cashfreeAppId.trim();
+            if (!finalSecretKey && anySet.payment_settings.cashfreeSecretKey) finalSecretKey = anySet.payment_settings.cashfreeSecretKey.trim();
+            if (anySet.payment_settings.cashfreeEnv) finalEnv = anySet.payment_settings.cashfreeEnv;
+          }
+        } catch {}
+      }
+
+      if (!finalAppId || !finalSecretKey) {
+        return NextResponse.json(
+          { error: 'Merchant Cashfree API credentials not configured for verification.' },
+          { status: 400 }
+        );
+      }
+
+      const host = finalEnv === 'production' ? 'https://api.cashfree.com' : 'https://sandbox.cashfree.com';
+      const cfRes = await fetch(`${host}/pg/orders/${encodeURIComponent(cfOrderId)}/payments`, {
+        method: 'GET',
+        headers: {
+          'x-api-version': '2023-08-01',
+          'x-client-id': finalAppId,
+          'x-client-secret': finalSecretKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!cfRes.ok) {
+        const errJson = await cfRes.json().catch(() => ({}));
+        return NextResponse.json(
+          { error: `Cashfree gateway verification failed: ${errJson.message || cfRes.statusText}` },
+          { status: 400 }
+        );
+      }
+
+      const cfData = await cfRes.json();
+      const successfulPayment = Array.isArray(cfData)
+        ? cfData.find((p: any) => p.payment_status === 'SUCCESS')
+        : null;
+
+      if (!successfulPayment) {
+        return NextResponse.json(
+          { error: 'Payment is not marked SUCCESS by Cashfree gateway. Settlement rejected.' },
+          { status: 400 }
+        );
+      }
+
+      const paidAmt = Number(successfulPayment.payment_amount || 0);
+      if (paidAmt > 0 && paidAmt < (numAmount - 1)) {
+        return NextResponse.json(
+          { error: `Paid amount (₹${paidAmt}) is less than requested amount (₹${numAmount}).` },
+          { status: 400 }
+        );
+      }
+
+      const bankRef =
+        (successfulPayment.bank_reference ? String(successfulPayment.bank_reference).trim() : '') ||
+        (successfulPayment.payment_method?.upi?.channel_reference_id ? String(successfulPayment.payment_method.upi.channel_reference_id).trim() : '') ||
+        (successfulPayment.payment_method?.card?.channel_reference_id ? String(successfulPayment.payment_method.card.channel_reference_id).trim() : '') ||
+        (successfulPayment.payment_method?.netbanking?.channel_reference_id ? String(successfulPayment.payment_method.netbanking.channel_reference_id).trim() : '') ||
+        (successfulPayment.cf_payment_id ? String(successfulPayment.cf_payment_id).trim() : '');
+
+      verifiedRef = bankRef || cfOrderId;
+      verifiedGatewayTxnId = successfulPayment.cf_payment_id ? String(successfulPayment.cf_payment_id) : '';
+
+    } else if (gwLower.includes('razorpay')) {
+      const rzpOrderId = body.razorpayOrderId || body.orderId || '';
+      const rzpPaymentId = body.razorpayPaymentId || gatewayTxnId || referenceNo || '';
+      const rzpSignature = body.razorpaySignature || '';
+
+      let rzpKeySecret = (body.razorpayKeySecret || process.env.RAZORPAY_KEY_SECRET || '').trim();
+      if (!rzpKeySecret && isSupabaseConfigured()) {
+        try {
+          const { data: setRow } = await supabase
+            .from('system_settings')
+            .select('payment_settings')
+            .eq('user_id', merchantUserId)
+            .maybeSingle();
+          if (setRow?.payment_settings?.razorpayKeySecret) {
+            rzpKeySecret = setRow.payment_settings.razorpayKeySecret.trim();
+          }
+        } catch {}
+      }
+
+      if (rzpSignature && rzpKeySecret && rzpOrderId && rzpPaymentId) {
+        const crypto = await import('crypto');
+        const expectedSig = crypto
+          .createHmac('sha256', rzpKeySecret)
+          .update(`${rzpOrderId}|${rzpPaymentId}`)
+          .digest('hex');
+
+        if (expectedSig !== rzpSignature) {
+          return NextResponse.json(
+            { error: 'Razorpay payment signature mismatch. Verification failed.' },
+            { status: 400 }
+          );
+        }
+        verifiedRef = rzpPaymentId;
+        verifiedGatewayTxnId = rzpPaymentId;
+      } else {
+        return NextResponse.json(
+          { error: 'Missing or invalid Razorpay payment signature.' },
+          { status: 400 }
+        );
+      }
+    } else {
+      // Reject any arbitrary unverified payment attempt!
+      return NextResponse.json(
+        { error: 'Direct unverified settlements are disallowed. Only genuine verified gateway payments can be settled.' },
+        { status: 403 }
+      );
+    }
+
+    const finalRef = verifiedRef || referenceNo || `TXN_${Date.now()}`;
     const gatewayName = gateway || 'Online Gateway';
     const txnId = passedTxnId || `txn_online_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const nowIso = new Date().toISOString();

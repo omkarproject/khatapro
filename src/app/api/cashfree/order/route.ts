@@ -6,7 +6,7 @@ import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { orderId, orderAmount, customerName, customerPhone, customerEmail, appId, secretKey, env, orderNote, brandDisplayName } = body;
+    const { orderId, orderAmount, customerName, customerPhone, customerEmail, appId, secretKey, env, orderNote, brandDisplayName, returnUrl: clientReturnUrl } = body;
 
     const serverConfig = getCashfreeConfig();
     let finalAppId = (appId || serverConfig.appId || process.env.CASHFREE_APP_ID || '').trim();
@@ -57,12 +57,15 @@ export async function POST(req: NextRequest) {
 
     const host = finalEnv === 'production' ? 'https://api.cashfree.com' : 'https://sandbox.cashfree.com';
 
-    // Dynamic return_url resolution based on current host/runtime
+    // Dynamic return_url resolution based on current host/runtime or passed client return URL
     const dynamicBase = getBaseUrl(req);
     const secureOrigin = dynamicBase.startsWith('https://')
       ? dynamicBase
       : (dynamicBase.includes('localhost') ? dynamicBase : `https://${dynamicBase.replace(/^https?:\/\//, '')}`);
-    const returnUrl = `${secureOrigin}/pay/${orderId}?order_id={order_id}`;
+    const defaultReturnUrl = `${secureOrigin}/pay/${orderId}?order_id={order_id}`;
+    const returnUrl = clientReturnUrl
+      ? (clientReturnUrl.includes('{order_id}') ? clientReturnUrl : `${clientReturnUrl}${clientReturnUrl.includes('?') ? '&' : '?'}order_id={order_id}`)
+      : defaultReturnUrl;
 
     const payload = {
       order_id: orderId || `order_${Date.now()}`,

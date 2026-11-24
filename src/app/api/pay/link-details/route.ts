@@ -102,7 +102,13 @@ export async function GET(req: NextRequest) {
           .limit(5);
 
         if (txns && txns.length > 0) {
-          const match = txns[0];
+          const match = txns.find((t: any) => {
+            const rawAtt = JSON.stringify(t.attachments || '');
+            if (rawAtt.includes(tempPayId)) return true;
+            if (rawAtt.includes('online_payment') || rawAtt.includes('__sk_meta')) return true;
+            return false;
+          });
+          if (match) {
           let receiptImgUrl = '';
           if (Array.isArray(match.attachments)) {
             for (const att of match.attachments) {
@@ -167,6 +173,7 @@ export async function GET(req: NextRequest) {
         }
       }
     }
+  }
 
     return NextResponse.json({
       valid: true,
