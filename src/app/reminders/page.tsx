@@ -21,6 +21,7 @@ import {
   Sparkles,
   QrCode,
   Trash2,
+  Search,
 } from 'lucide-react';
 
 export default function RemindersPage() {
@@ -38,6 +39,7 @@ export default function RemindersPage() {
   } = useApp();
 
   const [filter, setFilter] = useState<'all' | 'overdue' | 'upcoming'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Form State
@@ -230,6 +232,18 @@ export default function RemindersPage() {
     return true;
   });
 
+  const searchedReminders = filteredReminders.filter((rem) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    return (
+      rem.customerName?.toLowerCase().includes(q) ||
+      rem.customerPhone?.toLowerCase().includes(q) ||
+      rem.messageTemplate?.toLowerCase().includes(q) ||
+      rem.note?.toLowerCase().includes(q) ||
+      rem.amount?.toString().includes(q)
+    );
+  });
+
   const handleSendWhatsApp = (rem: PaymentReminder) => {
     const appBaseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://smartkhata.netsell.in';
     const tempPayId = Math.floor(Date.now() / 1000).toString();
@@ -289,149 +303,201 @@ export default function RemindersPage() {
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all self-start sm:self-auto"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-white fintech-gradient-primary shadow-sm hover:shadow-md active:scale-95 transition-all self-start sm:self-auto cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           Create Reminder
         </button>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => setFilter('all')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold ${
-            filter === 'all'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          All Follow-ups ({reminders.length})
-        </button>
-        <button
-          onClick={() => setFilter('overdue')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 ${
-            filter === 'overdue'
-              ? 'bg-rose-600 text-white shadow-sm'
-              : 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <AlertTriangle className="w-3.5 h-3.5" />
-          Overdue ({overdueCount})
-        </button>
-        <button
-          onClick={() => setFilter('upcoming')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 ${
-            filter === 'upcoming'
-              ? 'bg-amber-500 text-white shadow-sm'
-              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <Clock className="w-3.5 h-3.5" />
-          Upcoming Due ({upcomingCount})
-        </button>
+      {/* Top Controls: Filter Tabs & Search Box */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        {/* Filter Tabs */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setFilter('all')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              filter === 'all'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+            }`}
+          >
+            All Follow-ups ({activeReminders.length})
+          </button>
+          <button
+            onClick={() => setFilter('overdue')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              filter === 'overdue'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 border border-slate-200 dark:border-slate-700 hover:bg-rose-50/50 dark:hover:bg-slate-700/50'
+            }`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Overdue ({overdueCount})
+          </button>
+          <button
+            onClick={() => setFilter('upcoming')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              filter === 'upcoming'
+                ? 'bg-amber-500 text-white shadow-xs'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            Upcoming Due ({upcomingCount})
+          </button>
+        </div>
+
+        {/* Search Box */}
+        <div className="relative min-w-[240px] max-w-full md:max-w-xs">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search customer, phone, note, amount..."
+            className="w-full pl-9 pr-8 py-1.5 rounded-xl text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded-full"
+              title="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Reminders Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filteredReminders.map((rem) => {
+      {/* Reminders Cards Grid (50% Compact, Small Corner Curves, Hover Lift Cursor Effect) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+        {searchedReminders.map((rem) => {
           const isPastDue = rem.dueDate ? rem.dueDate < todayStr : rem.reminderType === 'overdue';
           const isDueToday = rem.dueDate ? rem.dueDate === todayStr : false;
           const statusBadge = isPastDue
-            ? { text: 'OVERDUE', cls: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400' }
+            ? { text: 'OVERDUE', cls: 'bg-rose-100 text-rose-700 dark:bg-rose-950/80 dark:text-rose-400 border border-rose-200/50 dark:border-rose-900/40' }
             : isDueToday
-            ? { text: 'DUE TODAY', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' }
-            : { text: 'UPCOMING', cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400' };
+            ? { text: 'DUE TODAY', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950/80 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/40' }
+            : { text: 'UPCOMING', cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-900/40' };
 
           return (
             <div
               key={rem.id}
-              className="glass-card p-5 space-y-4 flex flex-col justify-between hover:border-indigo-300 dark:hover:border-indigo-700 transition-all"
+              className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 p-3.5 space-y-2.5 flex flex-col justify-between shadow-xs hover:shadow-lg hover:-translate-y-1 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all duration-200 cursor-pointer group"
             >
               <div>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                       {rem.customerName}
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {rem.customerPhone}
+                    <p className="text-[11px] text-slate-400 font-mono truncate mt-0.5">
+                      {rem.customerPhone || 'No phone'}
                     </p>
                   </div>
 
                   <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${statusBadge.cls}`}
+                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase shrink-0 ${statusBadge.cls}`}
                   >
                     {statusBadge.text}
                   </span>
                 </div>
 
-                <div className="mt-4 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-500">Amount Due</span>
-                    <span className="font-mono font-bold text-rose-600 text-sm">
+                <div className="mt-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block leading-none">Amount Due</span>
+                    <span className="font-mono font-bold text-rose-600 text-xs">
                       {formatINR(rem.amount)}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-[11px] text-slate-400 mt-1">
-                    <span>Due Date</span>
-                    <span className="font-mono">{formatDate(rem.dueDate)}</span>
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-400 block leading-none">Due Date</span>
+                    <span className="font-mono text-[11px] text-slate-700 dark:text-slate-300 font-medium">
+                      {formatDate(rem.dueDate)}
+                    </span>
                   </div>
                 </div>
 
-                <div className="mt-3 text-xs text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-800/30 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 italic">
-                  &ldquo;{rem.messageTemplate}&rdquo;
-                </div>
+                {rem.messageTemplate && (
+                  <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50/60 dark:bg-slate-800/40 p-2 rounded-lg border border-slate-100 dark:border-slate-800/80 italic line-clamp-2 leading-relaxed">
+                    &ldquo;{rem.messageTemplate}&rdquo;
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons */}
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                <span className="text-[10px] font-semibold text-slate-400">
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5">
+                <span className="text-[10px] font-medium text-slate-400 truncate max-w-[85px]">
                   {rem.status === 'sent' ? `Sent: ${formatDate(rem.sentAt || '')}` : 'Pending Send'}
                 </span>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1 shrink-0">
                   <button
-                    onClick={() =>
+                    onClick={(e) => {
+                      e.stopPropagation();
                       openCollectModal({
                         customerId: rem.customerId,
                         customerName: rem.customerName,
                         amount: rem.amount,
                         note: `Settlement against reminder`,
-                      })
-                    }
-                    className="p-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100"
+                      });
+                    }}
+                    className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors cursor-pointer"
                     title="Collect UPI"
                   >
-                    <QrCode className="w-4 h-4" />
+                    <QrCode className="w-3.5 h-3.5" />
                   </button>
 
                   <button
-                    onClick={() => handleSendWhatsApp(rem)}
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 flex items-center gap-1 shadow-sm shadow-emerald-500/20 transition-all cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSendWhatsApp(rem);
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-white bg-emerald-500 hover:bg-emerald-600 flex items-center gap-1 shadow-xs transition-all cursor-pointer active:scale-95"
                   >
-                    <Share2 className="w-3.5 h-3.5" />
+                    <Share2 className="w-3 h-3" />
                     WhatsApp
                   </button>
 
                   <button
-                    onClick={() => handleDeleteReminder(rem)}
-                    className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteReminder(rem);
+                    }}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
                     title="Delete Reminder"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
             </div>
           );
         })}
+
+        {searchedReminders.length === 0 && (
+          <div className="col-span-full text-center py-12 px-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
+            <Search className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+              {searchQuery ? `No reminders match "${searchQuery}"` : 'No reminders found'}
+            </p>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="mt-2 text-xs text-indigo-600 hover:underline font-medium cursor-pointer"
+              >
+                Clear search query
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Modal: Create Reminder */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 sm:p-6 max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                 <BellRing className="w-5 h-5 text-indigo-500" />
