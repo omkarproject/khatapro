@@ -36,69 +36,6 @@ import {
 } from 'lucide-react';
 import { SupportTicket, Customer } from '@/types';
 
-// Modern Digital Clock Component (12hr hr:mm:ss AM/PM with Seconds Destroy Glow Effect & dd-mm-yyyy Date)
-function DashboardDigitalClock() {
-  const [mounted, setMounted] = useState(false);
-  const [time, setTime] = useState<Date>(() => new Date());
-
-  useEffect(() => {
-    setMounted(true);
-    setTime(new Date());
-    const timer = setInterval(() => {
-      setTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  if (!mounted) {
-    return (
-      <div className="flex flex-col justify-center min-h-[38px] animate-pulse">
-        <div className="h-5 w-40 bg-slate-800/60 rounded-lg mb-0.5" />
-        <div className="h-3 w-24 bg-slate-800/40 rounded-md" />
-      </div>
-    );
-  }
-
-  const hours = time.getHours();
-  const h12 = hours % 12 || 12;
-  const hh = String(h12).padStart(2, '0');
-  const mm = String(time.getMinutes()).padStart(2, '0');
-  const ss = String(time.getSeconds()).padStart(2, '0');
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-
-  const dd = String(time.getDate()).padStart(2, '0');
-  const mo = String(time.getMonth() + 1).padStart(2, '0');
-  const yyyy = time.getFullYear();
-  const dateStr = `${dd}-${mo}-${yyyy}`;
-
-  return (
-    <div className="group/clock flex flex-col items-center justify-center text-center select-none cursor-pointer transition-all duration-300">
-      {/* 12-Hour Digital Time: hr:mm:ss AM/PM */}
-      <div className="flex items-baseline justify-center gap-0.5 transition-all duration-300 group-hover/clock:drop-shadow-[0_0_20px_rgba(6,182,212,0.95)]">
-        <span className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]">
-          {hh}<span className="text-indigo-400 opacity-90 mx-0.5">:</span>{mm}<span className="text-indigo-400 opacity-90 mx-0.5">:</span>
-        </span>
-        <span
-          key={ss}
-          className="inline-block text-xl sm:text-2xl font-black font-mono tracking-tight text-cyan-400 animate-sec-destroy drop-shadow-[0_0_12px_rgba(6,182,212,0.85)]"
-        >
-          {ss}
-        </span>
-        <span className="ml-1 text-[10px] font-black font-mono px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-cyan-300 border border-cyan-500/30 tracking-wider shadow-xs group-hover/clock:border-cyan-400">
-          {ampm}
-        </span>
-      </div>
-
-      {/* dd-mm-yyyy Date beneath with subtle blinking & hover glow drop */}
-      <div className="-mt-0.5 text-center transition-all duration-300 group-hover/clock:drop-shadow-[0_0_12px_rgba(99,102,241,0.9)]">
-        <span className="animate-subtle-blink font-mono font-bold text-[11px] sm:text-xs tracking-widest text-indigo-200/90 group-hover/clock:text-cyan-200">
-          {dateStr}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 export default function DashboardPage() {
   const {
     customers,
@@ -345,38 +282,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-3 sm:space-y-3.5">
-      
-      {/* Top Banner: Digital Clock & Quick Action Bar (Hidden on Mobile, Visible on Desktop - Slim & Stylish Corner Curve with Cool Drop BG Animation) */}
-      <div className="hidden md:block relative overflow-hidden rounded-[26px] py-2 px-4 sm:py-2.5 sm:px-6 bg-gradient-to-r from-slate-950 via-[#0d1226] to-slate-950 text-white shadow-lg shadow-indigo-950/30 border border-slate-800/90 hover:border-indigo-500/40 transition-all duration-300 group/banner">
-        {/* Cool Animated BG Drops & Luminous Auras */}
-        <div className="absolute -top-10 -left-10 w-64 h-64 bg-indigo-600/25 rounded-full blur-3xl pointer-events-none animate-aura-pulse" />
-        <div className="absolute -bottom-10 -right-8 w-72 h-72 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none animate-aura-float" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-24 bg-gradient-to-r from-indigo-500/15 via-cyan-400/25 to-purple-500/15 rounded-full blur-2xl pointer-events-none animate-banner-drop-glow" />
-        
-        {/* Subtle Cyber Grid Starlight Pattern */}
-        <div className="absolute inset-0 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:16px_16px] opacity-[0.06] pointer-events-none" />
-
-        <div className="relative z-10 flex items-center justify-between gap-4">
-          <div className="w-1/4 hidden lg:block" />
-          
-          {/* Centered Modern Digital Clock */}
-          <div className="flex-1 flex justify-center items-center">
-            <DashboardDigitalClock />
-          </div>
-
-          {/* Action Hub Buttons */}
-          <div className="flex items-center justify-end shrink-0 lg:w-1/4">
-            <button
-              onClick={() => setIsQuickAddOpen(true)}
-              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/25 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              {t('add', 'Add')}
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         
