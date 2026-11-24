@@ -1,12 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCashfreeConfig } from '@/lib/cashfreeServer';
+import { getCashfreeConfig, saveCashfreeConfig } from '@/lib/cashfreeServer';
 import { getBaseUrl } from '@/lib/domain';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { orderId, orderAmount, customerName, customerPhone, customerEmail, appId, secretKey, env, orderNote, brandDisplayName, returnUrl: clientReturnUrl } = body;
+    const {
+      orderId,
+      orderAmount,
+      customerName,
+      customerPhone,
+      customerEmail,
+      appId,
+      secretKey,
+      env,
+      orderNote,
+      brandDisplayName,
+      returnUrl: clientReturnUrl,
+      customerId: passedCustomerId,
+      merchantUserId: passedMerchantUserId,
+    } = body;
 
     const serverConfig = getCashfreeConfig();
     let finalAppId = (appId || serverConfig.appId || process.env.CASHFREE_APP_ID || '').trim();
@@ -20,23 +34,72 @@ export async function POST(req: NextRequest) {
       try {
         const supabase = getSupabaseAdmin();
         if (supabase) {
-          const { data: setRow } = await supabase.from('system_settings').select('business_name, payment_settings').limit(1).maybeSingle();
-          if (setRow?.payment_settings) {
-            if (!finalAppId && setRow.payment_settings.cashfreeAppId) {
-              finalAppId = setRow.payment_settings.cashfreeAppId.trim();
-            }
-            if (!finalSecretKey && setRow.payment_settings.cashfreeSecretKey) {
-              finalSecretKey = setRow.payment_settings.cashfreeSecretKey.trim();
-            }
-            if (setRow.payment_settings.cashfreeEnv) {
-              finalEnv = setRow.payment_settings.cashfreeEnv;
-            }
-            if (!finalBrandDisplayName && setRow.payment_settings.websiteName) {
-              finalBrandDisplayName = setRow.payment_settings.websiteName.trim();
+          let resolvedUserId = passedMerchantUserId || '';
+
+          // 1. Try finding user_id via customerId
+          const effectiveCustId = passedCustomerId || (orderId ? (orderId.match(/(cust_[0-9a-zA-Z_-]+)/)?.[1] || '') : '');
+          if (!resolvedUserId && effectiveCustId) {
+            const { data: custRow } = await supabase
+              .from('customers')
+              .select('user_id')
+              .eq('id', effectiveCustId)
+              .maybeSingle();
+            if (custRow?.user_id) {
+              resolvedUserId = custRow.user_id;
             }
           }
-          if (!finalBrandDisplayName && setRow?.business_name) {
-            finalBrandDisplayName = setRow.business_name.trim();
+
+          // 2. Query system_settings for the resolved merchant user
+          if (resolvedUserId) {
+            const { data: userSetRow } = await supabase
+              .from('system_settings')
+              .select('business_name, payment_settings')
+              .eq('user_id', resolvedUserId)
+              .maybeSingle();
+
+            if (userSetRow?.payment_settings) {
+              const ps = userSetRow.payment_settings;
+              if (!finalAppId && ps.cashfreeAppId) finalAppId = ps.cashfreeAppId.trim();
+              if (!finalSecretKey && ps.cashfreeSecretKey) finalSecretKey = ps.cashfreeSecretKey.trim();
+              if (ps.cashfreeEnv) finalEnv = ps.cashfreeEnv;
+              if (!finalBrandDisplayName && (ps.websiteName || userSetRow.business_name)) {
+                finalBrandDisplayName = (ps.websiteName || userSetRow.business_name).trim();
+              }
+            }
+          }
+
+          // 3. Fallback: Search system_settings for any user who configured Cashfree credentials
+          if (!finalAppId || !finalSecretKey) {
+            const { data: allRows } = await supabase
+              .from('system_settings')
+              .select('business_name, payment_settings')
+              .not('payment_settings', 'is', null)
+              .order('updated_at', { ascending: false })
+              .limit(20);
+
+            if (allRows && allRows.length > 0) {
+              const matchedRow = allRows.find(
+                (r: any) => r.payment_settings?.cashfreeAppId && r.payment_settings?.cashfreeSecretKey
+              );
+              if (matchedRow?.payment_settings) {
+                const ps = matchedRow.payment_settings;
+                if (!finalAppId && ps.cashfreeAppId) finalAppId = ps.cashfreeAppId.trim();
+                if (!finalSecretKey && ps.cashfreeSecretKey) finalSecretKey = ps.cashfreeSecretKey.trim();
+                if (ps.cashfreeEnv) finalEnv = ps.cashfreeEnv;
+                if (!finalBrandDisplayName && (ps.websiteName || matchedRow.business_name)) {
+                  finalBrandDisplayName = (ps.websiteName || matchedRow.business_name).trim();
+                }
+              }
+            }
+          }
+
+          // If found, persist in server memory/cache so subsequent calls are instant
+          if (finalAppId && finalSecretKey) {
+            saveCashfreeConfig({
+              appId: finalAppId,
+              secretKey: finalSecretKey,
+              env: finalEnv,
+            });
           }
         }
       } catch (dbErr) {

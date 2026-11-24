@@ -322,10 +322,48 @@ function CustomerPayInvoiceContent() {
     return new Promise((resolve) => {
       if (typeof window === 'undefined') return resolve(false);
       if ((window as any).Cashfree) return resolve(true);
+
+      let isResolved = false;
+      const safeResolve = (val: boolean) => {
+        if (!isResolved) {
+          isResolved = true;
+          resolve(val);
+        }
+      };
+
+      const timeoutId = setTimeout(() => {
+        safeResolve(!!(window as any).Cashfree);
+      }, 5000);
+
+      const existing = document.querySelector('script[src*="cashfree.js"]');
+      if (existing) {
+        let attempts = 0;
+        const interval = setInterval(() => {
+          attempts++;
+          if ((window as any).Cashfree) {
+            clearInterval(interval);
+            clearTimeout(timeoutId);
+            safeResolve(true);
+          } else if (attempts > 30) {
+            clearInterval(interval);
+            clearTimeout(timeoutId);
+            safeResolve(false);
+          }
+        }, 50);
+        return;
+      }
+
       const script = document.createElement('script');
       script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
+      script.async = true;
+      script.onload = () => {
+        clearTimeout(timeoutId);
+        safeResolve(!!(window as any).Cashfree);
+      };
+      script.onerror = () => {
+        clearTimeout(timeoutId);
+        safeResolve(false);
+      };
       document.body.appendChild(script);
     });
   };
@@ -854,6 +892,8 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
           secretKey: secretKey || undefined,
           env,
           returnUrl: currentUrl,
+          customerId: invoice.customerId || undefined,
+          merchantUserId: (invoice as any).userId || (invoice as any).user_id || undefined,
         }),
       });
 
@@ -877,21 +917,31 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
 
       // 3. Launch official Cashfree Checkout Modal / Redirect
       const checkoutEnv = data.env || env;
-      const cashfree = new (window as any).Cashfree({ mode: checkoutEnv === 'production' ? 'production' : 'sandbox' });
-      
+      const cashfree = typeof (window as any).Cashfree === 'function'
+        ? (window as any).Cashfree({ mode: checkoutEnv === 'production' ? 'production' : 'sandbox' })
+        : new (window as any).Cashfree({ mode: checkoutEnv === 'production' ? 'production' : 'sandbox' });
+
+      const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const effectiveTarget: '_modal' | '_self' = target === '_modal' && isMobile ? '_self' : target;
+
+      const cfTimer = setTimeout(() => {
+        setIsCfLoading(false);
+      }, 2000);
+
       cashfree.checkout({
         paymentSessionId: data.paymentSessionId,
-        redirectTarget: target,
+        redirectTarget: effectiveTarget,
       }).then(async (result: any) => {
+        clearTimeout(cfTimer);
         setIsCfLoading(false);
-        if (result.error) {
+        if (result?.error) {
           const errorMsg = result.error.message || 'Payment was cancelled or closed.';
           setCfApiError(errorMsg);
           addToast('Payment Notice', errorMsg, 'info');
           return;
         }
 
-        if (result.paymentDetails) {
+        if (result?.paymentDetails) {
           // 4. STRICT verify payment with Cashfree Server API
           try {
             const verifyRes = await fetch('/api/cashfree/verify', {
@@ -902,6 +952,8 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
                 appId: appId || undefined,
                 secretKey: secretKey || undefined,
                 env: checkoutEnv,
+                customerId: invoice.customerId || undefined,
+                merchantUserId: (invoice as any).userId || (invoice as any).user_id || undefined,
               }),
             });
             const verifyData = await verifyRes.json();
@@ -930,6 +982,21 @@ _Hello, I encountered this error while trying to pay. Please assist._`;
           } catch {
             setCfApiError('Could not verify payment with Cashfree server.');
           }
+        }
+      }).catch((chkErr: any) => {
+        clearTimeout(cfTimer);
+        setIsCfLoading(false);
+        if (effectiveTarget === '_modal') {
+          try {
+            cashfree.checkout({
+              paymentSessionId: data.paymentSessionId,
+              redirectTarget: '_self',
+            });
+          } catch (e) {
+            setCfApiError('Could not open payment checkout modal.');
+          }
+        } else {
+          setCfApiError('Could not open payment gateway.');
         }
       });
     } catch (err: any) {

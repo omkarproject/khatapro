@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCashfreeConfig } from '@/lib/cashfreeServer';
+import { getCashfreeConfig, saveCashfreeConfig } from '@/lib/cashfreeServer';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { orderId, appId, secretKey, env } = body;
+    const { orderId, appId, secretKey, env, customerId: passedCustomerId, merchantUserId: passedMerchantUserId } = body;
 
     if (!orderId) {
       return NextResponse.json(
@@ -24,17 +24,62 @@ export async function POST(req: NextRequest) {
       try {
         const supabase = getSupabaseAdmin();
         if (supabase) {
-          const { data: setRow } = await supabase.from('system_settings').select('payment_settings').limit(1).maybeSingle();
-          if (setRow?.payment_settings) {
-            if (!finalAppId && setRow.payment_settings.cashfreeAppId) {
-              finalAppId = setRow.payment_settings.cashfreeAppId.trim();
+          let resolvedUserId = passedMerchantUserId || '';
+
+          const effectiveCustId = passedCustomerId || (orderId ? (orderId.match(/(cust_[0-9a-zA-Z_-]+)/)?.[1] || '') : '');
+          if (!resolvedUserId && effectiveCustId) {
+            const { data: custRow } = await supabase
+              .from('customers')
+              .select('user_id')
+              .eq('id', effectiveCustId)
+              .maybeSingle();
+            if (custRow?.user_id) {
+              resolvedUserId = custRow.user_id;
             }
-            if (!finalSecretKey && setRow.payment_settings.cashfreeSecretKey) {
-              finalSecretKey = setRow.payment_settings.cashfreeSecretKey.trim();
+          }
+
+          if (resolvedUserId) {
+            const { data: userSetRow } = await supabase
+              .from('system_settings')
+              .select('payment_settings')
+              .eq('user_id', resolvedUserId)
+              .maybeSingle();
+
+            if (userSetRow?.payment_settings) {
+              const ps = userSetRow.payment_settings;
+              if (!finalAppId && ps.cashfreeAppId) finalAppId = ps.cashfreeAppId.trim();
+              if (!finalSecretKey && ps.cashfreeSecretKey) finalSecretKey = ps.cashfreeSecretKey.trim();
+              if (ps.cashfreeEnv) finalEnv = ps.cashfreeEnv;
             }
-            if (setRow.payment_settings.cashfreeEnv) {
-              finalEnv = setRow.payment_settings.cashfreeEnv;
+          }
+
+          if (!finalAppId || !finalSecretKey) {
+            const { data: allRows } = await supabase
+              .from('system_settings')
+              .select('payment_settings')
+              .not('payment_settings', 'is', null)
+              .order('updated_at', { ascending: false })
+              .limit(20);
+
+            if (allRows && allRows.length > 0) {
+              const matchedRow = allRows.find(
+                (r: any) => r.payment_settings?.cashfreeAppId && r.payment_settings?.cashfreeSecretKey
+              );
+              if (matchedRow?.payment_settings) {
+                const ps = matchedRow.payment_settings;
+                if (!finalAppId && ps.cashfreeAppId) finalAppId = ps.cashfreeAppId.trim();
+                if (!finalSecretKey && ps.cashfreeSecretKey) finalSecretKey = ps.cashfreeSecretKey.trim();
+                if (ps.cashfreeEnv) finalEnv = ps.cashfreeEnv;
+              }
             }
+          }
+
+          if (finalAppId && finalSecretKey) {
+            saveCashfreeConfig({
+              appId: finalAppId,
+              secretKey: finalSecretKey,
+              env: finalEnv,
+            });
           }
         }
       } catch (dbErr) {

@@ -53,10 +53,11 @@ function PayRedirectContent() {
 
   const [fetchedDetails, setFetchedDetails] = useState<{
     customer?: { id: string; name: string; phone: string; email?: string; dueAmount: number };
-    merchant?: { businessName: string; officialPhone: string; upiId: string };
+    merchant?: { userId?: string; businessName: string; officialPhone: string; upiId: string };
     paymentSettings?: {
       activeGateway: string;
       cashfreeAppId?: string;
+      cashfreeEnvironment?: string;
       razorpayKeyId?: string;
       upiGatewayApiKey?: string;
     };
@@ -940,15 +941,49 @@ function PayRedirectContent() {
     return new Promise((resolve) => {
       if (typeof window === 'undefined') return resolve(false);
       if ((window as any).Cashfree) return resolve(true);
+
+      let isResolved = false;
+      const safeResolve = (val: boolean) => {
+        if (!isResolved) {
+          isResolved = true;
+          resolve(val);
+        }
+      };
+
+      // 5-second timeout safeguard so checkout never gets stuck indefinitely
+      const timeoutId = setTimeout(() => {
+        safeResolve(!!(window as any).Cashfree);
+      }, 5000);
+
       const existing = document.querySelector('script[src*="cashfree.js"]');
       if (existing) {
-        existing.addEventListener('load', () => resolve(true));
+        let attempts = 0;
+        const interval = setInterval(() => {
+          attempts++;
+          if ((window as any).Cashfree) {
+            clearInterval(interval);
+            clearTimeout(timeoutId);
+            safeResolve(true);
+          } else if (attempts > 30) {
+            clearInterval(interval);
+            clearTimeout(timeoutId);
+            safeResolve(false);
+          }
+        }, 50);
         return;
       }
+
       const script = document.createElement('script');
       script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
+      script.async = true;
+      script.onload = () => {
+        clearTimeout(timeoutId);
+        safeResolve(!!(window as any).Cashfree);
+      };
+      script.onerror = () => {
+        clearTimeout(timeoutId);
+        safeResolve(false);
+      };
       document.body.appendChild(script);
     });
   };
@@ -958,15 +993,48 @@ function PayRedirectContent() {
     return new Promise((resolve) => {
       if (typeof window === 'undefined') return resolve(false);
       if ((window as any).Razorpay) return resolve(true);
+
+      let isResolved = false;
+      const safeResolve = (val: boolean) => {
+        if (!isResolved) {
+          isResolved = true;
+          resolve(val);
+        }
+      };
+
+      const timeoutId = setTimeout(() => {
+        safeResolve(!!(window as any).Razorpay);
+      }, 5000);
+
       const existing = document.querySelector('script[src*="checkout.razorpay.com"]');
       if (existing) {
-        existing.addEventListener('load', () => resolve(true));
+        let attempts = 0;
+        const interval = setInterval(() => {
+          attempts++;
+          if ((window as any).Razorpay) {
+            clearInterval(interval);
+            clearTimeout(timeoutId);
+            safeResolve(true);
+          } else if (attempts > 30) {
+            clearInterval(interval);
+            clearTimeout(timeoutId);
+            safeResolve(false);
+          }
+        }, 50);
         return;
       }
+
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
+      script.async = true;
+      script.onload = () => {
+        clearTimeout(timeoutId);
+        safeResolve(!!(window as any).Razorpay);
+      };
+      script.onerror = () => {
+        clearTimeout(timeoutId);
+        safeResolve(false);
+      };
       document.body.appendChild(script);
     });
   };
@@ -983,7 +1051,11 @@ function PayRedirectContent() {
         const verifyRes = await fetch('/api/cashfree/verify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId: redirectOrderId }),
+          body: JSON.stringify({
+            orderId: redirectOrderId,
+            customerId: targetCustomerId || pathCustomerId || undefined,
+            merchantUserId: fetchedDetails?.merchant?.userId || undefined,
+          }),
         });
         const verifyData = await verifyRes.json();
         if (isMounted && verifyData.success && verifyData.paymentStatus === 'SUCCESS') {
@@ -1006,7 +1078,7 @@ function PayRedirectContent() {
 
     checkRedirectPayment();
     return () => { isMounted = false; };
-  }, [redirectOrderId]);
+  }, [redirectOrderId, targetCustomerId, pathCustomerId, fetchedDetails]);
 
   // 4. Execute Cashfree API & Real Modal Checkout
   const executeCashfreeCheckout = async () => {
@@ -1014,9 +1086,9 @@ function PayRedirectContent() {
     setCfError('');
 
     const newOrderId = `ORD_${(targetCustomerId || 'cust').replace(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}`;
-    const appId = settings.paymentSettings?.cashfreeAppId?.trim();
+    const appId = (settings.paymentSettings?.cashfreeAppId || fetchedDetails?.paymentSettings?.cashfreeAppId || '').trim();
     const secretKey = settings.paymentSettings?.cashfreeSecretKey?.trim();
-    const env = settings.paymentSettings?.cashfreeEnv || 'production';
+    const env = settings.paymentSettings?.cashfreeEnv || fetchedDetails?.paymentSettings?.cashfreeEnvironment || 'production';
     const brandDisplayName = (
       settings.websiteName ||
       localBrand?.websiteName ||
@@ -1043,6 +1115,8 @@ function PayRedirectContent() {
           secretKey: secretKey || undefined,
           env,
           returnUrl: currentUrl,
+          customerId: targetCustomerId || pathCustomerId || undefined,
+          merchantUserId: fetchedDetails?.merchant?.userId || undefined,
         }),
       });
 
@@ -1064,21 +1138,33 @@ function PayRedirectContent() {
       }
 
       const checkoutEnv = data.env || env;
-      const cashfree = new (window as any).Cashfree({ mode: checkoutEnv === 'production' ? 'production' : 'sandbox' });
+      const cashfreeInstance = typeof (window as any).Cashfree === 'function'
+        ? (window as any).Cashfree({ mode: checkoutEnv === 'production' ? 'production' : 'sandbox' })
+        : new (window as any).Cashfree({ mode: checkoutEnv === 'production' ? 'production' : 'sandbox' });
 
-      cashfree.checkout({
-        paymentSessionId: data.paymentSessionId,
-        redirectTarget: '_modal', // Opens real official Cashfree modal popup
-      }).then(async (result: any) => {
+      // Detect mobile vs desktop: On mobile browsers, direct redirect (_self) ensures seamless UPI app triggers
+      const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const targetMode: '_modal' | '_self' = isMobile ? '_self' : '_modal';
+
+      // Reset loading state after short buffer so the button is interactive if modal opens
+      const openTimer = setTimeout(() => {
         setIsCfLoading(false);
-        if (result.error) {
+      }, 2000);
+
+      cashfreeInstance.checkout({
+        paymentSessionId: data.paymentSessionId,
+        redirectTarget: targetMode,
+      }).then(async (result: any) => {
+        clearTimeout(openTimer);
+        setIsCfLoading(false);
+        if (result?.error) {
           const errorMsg = result.error.message || 'Payment was cancelled or closed.';
           console.warn('Cashfree payment error:', errorMsg);
           setCfError(errorMsg);
           return;
         }
 
-        if (result.paymentDetails) {
+        if (result?.paymentDetails) {
           // STRICT Server-side verification with Cashfree
           try {
             const verifyRes = await fetch('/api/cashfree/verify', {
@@ -1089,6 +1175,8 @@ function PayRedirectContent() {
                 appId: appId || undefined,
                 secretKey: secretKey || undefined,
                 env: checkoutEnv,
+                customerId: targetCustomerId || pathCustomerId || undefined,
+                merchantUserId: fetchedDetails?.merchant?.userId || undefined,
               }),
             });
             const verifyData = await verifyRes.json();
@@ -1113,6 +1201,23 @@ function PayRedirectContent() {
             console.error('Cashfree verification failed:', vErr);
             setCfError('Unable to verify payment status with Cashfree.');
           }
+        }
+      }).catch((chkErr: any) => {
+        clearTimeout(openTimer);
+        setIsCfLoading(false);
+        console.warn('Cashfree modal error, attempting redirect fallback:', chkErr);
+        // Fallback: If modal mode failed (e.g. iframe blocked), redirect in current tab
+        if (targetMode === '_modal') {
+          try {
+            cashfreeInstance.checkout({
+              paymentSessionId: data.paymentSessionId,
+              redirectTarget: '_self',
+            });
+          } catch (e) {
+            setCfError('Failed to open payment gateway. Please try again.');
+          }
+        } else {
+          setCfError('Failed to open payment gateway. Please try again.');
         }
       });
     } catch (err: any) {
@@ -1154,6 +1259,8 @@ function PayRedirectContent() {
                 orderId: response.razorpay_order_id,
                 paymentId: response.razorpay_payment_id,
                 signature: response.razorpay_signature,
+                customerId: targetCustomerId || pathCustomerId || undefined,
+                merchantUserId: fetchedDetails?.merchant?.userId || undefined,
               }),
             });
             const vData = await vRes.json();
@@ -1699,6 +1806,17 @@ function PayRedirectContent() {
             Pay with <strong>UPI (GPay / PhonePe / Paytm)</strong>, <strong>Cards</strong>, or <strong>Netbanking</strong>
           </p>
         </div>
+
+        {/* Error / Notice message if checkout session failed or payment cancelled */}
+        {cfError && (
+          <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs leading-relaxed flex items-start gap-2 shadow-xs animate-in fade-in">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+            <div className="flex-1">
+              <span className="font-bold block">Gateway Notice:</span>
+              <span>{cfError}</span>
+            </div>
+          </div>
+        )}
 
         {/* PRIMARY "PAY NOW" BUTTON WITH MODERN PULSE & SHIMMER */}
         <button
