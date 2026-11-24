@@ -365,14 +365,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Action Hub Buttons */}
-          <div className="flex items-center justify-end gap-2 shrink-0 lg:w-1/4">
-            <button
-              onClick={() => openCollectModal()}
-              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-cyan-500 hover:opacity-95 shadow-md shadow-indigo-500/25 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
-            >
-              <QrCode className="w-3.5 h-3.5" />
-              {t('collectPayment', 'Collect Payment')}
-            </button>
+          <div className="flex items-center justify-end shrink-0 lg:w-1/4">
             <button
               onClick={() => setIsQuickAddOpen(true)}
               className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/25 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
@@ -473,13 +466,13 @@ export default function DashboardPage() {
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
               NET AMOUNT
             </span>
-            <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center shrink-0 ${
-              metrics.isNetPositive
-                ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
-                : 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400'
-            }`}>
-              <TrendingUp className="w-3.5 h-3.5" />
-            </div>
+            <button
+              onClick={() => setIsQuickAddOpen(true)}
+              className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 transition-all flex items-center justify-center shrink-0 cursor-pointer shadow-2xs active:scale-95 group/btn"
+              title="Quick Add (+)"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5] group-hover/btn:scale-110 transition-transform" />
+            </button>
           </div>
           <div className={`text-lg sm:text-2xl font-black truncate ${
             metrics.isNetPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
@@ -503,20 +496,21 @@ export default function DashboardPage() {
                 {formatINR(metrics.totalInvoiceAmount)}
               </span>
             </div>
-            <div
-              className={`p-1 sm:p-1.5 rounded-lg shrink-0 flex items-center justify-center shadow-2xs ${
+            <button
+              onClick={() => setIsQuickAddOpen(true)}
+              className={`p-1 sm:p-1.5 rounded-lg shrink-0 flex items-center justify-center shadow-2xs cursor-pointer hover:opacity-90 active:scale-95 transition-all ${
                 metrics.isNetPositive
                   ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
                   : 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400'
               }`}
-              title={metrics.isNetPositive ? `Net Positive (+${formatINR(metrics.netAmount)})` : `Net Negative (${formatINR(metrics.netAmount)})`}
+              title={metrics.isNetPositive ? `Net Positive (+${formatINR(metrics.netAmount)}) • Click to Add` : `Net Negative (${formatINR(metrics.netAmount)}) • Click to Add`}
             >
               {metrics.isNetPositive ? (
                 <TrendingUp className="w-3.5 h-3.5" />
               ) : (
                 <TrendingDown className="w-3.5 h-3.5" />
               )}
-            </div>
+            </button>
           </div>
         </div>
 
@@ -526,9 +520,13 @@ export default function DashboardPage() {
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
               ONLINE COLLECTIONS
             </span>
-            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0">
-              <CreditCard className="w-3.5 h-3.5" />
-            </div>
+            <button
+              onClick={() => openCollectModal()}
+              className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-100 dark:hover:bg-cyan-900/80 transition-all flex items-center justify-center shrink-0 cursor-pointer shadow-2xs active:scale-95 group/btn"
+              title="Collect Payment"
+            >
+              <QrCode className="w-3.5 h-3.5 group-hover/btn:scale-110 transition-transform" />
+            </button>
           </div>
           <div className="text-lg sm:text-2xl font-black text-slate-900 dark:text-white truncate">
             {formatINR(metrics.totalOnlineCollections)}
