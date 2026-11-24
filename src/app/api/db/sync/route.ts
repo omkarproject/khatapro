@@ -42,7 +42,9 @@ function customerToDb(c: any, userId: string) {
     category: c.category || 'Regular',
     status: (c.isDeleted || c.status === 'deleted') ? 'deleted' : (c.status || 'active'),
     rating: Number(c.rating) || 5,
-    notes: c.notes || '',
+    notes: c.excludeTransactions
+      ? (c.notes ? `${c.notes.replace(/__exclude_txns:true\s*/g, '').trim()} __exclude_txns:true` : '__exclude_txns:true')
+      : (c.notes ? c.notes.replace(/__exclude_txns:true\s*/g, '').trim() : ''),
     avatar: safeAvatar || null,
     bank_accounts: Array.isArray(c.bankAccounts) ? c.bankAccounts : [],
     upi_details: Array.isArray(c.upiDetails) ? c.upiDetails : [],
@@ -435,7 +437,8 @@ function customerFromDb(row: any) {
     status: row.status || 'active',
     isDeleted: Boolean(row.status === 'deleted'),
     rating: Number(row.rating) || 5,
-    notes: row.notes || '',
+    notes: (row.notes || '').replace(/__exclude_txns:true\s*/g, '').trim(),
+    excludeTransactions: Boolean(row.exclude_transactions || (row.notes && row.notes.includes('__exclude_txns:true'))),
     avatar: avatarUrl,
     avatarUrl: avatarUrl,
     driveAvatarId,

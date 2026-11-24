@@ -129,6 +129,13 @@ export default function DashboardPage() {
 
   // Financial Metrics Computations
   const metrics = useMemo(() => {
+    // Excluded customer IDs (marked as Exclude Transactions in profile)
+    const excludedCustIds = new Set<string>();
+    customers.forEach(c => {
+      if (c.excludeTransactions) excludedCustIds.add(c.id);
+    });
+    const isExcludedTxn = (t: any) => Boolean(t.customerId && excludedCustIds.has(t.customerId));
+
     // --- 1. KHATA CALCULATIONS ---
     // Khata Credit (Payments received / Money in from Khata customers)
     const khataCredit = transactions
@@ -136,6 +143,7 @@ export default function DashboardPage() {
         t =>
           !t.isDeleted &&
           t.status !== 'deleted' &&
+          !isExcludedTxn(t) &&
           (((t.type === 'debit' && (t.category === 'Payment Received' || t.note?.toLowerCase().includes('payment received'))) ||
             t.type === 'collection' ||
             t.type === 'income'))
@@ -144,11 +152,11 @@ export default function DashboardPage() {
 
     // Khata Debit (Credit given / Udhaar to customers / outstanding receivables)
     const txnsKhataDebit = transactions
-      .filter(t => !t.isDeleted && t.status !== 'deleted' && t.type === 'credit' && Boolean(t.customerId))
+      .filter(t => !t.isDeleted && t.status !== 'deleted' && !isExcludedTxn(t) && t.type === 'credit' && Boolean(t.customerId))
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
     const customersDue = customers.reduce(
-      (sum, c) => (c.outstandingBalance > 0 ? sum + c.outstandingBalance : sum),
+      (sum, c) => (!c.excludeTransactions && c.outstandingBalance > 0 ? sum + c.outstandingBalance : sum),
       0
     );
 
@@ -207,7 +215,7 @@ export default function DashboardPage() {
     // --- 3. BILLING & INVOICING CALCULATIONS ---
     // User requested: I: must be UNPAID invoices total only
     const totalInvoiceAmount = invoices
-      .filter(inv => !isInvoicePaid(inv))
+      .filter(inv => !isInvoicePaid(inv) && (!inv.customerId || !excludedCustIds.has(inv.customerId)))
       .reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
 
     // --- 4. NET AMOUNT (KHATA - EXPENSES) ---
@@ -219,7 +227,7 @@ export default function DashboardPage() {
     // --- 5. ONLINE COLLECTIONS (Payment Collection Hub Only) ---
     // Count only transactions recorded via Payment Collection Hub ("Record in Khata") or customer payment link!
     const totalOnlineCollections = transactions
-      .filter(isOnlineCollectionTxn)
+      .filter(t => isOnlineCollectionTxn(t) && !isExcludedTxn(t))
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
     // Total Savings
@@ -251,10 +259,10 @@ export default function DashboardPage() {
     };
   }, [customers, transactions, expenses, savingsGoals, products, invoices]);
 
-  // Top Customers by outstanding credit
+  // Top Customers by outstanding credit (excluding customers with Exclude Transactions enabled)
   const topCreditors = useMemo(() => {
     return [...customers]
-      .filter(c => c.outstandingBalance > 0)
+      .filter(c => !c.excludeTransactions && c.outstandingBalance > 0)
       .sort((a, b) => b.outstandingBalance - a.outstandingBalance)
       .slice(0, 4);
   }, [customers]);

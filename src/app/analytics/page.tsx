@@ -104,9 +104,16 @@ export default function AnalyticsPage() {
 
   // Scoped Data for KPI Calculations
   const scopedData = useMemo(() => {
-    let filteredTxns = transactions.filter(t => !t.isDeleted && t.status !== 'deleted');
+    const excludedCustIds = new Set<string>();
+    customers.forEach(c => {
+      if (c.excludeTransactions) excludedCustIds.add(c.id);
+    });
+
+    let filteredTxns = transactions.filter(
+      t => !t.isDeleted && t.status !== 'deleted' && (!t.customerId || !excludedCustIds.has(t.customerId))
+    );
     let filteredExps = expenses;
-    let filteredInvs = invoices;
+    let filteredInvs = invoices.filter(inv => !inv.customerId || !excludedCustIds.has(inv.customerId));
 
     if (timeframe === 'current_year') {
       filteredTxns = filteredTxns.filter(t => t.date?.startsWith(currentYearStr));
@@ -168,21 +175,25 @@ export default function AnalyticsPage() {
 
   // Outstanding Market Dues (Receivables)
   const khataDue = useMemo(() => {
-    return customers.reduce((sum, c) => (c.outstandingBalance > 0 ? sum + c.outstandingBalance : sum), 0);
+    return customers.reduce((sum, c) => (!c.excludeTransactions && c.outstandingBalance > 0 ? sum + c.outstandingBalance : sum), 0);
   }, [customers]);
 
   const khataAdvance = useMemo(() => {
-    return customers.reduce((sum, c) => (c.outstandingBalance < 0 ? sum + Math.abs(c.outstandingBalance) : sum), 0);
+    return customers.reduce((sum, c) => (!c.excludeTransactions && c.outstandingBalance < 0 ? sum + Math.abs(c.outstandingBalance) : sum), 0);
   }, [customers]);
 
   const invoiceDue = useMemo(() => {
+    const excludedCustIds = new Set<string>();
+    customers.forEach(c => {
+      if (c.excludeTransactions) excludedCustIds.add(c.id);
+    });
     return invoices.reduce((sum, inv) => {
-      if (inv.status === 'paid') return sum;
+      if (inv.status === 'paid' || (inv.customerId && excludedCustIds.has(inv.customerId))) return sum;
       const total = Number(inv.total) || 0;
       const paid = Number(inv.paidAmount) || 0;
       return sum + Math.max(0, total - paid);
     }, 0);
-  }, [invoices]);
+  }, [invoices, customers]);
 
   const totalReceivables = khataDue + invoiceDue;
 
@@ -193,23 +204,29 @@ export default function AnalyticsPage() {
 
   // Khata Recovery Rate
   const recoveryRate = useMemo(() => {
-    const givenTxns = transactions.filter(t => !t.isDeleted && t.status !== 'deleted' && t.type === 'debit');
+    const excludedCustIds = new Set<string>();
+    customers.forEach(c => {
+      if (c.excludeTransactions) excludedCustIds.add(c.id);
+    });
+    const givenTxns = transactions.filter(t => !t.isDeleted && t.status !== 'deleted' && t.type === 'debit' && (!t.customerId || !excludedCustIds.has(t.customerId)));
     const totalGiven = givenTxns.reduce((s, t) => s + (Number(t.amount) || 0), 0);
     if (totalGiven <= 0) return 100;
     const receivedTxns = transactions.filter(
       t =>
         !t.isDeleted &&
         t.status !== 'deleted' &&
+        (!t.customerId || !excludedCustIds.has(t.customerId)) &&
         (t.type === 'credit' || t.type === 'collection' || (t.type === 'debit' && t.category === 'Payment Received'))
     );
     const totalReceived = receivedTxns.reduce((s, t) => s + (Number(t.amount) || 0), 0);
     return Math.min(100, Math.round((totalReceived / totalGiven) * 100));
-  }, [transactions]);
+  }, [transactions, customers]);
 
   // Customer Retention
-  const activeCustomers = customers.filter(c => c.status === 'active').length;
+  const activeCustomers = customers.filter(c => c.status === 'active' && !c.excludeTransactions).length;
   const repeatCustomersCount = useMemo(() => {
     return customers.filter(c => {
+      if (c.excludeTransactions) return false;
       const custTxns = transactions.filter(t => !t.isDeleted && t.status !== 'deleted' && t.customerId === c.id);
       return custTxns.length >= 2;
     }).length;

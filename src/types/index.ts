@@ -105,6 +105,7 @@ export interface Customer {
   status: 'active' | 'overdue' | 'blocked' | 'deleted';
   isDeleted?: boolean;
   deletedAt?: string;
+  excludeTransactions?: boolean;
   rating: number; // 1 - 5
   notes?: string;
   avatar?: string;

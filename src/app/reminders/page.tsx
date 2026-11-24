@@ -168,6 +168,14 @@ export default function RemindersPage() {
 
   const activeReminders = React.useMemo(() => {
     return reminders.filter((r) => {
+      // 0. If customer is marked as Exclude Transactions, hide reminder
+      const custCheck = customers.find(
+        (c) =>
+          c.id === r.customerId ||
+          (r.customerPhone && c.phone && c.phone.replace(/\D/g, '').slice(-10) === r.customerPhone.replace(/\D/g, '').slice(-10))
+      );
+      if (custCheck?.excludeTransactions) return false;
+
       // 1. If linked invoice is paid, hide immediately
       const linkedInvoice = invoices.find(
         (i) =>

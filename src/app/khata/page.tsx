@@ -66,6 +66,7 @@ import {
   RotateCcw,
   Ban,
   LogOut,
+  Layers,
 } from 'lucide-react';
 
 function normalizePhone(p?: string): string {
@@ -2590,6 +2591,27 @@ function KhataPageInner() {
     addToast('Rating Updated', `${activeCustomer.name}'s rating set to ${rating} Star(s).`, 'success');
   };
 
+  // Toggle Customer Exclude Transactions
+  const handleToggleExcludeTransactions = () => {
+    if (!activeCustomer) return;
+    const currentExcluded = Boolean(activeCustomer.excludeTransactions);
+    const updated = { ...activeCustomer, excludeTransactions: !currentExcluded };
+    saveCustomer(updated);
+    if (!currentExcluded) {
+      addToast(
+        'Transactions Excluded',
+        `${activeCustomer.name} ke transactions Dashboard aur overall hisab se exclude kar diye gaye hain.`,
+        'info'
+      );
+    } else {
+      addToast(
+        'Transactions Included',
+        `${activeCustomer.name} ke transactions Dashboard aur overall hisab me include kar diye gaye hain.`,
+        'success'
+      );
+    }
+  };
+
   // Handle Delete Customer (Screen 1)
   const handleDeleteCurrentCustomer = () => {
     if (!activeCustomer) return;
@@ -4688,33 +4710,31 @@ function KhataPageInner() {
                       </div>
                     </div>
 
-                    {/* Section: Customer Rating & Risk Level */}
-                    <div className="space-y-2">
+                    {/* Section: Customer Rating & Risk Level (Slim Patti / Compact) */}
+                    <div className="space-y-1">
                       <div className="text-xs font-semibold text-slate-700 dark:text-slate-300 px-1">
                         CRM Rating & Credit Trust
                       </div>
-                      <div className="bg-[#EDF6F3] dark:bg-slate-800/80 rounded-2xl p-4 border border-[#D5ECE3] dark:border-slate-700 space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-extrabold ${getCustomerRatingColor(activeCustomer.rating)}`}>
-                              {activeCustomer.rating <= 2 ? 'High Risk (Rating 1-2 • Red)' : activeCustomer.rating <= 3 ? 'Medium Risk (Rating 3 • Yellow)' : 'Trusted Client (Rating 4-5 • Green)'}
-                            </span>
-                          </div>
-                          <span className="text-xs font-mono font-black text-amber-600 dark:text-amber-400">
-                            {(activeCustomer.rating || 5)}.0 / 5.0
+                      <div className="bg-[#EDF6F3] dark:bg-slate-800/80 rounded-xl px-3.5 py-2.5 border border-[#D5ECE3] dark:border-slate-700 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`text-xs font-extrabold truncate ${getCustomerRatingColor(activeCustomer.rating)}`}>
+                            {activeCustomer.rating <= 2 ? 'High Risk' : activeCustomer.rating <= 3 ? 'Medium Risk' : 'Trusted Client'}
+                          </span>
+                          <span className="text-[11px] font-mono font-black text-amber-600 dark:text-amber-400 shrink-0">
+                            ({(activeCustomer.rating || 5)}.0/5)
                           </span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-0.5 shrink-0">
                           {[1, 2, 3, 4, 5].map((star) => (
                             <button
                               key={star}
                               type="button"
                               onClick={() => handleUpdateCustomerRating(star)}
-                              className="p-1 hover:scale-125 active:scale-95 transition-transform cursor-pointer"
+                              className="p-0.5 hover:scale-125 active:scale-95 transition-transform cursor-pointer"
                               title={`Set rating to ${star} Star`}
                             >
                               <Star
-                                className={`w-6 h-6 ${
+                                className={`w-4 h-4 ${
                                   star <= (activeCustomer.rating || 5)
                                     ? 'fill-amber-400 text-amber-400'
                                     : 'text-slate-300 dark:text-slate-600'
@@ -4748,6 +4768,55 @@ function KhataPageInner() {
                         </div>
                         <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
                       </div>
+                    </div>
+
+                    {/* Option: Exclude Transactions */}
+                    <div className="bg-[#EDF6F3] dark:bg-slate-800/80 rounded-2xl p-4 border border-[#D5ECE3] dark:border-slate-700 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center ${
+                          !activeCustomer.excludeTransactions
+                            ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400'
+                            : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400'
+                        }`}>
+                          <Layers className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <span>Exclude Transactions</span>
+                            {activeCustomer.excludeTransactions && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 uppercase">
+                                Excluded
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            {!activeCustomer.excludeTransactions
+                              ? 'Transactions included in overall totals'
+                              : 'Excluded from Dashboard & overall reports (Active in Khata only)'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Toggle On/Off Switch */}
+                      <button
+                        type="button"
+                        onClick={handleToggleExcludeTransactions}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          !activeCustomer.excludeTransactions
+                            ? 'bg-emerald-600'
+                            : 'bg-slate-300 dark:bg-slate-700'
+                        }`}
+                        role="switch"
+                        aria-checked={!activeCustomer.excludeTransactions}
+                        title={!activeCustomer.excludeTransactions ? 'Toggle to Exclude' : 'Toggle to Include'}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                            !activeCustomer.excludeTransactions ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
                     </div>
 
                     {/* Delete Card (Image 1) */}

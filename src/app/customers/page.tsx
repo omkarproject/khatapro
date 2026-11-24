@@ -581,6 +581,9 @@ export default function CustomersPage() {
       category: formCategory,
       status: 'active',
       rating: parseInt(formRating) || 5,
+      excludeTransactions: editingId
+        ? customers.find(c => c.id === editingId)?.excludeTransactions || false
+        : false,
       notes: formNotes.trim(),
       avatar: finalAvatar,
       avatarUrl: finalAvatar,
@@ -1526,17 +1529,24 @@ export default function CustomersPage() {
                       Deleted
                     </span>
                   ) : (
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase inline-flex items-center gap-0.5 shrink-0 ${
-                      cust.category === 'VIP' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' :
-                      cust.category === 'Wholesale' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400' :
-                      cust.category === 'Merchant' || cust.id.startsWith('peer_cust_') ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' :
-                      'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                    }`}>
-                      {(cust.category === 'Merchant' || cust.id.startsWith('peer_cust_')) && (
-                        <BadgeCheck className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 fill-emerald-500/20 shrink-0" />
+                    <div className="flex items-center gap-1 shrink-0">
+                      {cust.excludeTransactions && (
+                        <span className="text-[8.5px] px-1.5 py-0.5 rounded-md font-bold uppercase bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200/50">
+                          Excluded
+                        </span>
                       )}
-                      {cust.category === 'Merchant' || cust.id.startsWith('peer_cust_') ? 'VERIFIED' : cust.category}
-                    </span>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase inline-flex items-center gap-0.5 ${
+                        cust.category === 'VIP' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' :
+                        cust.category === 'Wholesale' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400' :
+                        cust.category === 'Merchant' || cust.id.startsWith('peer_cust_') ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' :
+                        'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                      }`}>
+                        {(cust.category === 'Merchant' || cust.id.startsWith('peer_cust_')) && (
+                          <BadgeCheck className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 fill-emerald-500/20 shrink-0" />
+                        )}
+                        {cust.category === 'Merchant' || cust.id.startsWith('peer_cust_') ? 'VERIFIED' : cust.category}
+                      </span>
+                    </div>
                   )}
                 </div>
 
