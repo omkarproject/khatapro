@@ -63,17 +63,7 @@ function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
     return (
       <div className={`flex flex-col h-full justify-between transition-all duration-300 ${expanded ? 'p-3.5 sm:p-4' : 'p-2'}`}>
         {/* Top Section: Nav Links */}
-        <div className="space-y-1 overflow-y-auto pr-1 scrollbar-thin">
-          <div className={`flex items-center py-2 mb-1 ${expanded ? 'px-3 justify-between' : 'px-1 justify-center'}`}>
-            {expanded ? (
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-black dark:text-slate-300 truncate select-none">
-                {t('mainModules', 'Main Modules')}
-              </span>
-            ) : (
-              <div className="w-2 h-2 rounded-full bg-indigo-500/60 dark:bg-indigo-400/60 animate-pulse my-1" />
-            )}
-          </div>
-
+        <div className="space-y-1.5 overflow-y-auto pr-1 scrollbar-thin pt-1">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
@@ -85,24 +75,24 @@ function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
                 prefetch={true}
                 onClick={onCloseMobile}
                 title={!expanded ? item.label : undefined}
-                className={`flex items-center rounded-xl text-xs font-bold transition-all group duration-200 ${
+                className={`flex items-center rounded-xl text-xs font-bold transition-all group duration-200 transform origin-left cursor-pointer hover:scale-[1.03] active:scale-[0.97] ${
                   !expanded
                     ? 'justify-center p-2.5 my-1'
                     : 'justify-between px-3 py-2.5 my-0.5'
                 } ${
                   isActive
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400/40'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400/40 hover:shadow-indigo-600/40'
                     : 'text-black dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100/90 dark:hover:bg-slate-800/70 hover:shadow-sm'
                 }`}
               >
                 <div className={`flex items-center ${!expanded ? 'justify-center' : 'gap-3 min-w-0'}`}>
                   <Icon
-                    className={`w-4 h-4 transition-transform group-hover:scale-110 shrink-0 ${
+                    className={`w-4 h-4 transition-transform duration-200 ease-out group-hover:scale-125 shrink-0 ${
                       isActive ? 'text-white' : 'text-slate-900 dark:text-slate-400 group-hover:text-indigo-500'
                     }`}
                   />
                   {expanded && (
-                    <span className="truncate whitespace-nowrap animate-in fade-in duration-200">
+                    <span className="truncate whitespace-nowrap transition-transform duration-200 ease-out origin-left group-hover:scale-105 group-hover:translate-x-0.5 font-bold animate-in fade-in">
                       {item.label}
                     </span>
                   )}
@@ -110,7 +100,7 @@ function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
 
                 {expanded && item.badge && (
                   <span
-                    className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0 animate-in fade-in duration-200 ${
+                    className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0 transition-transform duration-200 group-hover:scale-110 animate-in fade-in ${
                       isActive
                         ? 'bg-white/20 text-white'
                         : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400 ring-1 ring-indigo-500/20'
