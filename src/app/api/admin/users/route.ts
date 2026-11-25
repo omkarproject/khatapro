@@ -53,6 +53,95 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// POST /api/admin/users - Admin creates a new user directly
+export async function POST(req: NextRequest) {
+  try {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return NextResponse.json({ success: false, message: 'Could not connect to Supabase' }, { status: 500 });
+    }
+
+    const isAdmin = await verifyAdminCaller(req, supabase);
+    if (!isAdmin) {
+      return NextResponse.json({ success: false, message: 'Forbidden: Admin access required' }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const cleanName = String(body?.name || '').trim();
+    const cleanBusinessName = String(body?.businessName || `${cleanName}'s Business`).trim();
+    const cleanEmail = String(body?.email || '').toLowerCase().trim();
+    const cleanPhone = String(body?.phone || '').trim();
+    const cleanPassword = String(body?.password || '').trim();
+    const role = body?.role === 'admin' ? 'admin' : 'user';
+
+    if (!cleanName || !cleanEmail || !cleanPassword) {
+      return NextResponse.json({ success: false, message: 'Name, email, and password are required.' }, { status: 400 });
+    }
+    if (cleanPassword.length < 6) {
+      return NextResponse.json({ success: false, message: 'Password must be at least 6 characters.' }, { status: 400 });
+    }
+
+    const normPhone = cleanPhone.replace(/\D/g, '').slice(-10);
+    const { data: existingProfiles } = await supabase.from('profiles').select('id, email, phone');
+    if (existingProfiles && existingProfiles.length > 0) {
+      if (existingProfiles.some((p: any) => (p.email || '').toLowerCase().trim() === cleanEmail)) {
+        return NextResponse.json({ success: false, message: 'Already registered email.' }, { status: 409 });
+      }
+      if (normPhone && normPhone.length >= 10 && existingProfiles.some((p: any) => String(p.phone || '').replace(/\D/g, '').slice(-10) === normPhone)) {
+        return NextResponse.json({ success: false, message: 'Already registered mobile number.' }, { status: 409 });
+      }
+    }
+
+    const { data: createdAuth, error: authErr } = await supabase.auth.admin.createUser({
+      email: cleanEmail,
+      password: cleanPassword,
+      email_confirm: true,
+      user_metadata: {
+        name: cleanName,
+        business_name: cleanBusinessName,
+        phone: cleanPhone,
+        role,
+      },
+    });
+
+    if (authErr || !createdAuth?.user) {
+      return NextResponse.json({ success: false, message: authErr?.message || 'Failed to create user in Auth.' }, { status: 400 });
+    }
+
+    const newUserId = createdAuth.user.id;
+    const nowIso = new Date().toISOString();
+
+    await supabase.from('profiles').upsert({
+      id: newUserId,
+      name: cleanName,
+      full_name: cleanName,
+      email: cleanEmail,
+      phone: cleanPhone,
+      business_name: cleanBusinessName,
+      role,
+      created_at: nowIso,
+      updated_at: nowIso,
+    }, { onConflict: 'id' });
+
+    await supabase.from('system_settings').upsert({
+      user_id: newUserId,
+      business_name: cleanBusinessName,
+      business_phone: cleanPhone,
+      business_email: cleanEmail,
+      updated_at: nowIso,
+    }, { onConflict: 'user_id' });
+
+    return NextResponse.json({
+      success: true,
+      userId: newUserId,
+      message: `User ${cleanName} created successfully.`,
+    });
+  } catch (error: any) {
+    console.error('Create user error:', error);
+    return NextResponse.json({ success: false, message: error.message || 'Failed to create user' }, { status: 500 });
+  }
+}
+
 // PATCH /api/admin/users - Update user role, block/unblock, password change, or profile edit
 export async function PATCH(req: NextRequest) {
   try {
