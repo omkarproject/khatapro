@@ -1445,7 +1445,7 @@ export default function CustomersPage() {
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2.5">
             <Users className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-            Customer Relationship Management
+            CRM
           </h1>
         </div>
 
