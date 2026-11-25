@@ -182,7 +182,52 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// DELETE /api/admin/users - Remove user
+async function broadcastRealtimeLogout(supabase: any, userId: string): Promise<void> {
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    const timer = setTimeout(finish, 1800);
+
+    try {
+      const chan = supabase.channel(`khatapro_realtime_${userId}`);
+      chan.subscribe(async (status: string) => {
+        if (status === 'SUBSCRIBED') {
+          try {
+            await chan.send({
+              type: 'broadcast',
+              event: 'khatapro_session_event',
+              payload: {
+                userId,
+                originDeviceId: 'admin_delete_user',
+                action: 'logout_all',
+                reason: 'account_deleted',
+                timestamp: Date.now(),
+              },
+            });
+          } catch {}
+          clearTimeout(timer);
+          setTimeout(() => {
+            try { supabase.removeChannel(chan); } catch {}
+            finish();
+          }, 250);
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          clearTimeout(timer);
+          try { supabase.removeChannel(chan); } catch {}
+          finish();
+        }
+      });
+    } catch {
+      clearTimeout(timer);
+      finish();
+    }
+  });
+}
+
+// DELETE /api/admin/users - Remove user, all database data, and force instant realtime sign-out
 export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -197,11 +242,75 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Could not connect to Supabase' }, { status: 500 });
     }
 
-    // Delete user from profiles and settings
-    await supabase.from('profiles').delete().eq('id', userId);
-    await supabase.from('system_settings').delete().eq('user_id', userId);
+    const isAdmin = await verifyAdminCaller(req, supabase);
+    if (!isAdmin) {
+      return NextResponse.json({ success: false, message: 'Forbidden: Admin access required' }, { status: 403 });
+    }
 
-    // Delete from Supabase Auth
+    const callerId =
+      req.cookies.get('skp_auth_session')?.value ||
+      req.headers.get('x-auth-session') ||
+      req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+    if (callerId && callerId === userId) {
+      return NextResponse.json({ success: false, message: 'You cannot delete your own active admin account.' }, { status: 400 });
+    }
+
+    // 1. Send instant realtime sign-out broadcast to all active devices/tabs of this user BEFORE wiping
+    await broadcastRealtimeLogout(supabase, userId);
+
+    // 2. Delete all user-scoped records across every database table
+    const userIdTables = [
+      'transactions',
+      'customers',
+      'invoices',
+      'products',
+      'expenses',
+      'savings_goals',
+      'payment_reminders',
+      'documents',
+      'notes',
+      'tasks',
+      'passwords',
+      'authenticators',
+      'customer_drive_files',
+      'customer_drive_folders',
+      'google_drive_backups',
+      'google_drive_tokens',
+      'user_devices',
+      'system_settings',
+    ];
+
+    for (const table of userIdTables) {
+      try {
+        await supabase.from(table).delete().eq('user_id', userId);
+      } catch (e) {
+        console.warn(`Cleanup skip for table ${table}:`, e);
+      }
+    }
+
+    // 3. Clean up reciprocal P2P links & mirrored transactions in peer merchants' tables
+    try {
+      await supabase.from('transactions').delete().eq('customer_id', `peer_cust_${userId}`);
+      await supabase.from('customers').delete().eq('id', `peer_cust_${userId}`);
+    } catch {}
+
+    // 4. Clean up Supabase Storage files uploaded by this user (if any)
+    try {
+      const { data: mediaFiles } = await supabase.storage.from('khatapro-media').list(userId, { limit: 1000 });
+      if (mediaFiles && mediaFiles.length > 0) {
+        const paths = mediaFiles.map((f: any) => `${userId}/${f.name}`);
+        await supabase.storage.from('khatapro-media').remove(paths);
+      }
+    } catch {}
+
+    // 5. Delete profile tables
+    for (const profTable of ['profiles', 'user_profiles', 'users']) {
+      try {
+        await supabase.from(profTable).delete().eq('id', userId);
+      } catch {}
+    }
+
+    // 6. Delete from Supabase Auth
     try {
       await supabase.auth.admin.deleteUser(userId);
     } catch (e) {
@@ -210,7 +319,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'User removed from SmartKhata system.',
+      message: 'User, all database data, and active sessions removed completely.',
     });
   } catch (error: any) {
     console.error('Delete user error:', error);

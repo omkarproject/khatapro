@@ -940,12 +940,34 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Could not connect to Supabase Cloud Database' }, { status: 500 });
     }
 
+    // Abort sync & force logout if account was deleted or blocked by Admin
+    const { data: activeProf, error: activeProfErr } = await supabase
+      .from('profiles')
+      .select('id, is_blocked')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (!activeProfErr && (!activeProf || activeProf.is_blocked)) {
+      return NextResponse.json(
+        { success: false, forceLogout: true, accountDeleted: !activeProf, message: 'Account removed or blocked.' },
+        { status: 401 }
+      );
+    }
+
     // Fast sub-25ms version check for lightweight cross-device change detection
     if (searchParams.get('checkVersion') === 'true') {
-      const [setRes, txnRes] = await Promise.all([
+      const [profRes, setRes, txnRes] = await Promise.all([
+        supabase.from('profiles').select('id, is_blocked').eq('id', userId).maybeSingle(),
         supabase.from('system_settings').select('updated_at').eq('user_id', userId).maybeSingle(),
         supabase.from('transactions').select('updated_at').eq('user_id', userId).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
+
+      if (!profRes.error && (!profRes.data || profRes.data.is_blocked)) {
+        return NextResponse.json(
+          { success: false, forceLogout: true, accountDeleted: !profRes.data, message: 'Account removed or blocked.' },
+          { status: 401 }
+        );
+      }
 
       const v1 = setRes.data?.updated_at || '';
       const v2 = txnRes.data?.updated_at || '';
@@ -1583,6 +1605,20 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabaseAdmin();
     if (!supabase) {
       return NextResponse.json({ success: false, message: 'Could not connect to Supabase Cloud Database' }, { status: 500 });
+    }
+
+    // Abort sync & force logout if account was deleted or blocked by Admin
+    const { data: activeProf, error: activeProfErr } = await supabase
+      .from('profiles')
+      .select('id, is_blocked')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (!activeProfErr && (!activeProf || activeProf.is_blocked)) {
+      return NextResponse.json(
+        { success: false, forceLogout: true, accountDeleted: !activeProf, message: 'Account removed or blocked.' },
+        { status: 401 }
+      );
     }
 
     // Security check: Validate caller session against target userId

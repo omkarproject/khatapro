@@ -560,6 +560,15 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         body: JSON.stringify(payload),
       });
 
+      if (res.status === 401) {
+        try {
+          const errJson = await res.json();
+          if (errJson?.forceLogout) {
+            logout();
+            return;
+          }
+        } catch {}
+      }
       if (res.ok) {
         setCloudSyncStatus('synced');
         lastCloudSyncTimestampRef.current = Date.now();
@@ -633,6 +642,15 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           'X-Auth-Session': userId,
         },
       });
+      if (res.status === 401) {
+        try {
+          const errJson = await res.json();
+          if (errJson?.forceLogout) {
+            logout();
+            return;
+          }
+        } catch {}
+      }
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
@@ -1330,7 +1348,16 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           const res = await fetch(`/api/db/sync?userId=${encodeURIComponent(userId)}&checkVersion=true`, {
             headers: { 'X-Auth-Session': userId },
           });
-          if (res.ok) {
+          if (res.status === 401) {
+        try {
+          const errJson = await res.json();
+          if (errJson?.forceLogout) {
+            logout();
+            return;
+          }
+        } catch {}
+      }
+      if (res.ok) {
             const data = await res.json();
             if (data && data.success && data.version) {
               if (lastKnownCloudVersionRef.current && data.version !== lastKnownCloudVersionRef.current) {
@@ -1362,6 +1389,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         })
           .then(r => r.json())
           .then(data => {
+            if (data?.forceLogout) {
+              logout();
+              return;
+            }
             if (data?.version) {
               if (lastKnownCloudVersionRef.current && data.version !== lastKnownCloudVersionRef.current) {
                 lastKnownCloudVersionRef.current = data.version;

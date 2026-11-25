@@ -70,6 +70,24 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Could not connect to database' }, { status: 500 });
     }
 
+    // If user profile was deleted by Admin, immediately revoke session so user signs out
+    try {
+      const { data: existingProfile, error: profCheckErr } = await supabase
+        .from('profiles')
+        .select('id, is_blocked')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (!profCheckErr && (!existingProfile || existingProfile.is_blocked)) {
+        return NextResponse.json({
+          success: true,
+          devices: [],
+          isCurrentRevoked: true,
+          accountDeleted: !existingProfile,
+        });
+      }
+    } catch {}
+
     let devices: DeviceSession[] = [];
     let tableExists = true;
 
