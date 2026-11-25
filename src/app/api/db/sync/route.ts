@@ -7,6 +7,7 @@ import {
   mirrorTransactionsFromDb,
   recalculateCustomerBalance,
   broadcastPeerAlert,
+  backfillPeerTransactionsForUser,
 } from '@/lib/p2pSync';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1030,6 +1031,24 @@ export async function GET(req: NextRequest) {
       supabase.from('global_config').select('maintenance_mode').eq('id', 'shared_khata_groups').maybeSingle(),
     ]);
 
+    // Ensure any old/missing transactions from verified peer merchants (e.g., Kanhaiya07k) are mirrored before returning
+    const didBackfill = await backfillPeerTransactionsForUser(
+      supabase,
+      userId,
+      sbCust.data || [],
+      sbProfile.data || null
+    );
+    let finalCustRows = sbCust.data || [];
+    let finalTxnRows = sbTxn.data || [];
+    if (didBackfill) {
+      const [freshCust, freshTxn] = await Promise.all([
+        supabase.from('customers').select('*').eq('user_id', userId),
+        supabase.from('transactions').select('*').eq('user_id', userId),
+      ]);
+      if (freshCust.data) finalCustRows = freshCust.data;
+      if (freshTxn.data) finalTxnRows = freshTxn.data;
+    }
+
     const logo = sbProfile.data?.avatar_url || sbSet.data?.payment_settings?.businessLogo || sbSet.data?.business_logo || '';
 
     const finalUser = sbProfile.data ? {
@@ -1102,8 +1121,8 @@ export async function GET(req: NextRequest) {
     }
 
     const finalData = {
-      customers: (sbCust.data || []).map(customerFromDb),
-      transactions: (sbTxn.data || []).map(transactionFromDb),
+      customers: finalCustRows.map(customerFromDb),
+      transactions: finalTxnRows.map(transactionFromDb),
       products: (sbProd.data || []).map(productFromDb),
       invoices: (sbInv.data || []).map(invoiceFromDb),
       expenses: (sbExp.data || []).map(expenseFromDb),

@@ -344,3 +344,110 @@ export function broadcastPeerAlert(
     console.warn('broadcastPeerAlert warning:', err);
   }
 }
+
+export async function backfillPeerTransactionsForUser(
+  supabase: any,
+  userId: string,
+  userCustomers: any[],
+  userProfile: any
+): Promise<boolean> {
+  try {
+    const activeCustomers = (userCustomers || []).filter(
+      (c: any) => c && c.id && c.status !== 'deleted'
+    );
+    if (activeCustomers.length === 0) return false;
+
+    const { data: allProfiles } = await supabase
+      .from('profiles')
+      .select('id, name, full_name, business_name, phone, email');
+
+    if (!allProfiles || allProfiles.length === 0) return false;
+
+    const curPhone = normalizePhone(userProfile?.phone);
+    const curEmail = (userProfile?.email || '').toLowerCase().trim();
+    let totalMirrored = 0;
+
+    for (const cust of activeCustomers) {
+      const cPhone = normalizePhone(cust.phone);
+      const cEmail = (cust.email || '').toLowerCase().trim();
+      const isPeerCust = String(cust.id).startsWith('peer_cust_');
+      if (!cPhone && !cEmail && !isPeerCust) continue;
+
+      let peerProfile: any = null;
+      if (isPeerCust) {
+        const potentialPeerId = String(cust.id).replace('peer_cust_', '');
+        peerProfile = allProfiles.find((p: any) => p.id === potentialPeerId);
+      }
+      if (!peerProfile) {
+        peerProfile = allProfiles.find((p: any) => {
+          if (p.id === userId) return false;
+          const pPhone = normalizePhone(p.phone);
+          const pEmail = (p.email || '').toLowerCase().trim();
+          if (cPhone && pPhone && cPhone === pPhone) return true;
+          if (cEmail && pEmail && cEmail === pEmail) return true;
+          return false;
+        });
+      }
+      if (!peerProfile || peerProfile.id === userId) continue;
+
+      const peerUserId = peerProfile.id;
+
+      // Respect permanent deletion if peer deleted userId
+      const { data: peerSettings } = await supabase
+        .from('system_settings')
+        .select('payment_settings')
+        .eq('user_id', peerUserId)
+        .maybeSingle();
+
+      const peerDeletedPeerIds = peerSettings?.payment_settings?.deletedPeerIds || [];
+      if (Array.isArray(peerDeletedPeerIds) && peerDeletedPeerIds.includes(userId)) {
+        continue;
+      }
+
+      const { data: peerCustomers } = await supabase
+        .from('customers')
+        .select('id, phone, email')
+        .eq('user_id', peerUserId);
+
+      const peerSourceIds = (peerCustomers || [])
+        .filter((pc: any) => {
+          if (pc.id === `peer_cust_${userId}` || pc.id === userId) return true;
+          const pcPhone = normalizePhone(pc.phone);
+          const pcEmail = (pc.email || '').toLowerCase().trim();
+          if (curPhone && pcPhone && curPhone === pcPhone) return true;
+          if (curEmail && pcEmail && curEmail === pcEmail) return true;
+          return false;
+        })
+        .map((pc: any) => String(pc.id));
+
+      if (!peerSourceIds.includes(`peer_cust_${userId}`)) peerSourceIds.push(`peer_cust_${userId}`);
+      if (!peerSourceIds.includes(userId)) peerSourceIds.push(userId);
+
+      const peerDisplayName = (
+        peerProfile.business_name ||
+        peerProfile.full_name ||
+        peerProfile.name ||
+        cust.name ||
+        'Peer Merchant'
+      ).trim();
+
+      const count = await mirrorTransactionsFromDb({
+        supabase,
+        sourceUserId: peerUserId,
+        sourceDisplayName: peerDisplayName,
+        sourcePhone: normalizePhone(peerProfile.phone),
+        sourceCustomerIds: peerSourceIds,
+        targetUserId: userId,
+        targetCustomerId: String(cust.id),
+        targetPhone: curPhone,
+      });
+
+      totalMirrored += count;
+    }
+
+    return totalMirrored > 0;
+  } catch (err) {
+    console.warn('backfillPeerTransactionsForUser warning:', err);
+    return false;
+  }
+}
