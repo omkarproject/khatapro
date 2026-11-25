@@ -149,7 +149,11 @@ export function clearDeletedRecordIds(table?: string, ids?: string[]): void {
   } else {
     const set = new Set(all[table] || []);
     ids.forEach(id => set.delete(id));
-    all[table] = Array.from(set);
+    if (set.size === 0) {
+      delete all[table];
+    } else {
+      all[table] = Array.from(set);
+    }
   }
   setLocalItem(DELETED_RECORD_KEYS, all);
 }

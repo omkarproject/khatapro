@@ -14,7 +14,7 @@ export default function OfflineSyncNotch() {
   }
 
   return (
-    <div className="w-full flex justify-center pointer-events-none select-none z-50 bg-transparent">
+    <div className="fixed top-0 left-1/2 -translate-x-1/2 flex justify-center pointer-events-none select-none z-[60]">
       {isOfflineState && (
         <div
           className="relative overflow-hidden inline-flex items-center gap-1.5 px-3 py-0.5 rounded-b-xl bg-amber-950/95 dark:bg-amber-950 text-amber-200 border-x border-b border-amber-500/40 shadow-md text-[10.5px] font-semibold tracking-wide"

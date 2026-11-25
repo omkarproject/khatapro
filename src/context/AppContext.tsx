@@ -278,7 +278,18 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const syncAbortControllerRef = useRef<AbortController | null>(null);
   const syncProgressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const syncedHideTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isRecoverySyncingRef = useRef<boolean>(false);
   const mutationSeqRef = useRef<number>(0);
+
+  const hasPendingDeletedRecords = () => {
+    try {
+      return Object.values(StorageService.getAllDeletedRecordIds()).some(
+        (arr) => Array.isArray(arr) && arr.length > 0
+      );
+    } catch {
+      return false;
+    }
+  };
   const [activeDevicesCount, setActiveDevicesCount] = useState<number>(1);
   const logoutRef = useRef<() => void>(() => {});
 
@@ -1318,7 +1329,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     loadTimeoutRef.current = setTimeout(async () => {
       try {
         isSyncingFromCloudRef.current = true;
-        if (hasPendingOfflineSyncRef.current || Object.keys(StorageService.getAllDeletedRecordIds()).length > 0) {
+        if (hasPendingOfflineSyncRef.current || hasPendingDeletedRecords()) {
           console.log(`⚡ [Offline Recovery Sync] Pushing pending offline changes before cloud refresh (${actionName || 'remote update'})...`);
           if (!isInitialCloudLoadedRef.current) {
             await loadUserDataFromCloud(userId, true);
@@ -1614,7 +1625,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     if (typeof window !== 'undefined') {
       try {
         const hadPending = localStorage.getItem(`skp_pending_offline_sync_${userId}`) === '1' ||
-          Object.keys(StorageService.getAllDeletedRecordIds()).length > 0;
+          hasPendingDeletedRecords();
         setPendingOfflineFlag(userId, hadPending);
         if (!navigator.onLine) {
           setIsOnline(false);
@@ -1637,42 +1648,48 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     };
 
     const runOnlineRecoverySync = async () => {
-      setIsOnline(true);
-      if (realtimeChannelRef.current) {
-        try { realtimeChannelRef.current.subscribe(); } catch {}
-      }
+      if (isRecoverySyncingRef.current || isSyncInFlightRef.current) return;
+      isRecoverySyncingRef.current = true;
+      try {
+        setIsOnline(true);
+        if (realtimeChannelRef.current) {
+          try { realtimeChannelRef.current.subscribe(); } catch {}
+        }
 
-      const hasDeletes = Object.keys(StorageService.getAllDeletedRecordIds()).length > 0;
-      if (hasPendingOfflineSyncRef.current || hasDeletes) {
-        if (!isInitialCloudLoadedRef.current) {
-          await loadUserDataFromCloud(userId, true);
-        }
-        await executeDatabaseSync(currentUserRef.current, true);
-      } else {
-        stopProgressTimers();
-        setSyncPhase('online_syncing');
-        setSyncProgress(1);
-        syncProgressTimerRef.current = setInterval(() => {
-          setSyncProgress(prev => (prev >= 82 ? prev : Math.min(82, prev + 9)));
-        }, 90);
-        try {
-          await loadUserDataFromCloud(userId, true);
-          if (typeof navigator !== 'undefined' && !navigator.onLine) {
-            handleOffline();
-            return;
+        const hasDeletes = hasPendingDeletedRecords();
+        if (hasPendingOfflineSyncRef.current || hasDeletes) {
+          if (!isInitialCloudLoadedRef.current) {
+            await loadUserDataFromCloud(userId, true);
           }
+          await executeDatabaseSync(currentUserRef.current, true);
+        } else {
           stopProgressTimers();
-          setCloudSyncStatus('synced');
-          setSyncProgress(100);
-          setSyncPhase('synced');
-          syncedHideTimerRef.current = setTimeout(() => {
-            setSyncPhase(prev => (prev === 'synced' ? 'idle' : prev));
-          }, 2200);
-        } catch {
-          handleOffline();
+          setSyncPhase('online_syncing');
+          setSyncProgress(1);
+          syncProgressTimerRef.current = setInterval(() => {
+            setSyncProgress(prev => (prev >= 82 ? prev : Math.min(82, prev + 9)));
+          }, 90);
+          try {
+            await loadUserDataFromCloud(userId, true);
+            if (typeof navigator !== 'undefined' && !navigator.onLine) {
+              handleOffline();
+              return;
+            }
+            stopProgressTimers();
+            setCloudSyncStatus('synced');
+            setSyncProgress(100);
+            setSyncPhase('synced');
+            syncedHideTimerRef.current = setTimeout(() => {
+              setSyncPhase(prev => (prev === 'synced' ? 'idle' : prev));
+            }, 2200);
+          } catch {
+            handleOffline();
+          }
         }
+        refreshActiveDevicesCount();
+      } finally {
+        isRecoverySyncingRef.current = false;
       }
-      refreshActiveDevicesCount();
     };
 
     const handleOnline = () => {
@@ -1702,23 +1719,34 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       document.addEventListener('visibilitychange', handleVisibility);
     }
 
-    // Auto-retry & live connectivity probe every 2s when offline or pending offline sync
+    // Auto-retry & live connectivity probe every 2s ONLY when offline or pending offline sync
+    let consecutivePingFails = 0;
     const offlineRetryInterval = setInterval(async () => {
+      if (
+        isSyncInFlightRef.current ||
+        isRecoverySyncingRef.current ||
+        syncPhaseRef.current === 'online_syncing'
+      ) {
+        return;
+      }
+
       const needCheck =
         !isOnlineRef.current ||
         syncPhaseRef.current === 'offline' ||
         hasPendingOfflineSyncRef.current ||
-        Object.keys(StorageService.getAllDeletedRecordIds()).length > 0;
+        hasPendingDeletedRecords();
 
-      if (!needCheck) return;
-      if (isSyncInFlightRef.current) return;
+      if (!needCheck) {
+        consecutivePingFails = 0;
+        return;
+      }
 
       // Verify real internet connectivity (Windows/Chrome often delays or skips 'online' event)
       let actuallyOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
       if (actuallyOnline) {
         try {
           const pingCtrl = new AbortController();
-          const pingTimer = setTimeout(() => pingCtrl.abort(), 2000);
+          const pingTimer = setTimeout(() => pingCtrl.abort(), 2500);
           const pingRes = await fetch(`/brand-favicon.png?__ping=${Date.now()}`, {
             method: 'HEAD',
             cache: 'no-store',
@@ -1732,21 +1760,29 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       }
 
       if (!actuallyOnline) {
-        if (syncPhaseRef.current !== 'offline' || isOnlineRef.current) {
-          setIsOnline(false);
-          setCloudSyncStatus('offline');
-          setSyncPhase('offline');
-          setSyncProgress(0);
+        consecutivePingFails += 1;
+        if (
+          (typeof navigator !== 'undefined' && !navigator.onLine) ||
+          consecutivePingFails >= 2
+        ) {
+          if (syncPhaseRef.current !== 'offline' || isOnlineRef.current) {
+            setIsOnline(false);
+            setCloudSyncStatus('offline');
+            setSyncPhase('offline');
+            setSyncProgress(0);
+          }
         }
         return;
       }
+
+      consecutivePingFails = 0;
 
       // Internet is genuinely back! Instantly recover & sync 1% -> 100%
       if (
         !isOnlineRef.current ||
         syncPhaseRef.current === 'offline' ||
         hasPendingOfflineSyncRef.current ||
-        Object.keys(StorageService.getAllDeletedRecordIds()).length > 0
+        hasPendingDeletedRecords()
       ) {
         runOnlineRecoverySync();
       }
@@ -1846,7 +1882,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       const hadPending =
         hasPendingOfflineSyncRef.current ||
         (typeof window !== 'undefined' && localStorage.getItem(`skp_pending_offline_sync_${userId}`) === '1') ||
-        Object.keys(StorageService.getAllDeletedRecordIds()).length > 0;
+        hasPendingDeletedRecords();
 
       if (hadPending) {
         setSyncProgress(p => Math.max(p, 75));
