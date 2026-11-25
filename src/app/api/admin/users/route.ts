@@ -384,36 +384,34 @@ export async function DELETE(req: NextRequest) {
       }
     }
 
-    // 3. Clean up reciprocal P2P links & downgrade Verified Merchant badge in other merchants' customers
+    // 3. Preserve other merchants' ledgers & transactions, ONLY remove Verified Merchant badge
     try {
-      await supabase.from('transactions').delete().eq('customer_id', `peer_cust_${userId}`);
-      await supabase.from('customers').delete().eq('id', `peer_cust_${userId}`);
-
       const targetPhone = String(targetProfile?.phone || '').replace(/\D/g, '').slice(-10);
       const targetEmail = String(targetProfile?.email || '').toLowerCase().trim();
-      if (targetPhone || targetEmail) {
-        const { data: merchantCusts } = await supabase
-          .from('customers')
-          .select('id, user_id, phone, email, notes')
-          .eq('category', 'Merchant');
 
-        for (const mc of merchantCusts || []) {
-          const mcPhone = String(mc.phone || '').replace(/\D/g, '').slice(-10);
-          const mcEmail = String(mc.email || '').toLowerCase().trim();
-          const isMatch =
-            (targetPhone && mcPhone && targetPhone === mcPhone) ||
-            (targetEmail && mcEmail && targetEmail === mcEmail);
-          if (isMatch) {
-            const cleanNotes = String(mc.notes || '')
-              .replace(/Verified Peer Merchant \(P2P Connected\)/gi, '')
-              .replace(/Verified Merchant/gi, '')
-              .trim();
-            await supabase
-              .from('customers')
-              .update({ category: 'Regular', notes: cleanNotes, updated_at: new Date().toISOString() })
-              .eq('id', mc.id)
-              .eq('user_id', mc.user_id);
-          }
+      const { data: merchantCusts } = await supabase
+        .from('customers')
+        .select('id, user_id, phone, email, notes, category')
+        .neq('user_id', userId);
+
+      for (const mc of merchantCusts || []) {
+        const mcPhone = String(mc.phone || '').replace(/\D/g, '').slice(-10);
+        const mcEmail = String(mc.email || '').toLowerCase().trim();
+        const isMatch =
+          mc.id === `peer_cust_${userId}` ||
+          (targetPhone && mcPhone && targetPhone === mcPhone) ||
+          (targetEmail && mcEmail && targetEmail === mcEmail);
+
+        if (isMatch && mc.category === 'Merchant') {
+          const cleanNotes = String(mc.notes || '')
+            .replace(/Verified Peer Merchant \(P2P Connected\)/gi, '')
+            .replace(/Verified Merchant/gi, '')
+            .trim();
+          await supabase
+            .from('customers')
+            .update({ category: 'Regular', notes: cleanNotes, updated_at: new Date().toISOString() })
+            .eq('id', mc.id)
+            .eq('user_id', mc.user_id);
         }
       }
     } catch {}

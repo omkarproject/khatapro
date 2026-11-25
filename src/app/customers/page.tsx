@@ -1545,7 +1545,7 @@ export default function CustomersPage() {
                     <div className="min-w-0">
                       <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1">
                         <span className="truncate">{cust.name}</span>
-                        {(cust.category === 'Merchant' || cust.id.startsWith('peer_cust_')) && (
+                        {cust.category === 'Merchant' && (
                           <span title="Verified Merchant" className="inline-flex items-center text-emerald-500 shrink-0">
                             <BadgeCheck className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500/20" />
                           </span>
@@ -1572,13 +1572,13 @@ export default function CustomersPage() {
                       <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase inline-flex items-center gap-0.5 ${
                         cust.category === 'VIP' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' :
                         cust.category === 'Wholesale' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400' :
-                        cust.category === 'Merchant' || cust.id.startsWith('peer_cust_') ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' :
+                        cust.category === 'Merchant' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' :
                         'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
                       }`}>
-                        {(cust.category === 'Merchant' || cust.id.startsWith('peer_cust_')) && (
+                        {cust.category === 'Merchant' && (
                           <BadgeCheck className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 fill-emerald-500/20 shrink-0" />
                         )}
-                        {cust.category === 'Merchant' || cust.id.startsWith('peer_cust_') ? 'VERIFIED' : cust.category}
+                        {cust.category === 'Merchant' ? 'VERIFIED' : cust.category}
                       </span>
                     </div>
                   )}
@@ -1808,7 +1808,7 @@ export default function CustomersPage() {
                 <div>
                   <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                     <span>{activeCustomer.name}</span>
-                    {(activeCustomer.category === 'Merchant' || activeCustomer.id.startsWith('peer_cust_')) && (
+                    {activeCustomer.category === 'Merchant' && (
                       <span title="Verified Merchant" className="inline-flex items-center text-emerald-500 shrink-0">
                         <BadgeCheck className="w-5 h-5 text-emerald-500 fill-emerald-500/20" />
                       </span>

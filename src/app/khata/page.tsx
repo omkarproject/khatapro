@@ -4424,7 +4424,7 @@ function KhataPageInner() {
                                   <PinIcon className="w-3 h-3 rotate-45" />
                                 </span>
                               )}
-                              {(cust.category === 'Merchant' || cust.id.startsWith('peer_cust_')) && (
+                              {cust.category === 'Merchant' && (
                                 <span title="Verified Merchant" className="inline-flex items-center text-emerald-500 shrink-0">
                                   <BadgeCheck className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500/20" />
                                 </span>
@@ -4649,7 +4649,7 @@ function KhataPageInner() {
                                   <Ban className="w-3.5 h-3.5 text-rose-500 stroke-[2.5]" />
                                 </span>
                               )}
-                              {(activeCustomer.category === 'Merchant' || activeCustomer.id.startsWith('peer_cust_')) && (
+                              {activeCustomer.category === 'Merchant' && (
                                 <span title="Verified Merchant" className="inline-flex items-center text-emerald-500 shrink-0">
                                   <BadgeCheck className="w-4 h-4 text-emerald-500 fill-emerald-500/20" />
                                 </span>
@@ -4973,7 +4973,7 @@ function KhataPageInner() {
                                   <Ban className="w-3.5 h-3.5 text-rose-500 stroke-[2.5]" />
                                 </span>
                               )}
-                              {(activeCustomer.category === 'Merchant' || activeCustomer.id.startsWith('peer_cust_')) && (
+                              {activeCustomer.category === 'Merchant' && (
                                 <span title="Verified Merchant" className="inline-flex items-center text-emerald-500 shrink-0">
                                   <BadgeCheck className="w-4 h-4 text-emerald-500 fill-emerald-500/20" />
                                 </span>
