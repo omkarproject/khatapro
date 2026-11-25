@@ -243,11 +243,15 @@ export async function POST(req: NextRequest) {
         updated_at: new Date().toISOString(),
       });
 
-      // Dispatch Welcome Email to newly verified merchant
-      sendWelcomeEmailDirect({
-        to: cleanEmail,
-        recipientName: name,
-      }).catch((err) => console.warn('[WelcomeEmail] Verify hook note:', err));
+      // Dispatch Welcome Email to newly verified merchant (awaited so serverless runtime does not terminate before SMTP completes)
+      try {
+        await sendWelcomeEmailDirect({
+          to: cleanEmail,
+          recipientName: name,
+        });
+      } catch (err) {
+        console.warn('[WelcomeEmail] Verify hook note:', err);
+      }
 
       const safeUser = {
         id: createdUserId,

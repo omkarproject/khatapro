@@ -185,11 +185,15 @@ export async function POST(req: NextRequest) {
       updated_at: new Date().toISOString(),
     });
 
-    // Send Welcome Email if enabled in SMTP triggers
-    sendWelcomeEmailDirect({
-      to: cleanEmail,
-      recipientName: cleanName,
-    }).catch((err) => console.warn('[WelcomeEmail] Register hook note:', err));
+    // Send Welcome Email if enabled in SMTP triggers (awaited so serverless runtime does not terminate before SMTP completes)
+    try {
+      await sendWelcomeEmailDirect({
+        to: cleanEmail,
+        recipientName: cleanName,
+      });
+    } catch (err) {
+      console.warn('[WelcomeEmail] Register hook note:', err);
+    }
 
     const safeUser = {
       id: createdUserId,
