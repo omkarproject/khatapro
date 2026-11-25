@@ -1,8 +1,28 @@
 import crypto from 'crypto';
+import { getAuthenticatedDriveForUser } from '@/lib/driveTokenHelper';
+import { ensureSmartKhataFolders, getOrCreateCategoryFolder, uploadAttachmentFile } from '@/lib/googleDrive';
 
 export const MEDIA_BUCKET = 'khatapro-media';
 
 let bucketEnsured = false;
+
+export async function isDriveGloballyEnabled(supabase: any): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { data: gc } = await supabase
+      .from('global_config')
+      .select('maintenance_mode')
+      .eq('id', 'global_config')
+      .maybeSingle();
+    const maint = gc?.maintenance_mode;
+    if (maint?.googleDriveEnabled === false || maint?.googleDriveSettings?.enabled === false) {
+      return false;
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
 
 export async function ensureMediaBucket(supabase: any): Promise<boolean> {
   if (!supabase) return false;
@@ -37,16 +57,14 @@ export async function uploadDataUrlToStorage(
   userId: string,
   folder: string,
   fileName: string,
-  dataUrl: string
+  dataUrl: string,
+  driveCtx?: { drive: any; filesFolderId: string } | null
 ): Promise<string> {
   if (!supabase || !dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
     return dataUrl;
   }
 
   try {
-    const ok = await ensureMediaBucket(supabase);
-    if (!ok) return dataUrl;
-
     const commaIdx = dataUrl.indexOf(',');
     if (commaIdx < 0) return dataUrl;
 
@@ -59,10 +77,29 @@ export async function uploadDataUrlToStorage(
     const buffer = Buffer.from(base64Part, 'base64');
     if (!buffer || buffer.length === 0) return dataUrl;
 
-    const safeUserId = String(userId || 'user').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const safeFolder = String(folder || 'uploads').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
     const rawClean = String(fileName || `file.${extFromMime}`).replace(/[^a-zA-Z0-9._-]/g, '_');
     const finalName = rawClean.includes('.') ? rawClean : `${rawClean}.${extFromMime}`;
+
+    // If merchant has Google Drive connected & Drive Integration is ON, upload ONLY to their Google Drive
+    if (driveCtx?.drive && driveCtx?.filesFolderId) {
+      try {
+        const targetFolderId = await getOrCreateCategoryFolder(driveCtx.drive, driveCtx.filesFolderId, folder || 'Uploads');
+        const driveRes = await uploadAttachmentFile(driveCtx.drive, targetFolderId, finalName, mimeType, buffer, {
+          description: `SmartKhata Pro [${folder}] | Synced`,
+        });
+        if (driveRes?.fileId) {
+          return `/api/backup/google-drive/view-file?fileId=${driveRes.fileId}`;
+        }
+      } catch (driveErr) {
+        console.warn('Drive offload fallback to Supabase Storage:', driveErr);
+      }
+    }
+
+    const ok = await ensureMediaBucket(supabase);
+    if (!ok) return dataUrl;
+
+    const safeUserId = String(userId || 'user').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeFolder = String(folder || 'uploads').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
     const uniq = crypto.randomBytes(4).toString('hex');
     const storagePath = `${safeUserId}/${safeFolder}/${Date.now()}_${uniq}_${finalName}`;
 
@@ -88,13 +125,39 @@ export async function uploadDataUrlToStorage(
 export async function offloadSyncMediaToStorage(supabase: any, userId: string, data: any): Promise<void> {
   if (!supabase || !userId || !data || typeof data !== 'object') return;
 
+  // Check if any data: URLs actually exist before doing Drive auth lookup
+  const hasAnyDataUrl = (() => {
+    const s = JSON.stringify(data);
+    return s.includes('"data:');
+  })();
+  if (!hasAnyDataUrl) return;
+
+  // Resolve merchant's Google Drive connection once if Drive Integration is globally ON
+  let driveCtx: { drive: any; filesFolderId: string } | null = null;
+  try {
+    const driveOn = await isDriveGloballyEnabled(supabase);
+    if (driveOn) {
+      const driveObj = await getAuthenticatedDriveForUser(userId);
+      if (driveObj?.drive) {
+        let filesFolderId = driveObj.tokenRecord?.docs_folder_id;
+        if (!filesFolderId) {
+          const folders = await ensureSmartKhataFolders(driveObj.drive);
+          filesFolderId = folders.filesId;
+        }
+        driveCtx = { drive: driveObj.drive, filesFolderId };
+      }
+    }
+  } catch {
+    driveCtx = null;
+  }
+
   const tasks: Promise<void>[] = [];
 
   if (Array.isArray(data.customers)) {
     for (const c of data.customers) {
       if (c && typeof c.avatar === 'string' && c.avatar.startsWith('data:')) {
         tasks.push(
-          uploadDataUrlToStorage(supabase, userId, 'avatars', `${c.id || 'cust'}.jpg`, c.avatar).then((url) => {
+          uploadDataUrlToStorage(supabase, userId, 'avatars', `${c.id || 'cust'}.jpg`, c.avatar, driveCtx).then((url) => {
             c.avatar = url;
           })
         );
@@ -108,7 +171,7 @@ export async function offloadSyncMediaToStorage(supabase: any, userId: string, d
         t.attachments.forEach((att: any, idx: number) => {
           if (typeof att === 'object' && att !== null && typeof att.url === 'string' && att.url.startsWith('data:')) {
             tasks.push(
-              uploadDataUrlToStorage(supabase, userId, 'bills', att.name || `bill_${t.id}_${idx}`, att.url).then((url) => {
+              uploadDataUrlToStorage(supabase, userId, 'bills', att.name || `bill_${t.id}_${idx}`, att.url, driveCtx).then((url) => {
                 att.url = url;
               })
             );
@@ -117,7 +180,7 @@ export async function offloadSyncMediaToStorage(supabase: any, userId: string, d
               const parsed = JSON.parse(att);
               if (parsed && typeof parsed.url === 'string' && parsed.url.startsWith('data:')) {
                 tasks.push(
-                  uploadDataUrlToStorage(supabase, userId, 'bills', parsed.name || `bill_${t.id}_${idx}`, parsed.url).then((url) => {
+                  uploadDataUrlToStorage(supabase, userId, 'bills', parsed.name || `bill_${t.id}_${idx}`, parsed.url, driveCtx).then((url) => {
                     parsed.url = url;
                     t.attachments[idx] = JSON.stringify(parsed);
                   })
@@ -135,7 +198,7 @@ export async function offloadSyncMediaToStorage(supabase: any, userId: string, d
       if (!e) continue;
       if (typeof e.receiptUrl === 'string' && e.receiptUrl.startsWith('data:')) {
         tasks.push(
-          uploadDataUrlToStorage(supabase, userId, 'expenses', `exp_${e.id || 'receipt'}`, e.receiptUrl).then((url) => {
+          uploadDataUrlToStorage(supabase, userId, 'expenses', `exp_${e.id || 'receipt'}`, e.receiptUrl, driveCtx).then((url) => {
             e.receiptUrl = url;
           })
         );
@@ -144,7 +207,7 @@ export async function offloadSyncMediaToStorage(supabase: any, userId: string, d
         e.receiptUrls.forEach((u: any, idx: number) => {
           if (typeof u === 'string' && u.startsWith('data:')) {
             tasks.push(
-              uploadDataUrlToStorage(supabase, userId, 'expenses', `exp_${e.id || 'receipt'}_${idx}`, u).then((url) => {
+              uploadDataUrlToStorage(supabase, userId, 'expenses', `exp_${e.id || 'receipt'}_${idx}`, u, driveCtx).then((url) => {
                 e.receiptUrls[idx] = url;
               })
             );
@@ -159,7 +222,7 @@ export async function offloadSyncMediaToStorage(supabase: any, userId: string, d
       if (!p) continue;
       if (typeof p.imageUrl === 'string' && p.imageUrl.startsWith('data:')) {
         tasks.push(
-          uploadDataUrlToStorage(supabase, userId, 'products', `prod_${p.id || 'img'}`, p.imageUrl).then((url) => {
+          uploadDataUrlToStorage(supabase, userId, 'products', `prod_${p.id || 'img'}`, p.imageUrl, driveCtx).then((url) => {
             p.imageUrl = url;
           })
         );
@@ -168,7 +231,7 @@ export async function offloadSyncMediaToStorage(supabase: any, userId: string, d
         p.images.forEach((img: any, idx: number) => {
           if (typeof img === 'string' && img.startsWith('data:')) {
             tasks.push(
-              uploadDataUrlToStorage(supabase, userId, 'products', `prod_${p.id || 'img'}_${idx}`, img).then((url) => {
+              uploadDataUrlToStorage(supabase, userId, 'products', `prod_${p.id || 'img'}_${idx}`, img, driveCtx).then((url) => {
                 p.images[idx] = url;
               })
             );
@@ -182,7 +245,7 @@ export async function offloadSyncMediaToStorage(supabase: any, userId: string, d
     for (const s of data.savingsGoals) {
       if (s && typeof s.documentUrl === 'string' && s.documentUrl.startsWith('data:')) {
         tasks.push(
-          uploadDataUrlToStorage(supabase, userId, 'savings', s.documentName || `goal_${s.id}`, s.documentUrl).then((url) => {
+          uploadDataUrlToStorage(supabase, userId, 'savings', s.documentName || `goal_${s.id}`, s.documentUrl, driveCtx).then((url) => {
             s.documentUrl = url;
           })
         );
@@ -194,7 +257,7 @@ export async function offloadSyncMediaToStorage(supabase: any, userId: string, d
     for (const d of data.documents) {
       if (d && typeof d.fileUrl === 'string' && d.fileUrl.startsWith('data:')) {
         tasks.push(
-          uploadDataUrlToStorage(supabase, userId, 'vault', d.fileName || d.title || `doc_${d.id}`, d.fileUrl).then((url) => {
+          uploadDataUrlToStorage(supabase, userId, 'vault', d.fileName || d.title || `doc_${d.id}`, d.fileUrl, driveCtx).then((url) => {
             d.fileUrl = url;
           })
         );
@@ -204,7 +267,7 @@ export async function offloadSyncMediaToStorage(supabase: any, userId: string, d
 
   if (data.profile && typeof data.profile.avatarUrl === 'string' && data.profile.avatarUrl.startsWith('data:')) {
     tasks.push(
-      uploadDataUrlToStorage(supabase, userId, 'profile', 'avatar.jpg', data.profile.avatarUrl).then((url) => {
+      uploadDataUrlToStorage(supabase, userId, 'profile', 'avatar.jpg', data.profile.avatarUrl, driveCtx).then((url) => {
         data.profile.avatarUrl = url;
         if (data.settings && typeof data.settings.businessLogo === 'string' && data.settings.businessLogo.startsWith('data:')) {
           data.settings.businessLogo = url;
@@ -213,7 +276,7 @@ export async function offloadSyncMediaToStorage(supabase: any, userId: string, d
     );
   } else if (data.settings && typeof data.settings.businessLogo === 'string' && data.settings.businessLogo.startsWith('data:')) {
     tasks.push(
-      uploadDataUrlToStorage(supabase, userId, 'profile', 'business_logo.jpg', data.settings.businessLogo).then((url) => {
+      uploadDataUrlToStorage(supabase, userId, 'profile', 'business_logo.jpg', data.settings.businessLogo, driveCtx).then((url) => {
         data.settings.businessLogo = url;
       })
     );

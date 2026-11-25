@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedDriveForUser } from '@/lib/driveTokenHelper';
 import { ensureSmartKhataFolders, uploadAttachmentFile, getOrCreateCustomerFolder, getOrCreateCategoryFolder } from '@/lib/googleDrive';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { ensureMediaBucket, MEDIA_BUCKET } from '@/lib/supabaseMedia';
+import { ensureMediaBucket, isDriveGloballyEnabled, MEDIA_BUCKET } from '@/lib/supabaseMedia';
 
 export async function POST(req: NextRequest) {
   try {
@@ -41,12 +41,70 @@ export async function POST(req: NextRequest) {
       buffer = Buffer.from(fileData, 'base64');
     }
 
-    // 1. Primary permanent storage: Supabase Storage Public Bucket ('khatapro-media')
+    const supabase = getSupabaseAdmin();
+    const driveEnabled = await isDriveGloballyEnabled(supabase);
+
+    // 1. If Google Drive Integration is ON & merchant has connected Drive, upload ONLY to their Google Drive (NOT Supabase Storage)
+    let driveResult: { fileId: string; webViewLink?: string; webContentLink?: string; size: number } | null = null;
+    let targetFolderName = 'SmartKhata Pro/Files';
+
+    if (driveEnabled) {
+      try {
+        const driveObj = await getAuthenticatedDriveForUser(userId);
+        const { drive, tokenRecord } = driveObj;
+
+        let filesFolderId = tokenRecord.docs_folder_id;
+        if (!filesFolderId) {
+          const folders = await ensureSmartKhataFolders(drive);
+          filesFolderId = folders.filesId;
+        }
+
+        let targetFolderId = filesFolderId;
+        if (customerName || customerId) {
+          try {
+            targetFolderId = await getOrCreateCustomerFolder(
+              drive,
+              filesFolderId,
+              customerName || 'Customer',
+              customerId,
+              folderName
+            );
+            targetFolderName = `SmartKhata Pro/Files/Customer CRM/${customerName || 'Customer'}${folderName ? `/${folderName}` : ''}`;
+          } catch {
+            targetFolderId = filesFolderId;
+          }
+        } else if (category) {
+          try {
+            targetFolderId = await getOrCreateCategoryFolder(drive, filesFolderId, category);
+            targetFolderName = `SmartKhata Pro/Files/${category}`;
+          } catch {
+            targetFolderId = filesFolderId;
+          }
+        }
+
+        driveResult = await uploadAttachmentFile(
+          drive,
+          targetFolderId,
+          fileName,
+          actualMime,
+          buffer,
+          {
+            appFileId,
+            uploadedAt: uploadedAt || new Date().toISOString(),
+            description: `SmartKhata Pro [${targetFolderName}] | Uploaded: ${uploadedAt || new Date().toISOString()}`,
+          }
+        );
+      } catch (driveErr: any) {
+        // Merchant hasn't connected Drive or Drive is temporarily unreachable; will fall back to Supabase Storage
+        console.info('Google Drive upload skipped/fallback:', driveErr?.message || driveErr);
+      }
+    }
+
+    // 2. Fallback to Supabase Storage ONLY if Google Drive is OFF or merchant hasn't connected Drive
     let supabasePublicUrl: string | null = null;
     let supabasePath: string | null = null;
-    const supabase = getSupabaseAdmin();
 
-    if (supabase) {
+    if (!driveResult?.fileId && supabase) {
       try {
         await ensureMediaBucket(supabase);
         const safeUserId = String(userId || 'user').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -74,63 +132,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. Secondary backup: Google Drive (if user has connected Google Drive)
-    let driveResult: { fileId: string; webViewLink?: string; webContentLink?: string; size: number } | null = null;
-    let targetFolderName = 'SmartKhata Pro/Files';
-
-    try {
-      const driveObj = await getAuthenticatedDriveForUser(userId);
-      const { drive, tokenRecord } = driveObj;
-
-      let filesFolderId = tokenRecord.docs_folder_id;
-      if (!filesFolderId) {
-        const folders = await ensureSmartKhataFolders(drive);
-        filesFolderId = folders.filesId;
-      }
-
-      let targetFolderId = filesFolderId;
-      if (customerName || customerId) {
-        try {
-          targetFolderId = await getOrCreateCustomerFolder(
-            drive,
-            filesFolderId,
-            customerName || 'Customer',
-            customerId,
-            folderName
-          );
-          targetFolderName = `SmartKhata Pro/Files/Customer CRM/${customerName || 'Customer'}${folderName ? `/${folderName}` : ''}`;
-        } catch {
-          targetFolderId = filesFolderId;
-        }
-      } else if (category) {
-        try {
-          targetFolderId = await getOrCreateCategoryFolder(drive, filesFolderId, category);
-          targetFolderName = `SmartKhata Pro/Files/${category}`;
-        } catch {
-          targetFolderId = filesFolderId;
-        }
-      }
-
-      driveResult = await uploadAttachmentFile(
-        drive,
-        targetFolderId,
-        fileName,
-        actualMime,
-        buffer,
-        {
-          appFileId,
-          uploadedAt: uploadedAt || new Date().toISOString(),
-          description: `SmartKhata Pro [${targetFolderName}] | Uploaded: ${uploadedAt || new Date().toISOString()}`,
-        }
-      );
-    } catch (driveErr: any) {
-      // Google Drive is optional; file is safely in Supabase Storage
-      console.info('Google Drive upload skipped/offline:', driveErr?.message || driveErr);
-    }
-
-    // Final URL to use across the app: prefer high-speed permanent Supabase CDN URL, fallback to view-file or data URL
     const finalFileId = driveResult?.fileId || `file_${Date.now()}`;
-    const primaryUrl = supabasePublicUrl || (driveResult?.fileId ? `/api/backup/google-drive/view-file?fileId=${driveResult.fileId}` : fileData);
+    const primaryUrl = driveResult?.fileId
+      ? `/api/backup/google-drive/view-file?fileId=${driveResult.fileId}`
+      : (supabasePublicUrl || fileData);
 
     return NextResponse.json({
       success: true,

@@ -112,16 +112,6 @@ export async function GET(req: NextRequest) {
         const buffer = await downloadDriveFileBuffer(drive, fileId);
 
         if (buffer && buffer.length > 0) {
-          // Cache in Supabase Storage in background for future ultra-fast delivery
-          if (supabase) {
-            try {
-              await supabase.storage.from('khatapro-media').upload(cachePath, buffer, {
-                contentType: mimeType,
-                upsert: true,
-              });
-            } catch {}
-          }
-
           const headers = new Headers();
           headers.set('Content-Type', mimeType);
           headers.set('Content-Length', buffer.length.toString());
