@@ -21,6 +21,11 @@ function normalizePhone(p?: string | null): string {
 
 // --- MAPPERS: Frontend camelCase -> Supabase snake_case ---
 
+function withExcludeFlag(notes: string, excludeTransactions?: boolean): string {
+  const clean = String(notes || '').replace(/__exclude_txns:true\s*/g, '').trim();
+  return excludeTransactions ? (clean ? `${clean} __exclude_txns:true` : '__exclude_txns:true') : clean;
+}
+
 function customerToDb(c: any, userId: string) {
   // Store permanent URL or compact photo, avoid multi-MB strings
   let safeAvatar = c.avatar || c.avatarUrl || null;
@@ -50,9 +55,7 @@ function customerToDb(c: any, userId: string) {
     category: c.category || 'Regular',
     status: (c.isDeleted || c.status === 'deleted') ? 'deleted' : (c.status || 'active'),
     rating: Number(c.rating) || 5,
-    notes: c.excludeTransactions
-      ? (c.notes ? `${c.notes.replace(/__exclude_txns:true\s*/g, '').trim()} __exclude_txns:true` : '__exclude_txns:true')
-      : (c.notes ? c.notes.replace(/__exclude_txns:true\s*/g, '').trim() : ''),
+    notes: withExcludeFlag(c.notes || '', Boolean(c.excludeTransactions)),
     avatar: safeAvatar || null,
     bank_accounts: Array.isArray(c.bankAccounts) ? c.bankAccounts : [],
     upi_details: Array.isArray(c.upiDetails) ? c.upiDetails : [],
@@ -1337,7 +1340,11 @@ async function syncPeerMerchants(
             .trim();
           await supabase
             .from('customers')
-            .update({ category: 'Regular', notes: cleanNotes, updated_at: new Date().toISOString() })
+            .update({
+              category: 'Regular',
+              notes: withExcludeFlag(cleanNotes, Boolean(cust.excludeTransactions)),
+              updated_at: new Date().toISOString(),
+            })
             .eq('id', cust.id)
             .eq('user_id', currentUserId);
         }
@@ -1369,14 +1376,14 @@ async function syncPeerMerchants(
         category: 'Merchant',
         business_name: peerProfile.business_name || cust.businessName || cust.business_name || '',
         avatar: peerProfile.avatar_url || cust.avatar || null,
-        notes: cust.notes || 'Verified Peer Merchant (P2P Connected)',
+        notes: withExcludeFlag(cust.notes || 'Verified Peer Merchant (P2P Connected)', Boolean(cust.excludeTransactions)),
         updated_at: new Date().toISOString(),
       }).eq('id', cust.id).eq('user_id', currentUserId);
 
       // Ensure reciprocal customer exists for peerUserId (User B sees User A)
       const { data: peerCustomers } = await supabase
         .from('customers')
-        .select('id, phone, email, status')
+        .select('id, phone, email, status, notes')
         .eq('user_id', peerUserId);
 
       let reciprocalCust = (peerCustomers || []).find((pc: any) => {
@@ -1392,6 +1399,8 @@ async function syncPeerMerchants(
       const reciprocalStatus = reciprocalCust?.status === 'deleted' ? 'deleted' : 'active';
       const reciprocalCustId = reciprocalCust?.id || `peer_cust_${currentUserId}`;
 
+      const reciprocalExcluded = Boolean(reciprocalCust?.notes && String(reciprocalCust.notes).includes('__exclude_txns:true'));
+
       await supabase.from('customers').upsert({
         id: reciprocalCustId,
         user_id: peerUserId,
@@ -1403,7 +1412,7 @@ async function syncPeerMerchants(
         category: 'Merchant',
         status: reciprocalStatus,
         rating: 5,
-        notes: 'Verified Peer Merchant (P2P Connected)',
+        notes: withExcludeFlag('Verified Peer Merchant (P2P Connected)', reciprocalExcluded),
         updated_at: new Date().toISOString(),
       }, { onConflict: 'id, user_id' });
 
