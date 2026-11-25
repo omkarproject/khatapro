@@ -263,7 +263,7 @@ export async function POST(req: NextRequest) {
     // 5. Notify peer merchant ONLY with clean "Added You Khata / New Merchant Add KhataBook" alert when newly added
     if (isNewReciprocal) {
       broadcastPeerAlert(supabase, peerUserId, {
-        id: `p2p_added_${currentUserId}_${Date.now()}`,
+        id: `p2p_added_${currentUserId}_${peerUserId}`,
         alertKind: 'merchant_added',
         peerUserId: currentUserId,
         peerMerchantName: reciprocalName,

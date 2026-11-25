@@ -1514,23 +1514,9 @@ async function syncPeerMerchants(
         }
       }
 
-      // ⚡ Broadcast clean alert: "Added You Khata" when newly linked, or real-time alert ONLY for brand-new txns
-      if (isNewReciprocalLink && reciprocalStatus === 'active') {
-        broadcastPeerAlert(supabase, peerUserId, {
-          id: `p2p_added_${currentUserId}_${Date.now()}`,
-          alertKind: 'merchant_added',
-          peerUserId: currentUserId,
-          peerMerchantName: curDisplayName,
-          peerPhone: currentProfile.phone || '',
-          customerId: reciprocalCustId,
-          transactionId: '',
-          type: 'debit',
-          amount: 0,
-          note: 'New Merchant Add KhataBook',
-          date: new Date().toISOString().split('T')[0],
-          createdAt: new Date().toISOString(),
-        });
-      } else if (newlyCreatedLiveTxns.length > 0) {
+      // ⚡ Broadcast clean alert: real-time transaction alert whenever new txns arrive,
+      // or deterministic "Added You Khata" only when newly linked with no new txns yet
+      if (newlyCreatedLiveTxns.length > 0) {
         const latestItem = newlyCreatedLiveTxns[newlyCreatedLiveTxns.length - 1];
         const latestTxn = latestItem.txn;
         broadcastPeerAlert(supabase, peerUserId, {
@@ -1545,6 +1531,21 @@ async function syncPeerMerchants(
           amount: Number(latestTxn.amount) || 0,
           note: latestTxn.note || '',
           date: latestTxn.date || new Date().toISOString().split('T')[0],
+          createdAt: new Date().toISOString(),
+        });
+      } else if (isNewReciprocalLink && reciprocalStatus === 'active') {
+        broadcastPeerAlert(supabase, peerUserId, {
+          id: `p2p_added_${currentUserId}_${peerUserId}`,
+          alertKind: 'merchant_added',
+          peerUserId: currentUserId,
+          peerMerchantName: curDisplayName,
+          peerPhone: currentProfile.phone || '',
+          customerId: reciprocalCustId,
+          transactionId: '',
+          type: 'debit',
+          amount: 0,
+          note: 'New Merchant Add KhataBook',
+          date: new Date().toISOString().split('T')[0],
           createdAt: new Date().toISOString(),
         });
       }
