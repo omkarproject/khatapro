@@ -292,6 +292,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   };
   const [activeDevicesCount, setActiveDevicesCount] = useState<number>(1);
   const logoutRef = useRef<() => void>(() => {});
+  const isLoggingOutRef = useRef<boolean>(false);
 
   useEffect(() => {
     isOnlineRef.current = isOnline;
@@ -2071,6 +2072,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
   // Logout handler (cleans all local browser storage & optionally revokes all devices in realtime)
   const logout = async (allDevices: boolean = false) => {
+    if (isLoggingOutRef.current) return;
+    isLoggingOutRef.current = true;
     const curU = currentUserRef.current || currentUser || StorageService.getCurrentUser();
     const myDevId = typeof window !== 'undefined' ? getOrCreateDeviceId() : '';
     if (curU && myDevId) {
@@ -2198,9 +2201,17 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     transaction?: Transaction
   ) => {
     const id = Math.random().toString(36).substring(2, 9);
-    setToasts(prev => [...prev, { id, title, message, type, transaction }]);
+    let added = false;
+    setToasts(prev => {
+      // Deduplicate identical active toasts & cap stack to 3 max so mobile screen never overflows
+      if (prev.some(t => t.title === title && t.message === message)) {
+        return prev;
+      }
+      added = true;
+      return [...prev.slice(-2), { id, title, message, type, transaction }];
+    });
     setTimeout(() => {
-      removeToast(id);
+      if (added) removeToast(id);
     }, transaction ? 8000 : 4500);
   };
 

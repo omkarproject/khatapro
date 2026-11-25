@@ -2095,7 +2095,7 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                           type="button"
                           onClick={() => {
                             setIsUserMenuOpen(false);
-                            logout(true);
+                            logout(false);
                           }}
                           className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
                         >
