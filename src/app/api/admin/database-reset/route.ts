@@ -1,5 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
+import { MEDIA_BUCKET } from '@/lib/supabaseMedia';
+
+async function wipeMediaStorage(
+  supabase: any,
+  options: { preserveUserId?: string; preserveProfileFolder?: boolean } = {}
+): Promise<number> {
+  let removedCount = 0;
+  try {
+    const safePreserve = options.preserveUserId
+      ? String(options.preserveUserId).replace(/[^a-zA-Z0-9_-]/g, '_')
+      : '';
+
+    const collectPaths = async (prefix: string): Promise<string[]> => {
+      const { data: entries, error } = await supabase.storage
+        .from(MEDIA_BUCKET)
+        .list(prefix, { limit: 1000 });
+      if (error || !entries || entries.length === 0) return [];
+
+      const paths: string[] = [];
+      for (const entry of entries) {
+        if (!entry?.name) continue;
+        const fullPath = prefix ? `${prefix}/${entry.name}` : entry.name;
+
+        if (!prefix && options.preserveUserId && (entry.name === options.preserveUserId || entry.name === safePreserve)) {
+          continue;
+        }
+        if (options.preserveProfileFolder && entry.name === 'profile' && !entry.id) {
+          continue;
+        }
+
+        if (entry.id) {
+          paths.push(fullPath);
+        } else {
+          const subPaths = await collectPaths(fullPath);
+          paths.push(...subPaths);
+        }
+      }
+      return paths;
+    };
+
+    const allPaths = await collectPaths('');
+    for (let i = 0; i < allPaths.length; i += 100) {
+      const chunk = allPaths.slice(i, i + 100);
+      const { error: remErr } = await supabase.storage.from(MEDIA_BUCKET).remove(chunk);
+      if (!remErr) removedCount += chunk.length;
+    }
+  } catch (e) {
+    console.warn('wipeMediaStorage note:', e);
+  }
+  return removedCount;
+}
 
 // Security check: Only verified Platform Super Admin can perform database wipe / reset
 async function verifyAdminCaller(req: NextRequest, supabase: any, callerUserId?: string): Promise<{ isAdmin: boolean; adminUserId?: string; adminEmail?: string }> {
@@ -126,12 +177,17 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 1b. Wipe shared_khata_groups and login_lockout_* in global_config (preserve global_config branding/SMTP)
+      // 1b. Wipe shared_khata_groups, support_tickets, and login_lockout_* in global_config (preserve branding/SMTP)
       try {
         await supabase.from('global_config').delete().eq('id', 'shared_khata_groups');
         await supabase.from('global_config').delete().like('id', 'login_lockout_%');
-        cleanedTables.push('global_config (groups & lockouts)');
+        await supabase.from('global_config').delete().like('id', 'support_ticket%');
+        cleanedTables.push('global_config (groups, tickets & lockouts)');
       } catch {}
+
+      // 1d. Wipe all files in Supabase Storage bucket (khatapro-media)
+      const removedFiles = await wipeMediaStorage(supabase);
+      cleanedTables.push(`storage:${MEDIA_BUCKET} (${removedFiles} files)`);
 
       // 1c. Clear backup arrays inside Admin's system_settings.payment_settings so ghost notes/tasks/passwords don't restore
       try {
@@ -247,6 +303,10 @@ export async function POST(req: NextRequest) {
         cleanedTables.push('global_config (shared_khata_groups)');
       } catch {}
 
+      // Wipe business/ledger files from Supabase Storage (keep profile avatars)
+      const removedLedgerFiles = await wipeMediaStorage(supabase, { preserveProfileFolder: true });
+      cleanedTables.push(`storage:${MEDIA_BUCKET} (${removedLedgerFiles} files)`);
+
       return NextResponse.json({
         success: true,
         resetMode: 'ledger_only',
@@ -292,6 +352,10 @@ export async function POST(req: NextRequest) {
         await supabase.from('profiles').delete().neq('id', adminUserId);
         cleanedTables.push('profiles (non-admin)');
       } catch {}
+
+      // Wipe Supabase Storage files for all non-admin users (preserve Admin's folder)
+      const removedUserFiles = await wipeMediaStorage(supabase, { preserveUserId: adminUserId });
+      cleanedTables.push(`storage:${MEDIA_BUCKET} non-admin (${removedUserFiles} files)`);
 
       try {
         const { data: userList } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });

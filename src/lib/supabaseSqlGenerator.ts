@@ -431,6 +431,21 @@ ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS discount_amount NUMERIC DEF
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS receipt_urls TEXT[] DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT ARRAY[]::TEXT[];
+
+ALTER TABLE public.customers ADD COLUMN IF NOT EXISTS bank_accounts JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.customers ADD COLUMN IF NOT EXISTS upi_details JSONB DEFAULT '[]'::jsonb;
+
+ALTER TABLE public.savings_goals ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.savings_goals ADD COLUMN IF NOT EXISTS deposits JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.savings_goals ADD COLUMN IF NOT EXISTS document_url TEXT;
+ALTER TABLE public.savings_goals ADD COLUMN IF NOT EXISTS document_name TEXT;
+ALTER TABLE public.savings_goals ADD COLUMN IF NOT EXISTS document_type TEXT;
+
+ALTER TABLE public.payment_reminders ADD COLUMN IF NOT EXISTS custom_message TEXT DEFAULT '';
+ALTER TABLE public.payment_reminders ADD COLUMN IF NOT EXISTS sent_history JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.payment_reminders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 ALTER TABLE public.notes ADD COLUMN IF NOT EXISTS content TEXT DEFAULT '';
 ALTER TABLE public.notes ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;
