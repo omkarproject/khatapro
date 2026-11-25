@@ -6429,19 +6429,6 @@ export default function SettingsPage() {
             })()}
           </div>
 
-          {/* CRM Helper Footer Notice */}
-          <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/40 text-xs text-indigo-700 dark:text-indigo-300 flex items-start gap-3">
-            <Shield className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="font-bold">Role Permissions &amp; Access Control:</p>
-              <p className="text-[11px] leading-relaxed text-indigo-600/90 dark:text-indigo-400">
-                &bull; <strong>Merchant (user):</strong> Can create invoices, manage their ledger, customer records, and personal business profile. Technical tabs (Database, Google Drive API, Maintenance, User Management) remain completely hidden.
-                <br />
-                &bull; <strong>Admin / Super Admin:</strong> Has full access to technical database keys, emergency maintenance controls, and multi-merchant user CRM.
-              </p>
-            </div>
-          </div>
-
         </div>
       )}
 
