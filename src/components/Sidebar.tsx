@@ -30,9 +30,6 @@ interface SidebarProps {
 function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
   const { settings, activeLanguage } = useApp();
-  
-  // Auto-hide & Hover-to-expand state for desktop (no pin, no glow, pure in-flow layout)
-  const [isHovered, setIsHovered] = useState(false);
   const [, setLangTick] = useState(0);
 
   useEffect(() => {
@@ -58,12 +55,14 @@ function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
   ], [activeLanguage]);
 
   const renderContent = (isMobileView: boolean) => {
-    const expanded = isMobileView || isHovered;
+    const labelVisibility = isMobileView
+      ? 'opacity-100'
+      : 'opacity-0 group-hover/sidebar:opacity-100';
 
     return (
-      <div className={`flex flex-col h-full justify-between transition-all duration-300 ${expanded ? 'p-3.5 sm:p-4' : 'p-2'}`}>
-        {/* Top Section: Nav Links */}
-        <div className="space-y-1.5 overflow-y-auto pr-1 scrollbar-thin pt-1">
+      <div className="flex flex-col h-full justify-between p-2">
+        {/* Top Section: Nav Links (Fixed icon position + pure CSS reveal = zero jitter) */}
+        <div className="space-y-1 overflow-y-auto overflow-x-hidden scrollbar-thin pt-1">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
@@ -74,39 +73,37 @@ function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
                 href={item.href}
                 prefetch={true}
                 onClick={onCloseMobile}
-                title={!expanded ? item.label : undefined}
-                className={`flex items-center rounded-xl text-xs font-bold transition-all group duration-200 transform origin-left cursor-pointer hover:scale-[1.03] active:scale-[0.97] ${
-                  !expanded
-                    ? 'justify-center p-2.5 my-1'
-                    : 'justify-between px-3 py-2.5 my-0.5'
-                } ${
+                className={`group/item flex items-center px-3.5 py-2.5 rounded-xl text-xs font-bold overflow-hidden whitespace-nowrap transition-[transform,background-color,color] duration-150 ease-out origin-left cursor-pointer hover:scale-[1.03] active:scale-[0.97] ${
                   isActive
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400/40 hover:shadow-indigo-600/40'
-                    : 'text-black dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100/90 dark:hover:bg-slate-800/70 hover:shadow-sm'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400/40'
+                    : 'text-black dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100/90 dark:hover:bg-slate-800/70'
                 }`}
               >
-                <div className={`flex items-center ${!expanded ? 'justify-center' : 'gap-3 min-w-0'}`}>
-                  <Icon
-                    className={`w-4 h-4 transition-transform duration-200 ease-out group-hover:scale-125 shrink-0 ${
-                      isActive ? 'text-white' : 'text-slate-900 dark:text-slate-400 group-hover:text-indigo-500'
-                    }`}
-                  />
-                  {expanded && (
-                    <span className="truncate whitespace-nowrap transition-transform duration-200 ease-out origin-left group-hover:scale-105 group-hover:translate-x-0.5 font-bold animate-in fade-in">
-                      {item.label}
-                    </span>
-                  )}
-                </div>
+                <Icon
+                  className={`w-4 h-4 shrink-0 transition-transform duration-150 ease-out group-hover/item:scale-125 ${
+                    isActive ? 'text-white' : 'text-slate-900 dark:text-slate-400 group-hover/item:text-indigo-500'
+                  }`}
+                />
 
-                {expanded && item.badge && (
+                <span
+                  className={`ml-3 truncate whitespace-nowrap font-bold origin-left transition-[transform,opacity] duration-150 ease-out group-hover/item:scale-105 group-hover/item:translate-x-0.5 ${labelVisibility}`}
+                >
+                  {item.label}
+                </span>
+
+                {item.badge && (
                   <span
-                    className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0 transition-transform duration-200 group-hover:scale-110 animate-in fade-in ${
-                      isActive
-                        ? 'bg-white/20 text-white'
-                        : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400 ring-1 ring-indigo-500/20'
-                    }`}
+                    className={`ml-auto pl-2 shrink-0 transition-[transform,opacity] duration-150 ease-out group-hover/item:scale-110 ${labelVisibility}`}
                   >
-                    {item.badge}
+                    <span
+                      className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-md uppercase tracking-wider ${
+                        isActive
+                          ? 'bg-white/20 text-white'
+                          : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400 ring-1 ring-indigo-500/20'
+                      }`}
+                    >
+                      {item.badge}
+                    </span>
                   </span>
                 )}
               </Link>
@@ -115,22 +112,16 @@ function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
         </div>
 
         {/* Bottom Section */}
-        <div className={`pt-2.5 border-t border-slate-200/80 dark:border-slate-800/80 ${expanded ? 'p-1' : 'p-1'}`}>
-          {expanded ? (
-            <div className="flex items-center justify-between text-[10px] text-black dark:text-slate-400 font-medium px-1 py-1 animate-in fade-in duration-200">
-              <span className="flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                <span>{t('secure100', '100% Secure')}</span>
-              </span>
-              <span className="text-[9px] font-mono text-black dark:text-slate-400 font-semibold">
-                v1.0{settings.websiteBadgeText ? ` ${settings.websiteBadgeText.trim()}` : ''}
-              </span>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-1 text-black dark:text-slate-400" title="100% Secure">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            </div>
-          )}
+        <div className="pt-2.5 pb-1 border-t border-slate-200/80 dark:border-slate-800/80 overflow-hidden">
+          <div className="flex items-center px-3.5 py-1 text-[10px] text-black dark:text-slate-400 font-medium whitespace-nowrap">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span className={`ml-2 transition-opacity duration-150 ${labelVisibility}`}>
+              {t('secure100', '100% Secure')}
+            </span>
+            <span className={`ml-auto text-[9px] font-mono text-black dark:text-slate-400 font-semibold transition-opacity duration-150 ${labelVisibility}`}>
+              v1.0{settings.websiteBadgeText ? ` ${settings.websiteBadgeText.trim()}` : ''}
+            </span>
+          </div>
         </div>
       </div>
     );
@@ -138,13 +129,9 @@ function SidebarContent({ isOpenMobile, onCloseMobile }: SidebarProps) {
 
   return (
     <>
-      {/* Desktop Auto-Hide Sidebar with Hover-to-Expand (In-Flow, Never Overlapping Dashboard) */}
+      {/* Desktop Auto-Hide Sidebar: Pure CSS hover, GPU-friendly, zero React re-renders, zero jitter */}
       <aside
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        className={`hidden lg:flex flex-col shrink-0 h-[calc(100vh-4rem)] sticky top-16 border-r border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl transition-all duration-300 ease-in-out select-none ${
-          isHovered ? 'w-64 shadow-lg' : 'w-16 shadow-none'
-        }`}
+        className="group/sidebar hidden lg:flex flex-col shrink-0 w-16 hover:w-64 h-[calc(100vh-4rem)] sticky top-16 overflow-x-hidden border-r border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 hover:shadow-lg transition-[width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] select-none"
       >
         {renderContent(false)}
       </aside>
