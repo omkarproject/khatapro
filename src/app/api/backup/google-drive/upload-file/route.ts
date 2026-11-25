@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedDriveForUser } from '@/lib/driveTokenHelper';
 import { ensureSmartKhataFolders, uploadAttachmentFile, getOrCreateCustomerFolder, getOrCreateCategoryFolder } from '@/lib/googleDrive';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { ensureMediaBucket, MEDIA_BUCKET } from '@/lib/supabaseMedia';
 
 export async function POST(req: NextRequest) {
   try {
@@ -47,17 +48,21 @@ export async function POST(req: NextRequest) {
 
     if (supabase) {
       try {
+        await ensureMediaBucket(supabase);
+        const safeUserId = String(userId || 'user').replace(/[^a-zA-Z0-9_-]/g, '_');
         const cleanName = (fileName || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
         const folderPrefix = (category || folderName || 'uploads').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
-        supabasePath = `${folderPrefix}/${userId}_${Date.now()}_${cleanName}`;
+        const uniq = Math.random().toString(36).slice(2, 7);
+        supabasePath = `${safeUserId}/${folderPrefix}/${Date.now()}_${uniq}_${cleanName}`;
 
-        const { error: uploadErr } = await supabase.storage.from('khatapro-media').upload(supabasePath, buffer, {
+        const { error: uploadErr } = await supabase.storage.from(MEDIA_BUCKET).upload(supabasePath, buffer, {
           contentType: actualMime,
+          cacheControl: '31536000',
           upsert: true,
         });
 
         if (!uploadErr) {
-          const { data: pubData } = supabase.storage.from('khatapro-media').getPublicUrl(supabasePath);
+          const { data: pubData } = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(supabasePath);
           if (pubData?.publicUrl) {
             supabasePublicUrl = pubData.publicUrl;
           }

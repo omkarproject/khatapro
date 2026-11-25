@@ -416,12 +416,28 @@ export async function DELETE(req: NextRequest) {
       }
     } catch {}
 
-    // 4. Clean up Supabase Storage files uploaded by this user (if any)
+    // 4. Clean up Supabase Storage files uploaded by this user (including subfolders)
     try {
-      const { data: mediaFiles } = await supabase.storage.from('khatapro-media').list(userId, { limit: 1000 });
-      if (mediaFiles && mediaFiles.length > 0) {
-        const paths = mediaFiles.map((f: any) => `${userId}/${f.name}`);
-        await supabase.storage.from('khatapro-media').remove(paths);
+      const safeUid = String(userId).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const prefixes = Array.from(new Set([userId, safeUid]));
+      for (const prefix of prefixes) {
+        const { data: entries } = await supabase.storage.from('khatapro-media').list(prefix, { limit: 1000 });
+        if (entries && entries.length > 0) {
+          const toRemove: string[] = [];
+          for (const entry of entries) {
+            if (entry.id) {
+              toRemove.push(`${prefix}/${entry.name}`);
+            } else {
+              const { data: subFiles } = await supabase.storage.from('khatapro-media').list(`${prefix}/${entry.name}`, { limit: 1000 });
+              (subFiles || []).forEach((sf: any) => {
+                if (sf.name) toRemove.push(`${prefix}/${entry.name}/${sf.name}`);
+              });
+            }
+          }
+          if (toRemove.length > 0) {
+            await supabase.storage.from('khatapro-media').remove(toRemove);
+          }
+        }
       }
     } catch {}
 

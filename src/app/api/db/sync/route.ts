@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
+import { offloadSyncMediaToStorage } from '@/lib/supabaseMedia';
 import { getGlobalBrandingFromDb, saveGlobalBrandingToDb } from '@/lib/globalBranding';
 import {
   buildTransactionDbRow,
@@ -1774,6 +1775,9 @@ export async function POST(req: NextRequest) {
           );
         }
       };
+
+      // Offload any base64 data: URLs to per-user Supabase Storage bucket before saving to Postgres
+      await offloadSyncMediaToStorage(supabase, userId, data);
 
       if (Array.isArray(data.customers)) {
         const rows = data.customers.filter((c: any) => c && c.id).map((c: any) => customerToDb(c, userId));
