@@ -636,7 +636,7 @@ export default function SettingsPage() {
       setDangerResetResult(data);
       setDangerConfirmPhrase('');
 
-      // If full reset or ledger reset, clear local storage financial data
+      // If full reset or ledger reset, clear local storage financial data and reload fresh state
       if (dangerResetMode === 'full_reset' || dangerResetMode === 'ledger_only') {
         StorageService.clearAllFinancialData();
       }
@@ -646,6 +646,12 @@ export default function SettingsPage() {
         data.message || 'Selected records were purged. Database has been cleaned.',
         'success'
       );
+
+      if (dangerResetMode === 'full_reset' || dangerResetMode === 'ledger_only') {
+        setTimeout(() => {
+          if (typeof window !== 'undefined') window.location.reload();
+        }, 900);
+      }
     } catch (err: any) {
       console.error('Database reset error:', err);
       addToast('Database Reset Error', err.message || 'Failed to wipe database.', 'error');
@@ -6016,34 +6022,6 @@ export default function SettingsPage() {
                   Delete All Regular Users (Remove Non-Admin Users, Keep Admin Data)
                 </option>
               </select>
-            </div>
-
-            {/* Dynamic Explanation Card */}
-            <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs space-y-2">
-              <div className="font-extrabold text-red-600 dark:text-red-400 flex items-center gap-1.5">
-                <ShieldAlert className="w-4 h-4 text-red-500 shrink-0" />
-                <span>Scope of Selected Action:</span>
-              </div>
-              {dangerResetMode === 'full_reset' && (
-                <ul className="list-disc pl-5 space-y-1 text-slate-700 dark:text-slate-300 text-[11px] leading-relaxed">
-                  <li><strong>Complete Database Wipe:</strong> All 14 operational tables (Customers, Transactions, Invoices, Expenses, Products, Notes, Tasks, Reminders, Documents, Drive Backups) will have <strong>0 records</strong>.</li>
-                  <li><strong>All Users Erased:</strong> All regular merchant accounts will be permanently deleted from profiles and Supabase Auth.</li>
-                  <li><strong>🛡️ Admin Account Preserved:</strong> Only your Super Admin login account (<code className="font-mono font-bold text-red-600 dark:text-red-400">anantyadav8924@gmail.com</code>) will remain intact so you can log back in with a fresh database.</li>
-                  <li><strong>New DB Experience:</strong> Exactly like creating a brand new database with all tables ready and zero residual data.</li>
-                </ul>
-              )}
-              {dangerResetMode === 'ledger_only' && (
-                <ul className="list-disc pl-5 space-y-1 text-slate-700 dark:text-slate-300 text-[11px] leading-relaxed">
-                  <li><strong>Ledger &amp; Financial Wipe:</strong> Clears all Customers, Invoices, Expenses, Transactions, and Products for all accounts.</li>
-                  <li><strong>Accounts Preserved:</strong> All user accounts and their login credentials remain active.</li>
-                </ul>
-              )}
-              {dangerResetMode === 'non_admin_users' && (
-                <ul className="list-disc pl-5 space-y-1 text-slate-700 dark:text-slate-300 text-[11px] leading-relaxed">
-                  <li><strong>Remove Merchant Accounts:</strong> All non-admin registered users and their respective records will be removed.</li>
-                  <li><strong>Admin Data Preserved:</strong> Your Admin account and business ledger data will remain untouched.</li>
-                </ul>
-              )}
             </div>
 
             {/* Confirmation Phrase Input */}

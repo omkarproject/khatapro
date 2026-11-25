@@ -111,6 +111,7 @@ export async function POST(req: NextRequest) {
         'notes',
         'tasks',
         'passwords',
+        'authenticators',
         'products',
         'customers',
         'google_drive_backups',
@@ -125,10 +126,42 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 2. Clear Google Drive tokens for all non-admin users
+      // 1b. Wipe shared_khata_groups and login_lockout_* in global_config (preserve global_config branding/SMTP)
+      try {
+        await supabase.from('global_config').delete().eq('id', 'shared_khata_groups');
+        await supabase.from('global_config').delete().like('id', 'login_lockout_%');
+        cleanedTables.push('global_config (groups & lockouts)');
+      } catch {}
+
+      // 1c. Clear backup arrays inside Admin's system_settings.payment_settings so ghost notes/tasks/passwords don't restore
+      try {
+        const { data: adminSet } = await supabase
+          .from('system_settings')
+          .select('payment_settings')
+          .eq('user_id', adminUserId)
+          .maybeSingle();
+        if (adminSet?.payment_settings && typeof adminSet.payment_settings === 'object') {
+          const cleanedPs = { ...adminSet.payment_settings };
+          delete cleanedPs.notesBackup;
+          delete cleanedPs.tasksBackup;
+          delete cleanedPs.passwordsBackup;
+          delete cleanedPs.authenticators;
+          delete cleanedPs.deletedPeerIds;
+          await supabase
+            .from('system_settings')
+            .update({ payment_settings: cleanedPs, updated_at: new Date().toISOString() })
+            .eq('user_id', adminUserId);
+        }
+      } catch {}
+
+      // 2. Clear Google Drive tokens & user_devices for all non-admin users
       try {
         await supabase.from('google_drive_tokens').delete().neq('user_id', adminUserId);
         cleanedTables.push('google_drive_tokens (non-admin)');
+      } catch {}
+      try {
+        await supabase.from('user_devices').delete().neq('user_id', adminUserId);
+        cleanedTables.push('user_devices (non-admin)');
       } catch {}
 
       // 3. Clear System Settings for non-admin users
@@ -194,6 +227,7 @@ export async function POST(req: NextRequest) {
         'notes',
         'tasks',
         'passwords',
+        'authenticators',
         'products',
         'customers',
         'google_drive_backups',
@@ -207,6 +241,11 @@ export async function POST(req: NextRequest) {
           console.warn(`Error wiping table ${table}:`, tblErr);
         }
       }
+
+      try {
+        await supabase.from('global_config').delete().eq('id', 'shared_khata_groups');
+        cleanedTables.push('global_config (shared_khata_groups)');
+      } catch {}
 
       return NextResponse.json({
         success: true,
@@ -233,10 +272,12 @@ export async function POST(req: NextRequest) {
         'notes',
         'tasks',
         'passwords',
+        'authenticators',
         'products',
         'customers',
         'google_drive_backups',
         'google_drive_tokens',
+        'user_devices',
         'system_settings',
       ];
 
