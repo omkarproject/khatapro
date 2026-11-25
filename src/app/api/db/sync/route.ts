@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 import { getGlobalBrandingFromDb, saveGlobalBrandingToDb } from '@/lib/globalBranding';
+import {
+  buildTransactionDbRow,
+  invertTransactionType,
+  mirrorTransactionsFromDb,
+  recalculateCustomerBalance,
+  broadcastPeerAlert,
+} from '@/lib/p2pSync';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -1361,25 +1368,29 @@ async function syncPeerMerchants(
         return isIdMatch || isPhoneMatch || isPeerIdMatch;
       });
 
+      const isNewReciprocalLink = !reciprocalCust || reciprocalStatus === 'deleted';
+
+      // Fetch pre-existing mirrored peer transactions BEFORE upserting so we only notify on genuinely new live txns
+      const { data: existingPeerTxns } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('user_id', peerUserId)
+        .eq('customer_id', reciprocalCustId)
+        .like('id', 'peer_txn_%');
+
+      const preExistingPeerIds = new Set(
+        (existingPeerTxns || []).map((pt: any) => String(pt.id))
+      );
+
       const activePeerTxnIds = new Set<string>();
+      const newlyCreatedLiveTxns: Array<{ txn: any; invertedType: string }> = [];
+      const twoMinutesAgoMs = Date.now() - 120 * 1000;
 
       for (const t of directTxns) {
         const peerTxnId = `peer_txn_${t.id}`;
         activePeerTxnIds.add(peerTxnId);
 
-        let invertedType = 'debit';
-        if (t.type === 'credit') {
-          invertedType = 'debit'; // User A gave (Credit) -> Peer B received (Debit)
-        } else if (t.type === 'debit' || t.type === 'collection') {
-          invertedType = 'credit'; // User A received (Debit) -> Peer B gave (Credit)
-        } else if (t.type === 'income') {
-          invertedType = 'expense';
-        } else if (t.type === 'expense') {
-          invertedType = 'income';
-        } else {
-          invertedType = t.type;
-        }
-
+        const invertedType = invertTransactionType(t.type);
         const isTxnDeleted = Boolean(t.isDeleted || t.status === 'deleted');
         let peerTags = Array.isArray(t.tags)
           ? t.tags.filter((tag: string) => !tag.startsWith('__del_') && tag !== '__is_deleted:true')
@@ -1412,77 +1423,79 @@ async function syncPeerMerchants(
           if (t.deletedBy) peerTags.push(`__del_by:${encodeURIComponent(t.deletedBy)}`);
         }
 
-        await supabase.from('transactions').upsert({
+        const peerTxnObj = {
           id: peerTxnId,
-          user_id: peerUserId,
-          customer_id: reciprocalCustId,
-          customer_name: curDisplayName,
+          customerId: reciprocalCustId,
+          customerName: curDisplayName,
           type: invertedType,
           amount: Number(t.amount) || 0,
           date: t.date || new Date().toISOString().split('T')[0],
           category: t.category || (invertedType === 'credit' ? 'Credit Given' : 'Payment Received'),
-          payment_mode: t.paymentMode || t.payment_mode || 'upi',
+          paymentMode: t.paymentMode || t.payment_mode || 'upi',
           note: t.note || '',
           tags: peerTags,
           attachments: Array.isArray(t.attachments) ? t.attachments : [],
           status: isTxnDeleted ? 'deleted' : (t.status || 'completed'),
-          reference_no: String(t.id),
-          created_by: curDisplayName,
-          created_at: t.createdAt || t.created_at || new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'id, user_id' });
-      }
+          isDeleted: isTxnDeleted,
+          deletedAt: t.deletedAt,
+          deletedBy: t.deletedBy,
+          editHistory: t.editHistory,
+          referenceNo: String(t.id),
+          createdBy: curDisplayName,
+          createdAt: t.createdAt || t.created_at || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
 
-      // ⚡ Broadcast live real-time P2P alert to peer merchant's WebSocket channel
-      if (directTxns.length > 0) {
-        try {
-          const peerChan = supabase.channel(`khatapro_realtime_${peerUserId}`);
-          peerChan.subscribe((status: string) => {
-            if (status === 'SUBSCRIBED') {
-              const latestTxn = directTxns[directTxns.length - 1];
-              const invertedType = (latestTxn.type === 'credit') ? 'debit' : (latestTxn.type === 'debit' || latestTxn.type === 'collection') ? 'credit' : latestTxn.type;
-              peerChan.send({
-                type: 'broadcast',
-                event: 'khatapro_device_sync',
-                payload: {
-                  userId: peerUserId,
-                  originDeviceId: 'server_p2p_sync',
-                  action: 'p2p_transaction_alert',
-                  alert: {
-                    id: `p2p_alert_${latestTxn.id}`,
-                    peerUserId: currentUserId,
-                    peerMerchantName: curDisplayName,
-                    peerPhone: currentProfile.phone || '',
-                    customerId: reciprocalCustId,
-                    transactionId: `peer_txn_${latestTxn.id}`,
-                    type: invertedType,
-                    amount: Number(latestTxn.amount) || 0,
-                    note: latestTxn.note || '',
-                    date: latestTxn.date || new Date().toISOString().split('T')[0],
-                    createdAt: new Date().toISOString(),
-                  },
-                  timestamp: Date.now(),
-                },
-              }).finally(() => {
-                setTimeout(() => {
-                  try { supabase.removeChannel(peerChan); } catch {}
-                }, 1000);
-              });
-            }
-          });
-        } catch (bcErr) {
-          console.warn('Realtime P2P broadcast warning:', bcErr);
+        const { error: peerUpsertErr } = await supabase
+          .from('transactions')
+          .upsert(buildTransactionDbRow(peerTxnObj, peerUserId), { onConflict: 'id, user_id' });
+
+        if (peerUpsertErr) {
+          console.warn('P2P transaction upsert warning:', peerUpsertErr.message);
+        } else if (!preExistingPeerIds.has(peerTxnId) && !isTxnDeleted) {
+          const createdMs = new Date(t.createdAt || t.created_at || 0).getTime();
+          if (createdMs >= twoMinutesAgoMs) {
+            newlyCreatedLiveTxns.push({ txn: t, invertedType });
+          }
         }
       }
 
-      // Clean up deleted peer transactions
-      const { data: existingPeerTxns } = await supabase
-        .from('transactions')
-        .select('id')
-        .eq('user_id', peerUserId)
-        .eq('customer_id', reciprocalCustId)
-        .like('id', 'peer_txn_%');
+      // ⚡ Broadcast clean alert: "Added You Khata" when newly linked, or real-time alert ONLY for brand-new txns
+      if (isNewReciprocalLink && reciprocalStatus === 'active') {
+        broadcastPeerAlert(supabase, peerUserId, {
+          id: `p2p_added_${currentUserId}_${Date.now()}`,
+          alertKind: 'merchant_added',
+          peerUserId: currentUserId,
+          peerMerchantName: curDisplayName,
+          peerPhone: currentProfile.phone || '',
+          customerId: reciprocalCustId,
+          transactionId: '',
+          type: 'debit',
+          amount: 0,
+          note: 'New Merchant Add KhataBook',
+          date: new Date().toISOString().split('T')[0],
+          createdAt: new Date().toISOString(),
+        });
+      } else if (newlyCreatedLiveTxns.length > 0) {
+        const latestItem = newlyCreatedLiveTxns[newlyCreatedLiveTxns.length - 1];
+        const latestTxn = latestItem.txn;
+        broadcastPeerAlert(supabase, peerUserId, {
+          id: `p2p_alert_${latestTxn.id}`,
+          alertKind: 'transaction',
+          peerUserId: currentUserId,
+          peerMerchantName: curDisplayName,
+          peerPhone: currentProfile.phone || '',
+          customerId: reciprocalCustId,
+          transactionId: `peer_txn_${latestTxn.id}`,
+          type: latestItem.invertedType,
+          amount: Number(latestTxn.amount) || 0,
+          note: latestTxn.note || '',
+          date: latestTxn.date || new Date().toISOString().split('T')[0],
+          createdAt: new Date().toISOString(),
+        });
+      }
 
+      // Clean up deleted peer transactions
       if (existingPeerTxns && existingPeerTxns.length > 0) {
         const staleIds = existingPeerTxns
           .map((pt: any) => pt.id)
@@ -1497,28 +1510,43 @@ async function syncPeerMerchants(
         }
       }
 
-      // Update peer's customer outstanding balance (exclude deleted transactions)
-      const { data: peerAllTxns } = await supabase
-        .from('transactions')
-        .select('type, amount, status')
-        .eq('user_id', peerUserId)
-        .eq('customer_id', reciprocalCustId);
+      // Recalculate peer's customer outstanding balance accurately (give/credit vs got/debit)
+      await recalculateCustomerBalance(supabase, peerUserId, reciprocalCustId);
 
-      let peerBalance = 0;
-      if (peerAllTxns) {
-        for (const pt of peerAllTxns) {
-          if (pt.status === 'deleted') continue;
-          const amt = Number(pt.amount) || 0;
-          if (pt.type === 'credit') peerBalance += amt;
-          else if (pt.type === 'debit' || pt.type === 'collection') peerBalance -= amt;
-        }
+      // Also mirror peerUserId's existing/old direct transactions -> currentUserId so BOTH merchants see all transactions
+      const peerSourceIds = (peerCustomers || [])
+        .filter((pc: any) => {
+          if (pc.id === reciprocalCustId || pc.id === `peer_cust_${currentUserId}`) return true;
+          const pcPhone = normalizePhone(pc.phone);
+          const pcEmail = (pc.email || '').toLowerCase().trim();
+          if (curPhone && pcPhone && curPhone === pcPhone) return true;
+          if (curEmail && pcEmail && curEmail === pcEmail) return true;
+          return false;
+        })
+        .map((pc: any) => String(pc.id));
+
+      if (!peerSourceIds.includes(reciprocalCustId)) {
+        peerSourceIds.push(reciprocalCustId);
       }
 
-      await supabase
-        .from('customers')
-        .update({ outstanding_balance: peerBalance, updated_at: new Date().toISOString() })
-        .eq('id', reciprocalCustId)
-        .eq('user_id', peerUserId);
+      const peerDisplayName = (
+        peerProfile.business_name ||
+        peerProfile.full_name ||
+        peerProfile.name ||
+        cust.name ||
+        'Peer Merchant'
+      ).trim();
+
+      await mirrorTransactionsFromDb({
+        supabase,
+        sourceUserId: peerUserId,
+        sourceDisplayName: peerDisplayName,
+        sourcePhone: normalizePhone(peerProfile.phone),
+        sourceCustomerIds: peerSourceIds,
+        targetUserId: currentUserId,
+        targetCustomerId: String(cust.id),
+        targetPhone: curPhone,
+      });
     }
   } catch (err) {
     console.warn('syncPeerMerchants error:', err);

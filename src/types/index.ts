@@ -218,6 +218,7 @@ export interface KhataGroupNotification {
 
 export interface P2PTransactionAlert {
   id: string;
+  alertKind?: 'transaction' | 'merchant_added';
   peerUserId: string;
   peerMerchantName: string;
   peerPhone?: string;

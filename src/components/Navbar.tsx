@@ -1375,12 +1375,15 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                     {unreadP2PAlerts.length > 0 && (
                       <div className="space-y-2">
                         {unreadP2PAlerts.map((alert) => {
+                          const isMerchantAdded = alert.alertKind === 'merchant_added';
                           const isGot = alert.type === 'debit';
                           return (
                             <div
                               key={alert.id}
                               className={`p-3 rounded-2xl border space-y-2 relative group shadow-xs ${
-                                isGot
+                                isMerchantAdded
+                                  ? 'bg-gradient-to-r from-emerald-50 to-indigo-50/70 dark:from-emerald-950/40 dark:to-indigo-950/30 border-emerald-200/90 dark:border-emerald-800/60'
+                                  : isGot
                                   ? 'bg-gradient-to-r from-emerald-50 to-teal-50/70 dark:from-emerald-950/40 dark:to-teal-950/30 border-emerald-200/90 dark:border-emerald-800/60'
                                   : 'bg-gradient-to-r from-rose-50 to-amber-50/70 dark:from-rose-950/40 dark:to-amber-950/30 border-rose-200/90 dark:border-rose-800/60'
                               }`}
@@ -1389,29 +1392,51 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                                 <div className="flex items-center gap-2 min-w-0">
                                   <div
                                     className={`w-8 h-8 rounded-xl text-white flex items-center justify-center shrink-0 shadow-xs ${
-                                      isGot ? 'bg-emerald-600' : 'bg-rose-600'
+                                      isMerchantAdded
+                                        ? 'bg-indigo-600'
+                                        : isGot
+                                        ? 'bg-emerald-600'
+                                        : 'bg-rose-600'
                                     }`}
                                   >
-                                    {isGot ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
+                                    {isMerchantAdded ? (
+                                      <Users className="w-4 h-4" />
+                                    ) : isGot ? (
+                                      <ArrowDownLeft className="w-4 h-4" />
+                                    ) : (
+                                      <ArrowUpRight className="w-4 h-4" />
+                                    )}
                                   </div>
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-1.5 flex-wrap">
                                       <span className="text-xs font-black text-slate-900 dark:text-white truncate">
                                         {alert.peerMerchantName}
                                       </span>
-                                      <span className="text-[8.5px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider font-mono bg-indigo-600 text-white">
-                                        ⚡ P2P Khata
-                                      </span>
-                                      <span
-                                        className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider text-white font-mono ${
-                                          isGot ? 'bg-emerald-600 animate-pulse' : 'bg-rose-600 animate-pulse'
-                                        }`}
-                                      >
-                                        {isGot ? `+ ₹${alert.amount} Received` : `- ₹${alert.amount} Given`}
-                                      </span>
+                                      {isMerchantAdded ? (
+                                        <span className="text-[8.5px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider font-mono bg-emerald-600 text-white">
+                                          Added You Khata
+                                        </span>
+                                      ) : (
+                                        <>
+                                          <span className="text-[8.5px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider font-mono bg-indigo-600 text-white">
+                                            Verified Khata
+                                          </span>
+                                          <span
+                                            className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider text-white font-mono ${
+                                              isGot ? 'bg-emerald-600 animate-pulse' : 'bg-rose-600 animate-pulse'
+                                            }`}
+                                          >
+                                            {isGot ? `+ ₹${alert.amount} Received` : `- ₹${alert.amount} Given`}
+                                          </span>
+                                        </>
+                                      )}
                                     </div>
                                     <div className="text-[10px] text-slate-700 dark:text-slate-300 font-medium truncate mt-0.5">
-                                      {alert.note ? `"${alert.note}"` : `${alert.peerMerchantName} recorded transaction in your Khata`}
+                                      {isMerchantAdded
+                                        ? 'New Merchant Add KhataBook'
+                                        : alert.note
+                                        ? `"${alert.note}"`
+                                        : `${alert.peerMerchantName} recorded transaction in your Khata`}
                                     </div>
                                   </div>
                                 </div>

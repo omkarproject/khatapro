@@ -2679,9 +2679,12 @@ function KhataPageInner() {
         .then((r) => r.json())
         .then((data) => {
           if (data.success && data.linked) {
+            if (currentUser?.id) {
+              loadUserDataFromCloud(currentUser.id).catch(() => {});
+            }
             addToast(
-              '⚡ P2P Connected!',
-              `You have also been added to ${created.name}'s customer list automatically.`,
+              'Verified Merchant Connected!',
+              `You have also been added to ${created.name}'s KhataBook automatically.`,
               'success'
             );
           }
@@ -6319,7 +6322,7 @@ function KhataPageInner() {
                     )}
                   </span>
                   {isCheckingKhataPhone && (
-                    <span className="text-[10px] text-indigo-500 font-semibold animate-pulse">Checking P2P...</span>
+                    <span className="text-[10px] text-indigo-500 font-semibold animate-pulse">Verifying...</span>
                   )}
                   {!isCheckingKhataPhone && khataP2PMatched && (
                     <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">

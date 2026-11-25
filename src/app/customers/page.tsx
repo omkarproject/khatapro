@@ -136,6 +136,7 @@ export default function CustomersPage() {
     profile,
     addToast,
     syncWithDatabase,
+    loadUserDataFromCloud,
     activeCurrency,
     activeLanguage,
   } = useApp();
@@ -624,9 +625,12 @@ export default function CustomersPage() {
         .then((r) => r.json())
         .then((data) => {
           if (data.success && data.linked) {
+            if (currentUser?.id) {
+              loadUserDataFromCloud(currentUser.id).catch(() => {});
+            }
             addToast(
-              '⚡ P2P Connected!',
-              `You have also been added to ${customerData.name}'s customer list automatically.`,
+              'Verified Merchant Connected!',
+              `You have also been added to ${customerData.name}'s KhataBook automatically.`,
               'success'
             );
           }
@@ -2007,7 +2011,7 @@ export default function CustomersPage() {
                       )}
                     </span>
                     {isCheckingPhone && (
-                      <span className="text-[10px] text-indigo-500 font-semibold animate-pulse">Checking P2P...</span>
+                      <span className="text-[10px] text-indigo-500 font-semibold animate-pulse">Verifying...</span>
                     )}
                     {!isCheckingPhone && isP2PMatched && (
                       <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">

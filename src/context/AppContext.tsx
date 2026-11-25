@@ -1246,11 +1246,19 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
               StorageService.addP2PAlert(payload.alert);
               setP2PAlerts(StorageService.getP2PAlerts());
               playPaymentNotificationSound();
-              addToast(
-                `⚡ P2P Khata: ${payload.alert.peerMerchantName}`,
-                `₹${Number(payload.alert.amount).toLocaleString('en-IN')} ${payload.alert.type === 'debit' ? 'Payment Received' : 'Credit Given'} recorded by ${payload.alert.peerMerchantName}.`,
-                'success'
-              );
+              if (payload.alert.alertKind === 'merchant_added') {
+                addToast(
+                  `Added You Khata: ${payload.alert.peerMerchantName}`,
+                  'New Merchant Add KhataBook',
+                  'success'
+                );
+              } else {
+                addToast(
+                  `Verified Khata: ${payload.alert.peerMerchantName}`,
+                  `₹${Number(payload.alert.amount).toLocaleString('en-IN')} ${payload.alert.type === 'debit' ? 'Payment Received' : 'Credit Given'} recorded by ${payload.alert.peerMerchantName}.`,
+                  'success'
+                );
+              }
             }
             if (payload.originDeviceId !== myDeviceIdRef.current) {
               debouncedLoadFromCloud(userId, payload.action || 'device_broadcast');
