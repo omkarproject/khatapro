@@ -352,20 +352,103 @@ export async function backfillPeerTransactionsForUser(
   userProfile: any
 ): Promise<boolean> {
   try {
-    const activeCustomers = (userCustomers || []).filter(
-      (c: any) => c && c.id && c.status !== 'deleted'
-    );
-    if (activeCustomers.length === 0) return false;
-
     const { data: allProfiles } = await supabase
       .from('profiles')
-      .select('id, name, full_name, business_name, phone, email');
+      .select('id, name, full_name, business_name, phone, email, avatar_url');
 
     if (!allProfiles || allProfiles.length === 0) return false;
 
     const curPhone = normalizePhone(userProfile?.phone);
     const curEmail = (userProfile?.email || '').toLowerCase().trim();
     let totalMirrored = 0;
+
+    // 0. Discover any other merchant who added THIS user as a customer, and ensure reciprocal customer exists
+    if (curPhone || curEmail) {
+      try {
+        const { data: mySettings } = await supabase
+          .from('system_settings')
+          .select('payment_settings')
+          .eq('user_id', userId)
+          .maybeSingle();
+        const myDeletedPeerIds: string[] = Array.isArray(mySettings?.payment_settings?.deletedPeerIds)
+          ? mySettings.payment_settings.deletedPeerIds
+          : [];
+
+        const { data: inboundCusts } = await supabase
+          .from('customers')
+          .select('id, user_id, phone, email, status')
+          .neq('user_id', userId)
+          .neq('status', 'deleted');
+
+        for (const ic of inboundCusts || []) {
+          if (myDeletedPeerIds.includes(ic.user_id)) continue;
+          const icPhone = normalizePhone(ic.phone);
+          const icEmail = (ic.email || '').toLowerCase().trim();
+          const matchesMe =
+            ic.id === `peer_cust_${userId}` ||
+            (curPhone && icPhone && curPhone === icPhone) ||
+            (curEmail && icEmail && curEmail === icEmail);
+          if (!matchesMe) continue;
+
+          const senderProf = allProfiles.find((p: any) => p.id === ic.user_id);
+          if (!senderProf) continue;
+
+          const senderPhone = normalizePhone(senderProf.phone);
+          const senderEmail = (senderProf.email || '').toLowerCase().trim();
+          const alreadyExists = (userCustomers || []).some((uc: any) => {
+            if (!uc) return false;
+            if (uc.id === `peer_cust_${senderProf.id}`) return true;
+            const uPhone = normalizePhone(uc.phone);
+            const uEmail = (uc.email || '').toLowerCase().trim();
+            if (senderPhone && uPhone && senderPhone === uPhone) return true;
+            if (senderEmail && uEmail && senderEmail === uEmail) return true;
+            return false;
+          });
+
+          if (!alreadyExists) {
+            const nowIso = new Date().toISOString();
+            const recId = `peer_cust_${senderProf.id}`;
+            const recName = (senderProf.business_name || senderProf.full_name || senderProf.name || 'Merchant').trim();
+            const { error: recErr } = await supabase.from('customers').upsert(
+              {
+                id: recId,
+                user_id: userId,
+                name: recName,
+                phone: senderProf.phone || '',
+                email: senderProf.email || '',
+                business_name: senderProf.business_name || '',
+                avatar: senderProf.avatar_url || null,
+                category: 'Merchant',
+                status: 'active',
+                rating: 5,
+                credit_limit: 100000,
+                notes: 'Verified Merchant',
+                created_at: nowIso,
+                updated_at: nowIso,
+              },
+              { onConflict: 'id,user_id' }
+            );
+            if (!recErr) {
+              userCustomers.push({
+                id: recId,
+                user_id: userId,
+                name: recName,
+                phone: senderProf.phone || '',
+                email: senderProf.email || '',
+                category: 'Merchant',
+                status: 'active',
+              });
+              totalMirrored += 1;
+            }
+          }
+        }
+      } catch {}
+    }
+
+    const activeCustomers = (userCustomers || []).filter(
+      (c: any) => c && c.id && c.status !== 'deleted'
+    );
+    if (activeCustomers.length === 0) return totalMirrored > 0;
 
     for (const cust of activeCustomers) {
       const cPhone = normalizePhone(cust.phone);

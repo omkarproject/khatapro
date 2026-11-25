@@ -126,6 +126,7 @@ export async function POST(req: NextRequest) {
     const reciprocalCustId = existingReciprocal?.id || `peer_cust_${currentUserId}`;
 
     // 1. Upsert reciprocal customer into peer merchant's customers table in Supabase
+    const nowIso = new Date().toISOString();
     const { error: custErr } = await supabase.from('customers').upsert(
       {
         id: reciprocalCustId,
@@ -142,13 +143,29 @@ export async function POST(req: NextRequest) {
         rating: 5,
         credit_limit: 100000,
         notes: 'Verified Merchant',
-        updated_at: new Date().toISOString(),
+        created_at: nowIso,
+        updated_at: nowIso,
       },
-      { onConflict: 'id, user_id' }
+      { onConflict: 'id,user_id' }
     );
 
     if (custErr) {
-      console.warn('Error creating reciprocal customer in p2p-link:', custErr);
+      console.warn('Error creating reciprocal customer in p2p-link, retrying minimal upsert:', custErr.message);
+      await supabase.from('customers').upsert(
+        {
+          id: reciprocalCustId,
+          user_id: peerUserId,
+          name: reciprocalName,
+          phone: currentProfile.phone || '',
+          email: currentProfile.email || '',
+          category: 'Merchant',
+          status: 'active',
+          notes: 'Verified Merchant',
+          created_at: nowIso,
+          updated_at: nowIso,
+        },
+        { onConflict: 'id,user_id' }
+      );
     }
 
     // 2. Also ensure current user's customer record for peer merchant is marked 'Merchant'

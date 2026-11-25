@@ -1279,7 +1279,13 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
               }
             }
             if (payload.originDeviceId !== myDeviceIdRef.current) {
-              debouncedLoadFromCloud(userId, payload.action || 'device_broadcast');
+              if (payload.action === 'p2p_transaction_alert') {
+                setTimeout(() => {
+                  loadUserDataFromCloud(userId, true);
+                }, 250);
+              } else {
+                debouncedLoadFromCloud(userId, payload.action || 'device_broadcast');
+              }
             }
           }
         });
