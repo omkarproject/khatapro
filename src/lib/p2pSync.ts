@@ -388,7 +388,21 @@ export async function backfillPeerTransactionsForUser(
           return false;
         });
       }
-      if (!peerProfile || peerProfile.id === userId) continue;
+      if (!peerProfile || peerProfile.id === userId) {
+        if (cust.category === 'Merchant') {
+          const cleanNotes = String(cust.notes || '')
+            .replace(/Verified Peer Merchant \(P2P Connected\)/gi, '')
+            .replace(/Verified Merchant/gi, '')
+            .trim();
+          await supabase
+            .from('customers')
+            .update({ category: 'Regular', notes: cleanNotes, updated_at: new Date().toISOString() })
+            .eq('id', cust.id)
+            .eq('user_id', userId);
+          totalMirrored += 1;
+        }
+        continue;
+      }
 
       const peerUserId = peerProfile.id;
 

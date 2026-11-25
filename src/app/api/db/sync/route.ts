@@ -1329,7 +1329,20 @@ async function syncPeerMerchants(
         });
       }
 
-      if (!peerProfile) continue;
+      if (!peerProfile) {
+        if (cust.category === 'Merchant') {
+          const cleanNotes = String(cust.notes || '')
+            .replace(/Verified Peer Merchant \(P2P Connected\)/gi, '')
+            .replace(/Verified Merchant/gi, '')
+            .trim();
+          await supabase
+            .from('customers')
+            .update({ category: 'Regular', notes: cleanNotes, updated_at: new Date().toISOString() })
+            .eq('id', cust.id)
+            .eq('user_id', currentUserId);
+        }
+        continue;
+      }
       const peerUserId = peerProfile.id;
 
       // Check if peerUserId has permanently deleted this peer in their settings
