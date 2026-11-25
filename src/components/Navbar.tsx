@@ -1925,11 +1925,16 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                               </div>
                             )}
                           </div>
-                          <span
-                            className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-900 ${
-                              isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
-                            }`}
-                          />
+                          <span className="absolute bottom-0 right-0 flex h-2.5 w-2.5">
+                            {isOnline && (
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
+                            )}
+                            <span
+                              className={`relative inline-flex rounded-full h-2.5 w-2.5 border-2 border-white dark:border-slate-900 ${
+                                isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
+                              }`}
+                            />
+                          </span>
                         </button>
 
                         {/* Dropdown Menu */}
