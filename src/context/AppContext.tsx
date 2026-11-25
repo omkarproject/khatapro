@@ -271,12 +271,24 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   );
   const [hasPendingOfflineSync, setHasPendingOfflineSync] = useState<boolean>(false);
   const hasPendingOfflineSyncRef = useRef<boolean>(false);
+  const isOnlineRef = useRef<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const syncPhaseRef = useRef<'idle' | 'offline' | 'online_syncing' | 'synced'>(
+    typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'idle'
+  );
   const syncAbortControllerRef = useRef<AbortController | null>(null);
   const syncProgressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const syncedHideTimerRef = useRef<NodeJS.Timeout | null>(null);
   const mutationSeqRef = useRef<number>(0);
   const [activeDevicesCount, setActiveDevicesCount] = useState<number>(1);
   const logoutRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    isOnlineRef.current = isOnline;
+  }, [isOnline]);
+
+  useEffect(() => {
+    syncPhaseRef.current = syncPhase;
+  }, [syncPhase]);
 
   const setPendingOfflineFlag = useCallback((userId: string | undefined, pending: boolean) => {
     hasPendingOfflineSyncRef.current = pending;
@@ -1287,6 +1299,11 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     } catch (err) {
       console.warn('Could not load user data from cloud:', err);
       setCloudSyncStatus('offline');
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        setIsOnline(false);
+        setSyncPhase('offline');
+        setSyncProgress(0);
+      }
     }
   };
 
@@ -1301,8 +1318,16 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     loadTimeoutRef.current = setTimeout(async () => {
       try {
         isSyncingFromCloudRef.current = true;
-        console.log(`⚡ [Realtime Live Sync] Refreshing ledger from Supabase Cloud (${actionName || 'remote update'})...`);
-        await loadUserDataFromCloud(userId, true /* silent mode */);
+        if (hasPendingOfflineSyncRef.current || Object.keys(StorageService.getAllDeletedRecordIds()).length > 0) {
+          console.log(`⚡ [Offline Recovery Sync] Pushing pending offline changes before cloud refresh (${actionName || 'remote update'})...`);
+          if (!isInitialCloudLoadedRef.current) {
+            await loadUserDataFromCloud(userId, true);
+          }
+          await executeDatabaseSync(currentUserRef.current, true);
+        } else {
+          console.log(`⚡ [Realtime Live Sync] Refreshing ledger from Supabase Cloud (${actionName || 'remote update'})...`);
+          await loadUserDataFromCloud(userId, true /* silent mode */);
+        }
       } finally {
         isSyncingFromCloudRef.current = false;
       }
@@ -1619,6 +1644,9 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
       const hasDeletes = Object.keys(StorageService.getAllDeletedRecordIds()).length > 0;
       if (hasPendingOfflineSyncRef.current || hasDeletes) {
+        if (!isInitialCloudLoadedRef.current) {
+          await loadUserDataFromCloud(userId, true);
+        }
         await executeDatabaseSync(currentUserRef.current, true);
       } else {
         stopProgressTimers();
@@ -1674,10 +1702,37 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       document.addEventListener('visibilitychange', handleVisibility);
     }
 
-    // Auto-retry pending offline sync every 5s when browser is back online
-    const offlineRetryInterval = setInterval(() => {
-      if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        if (syncPhase !== 'offline') {
+    // Auto-retry & live connectivity probe every 2s when offline or pending offline sync
+    const offlineRetryInterval = setInterval(async () => {
+      const needCheck =
+        !isOnlineRef.current ||
+        syncPhaseRef.current === 'offline' ||
+        hasPendingOfflineSyncRef.current ||
+        Object.keys(StorageService.getAllDeletedRecordIds()).length > 0;
+
+      if (!needCheck) return;
+      if (isSyncInFlightRef.current) return;
+
+      // Verify real internet connectivity (Windows/Chrome often delays or skips 'online' event)
+      let actuallyOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+      if (actuallyOnline) {
+        try {
+          const pingCtrl = new AbortController();
+          const pingTimer = setTimeout(() => pingCtrl.abort(), 2000);
+          const pingRes = await fetch(`/brand-favicon.png?__ping=${Date.now()}`, {
+            method: 'HEAD',
+            cache: 'no-store',
+            signal: pingCtrl.signal,
+          });
+          clearTimeout(pingTimer);
+          actuallyOnline = pingRes.ok;
+        } catch {
+          actuallyOnline = false;
+        }
+      }
+
+      if (!actuallyOnline) {
+        if (syncPhaseRef.current !== 'offline' || isOnlineRef.current) {
           setIsOnline(false);
           setCloudSyncStatus('offline');
           setSyncPhase('offline');
@@ -1685,10 +1740,17 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         }
         return;
       }
-      if ((hasPendingOfflineSyncRef.current || Object.keys(StorageService.getAllDeletedRecordIds()).length > 0) && !isSyncInFlightRef.current) {
-        executeDatabaseSync(currentUserRef.current, true);
+
+      // Internet is genuinely back! Instantly recover & sync 1% -> 100%
+      if (
+        !isOnlineRef.current ||
+        syncPhaseRef.current === 'offline' ||
+        hasPendingOfflineSyncRef.current ||
+        Object.keys(StorageService.getAllDeletedRecordIds()).length > 0
+      ) {
+        runOnlineRecoverySync();
       }
-    }, 5000);
+    }, 2000);
 
     // 6. Safe background device status & 10-minute fallback heartbeat (every 120s / 2m)
     const pollingInterval = setInterval(() => {
