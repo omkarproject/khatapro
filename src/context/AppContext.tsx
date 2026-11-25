@@ -1596,10 +1596,6 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           setCloudSyncStatus('offline');
           setSyncPhase('offline');
           setSyncProgress(0);
-        } else if (hadPending) {
-          setTimeout(() => {
-            executeDatabaseSync(currentUserRef.current, true);
-          }, 600);
         }
       } catch {}
     }
@@ -1747,6 +1743,75 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     };
   }, [currentUser?.id]);
 
+  // Startup / Reload / Login full sync: pulls cloud data, merges local offline changes, and pushes any pending updates (1% -> 100%)
+  const syncOnStartupOrLogin = async (user: UserProfile) => {
+    if (!user?.id) return;
+    const userId = user.id;
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      stopProgressTimers();
+      setIsOnline(false);
+      setCloudSyncStatus('offline');
+      setSyncPhase('offline');
+      setSyncProgress(0);
+      return;
+    }
+
+    stopProgressTimers();
+    setIsOnline(true);
+    setSyncPhase('online_syncing');
+    setSyncProgress(1);
+    syncProgressTimerRef.current = setInterval(() => {
+      setSyncProgress(prev => {
+        if (prev >= 85) return prev;
+        const step = prev < 35 ? 8 : prev < 65 ? 5 : 2;
+        return Math.min(85, prev + step);
+      });
+    }, 80);
+
+    try {
+      await loadUserDataFromCloud(userId, true);
+
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        stopProgressTimers();
+        setIsOnline(false);
+        setCloudSyncStatus('offline');
+        setSyncPhase('offline');
+        setSyncProgress(0);
+        return;
+      }
+
+      const hadPending =
+        hasPendingOfflineSyncRef.current ||
+        (typeof window !== 'undefined' && localStorage.getItem(`skp_pending_offline_sync_${userId}`) === '1') ||
+        Object.keys(StorageService.getAllDeletedRecordIds()).length > 0;
+
+      if (hadPending) {
+        setSyncProgress(p => Math.max(p, 75));
+        await executeDatabaseSync(user, true);
+        return;
+      }
+
+      stopProgressTimers();
+      setCloudSyncStatus('synced');
+      setSyncProgress(100);
+      setSyncPhase('synced');
+      syncedHideTimerRef.current = setTimeout(() => {
+        setSyncPhase(prev => (prev === 'synced' ? 'idle' : prev));
+      }, 2200);
+    } catch {
+      stopProgressTimers();
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        setIsOnline(false);
+        setCloudSyncStatus('offline');
+        setSyncPhase('offline');
+      } else {
+        setSyncPhase('idle');
+      }
+      setSyncProgress(0);
+    }
+  };
+
   // Login handler
   const login = async (loginEmail: string, loginPass: string) => {
     const res = await fetch('/api/auth/login', {
@@ -1806,8 +1871,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setProfileState(user);
     setActiveRole(user.role || (user.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user'));
 
-    // Load isolated data from Supabase Cloud for this user
-    await loadUserDataFromCloud(user.id);
+    // Load isolated data from Supabase Cloud for this user (with 1%->100% sync notch)
+    await syncOnStartupOrLogin(user);
 
     // Register active device session in background
     try {
@@ -1894,7 +1959,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setActiveRole(user.role || (user.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user'));
 
     // Load user's fresh database records from Supabase Cloud
-    await loadUserDataFromCloud(user.id);
+    await syncOnStartupOrLogin(user);
     addToast('Account Created & Database Initialized', `Welcome, ${user.name}! Your isolated cloud ledger is active.`, 'success');
   };
 
@@ -1924,7 +1989,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setGroupNotifications([]);
     setProfileState(user);
     setActiveRole(user.role || (user.email === 'anantyadav8924@gmail.com' ? 'super_admin' : 'user'));
-    await loadUserDataFromCloud(user.id);
+    await syncOnStartupOrLogin(user);
     addToast('Authentication Verified', `Welcome, ${user.name}! Connected to Supabase Cloud Database.`, 'success');
   };
 
@@ -2100,9 +2165,9 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       }
     }
 
-    // If user is logged in, sync with database
+    // If user is logged in, sync with database on startup/reload (1% -> 100%)
     if (activeU) {
-      loadUserDataFromCloud(activeU.id);
+      syncOnStartupOrLogin(activeU);
     }
 
     const handleStorageChange = (e: StorageEvent) => {
