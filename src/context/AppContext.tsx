@@ -1270,6 +1270,18 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
                   'New Merchant Add KhataBook',
                   'success'
                 );
+              } else if (payload.alert.alertKind === 'transaction_edited') {
+                addToast(
+                  `Transaction Edited: ${payload.alert.peerMerchantName}`,
+                  `Old: ₹${Number(payload.alert.oldAmount ?? payload.alert.amount).toLocaleString('en-IN')} → New: ₹${Number(payload.alert.amount).toLocaleString('en-IN')} updated by ${payload.alert.peerMerchantName}.`,
+                  'info'
+                );
+              } else if (payload.alert.alertKind === 'transaction_deleted') {
+                addToast(
+                  `Transaction Deleted: ${payload.alert.peerMerchantName}`,
+                  `₹${Number(payload.alert.oldAmount ?? payload.alert.amount).toLocaleString('en-IN')} transaction deleted by ${payload.alert.peerMerchantName}.`,
+                  'warning'
+                );
               } else {
                 addToast(
                   `Verified Khata: ${payload.alert.peerMerchantName}`,
@@ -2404,11 +2416,39 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     }
   };
 
+  const notifyPeerMutation = (
+    action: 'edit' | 'delete' | 'hard_delete',
+    txn: Transaction,
+    oldAmount?: number
+  ) => {
+    if (!currentUser?.id) return;
+    const cust = StorageService.getCustomers().find((c) => c.id === txn.customerId);
+    const isPeer =
+      txn.id.startsWith('peer_txn_') ||
+      (Array.isArray(txn.tags) && txn.tags.includes('__p2p_peer')) ||
+      cust?.category === 'Merchant' ||
+      cust?.id.startsWith('peer_cust_');
+    if (!isPeer) return;
+
+    const actorName = currentUser?.businessName || currentUser?.name || profile?.name || 'Merchant';
+    fetch('/api/users/p2p-mutate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        currentUserId: currentUser.id,
+        action,
+        transaction: txn,
+        oldAmount,
+        customerPhone: cust?.phone || txn.customerPhone || txn.peerPhone,
+        customerEmail: cust?.email || '',
+        actorName,
+      }),
+    }).catch(() => {});
+  };
+
   const updateTransaction = (txn: Transaction) => {
-    if (txn.id.startsWith('peer_txn_') || (Array.isArray(txn.tags) && txn.tags.includes('__p2p_peer'))) {
-      addToast('Action Not Allowed', 'You can only edit transactions created by you.', 'info');
-      return;
-    }
+    const prevTxn = StorageService.getTransactions().find(t => t.id === txn.id);
+    const oldAmount = prevTxn ? Number(prevTxn.amount) : Number(txn.amount);
     const updatedTxns = StorageService.updateTransaction(txn);
     setTransactions(updatedTxns);
     setCustomers(StorageService.getCustomers()); // balance updated
@@ -2423,6 +2463,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           userId: currentUser?.id,
         }),
       }).catch(e => console.warn('Could not sync group transaction update:', e));
+    } else {
+      notifyPeerMutation('edit', txn, oldAmount);
     }
 
     addToast('Transaction Updated', `₹${txn.amount.toLocaleString('en-IN')} updated successfully.`, 'success');
@@ -2432,10 +2474,6 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const deleteTransaction = (id: string) => {
     const existing = StorageService.getTransactions().find(t => t.id === id);
     if (!existing) return;
-    if (existing.id.startsWith('peer_txn_') || (Array.isArray(existing.tags) && existing.tags.includes('__p2p_peer'))) {
-      addToast('Action Not Allowed', 'You can only delete transactions created by you.', 'info');
-      return;
-    }
 
     const actorName = currentUser?.businessName || currentUser?.name || profile?.name || 'User';
 
@@ -2456,6 +2494,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           userId: currentUser?.id,
         }),
       }).catch(e => console.warn('Could not sync group transaction soft-delete:', e));
+    } else {
+      notifyPeerMutation('delete', existing, Number(existing.amount));
     }
 
     const updatedTxns = StorageService.deleteTransaction(id, actorName);
@@ -2496,9 +2536,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
   const hardDeleteTransaction = async (id: string) => {
     const existing = StorageService.getTransactions().find(t => t.id === id);
-    if (existing && (existing.id.startsWith('peer_txn_') || (Array.isArray(existing.tags) && existing.tags.includes('__p2p_peer')))) {
-      addToast('Action Not Allowed', 'You can only delete transactions created by you.', 'info');
-      return;
+    if (existing && !existing.groupId) {
+      notifyPeerMutation('hard_delete', existing, Number(existing.amount));
     }
     if (existing && Array.isArray(existing.attachments) && existing.attachments.length > 0) {
       const fileNames: string[] = [];

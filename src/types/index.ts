@@ -218,7 +218,7 @@ export interface KhataGroupNotification {
 
 export interface P2PTransactionAlert {
   id: string;
-  alertKind?: 'transaction' | 'merchant_added';
+  alertKind?: 'transaction' | 'merchant_added' | 'transaction_edited' | 'transaction_deleted';
   peerUserId: string;
   peerMerchantName: string;
   peerPhone?: string;
@@ -226,6 +226,7 @@ export interface P2PTransactionAlert {
   transactionId: string;
   type: 'credit' | 'debit';
   amount: number;
+  oldAmount?: number;
   note?: string;
   date: string;
   createdAt: string;

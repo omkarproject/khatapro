@@ -1656,14 +1656,6 @@ function KhataPageInner() {
 
   // Open existing transaction for modification in Screen 3 (Keypad & Entry)
   const handleOpenEditTransaction = (txn: Transaction) => {
-    if (txn.id.startsWith('peer_txn_') || (Array.isArray(txn.tags) && txn.tags.includes('__p2p_peer'))) {
-      addToast(
-        'View Only Transaction',
-        `Sirf ${activeCustomer?.name || 'creator merchant'} hi is transaction ko edit ya delete kar sakte hain.`,
-        'info'
-      );
-      return;
-    }
     setEditingTxnId(txn.id);
     const isReceivedType = txn.type === 'debit' || txn.type === 'collection';
     setEntryType(isReceivedType ? 'received' : 'given');
@@ -1723,10 +1715,6 @@ function KhataPageInner() {
   // Delete transaction currently being edited (soft delete - shows as deleted/excluded in ledger)
   const handleDeleteEditingTransaction = () => {
     if (!editingTxnId) return;
-    if (editingTxnId.startsWith('peer_txn_')) {
-      addToast('Action Not Allowed', 'You can only delete transactions created by you.', 'info');
-      return;
-    }
     deleteTransaction(editingTxnId);
     setEditingTxnId(null);
     setEntryAmountStr('');
@@ -1738,10 +1726,6 @@ function KhataPageInner() {
   // Permanent Delete transaction (header trash icon - removes completely so it doesn't show at all)
   const handlePermanentDeleteEditingTransaction = async () => {
     if (!editingTxnId) return;
-    if (editingTxnId.startsWith('peer_txn_')) {
-      addToast('Action Not Allowed', 'You can only delete transactions created by you.', 'info');
-      return;
-    }
     if (confirm('Permanently delete this transaction? It will be completely removed and will not appear in the ledger.')) {
       await hardDeleteTransaction(editingTxnId);
       setEditingTxnId(null);

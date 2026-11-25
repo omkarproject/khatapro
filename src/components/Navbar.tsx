@@ -1376,6 +1376,8 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                       <div className="space-y-2">
                         {unreadP2PAlerts.map((alert) => {
                           const isMerchantAdded = alert.alertKind === 'merchant_added';
+                          const isEdited = alert.alertKind === 'transaction_edited';
+                          const isDeleted = alert.alertKind === 'transaction_deleted';
                           const isGot = alert.type === 'debit';
                           return (
                             <div
@@ -1383,6 +1385,10 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                               className={`p-3 rounded-2xl border space-y-2 relative group shadow-xs ${
                                 isMerchantAdded
                                   ? 'bg-gradient-to-r from-emerald-50 to-indigo-50/70 dark:from-emerald-950/40 dark:to-indigo-950/30 border-emerald-200/90 dark:border-emerald-800/60'
+                                  : isEdited
+                                  ? 'bg-gradient-to-r from-amber-50 to-orange-50/70 dark:from-amber-950/40 dark:to-orange-950/30 border-amber-200/90 dark:border-amber-800/60'
+                                  : isDeleted
+                                  ? 'bg-gradient-to-r from-rose-50 to-red-50/70 dark:from-rose-950/40 dark:to-red-950/30 border-rose-300/90 dark:border-rose-800/60'
                                   : isGot
                                   ? 'bg-gradient-to-r from-emerald-50 to-teal-50/70 dark:from-emerald-950/40 dark:to-teal-950/30 border-emerald-200/90 dark:border-emerald-800/60'
                                   : 'bg-gradient-to-r from-rose-50 to-amber-50/70 dark:from-rose-950/40 dark:to-amber-950/30 border-rose-200/90 dark:border-rose-800/60'
@@ -1394,6 +1400,10 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                                     className={`w-8 h-8 rounded-xl text-white flex items-center justify-center shrink-0 shadow-xs ${
                                       isMerchantAdded
                                         ? 'bg-indigo-600'
+                                        : isEdited
+                                        ? 'bg-amber-600'
+                                        : isDeleted
+                                        ? 'bg-rose-600'
                                         : isGot
                                         ? 'bg-emerald-600'
                                         : 'bg-rose-600'
@@ -1401,6 +1411,8 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                                   >
                                     {isMerchantAdded ? (
                                       <Users className="w-4 h-4" />
+                                    ) : isDeleted ? (
+                                      <Trash2 className="w-4 h-4" />
                                     ) : isGot ? (
                                       <ArrowDownLeft className="w-4 h-4" />
                                     ) : (
@@ -1416,6 +1428,24 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                                         <span className="text-[8.5px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider font-mono bg-emerald-600 text-white">
                                           Added You Khata
                                         </span>
+                                      ) : isEdited ? (
+                                        <>
+                                          <span className="text-[8.5px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider font-mono bg-amber-600 text-white">
+                                            Edited
+                                          </span>
+                                          <span className="text-[9px] px-1.5 py-0.5 rounded font-bold font-mono bg-slate-900 text-white dark:bg-white dark:text-slate-900">
+                                            Old: ₹{alert.oldAmount ?? alert.amount} → New: ₹{alert.amount}
+                                          </span>
+                                        </>
+                                      ) : isDeleted ? (
+                                        <>
+                                          <span className="text-[8.5px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider font-mono bg-rose-600 text-white">
+                                            Deleted
+                                          </span>
+                                          <span className="text-[9px] px-1.5 py-0.5 rounded font-bold font-mono bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                                            ₹{alert.oldAmount ?? alert.amount}
+                                          </span>
+                                        </>
                                       ) : (
                                         <>
                                           <span className="text-[8.5px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider font-mono bg-indigo-600 text-white">
@@ -1434,6 +1464,10 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                                     <div className="text-[10px] text-slate-700 dark:text-slate-300 font-medium truncate mt-0.5">
                                       {isMerchantAdded
                                         ? 'New Merchant Add KhataBook'
+                                        : isEdited
+                                        ? `${alert.peerMerchantName} edited transaction (Old: ₹${alert.oldAmount ?? alert.amount} → New: ₹${alert.amount})${alert.note ? ` • "${alert.note}"` : ''}`
+                                        : isDeleted
+                                        ? `${alert.peerMerchantName} deleted ₹${alert.oldAmount ?? alert.amount} transaction${alert.note ? ` • "${alert.note}"` : ''}`
                                         : alert.note
                                         ? `"${alert.note}"`
                                         : `${alert.peerMerchantName} recorded transaction in your Khata`}
