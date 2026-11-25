@@ -2288,7 +2288,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 max-w-full">
       
       {/* Header */}
       <div>
@@ -2299,7 +2299,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Primary Tabs */}
-      <div className="flex gap-2 border-b border-slate-200/80 dark:border-slate-800 pb-3 overflow-x-auto">
+      <div className="flex gap-2 border-b border-slate-200/80 dark:border-slate-800 pb-3 overflow-x-auto max-w-full scrollbar-none">
         <button
           onClick={() => setMainTab('business')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer ${
@@ -2360,7 +2360,7 @@ export default function SettingsPage() {
 
       {/* Sub-Tabs: Inside Business Profile */}
       {mainTab === 'business' && (
-        <div className="flex gap-1.5 p-1 bg-slate-100/80 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 w-fit overflow-x-auto">
+        <div className="flex gap-1.5 p-1 bg-slate-100/80 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 w-fit max-w-full overflow-x-auto scrollbar-none">
           <button
             type="button"
             onClick={() => setBusinessSubTab('enterprise')}
@@ -2404,7 +2404,7 @@ export default function SettingsPage() {
 
       {/* Sub-Tabs: Inside Website Branding (Admin Only) */}
       {mainTab === 'branding' && isAdmin && (
-        <div className="flex gap-1.5 p-1 bg-slate-100/80 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 w-fit overflow-x-auto">
+        <div className="flex gap-1.5 p-1 bg-slate-100/80 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 w-fit max-w-full overflow-x-auto scrollbar-none">
           <button
             type="button"
             onClick={() => setBrandingSubTab('visuals')}
@@ -2440,7 +2440,7 @@ export default function SettingsPage() {
 
       {/* Sub-Tabs: Inside Management (Admin Only) */}
       {mainTab === 'admin' && isAdmin && (
-        <div className="flex gap-1.5 p-1 bg-slate-100/80 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 w-fit overflow-x-auto">
+        <div className="flex gap-1.5 p-1 bg-slate-100/80 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 w-fit max-w-full overflow-x-auto scrollbar-none">
           <button
             type="button"
             onClick={() => setAdminSubTab('supabase')}
