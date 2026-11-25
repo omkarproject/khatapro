@@ -310,6 +310,8 @@ function KhataPageInner() {
     return d.toISOString().split('T')[0];
   });
   const [entryReminderNote, setEntryReminderNote] = useState('');
+  const [isSavingEntry, setIsSavingEntry] = useState(false);
+  const isSavingEntryRef = useRef(false);
   // Preview Gallery State (Holds list of items, current active index, navigation, and linked transactionId)
   const [previewGallery, setPreviewGallery] = useState<{
     items: AttachedBill[];
@@ -1844,12 +1846,19 @@ function KhataPageInner() {
 
   // Handle Confirm / Save Entry (Screen 3 -> Screen 2)
   const handleConfirmEntry = async () => {
+    if (isSavingEntryRef.current) return;
+
     const num = parseFloat(entryAmountStr);
     if (!num || num <= 0) {
       addToast('Amount Required', 'Please enter a valid amount.', 'warning');
       return;
     }
 
+    if (!activeGroup && !activeCustomer) return;
+
+    isSavingEntryRef.current = true;
+    setIsSavingEntry(true);
+    try {
     const isGot = entryType === 'received';
 
     // In Group Mode
@@ -2161,6 +2170,10 @@ function KhataPageInner() {
     setIsEntryReminderEnabled(false);
     setEntryReminderNote('');
     setScreenView('chat');
+    } finally {
+      isSavingEntryRef.current = false;
+      setIsSavingEntry(false);
+    }
   };
 
   // Convert number to Indian currency words
@@ -2302,6 +2315,8 @@ function KhataPageInner() {
 
   // Handle "Create Bill": Save transaction to Khata AND generate single-transaction PDF Bill
   const handleCreateBillAndSave = async (isEditing: boolean) => {
+    if (isSavingEntryRef.current) return;
+
     const num = parseFloat(entryAmountStr);
     if (!num || num <= 0) {
       addToast('Amount Required', 'Please enter a valid amount using the keypad.', 'warning');
@@ -2309,6 +2324,9 @@ function KhataPageInner() {
     }
     if (!activeCustomer) return;
 
+    isSavingEntryRef.current = true;
+    setIsSavingEntry(true);
+    try {
     const isGot = entryType === 'received';
     const finalAttachments = await uploadPendingAttachmentsToDrive(activeCustomer, entryAttachments);
     const serializedAttachments = finalAttachments.map(b => JSON.stringify(b));
@@ -2395,6 +2413,10 @@ function KhataPageInner() {
 
     // Generate & Print Single Transaction PDF Bill
     printSingleTxnBill(createdOrUpdatedTxn);
+    } finally {
+      isSavingEntryRef.current = false;
+      setIsSavingEntry(false);
+    }
   };
 
   // Handle Multi-file & PDF Upload (Screen 3) - Keep local until save
@@ -6166,50 +6188,54 @@ function KhataPageInner() {
 
                         <button
                           type="button"
+                          disabled={isSavingEntry}
                           onClick={() => handleCreateBillAndSave(true)}
-                          className="flex-1 py-2.5 px-3 rounded-xl bg-[#E8F5E9] text-[#2E7D32] dark:bg-emerald-950/60 dark:text-emerald-300 font-bold text-xs flex items-center justify-center gap-1.5 border border-[#C8E6C9] dark:border-emerald-800 active:scale-95 transition-all cursor-pointer"
+                          className="flex-1 py-2.5 px-3 rounded-xl bg-[#E8F5E9] text-[#2E7D32] dark:bg-emerald-950/60 dark:text-emerald-300 font-bold text-xs flex items-center justify-center gap-1.5 border border-[#C8E6C9] dark:border-emerald-800 active:scale-95 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
                           title="Save changes and generate PDF Bill"
                         >
-                          <FileSpreadsheet className="w-3.5 h-3.5" />
-                          Bill
+                          {isSavingEntry ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+                          {isSavingEntry ? 'Saving...' : 'Bill'}
                         </button>
 
                         <button
                           type="button"
+                          disabled={isSavingEntry}
                           onClick={handleConfirmEntry}
-                          className={`flex-1 py-2.5 px-3 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer ${
+                          className={`flex-1 py-2.5 px-3 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 ${
                             entryType === 'received'
                               ? 'bg-[#1E7E34] hover:bg-[#155d27] shadow-emerald-600/20'
                               : 'bg-[#D32F2F] hover:bg-[#b71c1c] shadow-rose-600/20'
                           }`}
                         >
-                          <Check className="w-4 h-4 stroke-[3]" />
-                          Save
+                          {isSavingEntry ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4 stroke-[3]" />}
+                          {isSavingEntry ? 'Saving...' : 'Save'}
                         </button>
                       </>
                     ) : (
                       <>
                         <button
                           type="button"
+                          disabled={isSavingEntry}
                           onClick={() => handleCreateBillAndSave(false)}
-                          className="flex-1 py-3 px-4 rounded-xl bg-[#E8F5E9] text-[#2E7D32] dark:bg-emerald-950/60 dark:text-emerald-300 font-bold text-xs flex items-center justify-center gap-2 border border-[#C8E6C9] dark:border-emerald-800 active:scale-95 transition-all cursor-pointer"
+                          className="flex-1 py-3 px-4 rounded-xl bg-[#E8F5E9] text-[#2E7D32] dark:bg-emerald-950/60 dark:text-emerald-300 font-bold text-xs flex items-center justify-center gap-2 border border-[#C8E6C9] dark:border-emerald-800 active:scale-95 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
                           title="Add transaction to Khata & generate PDF Bill for this amount"
                         >
-                          <FileSpreadsheet className="w-4 h-4" />
-                          Create Bill
+                          {isSavingEntry ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                          {isSavingEntry ? 'Saving...' : 'Create Bill'}
                         </button>
 
                         <button
                           type="button"
+                          disabled={isSavingEntry}
                           onClick={handleConfirmEntry}
-                          className={`flex-1 py-3 px-4 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all cursor-pointer ${
+                          className={`flex-1 py-3 px-4 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 ${
                             entryType === 'received'
                               ? 'bg-[#1E7E34] hover:bg-[#155d27] shadow-emerald-600/20'
                               : 'bg-[#D32F2F] hover:bg-[#b71c1c] shadow-rose-600/20'
                           }`}
                         >
-                          <Check className="w-4 h-4 stroke-[3]" />
-                          Confirm
+                          {isSavingEntry ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4 stroke-[3]" />}
+                          {isSavingEntry ? 'Saving...' : 'Confirm'}
                         </button>
                       </>
                     )}
