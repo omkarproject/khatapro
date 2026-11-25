@@ -1373,23 +1373,6 @@ export const StorageService = {
   // Invoices
   getInvoices: (): Invoice[] => {
     let list = getLocalItem<Invoice[]>(STORAGE_KEYS.INVOICES, []);
-    if ((!list || list.length === 0) && typeof window !== 'undefined') {
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith('skp_invoices') && k !== getScopedKey(STORAGE_KEYS.INVOICES)) {
-          try {
-            const raw = localStorage.getItem(k);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                list = parsed;
-                break;
-              }
-            }
-          } catch {}
-        }
-      }
-    }
     // Check if any invoice was settled via confirmed receipt/payment proof
     if (Array.isArray(list) && typeof window !== 'undefined') {
       let modified = false;

@@ -517,10 +517,11 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         }
       });
 
+      const syncedDeletedIds = StorageService.getAllDeletedRecordIds();
       const payload = {
         userId,
         originDeviceId: myDeviceIdRef.current,
-        deletedRecordIds: StorageService.getAllDeletedRecordIds(),
+        deletedRecordIds: syncedDeletedIds,
         data: {
           customers: curCustomers,
           transactions: StorageService.getTransactions(),
@@ -572,8 +573,12 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       if (res.ok) {
         setCloudSyncStatus('synced');
         lastCloudSyncTimestampRef.current = Date.now();
-        // Clear locally tracked deleted IDs now that cloud database has confirmed their removal
-        StorageService.clearDeletedRecordIds();
+        // Clear only the deleted IDs that were actually sent in this sync request
+        Object.entries(syncedDeletedIds).forEach(([tbl, ids]) => {
+          if (Array.isArray(ids) && ids.length > 0) {
+            StorageService.clearDeletedRecordIds(tbl, ids);
+          }
+        });
         // ⚡ Instantly broadcast live update to all other devices & tabs!
         broadcastRealtimeChange(userId, 'database_update');
 
