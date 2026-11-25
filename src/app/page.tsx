@@ -220,7 +220,7 @@ export default function DashboardPage() {
 
     // --- 4. NET AMOUNT (KHATA - EXPENSES) ---
     // User requested formula: KHATA - EXPENSES (K - E)
-    const khataBase = khataCredit;
+    const khataBase = khataCredit - khataDebit;
     const netAmount = khataBase - currentMonthExpenses;
     const isNetPositive = netAmount >= 0;
 
@@ -394,7 +394,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 gap-1">
             <div className="flex items-center gap-1 min-w-0 flex-wrap text-[9.5px] sm:text-[10px]">
-              <span className="text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap" title={`Khata: ${formatINR(metrics.khataBase)}`}>
+              <span className={`${metrics.khataBase >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'} font-bold whitespace-nowrap`} title={`Khata: ${formatINR(metrics.khataBase)}`}>
                 <span className="text-[8.5px] uppercase text-slate-400 font-semibold mr-0.5">K:</span>
                 {formatINR(metrics.khataBase)}
               </span>
