@@ -164,8 +164,23 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Filter out revoked devices for the returned active list
-    const activeDevices = devices.filter(d => !d.isRevoked);
+    // Filter out revoked devices and deduplicate same device (same deviceName + browser + os + ip)
+    const rawActive = devices.filter(d => !d.isRevoked);
+    rawActive.sort((a, b) => {
+      if (a.isCurrent) return -1;
+      if (b.isCurrent) return 1;
+      return new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime();
+    });
+
+    const seenKeys = new Set<string>();
+    const activeDevices: DeviceSession[] = [];
+    for (const d of rawActive) {
+      const fp = `${(d.deviceName || '').toLowerCase().trim()}|${(d.browser || '').toLowerCase().trim()}|${(d.os || '').toLowerCase().trim()}|${(d.ip || '').trim()}`;
+      if (!seenKeys.has(fp)) {
+        seenKeys.add(fp);
+        activeDevices.push(d);
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -202,6 +217,31 @@ export async function POST(req: NextRequest) {
     if (action === 'register' || action === 'heartbeat') {
       const targetDevId = deviceId || `dev_${Date.now()}`;
       const targetDevName = deviceName || 'SmartKhata Session';
+      const targetBrowser = browser || '';
+      const targetOs = os || '';
+
+      // 0. Remove duplicate active rows for the exact same device/browser/OS/IP so re-logins never create duplicate cards
+      try {
+        const { data: existingRows } = await supabase
+          .from('user_devices')
+          .select('id, device_name, browser, os, ip, is_revoked')
+          .eq('user_id', userId)
+          .eq('is_revoked', false);
+
+        const dupIds = (existingRows || [])
+          .filter((r: any) =>
+            r.id !== targetDevId &&
+            (r.device_name || '').toLowerCase().trim() === targetDevName.toLowerCase().trim() &&
+            (r.browser || '').toLowerCase().trim() === targetBrowser.toLowerCase().trim() &&
+            (r.os || '').toLowerCase().trim() === targetOs.toLowerCase().trim() &&
+            (r.ip || '').trim() === clientIp.trim()
+          )
+          .map((r: any) => r.id);
+
+        if (dupIds.length > 0) {
+          await supabase.from('user_devices').delete().eq('user_id', userId).in('id', dupIds);
+        }
+      } catch {}
 
       // 1. Try upserting into user_devices table
       let tableSuccess = false;
@@ -211,8 +251,8 @@ export async function POST(req: NextRequest) {
           user_id: userId,
           device_name: targetDevName,
           device_type: deviceType || 'desktop',
-          browser: browser || '',
-          os: os || '',
+          browser: targetBrowser,
+          os: targetOs,
           ip: clientIp,
           location: location || '',
           last_active: nowIso,
@@ -223,7 +263,7 @@ export async function POST(req: NextRequest) {
         if (!error) tableSuccess = true;
       } catch {}
 
-      // 2. Also keep system_settings.payment_settings.active_devices updated as fallback
+      // 2. Also keep system_settings.payment_settings.active_devices updated as fallback (deduplicated)
       try {
         const { data: userSettings } = await supabase
           .from('system_settings')
@@ -233,6 +273,18 @@ export async function POST(req: NextRequest) {
 
         const paySettings = userSettings?.payment_settings || {};
         let list: any[] = Array.isArray(paySettings.active_devices) ? [...paySettings.active_devices] : [];
+
+        // Filter out duplicate non-revoked entries with same fingerprint
+        list = list.filter((d: any) => {
+          if (d.id === targetDevId) return true;
+          if (d.isRevoked) return true;
+          const sameFp =
+            (d.deviceName || '').toLowerCase().trim() === targetDevName.toLowerCase().trim() &&
+            (d.browser || '').toLowerCase().trim() === targetBrowser.toLowerCase().trim() &&
+            (d.os || '').toLowerCase().trim() === targetOs.toLowerCase().trim() &&
+            (d.ip || '').trim() === clientIp.trim();
+          return !sameFp;
+        });
 
         const existingIdx = list.findIndex(d => d.id === targetDevId);
         const deviceRecord: DeviceSession = {
