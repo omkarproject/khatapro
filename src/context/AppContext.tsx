@@ -162,6 +162,10 @@ interface AppContextType {
   activeDevicesCount: number;
   refreshActiveDevicesCount: () => Promise<number>;
   cloudSyncStatus: 'synced' | 'syncing' | 'offline' | 'error';
+  isOnline: boolean;
+  syncProgress: number;
+  syncPhase: 'idle' | 'offline' | 'online_syncing' | 'synced';
+  hasPendingOfflineSync: boolean;
   syncWithDatabase: () => Promise<void>;
   loadUserDataFromCloud: (userId: string, silent?: boolean) => Promise<void>;
 
@@ -255,9 +259,47 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     return null;
   });
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>(() =>
+    typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced'
+  );
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+  const [syncProgress, setSyncProgress] = useState<number>(0);
+  const [syncPhase, setSyncPhase] = useState<'idle' | 'offline' | 'online_syncing' | 'synced'>(() =>
+    typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'idle'
+  );
+  const [hasPendingOfflineSync, setHasPendingOfflineSync] = useState<boolean>(false);
+  const hasPendingOfflineSyncRef = useRef<boolean>(false);
+  const syncAbortControllerRef = useRef<AbortController | null>(null);
+  const syncProgressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const syncedHideTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const mutationSeqRef = useRef<number>(0);
   const [activeDevicesCount, setActiveDevicesCount] = useState<number>(1);
   const logoutRef = useRef<() => void>(() => {});
+
+  const setPendingOfflineFlag = useCallback((userId: string | undefined, pending: boolean) => {
+    hasPendingOfflineSyncRef.current = pending;
+    setHasPendingOfflineSync(pending);
+    if (typeof window !== 'undefined' && userId) {
+      try {
+        const key = `skp_pending_offline_sync_${userId}`;
+        if (pending) localStorage.setItem(key, '1');
+        else localStorage.removeItem(key);
+      } catch {}
+    }
+  }, []);
+
+  const stopProgressTimers = useCallback(() => {
+    if (syncProgressTimerRef.current) {
+      clearInterval(syncProgressTimerRef.current);
+      syncProgressTimerRef.current = null;
+    }
+    if (syncedHideTimerRef.current) {
+      clearTimeout(syncedHideTimerRef.current);
+      syncedHideTimerRef.current = null;
+    }
+  }, []);
 
   const refreshActiveDevicesCount = useCallback(async (): Promise<number> => {
     const curU = currentUser || StorageService.getCurrentUser();
@@ -480,8 +522,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   };
 
   // Sync all in-memory and local data to Supabase Cloud PostgreSQL with request coalescing
-  const executeDatabaseSync = async (targetUser?: UserProfile | null) => {
-    const activeU = targetUser !== undefined ? targetUser : currentUser;
+  const executeDatabaseSync = async (targetUser?: UserProfile | null, showProgressNotch: boolean = false) => {
+    const activeU = targetUser !== undefined ? targetUser : currentUserRef.current || currentUser;
     if (!activeU?.id) return;
     const userId = activeU.id;
 
@@ -491,14 +533,45 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       return;
     }
 
+    // If browser is offline right now, record pending offline changes and show Offline Work notch
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      stopProgressTimers();
+      setIsOnline(false);
+      setCloudSyncStatus('offline');
+      setSyncPhase('offline');
+      setSyncProgress(0);
+      setPendingOfflineFlag(userId, true);
+      return;
+    }
+
     if (isSyncInFlightRef.current) {
       syncPendingRef.current = true;
       return;
     }
 
+    const shouldShowProgress = showProgressNotch || hasPendingOfflineSyncRef.current;
+    const syncStartSeq = mutationSeqRef.current;
     isSyncInFlightRef.current = true;
+    let abortedOffline = false;
+
+    const controller = new AbortController();
+    syncAbortControllerRef.current = controller;
+
     try {
       setCloudSyncStatus('syncing');
+      if (shouldShowProgress) {
+        stopProgressTimers();
+        setSyncPhase('online_syncing');
+        setSyncProgress(1);
+        syncProgressTimerRef.current = setInterval(() => {
+          setSyncProgress(prev => {
+            if (prev >= 68) return prev;
+            const step = prev < 25 ? 6 : prev < 50 ? 4 : 2;
+            return Math.min(68, prev + step);
+          });
+        }, 120);
+      }
+
       // Read latest data synchronously from StorageService to avoid React closure lag
       const curCustomers = StorageService.getCustomers();
       const allDriveFolders: any[] = [];
@@ -552,6 +625,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         },
       };
 
+      if (shouldShowProgress) setSyncProgress(p => Math.max(p, 18));
+
       const res = await fetch('/api/db/sync', {
         method: 'POST',
         headers: {
@@ -559,18 +634,29 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           'X-Auth-Session': userId,
         },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
 
       if (res.status === 401) {
         try {
           const errJson = await res.json();
           if (errJson?.forceLogout) {
+            stopProgressTimers();
             logout();
             return;
           }
         } catch {}
       }
       if (res.ok) {
+        if (shouldShowProgress) {
+          if (syncProgressTimerRef.current) {
+            clearInterval(syncProgressTimerRef.current);
+            syncProgressTimerRef.current = null;
+          }
+          setSyncProgress(78);
+        }
+
+        setIsOnline(true);
         setCloudSyncStatus('synced');
         lastCloudSyncTimestampRef.current = Date.now();
         // Clear only the deleted IDs that were actually sent in this sync request
@@ -587,33 +673,84 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
           if (syncJson?.version) {
             lastKnownCloudVersionRef.current = syncJson.version;
           }
-          if (syncJson.peerLinked && Array.isArray(syncJson.matchedPeers) && syncJson.matchedPeers.length > 0) {
-            syncJson.matchedPeers.forEach((mp: any) => {
-              broadcastRealtimeChange(mp.id, 'peer_merchant_update');
-            });
-            // Silently reload user data so that newly linked peer merchant customer is loaded into local state
-            loadUserDataFromCloud(userId, true);
+          if (shouldShowProgress) setSyncProgress(88);
+          if (
+            (syncJson.peerLinked && Array.isArray(syncJson.matchedPeers) && syncJson.matchedPeers.length > 0) ||
+            shouldShowProgress
+          ) {
+            if (Array.isArray(syncJson.matchedPeers)) {
+              syncJson.matchedPeers.forEach((mp: any) => {
+                broadcastRealtimeChange(mp.id, 'peer_merchant_update');
+              });
+            }
+            // Pull latest cloud state (including any peer updates) after offline changes are safely pushed
+            await loadUserDataFromCloud(userId, true);
           }
         } catch {}
+
+        // Only clear pending flag if no newer local mutations occurred while this sync was running
+        if (mutationSeqRef.current === syncStartSeq) {
+          setPendingOfflineFlag(userId, false);
+        }
+
+        if (shouldShowProgress) {
+          setSyncProgress(100);
+          setSyncPhase('synced');
+          syncedHideTimerRef.current = setTimeout(() => {
+            setSyncPhase(prev => (prev === 'synced' ? 'idle' : prev));
+          }, 2500);
+        }
       } else {
+        stopProgressTimers();
+        setPendingOfflineFlag(userId, true);
         setCloudSyncStatus('error');
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          setIsOnline(false);
+          setSyncPhase('offline');
+          setSyncProgress(0);
+        } else if (shouldShowProgress) {
+          setSyncPhase('offline');
+          setSyncProgress(0);
+        }
       }
-    } catch (e) {
+    } catch (e: any) {
+      abortedOffline = e?.name === 'AbortError' || (typeof navigator !== 'undefined' && !navigator.onLine);
       console.warn('Database background sync deferred:', e);
+      stopProgressTimers();
+      setPendingOfflineFlag(userId, true);
+      setIsOnline(false);
       setCloudSyncStatus('offline');
+      setSyncPhase('offline');
+      setSyncProgress(0);
     } finally {
+      if (syncAbortControllerRef.current === controller) {
+        syncAbortControllerRef.current = null;
+      }
       isSyncInFlightRef.current = false;
-      if (syncPendingRef.current) {
+      if (syncPendingRef.current && !abortedOffline && (typeof navigator === 'undefined' || navigator.onLine)) {
         syncPendingRef.current = false;
-        setTimeout(() => executeDatabaseSync(targetUser), 40);
+        setTimeout(() => executeDatabaseSync(targetUser, shouldShowProgress), 40);
+      } else {
+        syncPendingRef.current = false;
       }
     }
   };
 
   const syncWithDatabase = async (targetUser?: UserProfile | null) => {
+    mutationSeqRef.current += 1;
     // ⚡ Instantly notify other open tabs on this machine in <5ms
     const user = targetUser || currentUserRef.current;
     if (user?.id) {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        setIsOnline(false);
+        setCloudSyncStatus('offline');
+        setSyncPhase('offline');
+        setSyncProgress(0);
+        setPendingOfflineFlag(user.id, true);
+      } else if (hasPendingOfflineSyncRef.current) {
+        setPendingOfflineFlag(user.id, true);
+      }
+
       try {
         if (broadcastChannelRef.current) {
           broadcastChannelRef.current.postMessage({
@@ -1448,12 +1585,74 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       }
       refreshActiveDevicesCount();
     };
-    const handleOnline = () => {
+    // Restore pending offline sync flag on mount/user switch
+    if (typeof window !== 'undefined') {
+      try {
+        const hadPending = localStorage.getItem(`skp_pending_offline_sync_${userId}`) === '1' ||
+          Object.keys(StorageService.getAllDeletedRecordIds()).length > 0;
+        setPendingOfflineFlag(userId, hadPending);
+        if (!navigator.onLine) {
+          setIsOnline(false);
+          setCloudSyncStatus('offline');
+          setSyncPhase('offline');
+          setSyncProgress(0);
+        } else if (hadPending) {
+          setTimeout(() => {
+            executeDatabaseSync(currentUserRef.current, true);
+          }, 600);
+        }
+      } catch {}
+    }
+
+    const handleOffline = () => {
+      stopProgressTimers();
+      if (syncAbortControllerRef.current) {
+        try { syncAbortControllerRef.current.abort(); } catch {}
+      }
+      setIsOnline(false);
+      setCloudSyncStatus('offline');
+      setSyncPhase('offline');
+      setSyncProgress(0);
+    };
+
+    const runOnlineRecoverySync = async () => {
+      setIsOnline(true);
       if (realtimeChannelRef.current) {
         try { realtimeChannelRef.current.subscribe(); } catch {}
       }
-      debouncedLoadFromCloud(userId, 'network_online');
+
+      const hasDeletes = Object.keys(StorageService.getAllDeletedRecordIds()).length > 0;
+      if (hasPendingOfflineSyncRef.current || hasDeletes) {
+        await executeDatabaseSync(currentUserRef.current, true);
+      } else {
+        stopProgressTimers();
+        setSyncPhase('online_syncing');
+        setSyncProgress(1);
+        syncProgressTimerRef.current = setInterval(() => {
+          setSyncProgress(prev => (prev >= 82 ? prev : Math.min(82, prev + 9)));
+        }, 90);
+        try {
+          await loadUserDataFromCloud(userId, true);
+          if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            handleOffline();
+            return;
+          }
+          stopProgressTimers();
+          setCloudSyncStatus('synced');
+          setSyncProgress(100);
+          setSyncPhase('synced');
+          syncedHideTimerRef.current = setTimeout(() => {
+            setSyncPhase(prev => (prev === 'synced' ? 'idle' : prev));
+          }, 2200);
+        } catch {
+          handleOffline();
+        }
+      }
       refreshActiveDevicesCount();
+    };
+
+    const handleOnline = () => {
+      runOnlineRecoverySync();
     };
 
     const handleSendSessionBroadcast = (e: Event) => {
@@ -1473,10 +1672,27 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     if (typeof window !== 'undefined') {
       window.addEventListener('focus', handleFocus);
       window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
       window.addEventListener('storage', handleStorageEvent);
       window.addEventListener('khatapro_send_session_broadcast', handleSendSessionBroadcast);
       document.addEventListener('visibilitychange', handleVisibility);
     }
+
+    // Auto-retry pending offline sync every 5s when browser is back online
+    const offlineRetryInterval = setInterval(() => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        if (syncPhase !== 'offline') {
+          setIsOnline(false);
+          setCloudSyncStatus('offline');
+          setSyncPhase('offline');
+          setSyncProgress(0);
+        }
+        return;
+      }
+      if ((hasPendingOfflineSyncRef.current || Object.keys(StorageService.getAllDeletedRecordIds()).length > 0) && !isSyncInFlightRef.current) {
+        executeDatabaseSync(currentUserRef.current, true);
+      }
+    }, 5000);
 
     // 6. Safe background device status & 10-minute fallback heartbeat (every 120s / 2m)
     const pollingInterval = setInterval(() => {
@@ -1507,6 +1723,8 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     return () => {
       clearInterval(versionCheckInterval);
       clearInterval(pollingInterval);
+      clearInterval(offlineRetryInterval);
+      stopProgressTimers();
       if (broadcastChannelRef.current) {
         try { broadcastChannelRef.current.close(); } catch {}
         broadcastChannelRef.current = null;
@@ -1521,6 +1739,7 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       if (typeof window !== 'undefined') {
         window.removeEventListener('focus', handleFocus);
         window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
         window.removeEventListener('storage', handleStorageEvent);
         window.removeEventListener('khatapro_send_session_broadcast', handleSendSessionBroadcast);
         document.removeEventListener('visibilitychange', handleVisibility);
@@ -3114,6 +3333,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
         activeDevicesCount,
         refreshActiveDevicesCount,
         cloudSyncStatus,
+        isOnline,
+        syncProgress,
+        syncPhase,
+        hasPendingOfflineSync,
         syncWithDatabase,
         loadUserDataFromCloud,
         refreshData,

@@ -17,6 +17,7 @@ import BroadcastBanner from './BroadcastBanner';
 import SupportChatWidget from './SupportChatWidget';
 import AutoBackupGuardian from './AutoBackupGuardian';
 import CustomerDriveUploadGuardian from './CustomerDriveUploadGuardian';
+import OfflineSyncNotch from './OfflineSyncNotch';
 import { useApp } from '@/context/AppContext';
 
 export default function LayoutShell({ children }: { children: React.ReactNode }) {
@@ -79,6 +80,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
       <AuthGuard>
         {currentUser && (
           <div className="sticky top-0 z-40 w-full print:hidden">
+            <OfflineSyncNotch />
             <Navbar onToggleSidebar={() => setMobileSidebarOpen(prev => !prev)} />
           </div>
         )}
