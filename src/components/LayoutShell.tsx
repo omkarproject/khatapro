@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
 import MobileNav from './MobileNav';
@@ -23,7 +23,45 @@ import { useApp } from '@/context/AppContext';
 export default function LayoutShell({ children }: { children: React.ReactNode }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const pathname = usePathname();
-  const { currentUser, settings } = useApp();
+  const router = useRouter();
+  const { currentUser, settings, isOnline } = useApp();
+
+  // Register Offline Service Worker so all visited/prefetched routes & JS chunks work offline
+  React.useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        console.warn('ServiceWorker registration skipped:', err);
+      });
+    }
+  }, []);
+
+  // Proactively prefetch all core sidebar routes when online so offline navigation never reloads to Dino page
+  React.useEffect(() => {
+    if (!currentUser?.id || !isOnline) return;
+    const coreRoutes = [
+      '/',
+      '/khata',
+      '/customers',
+      '/upi-collection',
+      '/invoices',
+      '/notes-tasks',
+      '/expenses',
+      '/savings',
+      '/inventory',
+      '/reminders',
+      '/documents',
+      '/analytics',
+      '/settings',
+    ];
+    const timer = setTimeout(() => {
+      coreRoutes.forEach((route) => {
+        try {
+          router.prefetch(route);
+        } catch {}
+      });
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [currentUser?.id, isOnline, router]);
 
   // Dynamically update document title & favicon across entire website
   React.useEffect(() => {
