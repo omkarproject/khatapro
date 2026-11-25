@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   X,
   Printer,
@@ -35,7 +35,16 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
 
   const [selectedTemplate, setSelectedTemplate] = useState<string>('card_royal_indigo');
   const [activeSide, setActiveSide] = useState<'front' | 'back'>('front');
+  const [isPreviewHovered, setIsPreviewHovered] = useState(false);
   const [printMode, setPrintMode] = useState<'single' | 'sheet'>('single');
+
+  useEffect(() => {
+    if (!isOpen || isPreviewHovered) return;
+    const timer = setInterval(() => {
+      setActiveSide((prev) => (prev === 'front' ? 'back' : 'front'));
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [isOpen, isPreviewHovered]);
 
   const logoInputRef = useRef<HTMLInputElement>(null);
 
@@ -159,47 +168,42 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
         </div>
 
         {/* Content Body: Left Preview, Right Controls */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 items-start">
           
           {/* LEFT: Live Interactive Preview */}
-          <div className="lg:col-span-6 flex flex-col items-center justify-center space-y-4">
+          <div className="lg:col-span-6 flex flex-col items-center justify-center space-y-3.5 my-auto">
             <div className="flex items-center justify-between w-full max-w-sm">
               <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Live Card Preview
               </span>
-              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setActiveSide('front')}
-                  className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-                    activeSide === 'front'
-                      ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-xs'
-                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
-                  }`}
-                >
-                  Front Side
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveSide('back')}
-                  className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-                    activeSide === 'back'
-                      ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-xs'
-                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
-                  }`}
-                >
-                  Back (UPI QR)
-                </button>
-              </div>
+              <span className="text-[10px] font-semibold text-slate-400">
+                {isPreviewHovered ? 'Paused' : `${activeSide === 'front' ? 'Front' : 'Back'} • Auto 5s`}
+              </span>
             </div>
 
-            {/* 3D Realistic Business Card View */}
+            {/* 3D Realistic Business Card View (Auto-flips every 5s, pauses on hover) */}
             <div
-              className="w-full max-w-sm aspect-[1.75/1] rounded-2xl p-5 shadow-2xl relative overflow-hidden transition-all duration-300 border border-slate-200/40 dark:border-white/10 flex flex-col justify-between select-none"
-              style={{ background: currentTemplate.bgGradient }}
+              onMouseEnter={() => setIsPreviewHovered(true)}
+              onMouseLeave={() => setIsPreviewHovered(false)}
+              className="w-full max-w-sm aspect-[1.75/1] relative select-none cursor-pointer"
+              style={{ perspective: '1200px' }}
             >
-              {activeSide === 'front' ? (
-                <>
+              <div
+                className="w-full h-full relative transition-transform duration-700 ease-in-out"
+                style={{
+                  transformStyle: 'preserve-3d',
+                  transform: activeSide === 'back' ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                }}
+              >
+                {/* FRONT SIDE */}
+                <div
+                  className="absolute inset-0 w-full h-full rounded-2xl p-5 shadow-2xl overflow-hidden border border-slate-200/40 dark:border-white/10 flex flex-col justify-between"
+                  style={{
+                    background: currentTemplate.bgGradient,
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
+                  }}
+                >
                   <div className="flex items-start justify-between gap-2.5">
                     <div className="flex items-center gap-2.5 min-w-0">
                       {formData.logoUrl && (
@@ -279,9 +283,18 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
                       )}
                     </div>
                   </div>
-                </>
-              ) : (
-                <div className="h-full flex flex-col justify-between items-center text-center">
+                </div>
+
+                {/* BACK SIDE (UPI QR) */}
+                <div
+                  className="absolute inset-0 w-full h-full rounded-2xl p-5 shadow-2xl overflow-hidden border border-slate-200/40 dark:border-white/10 flex flex-col justify-between items-center text-center"
+                  style={{
+                    background: currentTemplate.bgGradient,
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
+                    transform: 'rotateY(180deg)',
+                  }}
+                >
                   <div>
                     {formData.logoUrl && (
                       <div
@@ -335,7 +348,7 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Template Selector Pills */}
@@ -369,18 +382,18 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
 
           </div>
 
-          {/* RIGHT: Customization Form & Print Mode */}
-          <div className="lg:col-span-6 space-y-4">
-            <div className="bg-slate-50 dark:bg-slate-950/60 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
-              <h4 className="text-xs font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider flex items-center gap-1.5">
+          {/* RIGHT: Compact Customization Form & Print Mode (Fits without scrolling) */}
+          <div className="lg:col-span-6 space-y-2.5">
+            <div className="bg-slate-50 dark:bg-slate-950/60 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
+              <h4 className="text-[11px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
                 Customize Card Details
               </h4>
 
               {/* Profile / Business Logo Selector */}
-              <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 flex items-center justify-between gap-3 shadow-xs">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="relative w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-indigo-400 dark:border-indigo-600 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
+              <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 flex items-center justify-between gap-2.5 shadow-xs">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="relative w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 border border-dashed border-indigo-400 dark:border-indigo-600 flex items-center justify-center overflow-hidden shrink-0">
                     {formData.logoUrl ? (
                       <img
                         src={formData.logoUrl}
@@ -388,20 +401,20 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <Building className="w-5 h-5 text-slate-400" />
+                      <Building className="w-4 h-4 text-slate-400" />
                     )}
                   </div>
                   <div className="min-w-0">
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block truncate">
+                    <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 block truncate">
                       Profile / Business Logo
                     </span>
-                    <span className="text-[10px] text-slate-400 block truncate">
-                      {formData.logoUrl ? '✓ Logo active on card' : 'Visiting card par photo/logo jodein'}
+                    <span className="text-[9.5px] text-slate-400 block truncate">
+                      {formData.logoUrl ? '✓ Logo active on card' : 'Add photo/logo'}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
                   <input
                     ref={logoInputRef}
                     type="file"
@@ -412,7 +425,7 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
                   <button
                     type="button"
                     onClick={() => logoInputRef.current?.click()}
-                    className="px-2.5 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-extrabold text-[11px] hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors flex items-center gap-1 cursor-pointer"
+                    className="px-2 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-extrabold text-[10.5px] hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors flex items-center gap-1 cursor-pointer"
                   >
                     <Upload className="w-3 h-3" />
                     <span>Upload</span>
@@ -422,7 +435,7 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, logoUrl: defaultLogo })}
-                      className="px-2 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10.5px] hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                      className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px] hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
                       title="Use Account Profile Avatar"
                     >
                       Use Profile
@@ -433,7 +446,7 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, logoUrl: '' })}
-                      className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                      className="p-1 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
                       title="Remove Logo"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -442,120 +455,120 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
                     Business / Store Name
                   </label>
                   <input
                     type="text"
                     value={formData.businessName}
                     onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
                     placeholder="Store / Company Name"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
                     Tagline / Business Nature
                   </label>
                   <input
                     type="text"
                     value={formData.tagline}
                     onChange={(e) => setFormData({ ...formData, tagline: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
                     placeholder="e.g. Traders & Merchants"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
                     Owner / Contact Name
                   </label>
                   <input
                     type="text"
                     value={formData.ownerName}
                     onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
                     placeholder="Your Name"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
                     Role / Designation
                   </label>
                   <input
                     type="text"
                     value={formData.roleTitle}
                     onChange={(e) => setFormData({ ...formData, roleTitle: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
                     placeholder="e.g. Proprietor"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
                     Phone Number
                   </label>
                   <input
                     type="text"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
                     placeholder="+91 98000 00000"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
                     Email Address
                   </label>
                   <input
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
                     placeholder="contact@business.com"
                   />
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
                     Shop / Office Address
                   </label>
                   <input
                     type="text"
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
                     placeholder="Shop No, Market, City, State"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
                     GSTIN (Optional)
                   </label>
                   <input
                     type="text"
                     value={formData.gstin || ''}
                     onChange={(e) => setFormData({ ...formData, gstin: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-semibold focus:ring-2 focus:ring-indigo-500 outline-none uppercase"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-semibold focus:ring-2 focus:ring-indigo-500 outline-none uppercase"
                     placeholder="22AAAAA0000A1Z5"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
                     UPI ID (for Back QR)
                   </label>
                   <input
                     type="text"
                     value={formData.upiId || ''}
                     onChange={(e) => setFormData({ ...formData, upiId: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
                     placeholder="name@okaxis"
                   />
                 </div>
@@ -563,35 +576,35 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
             </div>
 
             {/* Print Mode Selector */}
-            <div className="bg-slate-50 dark:bg-slate-950/60 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+            <div className="bg-slate-50 dark:bg-slate-950/60 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-1.5">
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
                 Print Format:
               </span>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setPrintMode('single')}
-                  className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all ${
+                  className={`p-2 rounded-xl border text-left cursor-pointer transition-all ${
                     printMode === 'single'
                       ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-bold'
                       : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
                   }`}
                 >
-                  <div className="text-xs font-extrabold">Single Card (Front + Back)</div>
-                  <div className="text-[10px] opacity-80 mt-0.5">Standard 3.5" x 2" card size</div>
+                  <div className="text-[11px] font-extrabold">Single Card (Front + Back)</div>
+                  <div className="text-[9.5px] opacity-80">Standard 3.5&quot; x 2&quot; card</div>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setPrintMode('sheet')}
-                  className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all ${
+                  className={`p-2 rounded-xl border text-left cursor-pointer transition-all ${
                     printMode === 'sheet'
                       ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-bold'
                       : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
                   }`}
                 >
-                  <div className="text-xs font-extrabold">A4 Sheet (8 Cards)</div>
-                  <div className="text-[10px] opacity-80 mt-0.5">Ready to print & cut on cardstock</div>
+                  <div className="text-[11px] font-extrabold">A4 Sheet (8 Cards)</div>
+                  <div className="text-[9.5px] opacity-80">Ready to print & cut</div>
                 </button>
               </div>
             </div>
@@ -600,7 +613,7 @@ export const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ isOpen, on
             <button
               type="button"
               onClick={handlePrint}
-              className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-sm shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 active:scale-98 transition-all cursor-pointer"
+              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 active:scale-98 transition-all cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               <span>Print Business Card Now ({printMode === 'single' ? 'Single 3.5" x 2"' : '8 Cards Sheet'})</span>
