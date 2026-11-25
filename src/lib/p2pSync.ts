@@ -279,7 +279,10 @@ export async function mirrorTransactionsFromDb(params: {
       type: invertedType,
       amount: t.amount,
       date: t.date,
-      category: t.category || (invertedType === 'credit' ? 'Credit Given' : 'Payment Received'),
+      category:
+        t.category === 'Credit Given' || t.category === 'Payment Received' || !t.category
+          ? (invertedType === 'credit' ? 'Credit Given' : 'Payment Received')
+          : t.category,
       paymentMode: t.paymentMode || 'upi',
       note: t.note || '',
       tags: peerTags,

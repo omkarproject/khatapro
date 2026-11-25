@@ -144,7 +144,7 @@ export default function DashboardPage() {
           !t.isDeleted &&
           t.status !== 'deleted' &&
           !isExcludedTxn(t) &&
-          (((t.type === 'debit' && (t.category === 'Payment Received' || t.note?.toLowerCase().includes('payment received'))) ||
+          (((t.type === 'debit' && (Boolean(t.customerId) || t.category === 'Payment Received' || t.note?.toLowerCase().includes('payment received'))) ||
             t.type === 'collection' ||
             t.type === 'income'))
       )

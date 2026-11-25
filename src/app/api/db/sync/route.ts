@@ -1484,7 +1484,10 @@ async function syncPeerMerchants(
           type: invertedType,
           amount: Number(t.amount) || 0,
           date: t.date || new Date().toISOString().split('T')[0],
-          category: t.category || (invertedType === 'credit' ? 'Credit Given' : 'Payment Received'),
+          category:
+            t.category === 'Credit Given' || t.category === 'Payment Received' || !t.category
+              ? (invertedType === 'credit' ? 'Credit Given' : 'Payment Received')
+              : t.category,
           paymentMode: t.paymentMode || t.payment_mode || 'upi',
           note: t.note || '',
           tags: peerTags,
