@@ -2,6 +2,31 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 import { getActiveSmtpConfig } from '@/lib/emailService';
 import { resolveUserEmail, verifyUserCredentials } from '@/lib/authHelpers';
+import {
+  getLoginLockoutState,
+  recordFailedLoginAttempt,
+  clearLoginLockout,
+} from '@/lib/loginLockout';
+
+export async function GET(req: NextRequest) {
+  try {
+    const email = req.nextUrl.searchParams.get('email') || '';
+    if (!email.trim() || !isSupabaseConfigured()) {
+      return NextResponse.json({ success: true, isLocked: false, remainingSeconds: 0, lockedUntil: null });
+    }
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return NextResponse.json({ success: true, isLocked: false, remainingSeconds: 0, lockedUntil: null });
+    }
+    const state = await getLoginLockoutState(supabase, email);
+    return NextResponse.json({
+      success: true,
+      ...state,
+    });
+  } catch {
+    return NextResponse.json({ success: true, isLocked: false, remainingSeconds: 0, lockedUntil: null });
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,15 +54,43 @@ export async function POST(req: NextRequest) {
     // Resolves email whether user entered email, phone number (with or without country code), or username
     const resolvedEmail = await resolveUserEmail(supabase, email);
 
+    // Check 10-minute account lockout BEFORE verifying password
+    const lockState = await getLoginLockoutState(supabase, resolvedEmail);
+    if (lockState.isLocked) {
+      return NextResponse.json({
+        success: false,
+        isLocked: true,
+        lockedUntil: lockState.lockedUntil,
+        remainingSeconds: lockState.remainingSeconds,
+        message: 'Too many wrong password attempts. Login is blocked for 10 minutes across all devices.',
+      }, { status: 429 });
+    }
+
     // Authenticate resiliently via Supabase Auth (verifies original password, trimmed password, and canonical email)
     let { data, error } = await verifyUserCredentials(supabase, resolvedEmail, password);
 
     if (error || !data?.user) {
+      const failed = await recordFailedLoginAttempt(supabase, resolvedEmail);
+      if (failed.isLocked) {
+        return NextResponse.json({
+          success: false,
+          isLocked: true,
+          lockedUntil: failed.lockedUntil,
+          remainingSeconds: failed.remainingSeconds,
+          attempts: failed.attempts,
+          message: '3 wrong password attempts! Your login is blocked for 10 minutes across all devices.',
+        }, { status: 429 });
+      }
       return NextResponse.json({
         success: false,
-        message: 'Invalid credentials. User could not be verified in database.',
+        isLocked: false,
+        attempts: failed.attempts,
+        remainingAttempts: failed.remainingAttempts,
+        message: `Invalid password. ${failed.remainingAttempts} attempt(s) remaining before 10-minute block.`,
       }, { status: 401 });
     }
+
+    await clearLoginLockout(supabase, resolvedEmail);
 
     const sbUser = data.user;
 

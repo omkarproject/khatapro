@@ -90,6 +90,46 @@ export default function AuthModal() {
   // Resend timer
   const [resendTimer, setResendTimer] = useState<number>(0);
 
+  // Live 10-minute Sign-In Lockout Timer (synced with Supabase across all devices/IPs)
+  const [lockoutSeconds, setLockoutSeconds] = useState<number>(0);
+
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setLockoutSeconds((prev) => (prev > 1 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutSeconds > 0]);
+
+  useEffect(() => {
+    if (mode !== 'signin') return;
+    const candidate = email.trim() || (typeof window !== 'undefined' ? localStorage.getItem('skp_last_login_email') || '' : '');
+    if (!candidate) {
+      setLockoutSeconds(0);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/auth/login?email=${encodeURIComponent(candidate)}`);
+        const data = await res.json();
+        if (data?.isLocked && data?.remainingSeconds > 0) {
+          setLockoutSeconds(Number(data.remainingSeconds));
+        } else {
+          setLockoutSeconds(0);
+        }
+      } catch {}
+    }, email.trim() ? 350 : 0);
+
+    return () => clearTimeout(timer);
+  }, [mode, email]);
+
+  const formatCountdown = (totalSec: number) => {
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
   // Live Duplicate Email & Phone Check (Signup)
   const [emailExists, setEmailExists] = useState(false);
   const [phoneExists, setPhoneExists] = useState(false);
@@ -211,6 +251,15 @@ export default function AuthModal() {
       return;
     }
 
+    if (lockoutSeconds > 0) {
+      setErrorMsg(`Account login is blocked for 10 minutes. Please wait ${formatCountdown(lockoutSeconds)}.`);
+      return;
+    }
+
+    try {
+      localStorage.setItem('skp_last_login_email', cleanEmail);
+    } catch {}
+
     if (parseInt(captchaInput.trim(), 10) !== captcha.answer) {
       setErrorMsg('Incorrect captcha answer. Please solve the math verification.');
       refreshCaptcha();
@@ -232,6 +281,9 @@ export default function AuthModal() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
+        if (data.isLocked && data.remainingSeconds > 0) {
+          setLockoutSeconds(Number(data.remainingSeconds));
+        }
         throw new Error(data.message || 'Login verification failed.');
       }
 
@@ -262,6 +314,9 @@ export default function AuthModal() {
           ? 'Enter the 6-digit code from your Authenticator app.'
           : `2FA Login verification code sent to ${cleanEmail}.`);
         return;
+      }
+      if (err?.isLocked && err?.remainingSeconds > 0) {
+        setLockoutSeconds(Number(err.remainingSeconds));
       }
       setErrorMsg(err.message || 'Invalid email or password.');
       refreshCaptcha();
@@ -702,12 +757,36 @@ export default function AuthModal() {
                     </div>
                   </div>
 
+                  {lockoutSeconds > 0 && (
+                    <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Lock className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                        <div className="text-left">
+                          <p className="text-xs font-black text-rose-700 dark:text-rose-300">
+                            Login Blocked (3 Wrong Attempts)
+                          </p>
+                          <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium">
+                            10 min ke liye login block hai. Try again after timer.
+                          </p>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-xl bg-rose-600 text-white font-mono text-xs font-black shrink-0 tabular-nums">
+                        {formatCountdown(lockoutSeconds)}
+                      </span>
+                    </div>
+                  )}
+
                   <button
                     type="submit"
-                    disabled={isLoading}
-                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-black text-xs tracking-wider uppercase shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
+                    disabled={isLoading || lockoutSeconds > 0}
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-black text-xs tracking-wider uppercase shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isLoading ? (
+                    {lockoutSeconds > 0 ? (
+                      <>
+                        <Lock className="w-4 h-4" />
+                        <span>Blocked ({formatCountdown(lockoutSeconds)})</span>
+                      </>
+                    ) : isLoading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
                         <span>Signing In...</span>

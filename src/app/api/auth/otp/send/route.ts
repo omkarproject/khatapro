@@ -4,6 +4,11 @@ import { saveOtp, validatePasswordStrength } from '@/lib/otpStore';
 import { getActiveSmtpConfig, sendOtpEmailDirect } from '@/lib/emailService';
 import { getGlobalBrandingFromDb } from '@/lib/globalBranding';
 import { resolveUserEmail, verifyUserCredentials } from '@/lib/authHelpers';
+import {
+  getLoginLockoutState,
+  recordFailedLoginAttempt,
+  clearLoginLockout,
+} from '@/lib/loginLockout';
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,15 +45,43 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: 'Password is required to initiate login verification' }, { status: 400 });
       }
 
+      // Check 10-minute account lockout BEFORE verifying password
+      const lockState = await getLoginLockoutState(supabase, cleanEmail);
+      if (lockState.isLocked) {
+        return NextResponse.json({
+          success: false,
+          isLocked: true,
+          lockedUntil: lockState.lockedUntil,
+          remainingSeconds: lockState.remainingSeconds,
+          message: 'Too many wrong password attempts. Login is blocked for 10 minutes across all devices.',
+        }, { status: 429 });
+      }
+
       // Verify credentials resiliently (tests original password, trimmed password, and canonical email)
       const { data: authData, error: authErr } = await verifyUserCredentials(supabase, cleanEmail, password);
 
       if (authErr || !authData?.user) {
+        const failed = await recordFailedLoginAttempt(supabase, cleanEmail);
+        if (failed.isLocked) {
+          return NextResponse.json({
+            success: false,
+            isLocked: true,
+            lockedUntil: failed.lockedUntil,
+            remainingSeconds: failed.remainingSeconds,
+            attempts: failed.attempts,
+            message: '3 wrong password attempts! Your login is blocked for 10 minutes across all devices.',
+          }, { status: 429 });
+        }
         return NextResponse.json({
           success: false,
-          message: authErr?.message || 'Invalid email or password. Please verify your credentials.',
+          isLocked: false,
+          attempts: failed.attempts,
+          remainingAttempts: failed.remainingAttempts,
+          message: `Invalid password. ${failed.remainingAttempts} attempt(s) remaining before 10-minute block.`,
         }, { status: 401 });
       }
+
+      await clearLoginLockout(supabase, cleanEmail);
 
       // Check user's two-factor authentication configuration in system_settings
       const { data: userSettings } = await supabase

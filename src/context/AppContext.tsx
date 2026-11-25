@@ -1515,7 +1515,13 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
     const data = await res.json();
     if (!res.ok || !data.success) {
-      throw new Error(data.message || 'Login failed. Please check your credentials.');
+      const err: any = new Error(data.message || 'Login failed. Please check your credentials.');
+      if (data.isLocked) {
+        err.isLocked = true;
+        err.lockedUntil = data.lockedUntil;
+        err.remainingSeconds = data.remainingSeconds;
+      }
+      throw err;
     }
 
     const user: UserProfile = data.user;
