@@ -296,17 +296,22 @@ export function openWhatsApp(phone?: string, text?: string): void {
 export function isOnlineCollectionTxn(txn: any): boolean {
   if (!txn || txn.isDeleted || txn.status === 'deleted') return false;
 
+  // 0. Never count P2P mirrored Khata entries as Online Pay Link / Collection Hub payments
+  const id = String(txn.id || '').toLowerCase();
+  const tags = Array.isArray(txn.tags) ? txn.tags : [];
+  if (id.startsWith('peer_txn_') || tags.includes('__p2p_peer')) {
+    return false;
+  }
+
   // 1. Explicit collection type from Hub or Modal
   if (txn.type === 'collection') return true;
 
   // 2. ID prefix check
-  const id = String(txn.id || '').toLowerCase();
   if (id.startsWith('txn_online_') || id.startsWith('col_') || id.startsWith('pay_')) {
     return true;
   }
 
   // 3. Tags check
-  const tags = Array.isArray(txn.tags) ? txn.tags : [];
   if (
     tags.some((tag: string) =>
       typeof tag === 'string' &&
@@ -362,14 +367,6 @@ export function isOnlineCollectionTxn(txn: any): boolean {
     ref.startsWith('rzp_') ||
     ref.startsWith('col_') ||
     ref.startsWith('order_')
-  ) {
-    return true;
-  }
-
-  // 7. Payment Received / got / debit with UPI paymentMode or valid numeric UTR / reference number
-  if (
-    (cat === 'payment received' || txn.type === 'debit' || txn.type === 'got') &&
-    (txn.paymentMode === 'upi' || txn.payment_mode === 'upi' || (ref && ref.length >= 6 && ref !== 'n/a'))
   ) {
     return true;
   }
