@@ -841,35 +841,32 @@ export default function ExpensesPage() {
     <div className="space-y-6">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2.5">
             <Receipt className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-            Expense & Outflow Tracker
+            Expense
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Categorized operational expenses, recurring payments, and monthly spending comparisons
-          </p>
         </div>
 
-        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => setIsCategoryModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 shadow-sm active:scale-95 transition-all cursor-pointer"
+            className="flex items-center justify-center p-2.5 rounded-2xl text-slate-700 dark:text-slate-200 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 shadow-sm active:scale-95 transition-all cursor-pointer"
             title="Manage Expense Categories"
+            aria-label="Categories"
           >
             <Tags className="w-4 h-4 text-indigo-500" />
-            <span>Categories</span>
           </button>
 
           <button
             type="button"
             onClick={handleOpenCreateModal}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-bold text-white fintech-gradient-primary shadow-md shadow-indigo-500/20 active:scale-95 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>Log Expense</span>
+            <span>Log</span>
           </button>
         </div>
       </div>
