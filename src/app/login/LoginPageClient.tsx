@@ -221,6 +221,52 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
   // Resend Timer
   const [resendTimer, setResendTimer] = useState<number>(0);
 
+  // Live Duplicate Email & Phone Check (Signup)
+  const [emailExists, setEmailExists] = useState(false);
+  const [phoneExists, setPhoneExists] = useState(false);
+  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
+
+  useEffect(() => {
+    if (mode !== 'signup') {
+      setEmailExists(false);
+      setPhoneExists(false);
+      setIsCheckingAvailability(false);
+      return;
+    }
+    const cleanEmail = email.trim().toLowerCase();
+    const digits = phone.replace(/\D/g, '');
+    const hasCheckableEmail = cleanEmail.includes('@') && cleanEmail.includes('.');
+    const hasCheckablePhone = digits.length >= 10;
+
+    if (!hasCheckableEmail && !hasCheckablePhone) {
+      setEmailExists(false);
+      setPhoneExists(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsCheckingAvailability(true);
+      try {
+        const res = await fetch('/api/auth/check-availability', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: hasCheckableEmail ? cleanEmail : '',
+            phone: hasCheckablePhone ? digits.slice(-10) : '',
+          }),
+        });
+        const data = await res.json();
+        if (data?.success) {
+          setEmailExists(hasCheckableEmail ? Boolean(data.emailExists) : false);
+          setPhoneExists(hasCheckablePhone ? Boolean(data.phoneExists) : false);
+        }
+      } catch {}
+      setIsCheckingAvailability(false);
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [mode, email, phone]);
+
   useEffect(() => {
     setCaptcha(generateCaptcha());
 
@@ -379,6 +425,14 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
     if (mode === 'signup') {
       if (!name.trim()) {
         setErrorMsg('Please enter your full name.');
+        return;
+      }
+      if (emailExists) {
+        setErrorMsg('Already registered email. Please Sign In or use a different email address.');
+        return;
+      }
+      if (phoneExists) {
+        setErrorMsg('Already registered mobile number. Please Sign In or use a different mobile number.');
         return;
       }
       if (!isPasswordPolicyMet) {
@@ -1068,8 +1122,16 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
-                      Email Address *
+                    <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
+                      <span>Email Address *</span>
+                      {isCheckingAvailability && email.includes('@') && (
+                        <span className="text-[10px] text-indigo-500 font-semibold normal-case animate-pulse">Checking...</span>
+                      )}
+                      {!isCheckingAvailability && emailExists && (
+                        <span className="text-[10px] text-rose-600 dark:text-rose-400 font-bold normal-case">
+                          Already registered email
+                        </span>
+                      )}
                     </label>
                     <div className="relative">
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
@@ -1079,14 +1141,26 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="you@business.com"
-                        className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                        className={`w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border focus:outline-none focus:ring-2 text-slate-900 dark:text-white ${
+                          emailExists
+                            ? 'border-rose-500 focus:ring-rose-500'
+                            : 'border-slate-300 dark:border-slate-800 focus:ring-indigo-500'
+                        }`}
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
-                      Phone Number
+                    <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
+                      <span>Phone Number</span>
+                      {isCheckingAvailability && phone.replace(/\D/g, '').length >= 10 && (
+                        <span className="text-[10px] text-indigo-500 font-semibold normal-case animate-pulse">Checking...</span>
+                      )}
+                      {!isCheckingAvailability && phoneExists && (
+                        <span className="text-[10px] text-rose-600 dark:text-rose-400 font-bold normal-case">
+                          Already registered mobile
+                        </span>
+                      )}
                     </label>
                     <div className="relative">
                       <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
@@ -1095,7 +1169,11 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="e.g. 9876543210"
-                        className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                        className={`w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border focus:outline-none focus:ring-2 text-slate-900 dark:text-white ${
+                          phoneExists
+                            ? 'border-rose-500 focus:ring-rose-500'
+                            : 'border-slate-300 dark:border-slate-800 focus:ring-indigo-500'
+                        }`}
                       />
                     </div>
                   </div>

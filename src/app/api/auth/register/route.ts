@@ -49,6 +49,30 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Prevent duplicate email or mobile number registration
+    const normPhone = cleanPhone.replace(/\D/g, '').slice(-10);
+    const { data: existingProfiles } = await supabase.from('profiles').select('id, email, phone');
+    if (existingProfiles && existingProfiles.length > 0) {
+      const emailDup = existingProfiles.some((p: any) => (p.email || '').toLowerCase().trim() === cleanEmail);
+      if (emailDup) {
+        return NextResponse.json({
+          success: false,
+          emailExists: true,
+          message: 'Already registered email. Please Sign In or use a different email address.',
+        }, { status: 409 });
+      }
+      if (normPhone && normPhone.length >= 10) {
+        const phoneDup = existingProfiles.some((p: any) => String(p.phone || '').replace(/\D/g, '').slice(-10) === normPhone);
+        if (phoneDup) {
+          return NextResponse.json({
+            success: false,
+            phoneExists: true,
+            message: 'Already registered mobile number. Please Sign In or use a different mobile number.',
+          }, { status: 409 });
+        }
+      }
+    }
+
     let createdUserId: string | null = null;
 
     // STRICT ROLE RULE: Only system owner (anantyadav8924@gmail.com) gets super_admin.

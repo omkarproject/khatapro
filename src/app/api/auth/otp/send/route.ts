@@ -164,6 +164,30 @@ export async function POST(req: NextRequest) {
           message: 'New merchant registrations are temporarily disabled by the system administrator. Please contact support.',
         }, { status: 403 });
       }
+
+      // Check duplicate email AND phone BEFORE SMTP/OTP skip so duplicate registrations are always blocked
+      const normPhone = String(phone || '').replace(/\D/g, '').slice(-10);
+      const { data: allProfs } = await supabase.from('profiles').select('id, email, phone');
+      if (allProfs && allProfs.length > 0) {
+        const emailDup = allProfs.some((p: any) => (p.email || '').toLowerCase().trim() === cleanEmail);
+        if (emailDup) {
+          return NextResponse.json({
+            success: false,
+            emailExists: true,
+            message: 'Already registered email. Please Sign In or use a different email address.',
+          }, { status: 400 });
+        }
+        if (normPhone && normPhone.length >= 10) {
+          const phoneDup = allProfs.some((p: any) => String(p.phone || '').replace(/\D/g, '').slice(-10) === normPhone);
+          if (phoneDup) {
+            return NextResponse.json({
+              success: false,
+              phoneExists: true,
+              message: 'Already registered mobile number. Please Sign In or use a different mobile number.',
+            }, { status: 400 });
+          }
+        }
+      }
     }
 
     // Check if SMTP OTP verification is enabled by administrator
