@@ -409,8 +409,13 @@ ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT ARR
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS attachments TEXT[] DEFAULT ARRAY[]::TEXT[];
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS invoice_id TEXT;
 
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS full_name TEXT DEFAULT '';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS blocked_reason TEXT;
+
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS images TEXT[] DEFAULT ARRAY[]::TEXT[];
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS image_url TEXT DEFAULT '';
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS mrp NUMERIC DEFAULT 0;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS min_stock_alert NUMERIC DEFAULT 0;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS min_stock NUMERIC DEFAULT 0;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
@@ -423,9 +428,40 @@ ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS total_tax NUMERIC DEFAULT 0;
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS tax_amount NUMERIC DEFAULT 0;
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS discount_amount NUMERIC DEFAULT 0;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+ALTER TABLE public.notes ADD COLUMN IF NOT EXISTS content TEXT DEFAULT '';
+ALTER TABLE public.notes ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.notes ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT ARRAY[]::TEXT[];
 
 ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS completed BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS is_completed BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT ARRAY[]::TEXT[];
+
+ALTER TABLE public.passwords ADD COLUMN IF NOT EXISTS title TEXT DEFAULT '';
+ALTER TABLE public.passwords ADD COLUMN IF NOT EXISTS password_encrypted TEXT DEFAULT '';
+ALTER TABLE public.passwords ADD COLUMN IF NOT EXISTS url TEXT;
+ALTER TABLE public.passwords ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE public.authenticators ADD COLUMN IF NOT EXISTS secret_encrypted TEXT DEFAULT '';
+ALTER TABLE public.authenticators ADD COLUMN IF NOT EXISTS icon TEXT;
+
+ALTER TABLE public.customer_drive_folders ADD COLUMN IF NOT EXISTS folder_id TEXT DEFAULT '';
+ALTER TABLE public.customer_drive_folders ADD COLUMN IF NOT EXISTS folder_name TEXT DEFAULT 'Folder';
+
+ALTER TABLE public.customer_drive_files ADD COLUMN IF NOT EXISTS file_id TEXT DEFAULT '';
+ALTER TABLE public.customer_drive_files ADD COLUMN IF NOT EXISTS file_name TEXT DEFAULT '';
+ALTER TABLE public.customer_drive_files ADD COLUMN IF NOT EXISTS file_size BIGINT DEFAULT 0;
+ALTER TABLE public.customer_drive_files ADD COLUMN IF NOT EXISTS mime_type TEXT;
+ALTER TABLE public.customer_drive_files ADD COLUMN IF NOT EXISTS view_link TEXT DEFAULT '';
+ALTER TABLE public.customer_drive_files ALTER COLUMN data_url DROP NOT NULL;
+
+-- Create public storage bucket for attachments & avatars
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('khatapro-media', 'khatapro-media', true)
+ON CONFLICT (id) DO NOTHING;
 
 -- ==========================================================
 -- 3. ENABLE ROW LEVEL SECURITY (RLS) POLICIES
@@ -444,6 +480,7 @@ ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_devices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.passwords ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.authenticators ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customer_drive_folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customer_drive_files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.google_drive_tokens ENABLE ROW LEVEL SECURITY;
@@ -528,6 +565,26 @@ EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN
   DROP POLICY IF EXISTS "user_devices_isolation" ON public.user_devices;
   CREATE POLICY "user_devices_isolation" ON public.user_devices FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS "customer_drive_folders_isolation" ON public.customer_drive_folders;
+  CREATE POLICY "customer_drive_folders_isolation" ON public.customer_drive_folders FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS "customer_drive_files_isolation" ON public.customer_drive_files;
+  CREATE POLICY "customer_drive_files_isolation" ON public.customer_drive_files FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS "google_drive_tokens_isolation" ON public.google_drive_tokens;
+  CREATE POLICY "google_drive_tokens_isolation" ON public.google_drive_tokens FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS "google_drive_backups_isolation" ON public.google_drive_backups;
+  CREATE POLICY "google_drive_backups_isolation" ON public.google_drive_backups FOR ALL USING (auth.uid() = user_id OR auth.role() = 'service_role') WITH CHECK (auth.uid() = user_id OR auth.role() = 'service_role');
 EXCEPTION WHEN OTHERS THEN NULL; END $$;
 
 -- ==========================================================

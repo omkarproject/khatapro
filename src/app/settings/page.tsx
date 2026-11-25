@@ -3772,37 +3772,21 @@ export default function SettingsPage() {
       {/* Tab: Database & Cloud Auth Switcher (Admin Only) */}
       {mainTab === 'admin' && adminSubTab === 'supabase' && isAdmin && (
         <form onSubmit={handleSaveBackend} className="glass-card p-6 space-y-5 max-w-2xl">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-slate-800">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                <Database className="w-4 h-4 text-emerald-500" />
-                Supabase PostgreSQL &amp; Cloud Authentication
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowSqlSetupModal(true)}
-                className="p-1 rounded-lg hover:bg-emerald-500/10 text-emerald-500 hover:text-emerald-400 transition-colors cursor-pointer"
-                title="Database Setup SQL &amp; Admin Generator (Click to open)"
-                aria-label="Database Setup Information &amp; SQL Generator"
-              >
-                <Info className="w-4 h-4" />
-              </button>
-            </div>
+          <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-slate-800">
+            <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+              <Database className="w-4 h-4 text-emerald-500" />
+              Supabase
+            </h3>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowSqlSetupModal(true)}
-                className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
-              >
-                <Code className="w-3.5 h-3.5 text-emerald-500" />
-                <span>SQL Tables Setup</span>
-              </button>
-              <span className="self-start sm:self-auto text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Primary Provider
-              </span>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowSqlSetupModal(true)}
+              className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center transition-all cursor-pointer shadow-sm active:scale-95"
+              title="SQL Tables Setup"
+              aria-label="SQL Tables Setup"
+            >
+              <Info className="w-4 h-4" />
+            </button>
           </div>
 
           {/* Supabase Connection Details */}
@@ -3906,14 +3890,11 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-                        <span>Supabase SQL Tables &amp; Admin Setup</span>
+                        <span>SQL Tables</span>
                         <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                          18 Tables
+                          19 Tables
                         </span>
                       </h3>
-                      <p className="text-[11px] text-slate-400">
-                        Admin details enter karein aur SQL copy karke Supabase SQL Editor me run karein.
-                      </p>
                     </div>
                   </div>
                   <button
@@ -3989,20 +3970,12 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {/* Instructions Box */}
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-300 leading-relaxed flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <div>
-                    Ye SQL command Supabase ke sabhi <b>18 tables, RLS security policies, triggers aur indexes</b> banayega, sath me aapke diye hue email aur password se aapko <b>Super Admin</b> bana dega.
-                  </div>
-                </div>
-
                 {/* SQL Code Preview (Scrollable) */}
                 <div className="flex-1 overflow-hidden flex flex-col rounded-2xl bg-slate-950 border border-slate-800">
                   <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-800 text-[11px] font-mono text-slate-400">
                     <span className="flex items-center gap-1.5">
                       <Code className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>schema_and_admin_setup.sql</span>
+                      <span>schema_setup.sql</span>
                     </span>
                     <span className="text-[10px] text-slate-500">PostgreSQL</span>
                   </div>
