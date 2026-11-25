@@ -123,9 +123,9 @@ export function DevicesModal({ isOpen, onClose }: DevicesModalProps) {
   // Single device logout
   const handleLogoutDevice = async (device: DeviceSession) => {
     if (device.isCurrent) {
-      if (window.confirm('Are you sure you want to log out from this current device?')) {
+      if (window.confirm('Are you sure you want to sign out from all devices and clear browser storage?')) {
         onClose();
-        logout();
+        await logout(true);
       }
       return;
     }
@@ -173,29 +173,12 @@ export function DevicesModal({ isOpen, onClose }: DevicesModalProps) {
   const handleLogoutAllDevices = async () => {
     setActionInProgress('logout_all');
     try {
-      if (currentUserId) {
-        broadcastSessionRevocation({
-          action: 'logout_all',
-          originDeviceId: currentDeviceId,
-          userId: currentUserId,
-        });
-      }
-
-      await fetch('/api/auth/devices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'logout_all',
-          keepCurrent: false,
-        }),
-      }).catch(() => null);
-
-      addToast('All Devices Logged Out', 'You have been signed out from all devices.', 'info');
+      addToast('All Devices Logged Out', 'Signed out from all devices & browser storage cleared.', 'info');
       onClose();
-      logout();
+      await logout(true);
     } catch {
       onClose();
-      logout();
+      await logout(true);
     }
   };
 

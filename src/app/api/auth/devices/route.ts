@@ -2,6 +2,53 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 import { DeviceSession } from '@/types';
 
+async function broadcastDeviceSessionEvent(
+  supabase: any,
+  userId: string,
+  payload: Record<string, any>
+): Promise<void> {
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    const timer = setTimeout(finish, 1500);
+
+    try {
+      const chan = supabase.channel(`khatapro_realtime_${userId}`);
+      chan.subscribe(async (status: string) => {
+        if (status === 'SUBSCRIBED') {
+          try {
+            await chan.send({
+              type: 'broadcast',
+              event: 'khatapro_session_event',
+              payload: {
+                userId,
+                timestamp: Date.now(),
+                ...payload,
+              },
+            });
+          } catch {}
+          clearTimeout(timer);
+          setTimeout(() => {
+            try { supabase.removeChannel(chan); } catch {}
+            finish();
+          }, 180);
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          clearTimeout(timer);
+          try { supabase.removeChannel(chan); } catch {}
+          finish();
+        }
+      });
+    } catch {
+      clearTimeout(timer);
+      finish();
+    }
+  });
+}
+
 function getClientIp(req: NextRequest): string {
   const forwarded = req.headers.get('x-forwarded-for');
   if (forwarded) {
@@ -366,6 +413,12 @@ export async function POST(req: NextRequest) {
         }).eq('user_id', userId);
       } catch {}
 
+      await broadcastDeviceSessionEvent(supabase, userId, {
+        action: 'logout_device',
+        targetDeviceId: targetDevId,
+        originDeviceId: 'server_devices_api',
+      });
+
       return NextResponse.json({
         success: true,
         message: 'Device session revoked successfully',
@@ -417,6 +470,11 @@ export async function POST(req: NextRequest) {
           },
         }).eq('user_id', userId);
       } catch {}
+
+      await broadcastDeviceSessionEvent(supabase, userId, {
+        action: shouldKeepCurrent ? 'logout_others' : 'logout_all',
+        originDeviceId: shouldKeepCurrent ? deviceId : 'server_devices_api',
+      });
 
       return NextResponse.json({
         success: true,

@@ -158,7 +158,7 @@ interface AppContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (data: { name: string; email: string; password: string; businessName?: string; phone?: string; role?: UserRole }) => Promise<void>;
   applyAuthenticatedUser: (user: UserProfile) => Promise<void>;
-  logout: () => void;
+  logout: (allDevices?: boolean) => void | Promise<void>;
   activeDevicesCount: number;
   refreshActiveDevicesCount: () => Promise<number>;
   cloudSyncStatus: 'synced' | 'syncing' | 'offline' | 'error';
@@ -1686,22 +1686,26 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     addToast('Authentication Verified', `Welcome, ${user.name}! Connected to Supabase Cloud Database.`, 'success');
   };
 
-  // Logout handler
-  const logout = () => {
+  // Logout handler (cleans all local browser storage & optionally revokes all devices in realtime)
+  const logout = async (allDevices: boolean = false) => {
     const curU = currentUserRef.current || currentUser || StorageService.getCurrentUser();
     const myDevId = typeof window !== 'undefined' ? getOrCreateDeviceId() : '';
     if (curU && myDevId) {
       try {
         broadcastSessionRevocation({
-          action: 'logout_device',
+          action: allDevices ? 'logout_all' : 'logout_device',
           originDeviceId: myDevId,
           targetDeviceId: myDevId,
           userId: curU.id,
         });
-        fetch('/api/auth/devices', {
+        await fetch('/api/auth/devices', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'logout_device', deviceId: myDevId }),
+          body: JSON.stringify(
+            allDevices
+              ? { action: 'logout_all', keepCurrent: false, deviceId: myDevId }
+              : { action: 'logout_device', deviceId: myDevId }
+          ),
           keepalive: true,
         }).catch(() => null);
       } catch {}
@@ -1734,11 +1738,14 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
     setGroupNotifications([]);
     setSettingsState(getCleanDefaultSettings());
     setActiveDevicesCount(1);
-    addToast('Signed Out', 'You have logged out of your account.', 'info');
+    addToast('Signed Out', allDevices ? 'Signed out from all devices & browser storage cleared.' : 'You have logged out of your account.', 'info');
     if (typeof window !== 'undefined') {
       try {
         localStorage.clear();
         sessionStorage.clear();
+        if ('caches' in window) {
+          caches.keys().then((names) => names.forEach((n) => caches.delete(n))).catch(() => {});
+        }
       } catch {}
       // Perform hard reload to /login
       window.location.href = '/login';
