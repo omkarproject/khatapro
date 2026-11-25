@@ -2386,6 +2386,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   };
 
   const updateTransaction = (txn: Transaction) => {
+    if (txn.id.startsWith('peer_txn_') || (Array.isArray(txn.tags) && txn.tags.includes('__p2p_peer'))) {
+      addToast('Action Not Allowed', 'You can only edit transactions created by you.', 'info');
+      return;
+    }
     const updatedTxns = StorageService.updateTransaction(txn);
     setTransactions(updatedTxns);
     setCustomers(StorageService.getCustomers()); // balance updated
@@ -2409,6 +2413,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
   const deleteTransaction = (id: string) => {
     const existing = StorageService.getTransactions().find(t => t.id === id);
     if (!existing) return;
+    if (existing.id.startsWith('peer_txn_') || (Array.isArray(existing.tags) && existing.tags.includes('__p2p_peer'))) {
+      addToast('Action Not Allowed', 'You can only delete transactions created by you.', 'info');
+      return;
+    }
 
     const actorName = currentUser?.businessName || currentUser?.name || profile?.name || 'User';
 
@@ -2469,6 +2477,10 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
 
   const hardDeleteTransaction = async (id: string) => {
     const existing = StorageService.getTransactions().find(t => t.id === id);
+    if (existing && (existing.id.startsWith('peer_txn_') || (Array.isArray(existing.tags) && existing.tags.includes('__p2p_peer')))) {
+      addToast('Action Not Allowed', 'You can only delete transactions created by you.', 'info');
+      return;
+    }
     if (existing && Array.isArray(existing.attachments) && existing.attachments.length > 0) {
       const fileNames: string[] = [];
       const fileIds: string[] = [];

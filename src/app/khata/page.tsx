@@ -278,6 +278,10 @@ function KhataPageInner() {
     return (customerIdParam || groupIdParam) ? 'ledger' : 'directory';
   });
   const [editingTxnId, setEditingTxnId] = useState<string | null>(null);
+  const [peerDeleteBlockModal, setPeerDeleteBlockModal] = useState<{ open: boolean; merchantName: string }>({
+    open: false,
+    merchantName: '',
+  });
   const [isChatSearchOpen, setIsChatSearchOpen] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -1652,6 +1656,14 @@ function KhataPageInner() {
 
   // Open existing transaction for modification in Screen 3 (Keypad & Entry)
   const handleOpenEditTransaction = (txn: Transaction) => {
+    if (txn.id.startsWith('peer_txn_') || (Array.isArray(txn.tags) && txn.tags.includes('__p2p_peer'))) {
+      addToast(
+        'View Only Transaction',
+        `Sirf ${activeCustomer?.name || 'creator merchant'} hi is transaction ko edit ya delete kar sakte hain.`,
+        'info'
+      );
+      return;
+    }
     setEditingTxnId(txn.id);
     const isReceivedType = txn.type === 'debit' || txn.type === 'collection';
     setEntryType(isReceivedType ? 'received' : 'given');
@@ -1711,6 +1723,10 @@ function KhataPageInner() {
   // Delete transaction currently being edited (soft delete - shows as deleted/excluded in ledger)
   const handleDeleteEditingTransaction = () => {
     if (!editingTxnId) return;
+    if (editingTxnId.startsWith('peer_txn_')) {
+      addToast('Action Not Allowed', 'You can only delete transactions created by you.', 'info');
+      return;
+    }
     deleteTransaction(editingTxnId);
     setEditingTxnId(null);
     setEntryAmountStr('');
@@ -1722,6 +1738,10 @@ function KhataPageInner() {
   // Permanent Delete transaction (header trash icon - removes completely so it doesn't show at all)
   const handlePermanentDeleteEditingTransaction = async () => {
     if (!editingTxnId) return;
+    if (editingTxnId.startsWith('peer_txn_')) {
+      addToast('Action Not Allowed', 'You can only delete transactions created by you.', 'info');
+      return;
+    }
     if (confirm('Permanently delete this transaction? It will be completely removed and will not appear in the ledger.')) {
       await hardDeleteTransaction(editingTxnId);
       setEditingTxnId(null);
@@ -2612,9 +2632,25 @@ function KhataPageInner() {
     }
   };
 
-  // Handle Delete Customer (Screen 1)
+  // Handle Delete Customer (Screen 1) - only merchant who added the 1st transaction can delete
   const handleDeleteCurrentCustomer = () => {
     if (!activeCustomer) return;
+    const sortedTxns = [...activeTransactions].sort((a, b) => {
+      const timeA = new Date(a.date).getTime();
+      const timeB = new Date(b.date).getTime();
+      if (timeA !== timeB) return timeA - timeB;
+      return (a.createdAt ? new Date(a.createdAt).getTime() : 0) - (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+    });
+    const firstTxn = sortedTxns[0];
+    const isPeerFirstTxn = Boolean(
+      firstTxn &&
+        (firstTxn.id.startsWith('peer_txn_') ||
+          (Array.isArray(firstTxn.tags) && firstTxn.tags.includes('__p2p_peer')))
+    );
+    if (isPeerFirstTxn) {
+      setPeerDeleteBlockModal({ open: true, merchantName: activeCustomer.name });
+      return;
+    }
     if (confirm(`Are you sure you want to delete ${activeCustomer.name}? All ledger records will be removed.`)) {
       deleteCustomer(activeCustomer.id);
       setScreenView('chat');
@@ -8556,6 +8592,32 @@ function KhataPageInner() {
           }
         }
       `}</style>
+
+      {/* Profile Delete Restriction Modal (First Transaction Creator Only) */}
+      {peerDeleteBlockModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-sm w-full p-6 text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-base font-black text-slate-900 dark:text-white">
+                Please contact to {peerDeleteBlockModal.merchantName} to delete
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                1st transaction <span className="font-bold text-slate-800 dark:text-slate-200">{peerDeleteBlockModal.merchantName}</span> ne add kiya hai, isliye sirf wahi is profile ko delete kar sakte hain.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPeerDeleteBlockModal({ open: false, merchantName: '' })}
+              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors cursor-pointer"
+            >
+              OK, Got It
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -53,6 +53,7 @@ import {
   Loader2,
   RotateCcw,
   BadgeCheck,
+  AlertTriangle,
 } from 'lucide-react';
 
 const POPULAR_BANKS = [
@@ -144,6 +145,35 @@ export default function CustomersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [activeCustomer, setActiveCustomer] = useState<Customer | null>(null);
+  const [peerDeleteBlockModal, setPeerDeleteBlockModal] = useState<{ open: boolean; merchantName: string }>({
+    open: false,
+    merchantName: '',
+  });
+
+  const isBlockedByPeerFirstTxn = (cust: Customer): boolean => {
+    const normPhone = (cust.phone || '').replace(/\D/g, '').slice(-10);
+    const custTxns = transactions
+      .filter((t) => {
+        if (!t) return false;
+        if (String(t.customerId || '') === String(cust.id)) return true;
+        if (cust.id.startsWith('peer_cust_') && String(t.customerId || '') === cust.id.replace('peer_cust_', '')) return true;
+        const tPhone = (t.customerPhone || t.peerPhone || '').replace(/\D/g, '').slice(-10);
+        if (normPhone && tPhone && normPhone === tPhone) return true;
+        return false;
+      })
+      .sort((a, b) => {
+        const timeA = new Date(a.date).getTime();
+        const timeB = new Date(b.date).getTime();
+        if (timeA !== timeB) return timeA - timeB;
+        return (a.createdAt ? new Date(a.createdAt).getTime() : 0) - (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+      });
+    const firstTxn = custTxns[0];
+    return Boolean(
+      firstTxn &&
+        (firstTxn.id.startsWith('peer_txn_') ||
+          (Array.isArray(firstTxn.tags) && firstTxn.tags.includes('__p2p_peer')))
+    );
+  };
 
   // Customer Cloud Drive State
   const [driveCustomer, setDriveCustomer] = useState<Customer | null>(null);
@@ -1640,6 +1670,10 @@ export default function CustomersPage() {
                       <button
                         type="button"
                         onClick={async () => {
+                          if (isBlockedByPeerFirstTxn(cust)) {
+                            setPeerDeleteBlockModal({ open: true, merchantName: cust.name });
+                            return;
+                          }
                           if (confirm(`Are you sure you want to permanently delete ${cust.name}? This action cannot be undone.`)) {
                             await hardDeleteCustomer(cust.id);
                           }
@@ -1712,6 +1746,10 @@ export default function CustomersPage() {
                       </button>
                       <button
                         onClick={() => {
+                          if (isBlockedByPeerFirstTxn(cust)) {
+                            setPeerDeleteBlockModal({ open: true, merchantName: cust.name });
+                            return;
+                          }
                           if (confirm(`Are you sure you want to delete ${cust.name}?`)) {
                             deleteCustomer(cust.id);
                           }
@@ -4003,6 +4041,32 @@ export default function CustomersPage() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Profile Delete Restriction Modal (First Transaction Creator Only) */}
+      {peerDeleteBlockModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-sm w-full p-6 text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-base font-black text-slate-900 dark:text-white">
+                Please contact to {peerDeleteBlockModal.merchantName} to delete
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                1st transaction <span className="font-bold text-slate-800 dark:text-slate-200">{peerDeleteBlockModal.merchantName}</span> ne add kiya hai, isliye sirf wahi is profile ko delete kar sakte hain.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPeerDeleteBlockModal({ open: false, merchantName: '' })}
+              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors cursor-pointer"
+            >
+              OK, Got It
+            </button>
           </div>
         </div>
       )}
