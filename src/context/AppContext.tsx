@@ -1537,89 +1537,67 @@ export function AppProvider({ children, initialBranding }: { children: React.Rea
       }
     }
 
-    // 4. Safe background version check fallback (60s) to guarantee sync even if WebSockets drop or sleep on mobile
-    const versionCheckInterval = setInterval(async () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && !isSyncInFlightRef.current && !isSyncingFromCloudRef.current) {
-        try {
-          const res = await fetch(`/api/db/sync?userId=${encodeURIComponent(userId)}&checkVersion=true`, {
-            headers: { 'X-Auth-Session': userId },
-          });
-          if (res.status === 401) {
-        try {
-          const errJson = await res.json();
-          if (errJson?.forceLogout) {
-            logout();
-            return;
-          }
-        } catch {}
-      }
-      if (res.ok) {
-            const data = await res.json();
-            if (data && data.success && data.version) {
-              if (lastKnownCloudVersionRef.current && data.version !== lastKnownCloudVersionRef.current) {
-                console.log(`⚡ [Realtime Live Sync] Version bump detected (${lastKnownCloudVersionRef.current} -> ${data.version}). Refreshing...`);
-                lastKnownCloudVersionRef.current = data.version;
-                debouncedLoadFromCloud(userId, 'live_poll_version_change');
-              } else if (!lastKnownCloudVersionRef.current) {
-                lastKnownCloudVersionRef.current = data.version;
-              }
+    // 4. Safe background version check fallback (90s) to guarantee sync even if WebSockets drop or sleep on mobile
+    let lastVersionCheckAt = 0;
+    const runLightweightVersionCheck = async (reason: string) => {
+      const now = Date.now();
+      if (now - lastVersionCheckAt < 10000) return; // Rate-limit to at most once every 10s
+      if (isSyncInFlightRef.current || isSyncingFromCloudRef.current || !isOnlineRef.current) return;
+      lastVersionCheckAt = now;
+      try {
+        const res = await fetch(`/api/db/sync?userId=${encodeURIComponent(userId)}&checkVersion=true`, {
+          headers: { 'X-Auth-Session': userId },
+        });
+        if (res.status === 401) {
+          try {
+            const errJson = await res.json();
+            if (errJson?.forceLogout) {
+              logout();
+              return;
+            }
+          } catch {}
+        }
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && data.version) {
+            if (lastKnownCloudVersionRef.current && data.version !== lastKnownCloudVersionRef.current) {
+              console.log(`⚡ [Realtime Live Sync] Version bump detected (${reason}: ${lastKnownCloudVersionRef.current} -> ${data.version}). Refreshing...`);
+              lastKnownCloudVersionRef.current = data.version;
+              debouncedLoadFromCloud(userId, reason);
+            } else if (!lastKnownCloudVersionRef.current) {
+              lastKnownCloudVersionRef.current = data.version;
             }
           }
-        } catch {}
-      }
-    }, 60000);
+        }
+      } catch {}
+    };
 
-    // 5. Tab Focus & Visibility Change Listeners (wakes up mobile device / inactive tab with rocket speed)
+    const versionCheckInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        runLightweightVersionCheck('live_poll_version_change');
+      }
+    }, 90000);
+
+    // 5. Tab Focus & Visibility Change Listeners (uses lightweight version check — only fetches full DB if version actually changed!)
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        // Ensure Realtime channel is alive
         if (realtimeChannelRef.current) {
           const chanState = realtimeChannelRef.current.state;
           if (chanState === 'closed' || chanState === 'errored' || chanState === 'leaving') {
             try { realtimeChannelRef.current.subscribe(); } catch {}
           }
         }
-        // Rapid sub-25ms version check to see if remote device pushed updates
-        fetch(`/api/db/sync?userId=${encodeURIComponent(userId)}&checkVersion=true`, {
-          headers: { 'X-Auth-Session': userId },
-        })
-          .then(r => r.json())
-          .then(data => {
-            if (data?.forceLogout) {
-              logout();
-              return;
-            }
-            if (data?.version) {
-              if (lastKnownCloudVersionRef.current && data.version !== lastKnownCloudVersionRef.current) {
-                lastKnownCloudVersionRef.current = data.version;
-                debouncedLoadFromCloud(userId, 'version_change_on_visible');
-              } else if (!lastKnownCloudVersionRef.current) {
-                lastKnownCloudVersionRef.current = data.version;
-              }
-            }
-          })
-          .catch(() => {});
-
-        const elapsed = Date.now() - lastCloudSyncTimestampRef.current;
-        if (elapsed > 1500) {
-          debouncedLoadFromCloud(userId, 'visibility_change');
-        }
-        refreshActiveDevicesCount();
+        runLightweightVersionCheck('version_change_on_visible');
       }
     };
     const handleFocus = () => {
-      // Re-verify realtime subscription on window focus
       if (realtimeChannelRef.current) {
         const chanState = realtimeChannelRef.current.state;
         if (chanState === 'closed' || chanState === 'errored' || chanState === 'leaving') {
           try { realtimeChannelRef.current.subscribe(); } catch {}
         }
       }
-      const elapsed = Date.now() - lastCloudSyncTimestampRef.current;
-      if (elapsed > 1500) {
-        debouncedLoadFromCloud(userId, 'window_focus');
-      }
-      refreshActiveDevicesCount();
+      runLightweightVersionCheck('version_change_on_focus');
     };
     // Restore pending offline sync flag on mount/user switch
     if (typeof window !== 'undefined') {

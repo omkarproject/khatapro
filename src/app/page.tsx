@@ -94,7 +94,7 @@ export default function DashboardPage() {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         fetchSupportTickets();
       }
-    }, isAdmin ? 15000 : 45000);
+    }, isAdmin ? 30000 : 90000);
 
     const handleTicketCreated = () => fetchSupportTickets();
     const handleStorage = (e: StorageEvent) => {

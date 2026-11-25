@@ -161,7 +161,7 @@ export default function SupportChatWidget() {
         if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
           fetchTickets(true);
         }
-      }, isOpen ? 10000 : (isAdmin ? 15000 : 60000)); // 10s when open, 15s for admin, 60s for merchant
+      }, isOpen ? 12000 : (isAdmin ? 30000 : 90000)); // 12s when open, 30s for admin, 90s for merchant
       return () => clearInterval(interval);
     }
   }, [currentUser, isAdmin, isOpen]);

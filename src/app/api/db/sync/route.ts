@@ -960,10 +960,11 @@ export async function GET(req: NextRequest) {
 
     // Fast sub-25ms version check for lightweight cross-device change detection
     if (searchParams.get('checkVersion') === 'true') {
-      const [profRes, setRes, txnRes] = await Promise.all([
+      const [profRes, setRes, txnRes, custRes] = await Promise.all([
         supabase.from('profiles').select('id, is_blocked').eq('id', userId).maybeSingle(),
         supabase.from('system_settings').select('updated_at').eq('user_id', userId).maybeSingle(),
         supabase.from('transactions').select('updated_at').eq('user_id', userId).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('customers').select('updated_at').eq('user_id', userId).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
 
       if (!profRes.error && (!profRes.data || profRes.data.is_blocked)) {
@@ -975,7 +976,8 @@ export async function GET(req: NextRequest) {
 
       const v1 = setRes.data?.updated_at || '';
       const v2 = txnRes.data?.updated_at || '';
-      const finalVersion = v1 > v2 ? v1 : (v2 || v1);
+      const v3 = custRes.data?.updated_at || '';
+      const finalVersion = [v1, v2, v3].sort().pop() || '';
 
       return NextResponse.json({
         success: true,

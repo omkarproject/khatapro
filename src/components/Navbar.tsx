@@ -364,8 +364,8 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
   useEffect(() => {
     if (currentUser) {
       fetchSupportTickets();
-      // Near real-time polling (12s for admin, 30s for merchant)
-      const pollMs = isAdmin ? 12000 : 30000;
+      // Egress-friendly polling (30s for admin, 90s for merchant; instant updates via events)
+      const pollMs = isAdmin ? 30000 : 90000;
       const interval = setInterval(() => {
         if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
           fetchSupportTickets(true);
