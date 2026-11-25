@@ -145,91 +145,29 @@ export interface EmailLogoResult {
  * - Missing/Invalid: Falls back to clean empty string (NO broken image icons rendered).
  */
 export function resolveEmailLogo(rawLogo?: string, brandName = 'SmartKhata'): EmailLogoResult {
-  const attachments: Array<{
-    filename: string;
-    content: Buffer;
-    cid: string;
-    contentType: string;
-  }> = [];
-
   const trimmed = rawLogo?.trim() || '';
-  const cidName = 'brand_logo_cid@smartkhata';
+  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://smartkhata.netsell.in').replace(/\/+$/, '');
+  const imgStyle = 'max-height: 48px; max-width: 180px; object-fit: contain; margin-bottom: 12px; display: inline-block; border-radius: 8px;';
 
-  // 1. Base64 Data URL (e.g. data:image/png;base64,... or data:image/jpeg;base64,...)
-  if (trimmed.startsWith('data:image/')) {
-    const match = trimmed.match(/^data:image\/([a-zA-Z0-9-+.]+);base64,(.+)$/);
-    if (match) {
-      const rawExt = match[1].toLowerCase();
-      const base64Data = match[2];
-      try {
-        const buffer = Buffer.from(base64Data, 'base64');
-        const ext = rawExt.includes('jpeg') ? 'jpg' : rawExt.includes('png') ? 'png' : 'png';
-        const contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
-        attachments.push({
-          filename: `brand-logo.${ext}`,
-          content: buffer,
-          cid: cidName,
-          contentType,
-        });
-        return {
-          imgTag: `<img src="cid:${cidName}" alt="${brandName}" style="max-height: 48px; max-width: 180px; object-fit: contain; margin-bottom: 12px; display: inline-block; border-radius: 8px;" /><br>`,
-          attachments,
-        };
-      } catch (err) {
-        console.warn('[emailService] Error converting base64 logo to CID attachment:', err);
-      }
-    }
-  }
-
-  // 2. Direct HTTP or HTTPS URL (accessible by external mail proxies)
+  // 1. Direct HTTP or HTTPS URL (no attachment)
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return {
-      imgTag: `<img src="${trimmed}" alt="${brandName}" style="max-height: 48px; max-width: 180px; object-fit: contain; margin-bottom: 12px; display: inline-block; border-radius: 8px;" /><br>`,
+      imgTag: `<img src="${trimmed}" alt="${brandName}" style="${imgStyle}" /><br>`,
       attachments: [],
     };
   }
 
-  // 3. Local filesystem fallback from public/ folder
-  try {
-    const publicDir = path.join(process.cwd(), 'public');
-    let targetFile = '';
-
-    if (trimmed && (trimmed.startsWith('/') || trimmed.endsWith('.png') || trimmed.endsWith('.jpg'))) {
-      const cleanRel = trimmed.replace(/^\//, '');
-      const testPath = path.join(publicDir, cleanRel);
-      if (fs.existsSync(testPath)) {
-        targetFile = testPath;
-      }
-    }
-
-    if (!targetFile) {
-      const defaultLogo = path.join(publicDir, 'brand-logo.png');
-      if (fs.existsSync(defaultLogo)) {
-        targetFile = defaultLogo;
-      }
-    }
-
-    if (targetFile && fs.existsSync(targetFile)) {
-      const fileBuffer = fs.readFileSync(targetFile);
-      const ext = path.extname(targetFile).replace('.', '').toLowerCase() || 'png';
-      attachments.push({
-        filename: path.basename(targetFile),
-        content: fileBuffer,
-        cid: cidName,
-        contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
-      });
-      return {
-        imgTag: `<img src="cid:${cidName}" alt="${brandName}" style="max-height: 48px; max-width: 180px; object-fit: contain; margin-bottom: 12px; display: inline-block; border-radius: 8px;" /><br>`,
-        attachments,
-      };
-    }
-  } catch (err) {
-    console.warn('[emailService] Local filesystem logo read error:', err);
+  // 2. Relative path in /public (serve via public HTTPS URL, never as MIME attachment)
+  if (trimmed.startsWith('/')) {
+    return {
+      imgTag: `<img src="${baseUrl}${trimmed}" alt="${brandName}" style="${imgStyle}" /><br>`,
+      attachments: [],
+    };
   }
 
-  // Fallback: If no image is valid, return empty string so no broken placeholder shows
+  // 3. Default public brand logo URL (no attachment)
   return {
-    imgTag: '',
+    imgTag: `<img src="${baseUrl}/brand-logo.png" alt="${brandName}" style="${imgStyle}" /><br>`,
     attachments: [],
   };
 }

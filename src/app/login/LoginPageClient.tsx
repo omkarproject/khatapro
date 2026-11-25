@@ -1376,7 +1376,7 @@ export default function LoginPageClient({ initialBranding }: LoginPageClientProp
               {mode !== 'signin' && step === 'otp' && (
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
                   <div className="p-3 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 text-xs text-indigo-700 dark:text-indigo-300">
-                    Enter the 6 to 8-digit verification code sent to <strong>{email}</strong>.
+                    Enter the 6-digit verification code sent to <strong>{email}</strong>.
                   </div>
 
                   <div>
