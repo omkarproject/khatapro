@@ -5,6 +5,7 @@ import { AppState } from 'react-native';
 import { SecureStorage } from '@/services/secureStorage';
 import { AuthService } from '@/services/authService';
 import { SyncEngine } from '@/services/syncEngine';
+import { apiRequest } from '@/services/apiClient';
 import {
   getDb,
   getLocalEntities,
@@ -14,6 +15,8 @@ import {
 } from '@/db/sqlite';
 import {
   Customer,
+  DocumentItem,
+  EntityType,
   Expense,
   Invoice,
   NoteItem,
@@ -51,10 +54,21 @@ interface MobileAppContextValue {
   reminders: PaymentReminder[];
   notes: NoteItem[];
   tasks: TaskItem[];
+  documents: DocumentItem[];
 
   saveCustomer: (cust: Partial<Customer> & { name: string }, isEdit?: boolean) => Promise<Customer>;
   addKhataTransaction: (txn: Partial<Transaction> & { amount: number; type: Transaction['type'] }) => Promise<Transaction>;
+  updateKhataTransaction: (txnId: string, patch: Partial<Transaction>) => Promise<Transaction | null>;
   deleteTransaction: (txnId: string) => Promise<void>;
+  saveInvoice: (inv: Invoice, isEdit?: boolean) => Promise<Invoice>;
+  saveExpense: (exp: Expense, isEdit?: boolean) => Promise<Expense>;
+  saveProduct: (prod: Product, isEdit?: boolean) => Promise<Product>;
+  saveSavingsGoal: (goal: SavingsGoal, isEdit?: boolean) => Promise<SavingsGoal>;
+  saveReminder: (rem: PaymentReminder, isEdit?: boolean) => Promise<PaymentReminder>;
+  saveNote: (note: NoteItem, isEdit?: boolean) => Promise<NoteItem>;
+  saveTask: (task: TaskItem, isEdit?: boolean) => Promise<TaskItem>;
+  saveDocument: (doc: DocumentItem, isEdit?: boolean) => Promise<DocumentItem>;
+  deleteEntity: (entityType: EntityType, id: string, baseVersion?: string) => Promise<void>;
   refreshLocalState: () => Promise<void>;
 }
 
@@ -80,6 +94,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
   const [reminders, setReminders] = useState<PaymentReminder[]>([]);
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
 
   const userRef = useRef<UserProfile | null>(null);
   const isOnlineRef = useRef(true);
@@ -93,7 +108,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
     const uid = targetUserId || userRef.current?.id;
     if (!uid) return;
     await getDb();
-    const [c, t, i, e, p, s, r, n, tk, queue] = await Promise.all([
+    const [c, t, i, e, p, s, r, n, tk, docs, queue] = await Promise.all([
       getLocalEntities<Customer>(uid, 'customers'),
       getLocalEntities<Transaction>(uid, 'transactions'),
       getLocalEntities<Invoice>(uid, 'invoices'),
@@ -103,6 +118,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       getLocalEntities<PaymentReminder>(uid, 'payment_reminders'),
       getLocalEntities<NoteItem>(uid, 'notes'),
       getLocalEntities<TaskItem>(uid, 'tasks'),
+      getLocalEntities<DocumentItem>(uid, 'documents'),
       getSyncQueue(uid, ['pending', 'failed', 'conflict']),
     ]);
     setCustomers(c);
@@ -114,6 +130,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
     setReminders(r);
     setNotes(n);
     setTasks(tk);
+    setDocuments(docs);
     setConflictItems(queue.filter(q => q.status === 'conflict'));
     setPendingCount(queue.filter(q => q.status !== 'conflict').length);
   }, []);
@@ -324,6 +341,69 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
     return txn;
   }, [customers, refreshLocalState, triggerSync]);
 
+  const updateKhataTransaction = useCallback(async (txnId: string, patch: Partial<Transaction>) => {
+    const uid = userRef.current?.id;
+    if (!uid) throw new Error('Not authenticated');
+    const existing = transactions.find(t => t.id === txnId);
+    if (!existing) return null;
+    const now = new Date().toISOString();
+    const editEntry = {
+      editedAt: now,
+      editedBy: userRef.current?.businessName || userRef.current?.name || 'Merchant',
+      previousAmount: existing.amount,
+      newAmount: patch.amount !== undefined ? Number(patch.amount) : existing.amount,
+      previousNote: existing.note,
+      newNote: patch.note !== undefined ? patch.note : existing.note,
+    };
+    const updated: Transaction = {
+      ...existing,
+      ...patch,
+      amount: patch.amount !== undefined ? Number(patch.amount) : existing.amount,
+      editHistory: [...(existing.editHistory || []), editEntry],
+      updatedAt: now,
+    };
+
+    await upsertLocalEntity(uid, 'transactions', updated, {
+      enqueueSync: true,
+      operation: 'UPDATE',
+      baseVersion: existing.updatedAt || null,
+      auditSummary: `Updated transaction ${txnId} (₹${existing.amount} -> ₹${updated.amount})`,
+    });
+
+    if (updated.customerId) {
+      const cust = customers.find(c => c.id === updated.customerId);
+      if (cust) {
+        const oldDelta = existing.type === 'credit' ? existing.amount : (existing.type === 'debit' || existing.type === 'collection' ? -existing.amount : 0);
+        const newDelta = updated.type === 'credit' ? updated.amount : (updated.type === 'debit' || updated.type === 'collection' ? -updated.amount : 0);
+        const diff = newDelta - oldDelta;
+        if (diff !== 0) {
+          await upsertLocalEntity(uid, 'customers', {
+            ...cust,
+            outstandingBalance: Math.round((cust.outstandingBalance + diff) * 100) / 100,
+            updatedAt: now,
+          }, { enqueueSync: false });
+        }
+        if (cust.p2pPeerUserId && isOnlineRef.current) {
+          apiRequest('/api/users/p2p-mutate', {
+            method: 'POST',
+            userId: uid,
+            body: {
+              action: 'edit',
+              merchantUserId: uid,
+              peerUserId: cust.p2pPeerUserId,
+              transactionId: updated.id,
+              updatedTransaction: updated,
+            },
+          }).catch(() => {});
+        }
+      }
+    }
+
+    await refreshLocalState(uid);
+    if (isOnlineRef.current) triggerSync(uid);
+    return updated;
+  }, [transactions, customers, refreshLocalState, triggerSync]);
+
   const deleteTransaction = useCallback(async (txnId: string) => {
     const uid = userRef.current?.id;
     if (!uid) return;
@@ -343,9 +423,92 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       baseVersion: existing.updatedAt || null,
       auditSummary: `Deleted transaction ${txnId}`,
     });
+
+    if (existing.customerId) {
+      const cust = customers.find(c => c.id === existing.customerId);
+      if (cust) {
+        const delta = existing.type === 'credit' ? -existing.amount : (existing.type === 'debit' || existing.type === 'collection' ? existing.amount : 0);
+        await upsertLocalEntity(uid, 'customers', {
+          ...cust,
+          outstandingBalance: Math.round((cust.outstandingBalance + delta) * 100) / 100,
+          updatedAt: now,
+        }, { enqueueSync: false });
+        if (cust.p2pPeerUserId && isOnlineRef.current) {
+          apiRequest('/api/users/p2p-mutate', {
+            method: 'POST',
+            userId: uid,
+            body: {
+              action: 'delete',
+              merchantUserId: uid,
+              peerUserId: cust.p2pPeerUserId,
+              transactionId: existing.id,
+            },
+          }).catch(() => {});
+        }
+      }
+    }
+
     await refreshLocalState(uid);
     if (isOnlineRef.current) triggerSync(uid);
-  }, [transactions, refreshLocalState, triggerSync]);
+  }, [transactions, customers, refreshLocalState, triggerSync]);
+
+  const saveGenericEntity = useCallback(async <T extends { id: string; updatedAt?: string }>(
+    entityType: EntityType,
+    entity: T,
+    isEdit = false,
+    auditSummary?: string
+  ): Promise<T> => {
+    const uid = userRef.current?.id;
+    if (!uid) throw new Error('Not authenticated');
+    const now = new Date().toISOString();
+    const record = { ...entity, updatedAt: now };
+    await upsertLocalEntity(uid, entityType, record, {
+      enqueueSync: true,
+      operation: isEdit ? 'UPDATE' : 'CREATE',
+      baseVersion: isEdit ? (entity.updatedAt || null) : null,
+      auditSummary: auditSummary || `${isEdit ? 'Updated' : 'Created'} ${entityType} ${entity.id}`,
+    });
+    await refreshLocalState(uid);
+    if (isOnlineRef.current) triggerSync(uid);
+    return record;
+  }, [refreshLocalState, triggerSync]);
+
+  const saveInvoice = useCallback((inv: Invoice, isEdit = false) =>
+    saveGenericEntity('invoices', inv, isEdit, `${isEdit ? 'Updated' : 'Created'} invoice ${inv.invoiceNumber}`), [saveGenericEntity]);
+
+  const saveExpense = useCallback((exp: Expense, isEdit = false) =>
+    saveGenericEntity('expenses', exp, isEdit, `${isEdit ? 'Updated' : 'Added'} expense ₹${exp.amount}`), [saveGenericEntity]);
+
+  const saveProduct = useCallback((prod: Product, isEdit = false) =>
+    saveGenericEntity('products', prod, isEdit, `${isEdit ? 'Updated' : 'Added'} product ${prod.name}`), [saveGenericEntity]);
+
+  const saveSavingsGoal = useCallback((goal: SavingsGoal, isEdit = false) =>
+    saveGenericEntity('savings_goals', goal, isEdit, `${isEdit ? 'Updated' : 'Created'} goal ${goal.title}`), [saveGenericEntity]);
+
+  const saveReminder = useCallback((rem: PaymentReminder, isEdit = false) =>
+    saveGenericEntity('payment_reminders', rem, isEdit, `${isEdit ? 'Updated' : 'Created'} reminder ${rem.customerName}`), [saveGenericEntity]);
+
+  const saveNote = useCallback((note: NoteItem, isEdit = false) =>
+    saveGenericEntity('notes', note, isEdit, `${isEdit ? 'Updated' : 'Created'} note ${note.title}`), [saveGenericEntity]);
+
+  const saveTask = useCallback((task: TaskItem, isEdit = false) =>
+    saveGenericEntity('tasks', task, isEdit, `${isEdit ? 'Updated' : 'Created'} task ${task.title}`), [saveGenericEntity]);
+
+  const saveDocument = useCallback((doc: DocumentItem, isEdit = false) =>
+    saveGenericEntity('documents', doc, isEdit, `${isEdit ? 'Updated' : 'Uploaded'} document ${doc.title}`), [saveGenericEntity]);
+
+  const deleteEntity = useCallback(async (entityType: EntityType, id: string, baseVersion?: string) => {
+    const uid = userRef.current?.id;
+    if (!uid) return;
+    await upsertLocalEntity(uid, entityType, { id, isDeleted: true, updatedAt: new Date().toISOString() }, {
+      enqueueSync: true,
+      operation: 'DELETE',
+      baseVersion: baseVersion || null,
+      auditSummary: `Deleted ${entityType} ${id}`,
+    });
+    await refreshLocalState(uid);
+    if (isOnlineRef.current) triggerSync(uid);
+  }, [refreshLocalState, triggerSync]);
 
   const resolveConflict = useCallback(async (queueId: string, resolution: 'keep_local' | 'keep_server') => {
     const uid = userRef.current?.id;
@@ -384,9 +547,20 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         reminders,
         notes,
         tasks,
+        documents,
         saveCustomer,
         addKhataTransaction,
+        updateKhataTransaction,
         deleteTransaction,
+        saveInvoice,
+        saveExpense,
+        saveProduct,
+        saveSavingsGoal,
+        saveReminder,
+        saveNote,
+        saveTask,
+        saveDocument,
+        deleteEntity,
         refreshLocalState,
       }}
     >

@@ -1,8 +1,44 @@
 export type UserRole = 'admin' | 'user' | 'super_admin' | 'business_owner';
 
+export type EntityType =
+  | 'customers'
+  | 'transactions'
+  | 'invoices'
+  | 'expenses'
+  | 'products'
+  | 'savings_goals'
+  | 'payment_reminders'
+  | 'notes'
+  | 'tasks'
+  | 'documents';
+
+export interface KhataGroupMember {
+  userId: string;
+  username?: string;
+  name: string;
+  businessName?: string;
+  phone?: string;
+  role: 'creator' | 'member';
+  joinedAt: string;
+}
+
+export interface KhataGroup {
+  id: string;
+  name: string;
+  description?: string;
+  createdByUserId: string;
+  createdByUsername?: string;
+  createdByName?: string;
+  members: KhataGroupMember[];
+  pendingRequests?: any[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface UserProfile {
   id: string;
   name: string;
+  username?: string;
   email: string;
   phone: string;
   role: UserRole;
@@ -11,6 +47,7 @@ export interface UserProfile {
   businessName: string;
   businessGst?: string;
   businessAddress?: string;
+  upiId?: string;
   currency?: string;
   currencySymbol?: string;
   language?: string;
@@ -64,6 +101,7 @@ export interface Customer {
   avatarUrl?: string;
   bankAccounts?: CustomerBankAccount[];
   upiDetails?: CustomerUpiDetail[];
+  p2pPeerUserId?: string;
   createdAt: string;
   updatedAt?: string;
 }

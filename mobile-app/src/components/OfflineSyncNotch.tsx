@@ -1,10 +1,12 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { AlertTriangle, CheckCircle2, WifiOff } from 'lucide-react-native';
 import { useMobileApp } from '@/context/MobileAppContext';
 
 export default function OfflineSyncNotch() {
-  const { isOnline, syncPhase, syncProgress, pendingCount, conflictItems, triggerSync } = useMobileApp();
+  const router = useRouter();
+  const { isOnline, syncPhase, syncProgress, pendingCount, conflictItems } = useMobileApp();
 
   if (isOnline && syncPhase === 'idle' && pendingCount === 0 && conflictItems.length === 0) {
     return null;
@@ -13,10 +15,10 @@ export default function OfflineSyncNotch() {
   if (conflictItems.length > 0 || syncPhase === 'conflict') {
     return (
       <View style={styles.wrapper}>
-        <Pressable onPress={() => triggerSync()} style={[styles.pill, styles.conflictPill]}>
+        <Pressable onPress={() => router.push('/sync-conflicts')} style={[styles.pill, styles.conflictPill]}>
           <AlertTriangle size={12} color="#FCA5A5" />
           <Text style={styles.conflictText}>
-            Sync Conflict ({conflictItems.length}) • Tap to review
+            Sync Conflict ({conflictItems.length}) • Tap to resolve
           </Text>
         </Pressable>
       </View>

@@ -5,6 +5,7 @@ import {
   Linking,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,13 +14,45 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { ArrowDown, ArrowLeft, ArrowUp, FileText, Share2, Trash2 } from 'lucide-react-native';
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  Camera,
+  Edit3,
+  FileText,
+  History,
+  Image as ImageIcon,
+  Link2,
+  Paperclip,
+  QrCode,
+  Share2,
+  Trash2,
+  UserCheck,
+} from 'lucide-react-native';
 import { useMobileApp } from '@/context/MobileAppContext';
+import {
+  pickDocumentFile,
+  pickImageFromCamera,
+  pickImageFromGallery,
+  stageOrUploadMedia,
+} from '@/services/mediaService';
+import { apiRequest } from '@/services/apiClient';
+import { Transaction } from '@/types';
 
 export default function CustomerLedgerScreen() {
   const { customerId } = useLocalSearchParams<{ customerId: string }>();
   const router = useRouter();
-  const { customers, transactions, addKhataTransaction, deleteTransaction } = useMobileApp();
+  const {
+    user,
+    isOnline,
+    customers,
+    transactions,
+    saveCustomer,
+    addKhataTransaction,
+    updateKhataTransaction,
+    deleteTransaction,
+  } = useMobileApp();
 
   const customer = useMemo(() => customers.find(c => c.id === customerId), [customers, customerId]);
   const custTxns = useMemo(
@@ -41,9 +74,62 @@ export default function CustomerLedgerScreen() {
   }, [custTxns]);
 
   const [entryModal, setEntryModal] = useState<'received' | 'given' | null>(null);
+  const [editingTxn, setEditingTxn] = useState<Transaction | null>(null);
+  const [historyTxn, setHistoryTxn] = useState<Transaction | null>(null);
   const [amountStr, setAmountStr] = useState('');
   const [note, setNote] = useState('');
+  const [paymentMode, setPaymentMode] = useState<Transaction['paymentMode']>('cash');
+  const [attachments, setAttachments] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLinkingP2P, setIsLinkingP2P] = useState(false);
+
+  const openNewEntry = (mode: 'received' | 'given') => {
+    setEditingTxn(null);
+    setAmountStr('');
+    setNote('');
+    setPaymentMode('cash');
+    setAttachments([]);
+    setEntryModal(mode);
+  };
+
+  const openEditTxn = (txn: Transaction) => {
+    setEditingTxn(txn);
+    setAmountStr(String(txn.amount));
+    setNote(txn.note || '');
+    setPaymentMode(txn.paymentMode || 'cash');
+    setAttachments(txn.attachments || []);
+    setEntryModal(txn.type === 'credit' ? 'given' : 'received');
+  };
+
+  const handleAttach = async (source: 'camera' | 'gallery' | 'doc') => {
+    if (!user?.id || !customer) return;
+    try {
+      const picked =
+        source === 'camera'
+          ? await pickImageFromCamera()
+          : source === 'gallery'
+            ? await pickImageFromGallery()
+            : await pickDocumentFile();
+      if (!picked) return;
+      const uploaded = await stageOrUploadMedia({
+        userId: user.id,
+        media: picked,
+        isOnline,
+        customerId: customer.id,
+        customerName: customer.name,
+        folderName: 'BILLS',
+      });
+      setAttachments(prev => [...prev, uploaded.url]);
+      Alert.alert(
+        'Attached',
+        uploaded.storageProvider === 'local-offline'
+          ? 'Saved locally (offline). Will stay accessible on device.'
+          : `Uploaded via ${uploaded.storageProvider}`
+      );
+    } catch (e: any) {
+      Alert.alert('Attachment Failed', e?.message || 'Could not attach file');
+    }
+  };
 
   const handleSaveEntry = async () => {
     if (isSubmitting || !entryModal || !customer) return;
@@ -54,19 +140,72 @@ export default function CustomerLedgerScreen() {
     }
     setIsSubmitting(true);
     try {
-      await addKhataTransaction({
-        customerId: customer.id,
-        customerName: customer.name,
-        customerPhone: customer.phone,
-        type: entryModal === 'received' ? 'debit' : 'credit',
-        amount: amt,
-        note: note.trim() || (entryModal === 'received' ? 'Payment received' : 'Goods on credit'),
-      });
+      if (editingTxn) {
+        await updateKhataTransaction(editingTxn.id, {
+          amount: amt,
+          note: note.trim(),
+          paymentMode,
+          attachments,
+        });
+      } else {
+        await addKhataTransaction({
+          customerId: customer.id,
+          customerName: customer.name,
+          customerPhone: customer.phone,
+          type: entryModal === 'received' ? 'debit' : 'credit',
+          amount: amt,
+          paymentMode,
+          attachments,
+          note: note.trim() || (entryModal === 'received' ? 'Payment received' : 'Goods on credit'),
+        });
+      }
       setEntryModal(null);
+      setEditingTxn(null);
       setAmountStr('');
       setNote('');
+      setAttachments([]);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleLinkP2P = async () => {
+    if (!customer || !user?.id) return;
+    if (!isOnline) {
+      Alert.alert('Offline', 'Internet connection is required to link P2P merchants.');
+      return;
+    }
+    if (!customer.phone && !customer.email) {
+      Alert.alert('Missing Info', 'Customer needs a phone number or email to link P2P.');
+      return;
+    }
+    setIsLinkingP2P(true);
+    try {
+      const res = await apiRequest<{
+        success: boolean;
+        linked?: boolean;
+        peerUserId?: string;
+        message?: string;
+      }>('/api/users/p2p-link', {
+        method: 'POST',
+        userId: user.id,
+        body: {
+          currentUserId: user.id,
+          peerPhone: customer.phone,
+          peerEmail: customer.email,
+          peerCustomerData: customer,
+        },
+      });
+      if (res.linked && res.peerUserId) {
+        await saveCustomer({ ...customer, p2pPeerUserId: res.peerUserId }, true);
+        Alert.alert('P2P Linked', 'Bi-directional merchant ledger linked successfully!');
+      } else {
+        Alert.alert('Not Found', res.message || 'No matching SmartKhata merchant found.');
+      }
+    } catch (e: any) {
+      Alert.alert('P2P Link Error', e?.message || 'Could not link merchant');
+    } finally {
+      setIsLinkingP2P(false);
     }
   };
 
@@ -105,13 +244,26 @@ export default function CustomerLedgerScreen() {
         <Pressable onPress={() => router.back()} style={styles.iconBtn}>
           <ArrowLeft size={20} color="#0F172A" />
         </Pressable>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.custName}>{customer.name}</Text>
-          <Text style={styles.custSub}>
-            Balance: ₹{Math.abs(customer.outstandingBalance).toLocaleString('en-IN')}{' '}
-            {customer.outstandingBalance > 0 ? 'DUE' : customer.outstandingBalance < 0 ? 'ADVANCE' : 'SETTLED'}
-          </Text>
-        </View>
+        <Pressable onPress={() => router.push(`/customers/${customer.id}`)} style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.custName} numberOfLines={1}>{customer.name}</Text>
+            {customer.p2pPeerUserId && (
+              <View style={styles.p2pBadge}>
+                <UserCheck size={10} color="#047857" />
+                <Text style={styles.p2pText}>P2P</Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.custPhone}>{customer.phone || 'Tap for CRM Profile'}</Text>
+        </Pressable>
+        {!customer.p2pPeerUserId && (
+          <Pressable onPress={handleLinkP2P} disabled={isLinkingP2P} style={styles.iconBtn}>
+            <Link2 size={18} color={isLinkingP2P ? '#94A3B8' : '#0EA5E9'} />
+          </Pressable>
+        )}
+        <Pressable onPress={() => router.push(`/collect?customerId=${customer.id}`)} style={styles.iconBtn}>
+          <QrCode size={18} color="#7C3AED" />
+        </Pressable>
         <Pressable onPress={handlePrintPdf} style={styles.iconBtn}>
           <FileText size={18} color="#4F46E5" />
         </Pressable>
@@ -120,97 +272,182 @@ export default function CustomerLedgerScreen() {
         </Pressable>
       </View>
 
-      <View style={styles.strip}>
-        <View style={styles.stripItem}>
-          <ArrowDown size={13} color="#059669" />
-          <Text style={[styles.stripText, { color: '#059669' }]}>Received: ₹{totals.rec.toLocaleString('en-IN')}</Text>
+      <View style={styles.summaryStrip}>
+        <View style={styles.summaryItem}>
+          <Text style={styles.sumLabel}>Total Received</Text>
+          <Text style={[styles.sumVal, { color: '#059669' }]}>₹{totals.rec.toLocaleString('en-IN')}</Text>
         </View>
-        <View style={styles.stripItem}>
-          <ArrowUp size={13} color="#E11D48" />
-          <Text style={[styles.stripText, { color: '#E11D48' }]}>Given: ₹{totals.giv.toLocaleString('en-IN')}</Text>
+        <View style={styles.summaryItem}>
+          <Text style={styles.sumLabel}>Total Given</Text>
+          <Text style={[styles.sumVal, { color: '#E11D48' }]}>₹{totals.giv.toLocaleString('en-IN')}</Text>
+        </View>
+        <View style={styles.summaryItem}>
+          <Text style={styles.sumLabel}>Net Balance</Text>
+          <Text style={[styles.sumVal, { color: customer.outstandingBalance >= 0 ? '#E11D48' : '#059669' }]}>
+            ₹{Math.abs(customer.outstandingBalance).toLocaleString('en-IN')}
+          </Text>
         </View>
       </View>
 
       <FlatList
         data={custTxns}
         keyExtractor={item => item.id}
-        contentContainerStyle={{ padding: 14, paddingBottom: 90 }}
-        ListEmptyComponent={<Text style={styles.empty}>No transactions yet</Text>}
+        contentContainerStyle={{ padding: 14, paddingBottom: 100 }}
+        ListEmptyComponent={<Text style={styles.empty}>No transactions yet. Add Udhar or Jama below.</Text>}
         renderItem={({ item }) => {
-          const isGot = item.type !== 'credit';
+          const isGiven = item.type === 'credit';
+          const hasHistory = (item.editHistory?.length || 0) > 0;
           return (
             <View style={styles.txnCard}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.txnAmt, { color: isGot ? '#059669' : '#E11D48' }]}>
-                  {isGot ? '↓' : '↑'} ₹{item.amount.toLocaleString('en-IN')}
+                <Text style={styles.txnNote}>{item.note || (isGiven ? 'Given' : 'Received')}</Text>
+                <Text style={styles.txnMeta}>
+                  {new Date(item.date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} • {(item.paymentMode || 'cash').toUpperCase()}
                 </Text>
-                <Text style={styles.txnNote}>{item.note || (isGot ? 'Payment received' : 'Goods on credit')}</Text>
-                <Text style={styles.txnDate}>{new Date(item.date).toLocaleString('en-IN')}</Text>
+                {(item.attachments?.length || 0) > 0 && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                    <Paperclip size={11} color="#4F46E5" />
+                    <Text style={{ fontSize: 11, color: '#4F46E5', fontWeight: '600' }}>
+                      {item.attachments?.length} attachment(s)
+                    </Text>
+                  </View>
+                )}
               </View>
-              <Pressable
-                onPress={() =>
-                  Alert.alert('Delete Entry', 'Remove this transaction?', [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Delete', style: 'destructive', onPress: () => deleteTransaction(item.id) },
-                  ])
-                }
-                style={styles.iconBtn}
-              >
-                <Trash2 size={16} color="#94A3B8" />
-              </Pressable>
+              <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                <Text style={[styles.txnAmt, { color: isGiven ? '#E11D48' : '#059669' }]}>
+                  {isGiven ? '-' : '+'}₹{item.amount.toLocaleString('en-IN')}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  {hasHistory && (
+                    <Pressable onPress={() => setHistoryTxn(item)}>
+                      <History size={14} color="#6366F1" />
+                    </Pressable>
+                  )}
+                  <Pressable onPress={() => openEditTxn(item)}>
+                    <Edit3 size={14} color="#475569" />
+                  </Pressable>
+                  <Pressable
+                    onPress={() =>
+                      Alert.alert('Delete Entry', 'Remove this ledger entry?', [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Delete', style: 'destructive', onPress: () => deleteTransaction(item.id) },
+                      ])
+                    }
+                  >
+                    <Trash2 size={14} color="#94A3B8" />
+                  </Pressable>
+                </View>
+              </View>
             </View>
           );
         }}
       />
 
-      <View style={styles.footerBtns}>
-        <Pressable onPress={() => setEntryModal('received')} style={[styles.actionBtn, { backgroundColor: '#059669' }]}>
-          <ArrowDown size={16} color="#FFFFFF" />
-          <Text style={styles.actionText}>Received</Text>
+      <View style={styles.bottomBar}>
+        <Pressable style={[styles.actionBtn, styles.receivedBtn]} onPress={() => openNewEntry('received')}>
+          <ArrowDown size={18} color="#FFFFFF" />
+          <Text style={styles.actionText}>You Got (Jama)</Text>
         </Pressable>
-        <Pressable onPress={() => setEntryModal('given')} style={[styles.actionBtn, { backgroundColor: '#E11D48' }]}>
-          <ArrowUp size={16} color="#FFFFFF" />
-          <Text style={styles.actionText}>Given</Text>
+        <Pressable style={[styles.actionBtn, styles.givenBtn]} onPress={() => openNewEntry('given')}>
+          <ArrowUp size={18} color="#FFFFFF" />
+          <Text style={styles.actionText}>You Gave (Udhar)</Text>
         </Pressable>
       </View>
 
-      <Modal visible={entryModal !== null} transparent animationType="slide">
+      <Modal visible={Boolean(entryModal)} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
-              {entryModal === 'received' ? 'You Got (Received)' : 'You Gave (Udhar)'}
+              {editingTxn ? 'Edit Entry' : entryModal === 'received' ? 'Payment Received (Jama)' : 'Credit Given (Udhar)'}
             </Text>
             <TextInput
-              style={styles.amtInput}
+              style={styles.input}
+              placeholder="Amount (₹)"
+              placeholderTextColor="#94A3B8"
+              keyboardType="numeric"
               value={amountStr}
               onChangeText={setAmountStr}
-              keyboardType="numeric"
-              placeholder="₹ 0"
               autoFocus
             />
             <TextInput
-              style={styles.noteInput}
+              style={styles.input}
+              placeholder="Note / Item details (optional)"
+              placeholderTextColor="#94A3B8"
               value={note}
               onChangeText={setNote}
-              placeholder="Add note (optional)"
             />
-            <View style={styles.modalActions}>
-              <Pressable onPress={() => setEntryModal(null)} style={styles.cancelBtn}>
-                <Text style={{ fontWeight: '700', color: '#475569' }}>Cancel</Text>
+            <View style={styles.modeRow}>
+              {(['cash', 'upi', 'bank_transfer'] as const).map(m => (
+                <Pressable
+                  key={m}
+                  onPress={() => setPaymentMode(m)}
+                  style={[styles.modeChip, paymentMode === m && styles.modeChipActive]}
+                >
+                  <Text style={[styles.modeChipText, paymentMode === m && { color: '#FFFFFF' }]}>
+                    {m === 'bank_transfer' ? 'BANK' : m.toUpperCase()}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.attachRow}>
+              <Pressable onPress={() => handleAttach('camera')} style={styles.attachBtn}>
+                <Camera size={14} color="#4F46E5" />
+                <Text style={styles.attachText}>Camera</Text>
               </Pressable>
-              <Pressable
-                disabled={isSubmitting}
-                onPress={handleSaveEntry}
-                style={[
-                  styles.confirmBtn,
-                  { backgroundColor: entryModal === 'received' ? '#059669' : '#E11D48', opacity: isSubmitting ? 0.6 : 1 },
-                ]}
-              >
-                <Text style={{ fontWeight: '800', color: '#FFFFFF' }}>
-                  {isSubmitting ? 'Saving...' : 'Confirm'}
-                </Text>
+              <Pressable onPress={() => handleAttach('gallery')} style={styles.attachBtn}>
+                <ImageIcon size={14} color="#4F46E5" />
+                <Text style={styles.attachText}>Gallery</Text>
+              </Pressable>
+              <Pressable onPress={() => handleAttach('doc')} style={styles.attachBtn}>
+                <Paperclip size={14} color="#4F46E5" />
+                <Text style={styles.attachText}>PDF/Doc</Text>
               </Pressable>
             </View>
+            {attachments.length > 0 && (
+              <Text style={{ fontSize: 11, color: '#059669', fontWeight: '700' }}>
+                {attachments.length} file(s) attached
+              </Text>
+            )}
+            <View style={styles.modalActions}>
+              <Pressable onPress={() => setEntryModal(null)} style={styles.cancelBtn}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleSaveEntry}
+                disabled={isSubmitting}
+                style={[styles.saveBtn, { backgroundColor: entryModal === 'received' ? '#059669' : '#E11D48' }]}
+              >
+                <Text style={styles.saveText}>{isSubmitting ? 'Saving...' : 'Save Entry'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={Boolean(historyTxn)} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Audit & Edit History</Text>
+            <ScrollView style={{ maxHeight: 260 }}>
+              {(historyTxn?.editHistory || []).map((h, i) => (
+                <View key={i} style={styles.histRow}>
+                  <Text style={styles.histMeta}>
+                    {h.editedBy} • {new Date(h.editedAt).toLocaleString('en-IN')}
+                  </Text>
+                  <Text style={styles.histDetail}>
+                    Amount: ₹{h.previousAmount} → ₹{h.newAmount}
+                  </Text>
+                  {h.previousNote !== h.newNote && (
+                    <Text style={styles.histDetail}>
+                      Note: "{h.previousNote || '-'}" → "{h.newNote || '-'}"
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </ScrollView>
+            <Pressable onPress={() => setHistoryTxn(null)} style={[styles.cancelBtn, { marginTop: 12 }]}>
+              <Text style={styles.cancelText}>Close</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -224,41 +461,50 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#FFFFFF',
     padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  iconBtn: { padding: 8, borderRadius: 10, backgroundColor: '#F1F5F9' },
-  custName: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
-  custSub: { fontSize: 11, fontWeight: '700', color: '#64748B' },
-  strip: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
+    gap: 8,
   },
-  stripItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  stripText: { fontSize: 11, fontWeight: '800' },
-  empty: { textAlign: 'center', color: '#94A3B8', marginTop: 40 },
+  iconBtn: { padding: 6 },
+  custName: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+  custPhone: { fontSize: 12, color: '#64748B' },
+  p2pBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  p2pText: { fontSize: 9, fontWeight: '800', color: '#047857' },
+  summaryStrip: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  summaryItem: { flex: 1, alignItems: 'center' },
+  sumLabel: { fontSize: 11, color: '#64748B', fontWeight: '600' },
+  sumVal: { fontSize: 15, fontWeight: '800', marginTop: 2 },
   txnCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     padding: 14,
-    borderRadius: 14,
+    borderRadius: 12,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginBottom: 8,
   },
-  txnAmt: { fontSize: 16, fontWeight: '900' },
-  txnNote: { fontSize: 12, color: '#334155', marginTop: 2 },
-  txnDate: { fontSize: 10, color: '#94A3B8', marginTop: 4 },
-  footerBtns: {
+  txnNote: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
+  txnMeta: { fontSize: 11, color: '#64748B', marginTop: 3 },
+  txnAmt: { fontSize: 16, fontWeight: '800' },
+  empty: { textAlign: 'center', color: '#64748B', marginTop: 36, fontSize: 13 },
+  bottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
@@ -277,15 +523,68 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 12,
   },
-  actionText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
-  modalTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 12 },
-  amtInput: { fontSize: 28, fontWeight: '900', textAlign: 'center', borderBottomWidth: 2, borderBottomColor: '#4F46E5', paddingVertical: 8, marginBottom: 12 },
-  noteInput: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 12, padding: 12, marginBottom: 14 },
-  modalActions: { flexDirection: 'row', gap: 10 },
-  cancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center' },
-  confirmBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  receivedBtn: { backgroundColor: '#059669' },
+  givenBtn: { backgroundColor: '#E11D48' },
+  actionText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.55)', justifyContent: 'flex-end' },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    padding: 20,
+    gap: 12,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A' },
+  input: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#0F172A',
+  },
+  modeRow: { flexDirection: 'row', gap: 8 },
+  modeChip: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+  },
+  modeChipActive: { backgroundColor: '#4F46E5' },
+  modeChipText: { fontSize: 11, fontWeight: '800', color: '#475569' },
+  attachRow: { flexDirection: 'row', gap: 8 },
+  attachBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: '#EEF2FF',
+  },
+  attachText: { fontSize: 12, fontWeight: '700', color: '#4F46E5' },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+  },
+  cancelText: { fontWeight: '700', color: '#475569' },
+  saveBtn: { flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: 'center' },
+  saveText: { fontWeight: '800', color: '#FFFFFF' },
+  histRow: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  histMeta: { fontSize: 11, fontWeight: '700', color: '#64748B' },
+  histDetail: { fontSize: 13, color: '#0F172A', marginTop: 2 },
 });
