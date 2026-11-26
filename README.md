@@ -38,13 +38,13 @@
 | :--- | :--- |
 | 📒 **Smart Digital Khata** | Real-time Udhar (Credit) & Jama (Payment) ledger, customer balance tracking, credit limits, transaction histories, and instant PDF/WhatsApp account statements. |
 | 🧾 **Invoicing & Billing** | GST and Non-GST compliant invoices, customizable templates, line-item taxes, item catalogs, QR payment codes, and one-click PDF receipt downloads. |
-| 💳 **Omnichannel Payments** | Integrated **Direct UPI QR Generator**, **Cashfree Payment Gateway**, dynamic payment link generator (`/pay/[id]`), and webhook verification. |
-| ☁️ **Dual-Mode Cloud Vault** | **1. Google Drive Vault (ON):** Automated AES-256 encrypted backups saved directly to merchant's private Drive folders.<br>**2. Database-Only Mode (OFF):** Unrestricted signup with zero Drive prompt; all customer records isolated cleanly per `user_id` in Supabase PostgreSQL. |
-| 🛡️ **Auto Backup Guardian** | Silent background backup engine with live MB progress tracker, elapsed time, and interactive **[Cancel Today]** / **[Later]** session controls. |
-| 🌐 **Zero Fixed Domain** | **100% Host-Agnostic:** No hardcoded links! Google OAuth, Cashfree callbacks, QR links, and APIs automatically detect the runtime domain on any VPS, Vercel, or custom domain. |
-| 👥 **Customer CRM & Groups** | Customer profiles, P2P ledger linking, shared bill splitting, activity timeline, and auto-generated digital business cards. |
-| ⚡ **Zero-Lag Smooth Engine** | GPU hardware acceleration, CSS `content-visibility`, request coalescing, and optimized DOM rendering for smooth 60fps performance on low-end budget smartphones. |
-| ⚙️ **Admin Control Center** | Live website branding (Name, Logo, Favicon, Tagline), Maintenance Mode with live countdown timer, Broadcast announcements, and Support ticketing. |
+| 💳 **Omnichannel Payments** | Integrated **Direct UPI QR Generator**, **Cashfree Payment Gateway**, **Razorpay**, dynamic auto-settled payment links (`/pay/[id]/[pid]`), and webhook verification. |
+| 📶 **Offline Work & 1–100% Sync** | Full offline mode with Service Worker route/RSC caching (`public/sw.js`), floating top-edge `Offline Work` notch, and resumable `Online • Syncing 1% → 100%` background sync across devices. |
+| ☁️ **Smart Storage & Drive Vault** | **1. Google Drive Connected (ON):** Merchant files upload exclusively to their private Google Drive (no Supabase Storage duplication) + AES-256 encrypted backups.<br>**2. Database / Storage Mode (OFF):** Files auto-offload to per-user isolated `khatapro-media` Supabase Storage buckets (`${userId}/...`) to keep Postgres slim and egress minimal. |
+| 🛡️ **Session & Security Guardian** | Active device tracking, single-device Sign Out, instant realtime **Logout All Devices**, 6-digit OTP verification, and configurable Email SMTP automation triggers. |
+| 👥 **Customer CRM & P2P Ledger** | Customer profiles, P2P merchant ledger linking with live edit/delete alerts, shared group bill splitting, and digital business cards. |
+| ⚡ **Zero-Lag & Egress Optimized** | GPU hardware acceleration, request coalescing, lightweight `checkVersion` polling, and optimized DOM rendering for smooth 60fps performance on mobile & desktop. |
+| ⚙️ **Admin Control Center** | Live website branding (Name, Logo, Favicon, Tagline), Maintenance Mode, Broadcasts, User CRM, Support tickets, and Factory Reset (DB + Storage purge). |
 
 ---
 
@@ -94,6 +94,14 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_client_secret
 
+# Email SMTP (Optional - Can also be configured in Admin UI -> Email SMTP)
+SMTP_ENABLED=true
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=your_smtp_user
+SMTP_PASS=your_smtp_password
+SMTP_FROM="SmartKhata Cloud <noreply@example.com>"
+
 # Security & Cron
 DRIVE_TOKEN_ENCRYPTION_KEY=your_32_char_hex_encryption_key
 CRON_SECRET=skp_cron_daily_backup_secret_2026_secure
@@ -101,9 +109,10 @@ CRON_SECRET=skp_cron_daily_backup_secret_2026_secure
 
 > **Note:** `NEXT_PUBLIC_APP_URL` and `GOOGLE_REDIRECT_URI` are **optional**! KhataPro auto-detects your active domain on every request.
 
-### 3. Initialize Supabase Database
+### 3. Initialize Supabase Database & Storage
 
-Run the provided SQL script located at [`supabase/schema.sql`](supabase/schema.sql) in your **Supabase SQL Editor** to automatically create all required tables, indexes, and storage rules.
+- **Recommended (Complete Setup):** Open **Settings → Management → Supabase Cloud DB & Auth → Info (`i`) → SQL Tables (`schema_setup.sql`)**, copy the generated script, and run it in your **Supabase SQL Editor**. This creates all 19 tables, column migrations, RLS policies, the `khatapro-media` Storage bucket, and Super Admin provisioning.
+- **Base Schema File:** [`supabase/schema.sql`](supabase/schema.sql) also contains the core 19-table schema and RLS policies (the `khatapro-media` Storage bucket is auto-created on first file upload if missing).
 
 ### 4. Run Development Server
 
