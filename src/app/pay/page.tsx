@@ -62,6 +62,9 @@ function PayRedirectContent() {
       upiGatewayApiKey?: string;
     };
   } | null>(null);
+  const [isLoadingLinkDetails, setIsLoadingLinkDetails] = useState<boolean>(() =>
+    Boolean(pathCustomerId || decodedToken?.cid || searchParams?.get('cid'))
+  );
 
   // 1-Week Expiry Check & Dynamic Customer / Merchant details from Server
   useEffect(() => {
@@ -84,6 +87,7 @@ function PayRedirectContent() {
     }
 
     if (cid) {
+      setIsLoadingLinkDetails(true);
       fetch(`/api/pay/link-details?cid=${encodeURIComponent(cid)}&pid=${encodeURIComponent(pid)}`)
         .then(res => res.json())
         .then(data => {
@@ -103,7 +107,12 @@ function PayRedirectContent() {
             }
           }
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          setIsLoadingLinkDetails(false);
+        });
+    } else {
+      setIsLoadingLinkDetails(false);
     }
   }, [pathCustomerId, pathPid, searchParams, decodedToken]);
 
@@ -1320,6 +1329,18 @@ function PayRedirectContent() {
   const handleOpenOnlineGateway = async () => {
     await handlePayNow();
   };
+
+  // Show clean loader while resolving dynamic payment link details (never flash "Payment Link Required" prematurely)
+  if (isLoadingLinkDetails && !id && !pa && !paymentSuccess && !isLinkExpired) {
+    return (
+      <Loading
+        variant="initializing"
+        title="Loading Payment Link..."
+        subtitle="Fetching live due balance & merchant details"
+        fullScreen
+      />
+    );
+  }
 
   // If no pa is passed and no invoice id, show missing params
   if (!id && !pa) {
