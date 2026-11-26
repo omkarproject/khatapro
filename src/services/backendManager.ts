@@ -41,8 +41,9 @@ export class SupabaseAdapter implements IBackendAdapter {
     }
     try {
       const cleanUrl = this.url.trim().replace(/\/+$/, '').replace(/\/rest\/v1\/?$/i, '');
-      const res = await fetch(`${cleanUrl}/rest/v1/`, {
-        headers: { apikey: this.key, Authorization: `Bearer ${this.key}` },
+      const cleanKey = this.key.trim();
+      const res = await fetch(`${cleanUrl}/rest/v1/profiles?select=id&limit=1`, {
+        headers: { apikey: cleanKey, Authorization: `Bearer ${cleanKey}` },
       });
       if (res.ok || res.status === 200 || res.status === 404) {
         return { success: true, message: 'Connected to Supabase PostgreSQL cluster successfully!' };
