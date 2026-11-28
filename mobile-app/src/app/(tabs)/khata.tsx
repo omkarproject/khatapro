@@ -10,17 +10,30 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { BadgeCheck, Plus, Search, UserPlus } from 'lucide-react-native';
+import { BadgeCheck, Plus, Search, UserPlus, Users } from 'lucide-react-native';
 import { useMobileApp } from '@/context/MobileAppContext';
+import { formatINR, getThemeColors } from '@/theme/tokens';
 
 export default function KhataScreen() {
-  const { customers, saveCustomer } = useMobileApp();
+  const { darkMode, customers, saveCustomer } = useMobileApp();
+  const colors = getThemeColors(darkMode);
   const router = useRouter();
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'due' | 'advance'>('all');
+  const [filter, setFilter] = useState<'all' | 'due' | 'advance' | 'settled'>('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
+
+  const summary = useMemo(() => {
+    let youGet = 0;
+    let youGive = 0;
+    customers.forEach(c => {
+      if (c.isDeleted || c.status === 'deleted' || c.excludeTransactions) return;
+      if (c.outstandingBalance > 0) youGet += c.outstandingBalance;
+      else if (c.outstandingBalance < 0) youGive += Math.abs(c.outstandingBalance);
+    });
+    return { youGet, youGive };
+  }, [customers]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -28,6 +41,7 @@ export default function KhataScreen() {
       if (c.isDeleted || c.status === 'deleted') return false;
       if (filter === 'due' && c.outstandingBalance <= 0) return false;
       if (filter === 'advance' && c.outstandingBalance >= 0) return false;
+      if (filter === 'settled' && c.outstandingBalance !== 0) return false;
       if (q && !c.name.toLowerCase().includes(q) && !(c.phone || '').includes(q)) return false;
       return true;
     });
@@ -46,35 +60,52 @@ export default function KhataScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Digital KhataBook ({filtered.length})</Text>
-        <Pressable onPress={() => setModalOpen(true)} style={styles.addBtn}>
-          <Plus size={16} color="#FFFFFF" />
-          <Text style={styles.addBtnText}>Add</Text>
-        </Pressable>
+        <Text style={[styles.title, { color: colors.foreground }]}>Digital KhataBook ({filtered.length})</Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Pressable onPress={() => router.push('/khata/groups')} style={[styles.addBtn, { backgroundColor: colors.cardMuted }]}>
+            <Users size={15} color={colors.primary} />
+            <Text style={[styles.addBtnText, { color: colors.primary }]}>Groups</Text>
+          </Pressable>
+          <Pressable onPress={() => setModalOpen(true)} style={[styles.addBtn, { backgroundColor: colors.primary }]}>
+            <Plus size={16} color="#FFFFFF" />
+            <Text style={styles.addBtnText}>Add</Text>
+          </Pressable>
+        </View>
       </View>
 
-      <View style={styles.searchBox}>
-        <Search size={16} color="#64748B" />
+      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+        <View style={{ flex: 1, backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, borderRadius: 12, padding: 10 }}>
+          <Text style={{ fontSize: 10, fontWeight: '700', color: colors.mutedText }}>YOU WILL GET</Text>
+          <Text style={{ fontSize: 15, fontWeight: '900', color: colors.rose }}>{formatINR(summary.youGet)}</Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, borderRadius: 12, padding: 10 }}>
+          <Text style={{ fontSize: 10, fontWeight: '700', color: colors.mutedText }}>YOU WILL GIVE</Text>
+          <Text style={{ fontSize: 15, fontWeight: '900', color: colors.emerald }}>{formatINR(summary.youGive)}</Text>
+        </View>
+      </View>
+
+      <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+        <Search size={16} color={colors.mutedText} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: colors.foreground }]}
           value={search}
           onChangeText={setSearch}
           placeholder="Search customer or phone..."
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={colors.mutedText}
         />
       </View>
 
       <View style={styles.filterRow}>
-        {(['all', 'due', 'advance'] as const).map(f => (
+        {(['all', 'due', 'advance', 'settled'] as const).map(f => (
           <Pressable
             key={f}
             onPress={() => setFilter(f)}
-            style={[styles.filterChip, filter === f && styles.filterChipActive]}
+            style={[styles.filterChip, { backgroundColor: filter === f ? colors.primary : colors.cardMuted }]}
           >
-            <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
-              {f.toUpperCase()}
+            <Text style={[styles.filterText, { color: filter === f ? '#FFFFFF' : colors.foreground }]}>
+              {f === 'due' ? "YOU'LL GET" : f === 'advance' ? "YOU'LL GIVE" : f.toUpperCase()}
             </Text>
           </Pressable>
         ))}

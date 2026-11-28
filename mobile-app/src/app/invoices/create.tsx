@@ -20,9 +20,11 @@ export default function CreateInvoiceScreen() {
   const { customers, products, saveInvoice } = useMobileApp();
 
   const [selectedCustId, setSelectedCustId] = useState(customers[0]?.id || '');
+  const [invoiceType, setInvoiceType] = useState<Invoice['type']>('sales');
   const [walkInName, setWalkInName] = useState('');
   const [gstEnabled, setGstEnabled] = useState(true);
   const [discountStr, setDiscountStr] = useState('0');
+  const [deliveryStr, setDeliveryStr] = useState('0');
   const [notes, setNotes] = useState('');
 
   const [items, setItems] = useState<InvoiceItem[]>([
@@ -52,14 +54,16 @@ export default function CreateInvoiceScreen() {
       ? items.reduce((s, it) => s + ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0) * (Number(it.taxPercent) || 0)) / 100, 0)
       : 0;
     const discount = Number(discountStr) || 0;
-    const total = Math.max(0, Math.round((subtotal + taxAmount - discount) * 100) / 100);
+    const delivery = Number(deliveryStr) || 0;
+    const total = Math.max(0, Math.round((subtotal + taxAmount + delivery - discount) * 100) / 100);
     return {
       subtotal: Math.round(subtotal * 100) / 100,
       taxAmount: Math.round(taxAmount * 100) / 100,
       discount,
+      delivery,
       total,
     };
-  }, [items, gstEnabled, discountStr]);
+  }, [items, gstEnabled, discountStr, deliveryStr]);
 
   const handleSave = async () => {
     const custName = selectedCust?.name || walkInName.trim();
@@ -76,8 +80,8 @@ export default function CreateInvoiceScreen() {
     const now = new Date().toISOString();
     const inv: Invoice = {
       id: `inv_${Crypto.randomUUID()}`,
-      invoiceNumber: `INV-${Date.now().toString().slice(-6)}`,
-      type: 'sales',
+      invoiceNumber: `${invoiceType === 'quotation' ? 'QTN' : invoiceType === 'purchase' ? 'PUR' : 'INV'}-${Date.now().toString().slice(-6)}`,
+      type: invoiceType,
       customerId: selectedCust?.id || '',
       customerName: custName,
       customerPhone: selectedCust?.phone,
@@ -119,6 +123,19 @@ export default function CreateInvoiceScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.sectionLabel}>Bill Type</Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {(['sales', 'purchase', 'quotation'] as const).map(tp => (
+            <Pressable
+              key={tp}
+              onPress={() => setInvoiceType(tp)}
+              style={[styles.custChip, { flex: 1, alignItems: 'center', marginRight: 0 }, invoiceType === tp && styles.custChipActive]}
+            >
+              <Text style={[styles.custChipText, invoiceType === tp && { color: '#FFFFFF' }]}>{tp.toUpperCase()}</Text>
+            </Pressable>
+          ))}
+        </View>
+
         <Text style={styles.sectionLabel}>Customer</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
           {customers.slice(0, 10).map(c => (
@@ -225,13 +242,22 @@ export default function CreateInvoiceScreen() {
           <Text style={styles.addItemText}>Add Another Line Item</Text>
         </Pressable>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Discount (₹)"
-          keyboardType="numeric"
-          value={discountStr}
-          onChangeText={setDiscountStr}
-        />
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            placeholder="Discount (₹)"
+            keyboardType="numeric"
+            value={discountStr}
+            onChangeText={setDiscountStr}
+          />
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            placeholder="Delivery / Packing (₹)"
+            keyboardType="numeric"
+            value={deliveryStr}
+            onChangeText={setDeliveryStr}
+          />
+        </View>
         <TextInput style={styles.input} placeholder="Notes / Terms (optional)" value={notes} onChangeText={setNotes} />
 
         <View style={styles.summaryBox}>
@@ -241,8 +267,14 @@ export default function CreateInvoiceScreen() {
           </View>
           {gstEnabled && (
             <View style={styles.sumRow}>
-              <Text style={styles.sumLabel}>GST Tax</Text>
+              <Text style={styles.sumLabel}>CGST + SGST</Text>
               <Text style={styles.sumVal}>₹{totals.taxAmount.toLocaleString('en-IN')}</Text>
+            </View>
+          )}
+          {totals.delivery > 0 && (
+            <View style={styles.sumRow}>
+              <Text style={styles.sumLabel}>Delivery / Packing</Text>
+              <Text style={styles.sumVal}>₹{totals.delivery.toLocaleString('en-IN')}</Text>
             </View>
           )}
           <View style={styles.sumRow}>

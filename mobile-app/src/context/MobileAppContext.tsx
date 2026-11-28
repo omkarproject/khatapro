@@ -70,6 +70,17 @@ interface MobileAppContextValue {
   saveDocument: (doc: DocumentItem, isEdit?: boolean) => Promise<DocumentItem>;
   deleteEntity: (entityType: EntityType, id: string, baseVersion?: string) => Promise<void>;
   refreshLocalState: () => Promise<void>;
+
+  darkMode: boolean;
+  toggleDarkMode: () => Promise<void>;
+  isSidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
+  isQuickCollectOpen: boolean;
+  collectCustomer: Customer | null;
+  openCollectModal: (customer?: Customer | null) => void;
+  closeCollectModal: () => void;
+  isGlobalSearchOpen: boolean;
+  setGlobalSearchOpen: (open: boolean) => void;
 }
 
 const MobileAppContext = createContext<MobileAppContextValue | undefined>(undefined);
@@ -78,6 +89,35 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isBiometricLocked, setIsBiometricLocked] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [isQuickCollectOpen, setQuickCollectOpen] = useState(false);
+  const [collectCustomer, setCollectCustomer] = useState<Customer | null>(null);
+  const [isGlobalSearchOpen, setGlobalSearchOpen] = useState(false);
+
+  useEffect(() => {
+    SecureStorage.getThemeMode().then(mode => {
+      if (mode === 'dark') setDarkMode(true);
+    }).catch(() => {});
+  }, []);
+
+  const toggleDarkMode = useCallback(async () => {
+    setDarkMode(prev => {
+      const next = !prev;
+      SecureStorage.setThemeMode(next ? 'dark' : 'light').catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const openCollectModal = useCallback((cust?: Customer | null) => {
+    setCollectCustomer(cust || null);
+    setQuickCollectOpen(true);
+  }, []);
+
+  const closeCollectModal = useCallback(() => {
+    setQuickCollectOpen(false);
+    setCollectCustomer(null);
+  }, []);
 
   const [isOnline, setIsOnline] = useState(true);
   const [syncPhase, setSyncPhase] = useState<'idle' | 'offline' | 'syncing' | 'synced' | 'conflict'>('idle');
@@ -562,6 +602,16 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         saveDocument,
         deleteEntity,
         refreshLocalState,
+        darkMode,
+        toggleDarkMode,
+        isSidebarOpen,
+        setSidebarOpen,
+        isQuickCollectOpen,
+        collectCustomer,
+        openCollectModal,
+        closeCollectModal,
+        isGlobalSearchOpen,
+        setGlobalSearchOpen,
       }}
     >
       {children}

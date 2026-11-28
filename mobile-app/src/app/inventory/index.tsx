@@ -4,19 +4,32 @@ import { useRouter } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import { ArrowLeft, Package, Plus, Trash2 } from 'lucide-react-native';
 import { useMobileApp } from '@/context/MobileAppContext';
+import { getThemeColors } from '@/theme/tokens';
 import { Product } from '@/types';
 
 export default function InventoryScreen() {
   const router = useRouter();
-  const { products, saveProduct, deleteEntity } = useMobileApp();
+  const { darkMode, products, saveProduct, deleteEntity } = useMobileApp();
+  const colors = getThemeColors(darkMode);
   const [modalOpen, setModalOpen] = useState(false);
+  const [lowOnly, setLowOnly] = useState(false);
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
   const [priceStr, setPriceStr] = useState('');
   const [stockStr, setStockStr] = useState('10');
   const [gstStr, setGstStr] = useState('18');
 
-  const active = useMemo(() => products.filter(p => !(p as any).isDeleted), [products]);
+  const active = useMemo(
+    () =>
+      products
+        .filter(p => !(p as any).isDeleted)
+        .filter(p => (lowOnly ? p.currentStock <= (p.minStock || 5) : true)),
+    [products, lowOnly]
+  );
+
+  const adjustStock = async (item: Product, delta: number) => {
+    await saveProduct({ ...item, currentStock: Math.max(0, item.currentStock + delta) }, true);
+  };
 
   const handleSave = async () => {
     const price = parseFloat(priceStr);
@@ -46,12 +59,18 @@ export default function InventoryScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { backgroundColor: colors.navBg, borderBottomColor: colors.divider }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <ArrowLeft size={20} color="#0F172A" />
+          <ArrowLeft size={20} color={colors.foreground} />
         </Pressable>
-        <Text style={styles.title}>Inventory ({active.length})</Text>
+        <Text style={[styles.title, { color: colors.foreground }]}>Inventory ({active.length})</Text>
+        <Pressable
+          onPress={() => setLowOnly(v => !v)}
+          style={[styles.backBtn, { backgroundColor: lowOnly ? '#F59E0B' : colors.cardMuted, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }]}
+        >
+          <Text style={{ fontSize: 11, fontWeight: '800', color: lowOnly ? '#FFFFFF' : colors.foreground }}>Low Stock</Text>
+        </Pressable>
         <Pressable onPress={() => setModalOpen(true)} style={styles.addBtn}>
           <Plus size={18} color="#FFFFFF" />
         </Pressable>
@@ -65,20 +84,28 @@ export default function InventoryScreen() {
         renderItem={({ item }) => {
           const low = item.currentStock <= (item.minStock || 5);
           return (
-            <View style={styles.card}>
-              <View style={styles.iconBox}>
-                <Package size={18} color="#4F46E5" />
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              <View style={[styles.iconBox, { backgroundColor: colors.primaryLight }]}>
+                <Package size={18} color={colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{item.name}</Text>
-                <Text style={styles.meta}>
+                <Text style={[styles.name, { color: colors.foreground }]}>{item.name}</Text>
+                <Text style={[styles.meta, { color: colors.mutedText }]}>
                   {item.sku} •{' '}
                   <Text style={{ color: low ? '#DC2626' : '#059669', fontWeight: '800' }}>
                     Stock: {item.currentStock} {item.unit}
                   </Text>
                 </Text>
               </View>
-              <Text style={styles.price}>₹{item.sellingPrice.toLocaleString('en-IN')}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Pressable onPress={() => adjustStock(item, -1)} style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.cardMuted, borderRadius: 6 }}>
+                  <Text style={{ fontWeight: '900', color: colors.foreground }}>-</Text>
+                </Pressable>
+                <Pressable onPress={() => adjustStock(item, 1)} style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.primaryLight, borderRadius: 6 }}>
+                  <Text style={{ fontWeight: '900', color: colors.primary }}>+</Text>
+                </Pressable>
+              </View>
+              <Text style={[styles.price, { color: colors.foreground, marginLeft: 8 }]}>₹{item.sellingPrice.toLocaleString('en-IN')}</Text>
               <Pressable onPress={() => deleteEntity('products', item.id, item.updatedAt)} style={{ marginLeft: 10 }}>
                 <Trash2 size={15} color="#94A3B8" />
               </Pressable>

@@ -7,13 +7,19 @@ import { StatusBar } from 'expo-status-bar';
 import { Fingerprint } from 'lucide-react-native';
 import { MobileAppProvider, useMobileApp } from '@/context/MobileAppContext';
 import OfflineSyncNotch from '@/components/OfflineSyncNotch';
+import NavbarHeader from '@/components/NavbarHeader';
+import SidebarDrawer from '@/components/SidebarDrawer';
+import QuickUPICollectModal from '@/components/QuickUPICollectModal';
+import GlobalSearchModal from '@/components/GlobalSearchModal';
+import { getThemeColors } from '@/theme/tokens';
 
 const queryClient = new QueryClient();
 
 function RootNavigatorGate() {
-  const { user, isAuthLoading, isBiometricLocked, unlockWithBiometric } = useMobileApp();
+  const { user, darkMode, isAuthLoading, isBiometricLocked, unlockWithBiometric } = useMobileApp();
   const segments = useSegments();
   const router = useRouter();
+  const colors = getThemeColors(darkMode);
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -50,10 +56,16 @@ function RootNavigatorGate() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar style="auto" />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
+      <StatusBar style={darkMode ? 'light' : 'dark'} />
+      {user && <NavbarHeader />}
       {user && <OfflineSyncNotch />}
-      <Slot />
+      <View style={{ flex: 1 }}>
+        <Slot />
+      </View>
+      {user && <SidebarDrawer />}
+      {user && <QuickUPICollectModal />}
+      {user && <GlobalSearchModal />}
     </SafeAreaView>
   );
 }
@@ -71,10 +83,7 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
+  safeArea: { flex: 1 },
   centerContainer: {
     flex: 1,
     backgroundColor: '#0B0F19',
@@ -82,36 +91,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
-  logo: {
-    width: 84,
-    height: 84,
-    borderRadius: 20,
-    marginBottom: 16,
-  },
-  brandTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  subtitle: {
-    fontSize: 13,
-    color: '#94A3B8',
-    marginTop: 8,
-    textAlign: 'center',
-  },
+  logo: { width: 84, height: 84, borderRadius: 20, marginBottom: 16 },
+  brandTitle: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
+  subtitle: { fontSize: 13, color: '#94A3B8', marginTop: 8, textAlign: 'center' },
   unlockBtn: {
-    marginTop: 24,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginTop: 22,
     backgroundColor: '#4F46E5',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 16,
+    paddingHorizontal: 22,
+    paddingVertical: 13,
+    borderRadius: 14,
   },
-  unlockBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 15,
-  },
+  unlockBtnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
 });

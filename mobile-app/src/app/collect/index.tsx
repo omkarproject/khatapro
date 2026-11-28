@@ -14,20 +14,32 @@ import QRCode from 'react-native-qrcode-svg';
 import { ArrowLeft, CheckCircle, ExternalLink, ShieldCheck } from 'lucide-react-native';
 import { useMobileApp } from '@/context/MobileAppContext';
 import { apiRequest } from '@/services/apiClient';
+import { formatINR, getThemeColors, isOnlineCollectionTxn } from '@/theme/tokens';
 
 export default function CollectPaymentScreen() {
   const { customerId } = useLocalSearchParams<{ customerId?: string }>();
   const router = useRouter();
-  const { user, isOnline, customers, addKhataTransaction } = useMobileApp();
+  const { user, darkMode, isOnline, customers, transactions, addKhataTransaction } = useMobileApp();
+  const colors = getThemeColors(darkMode);
 
   const customer = useMemo(() => customers.find(c => c.id === customerId), [customers, customerId]);
   const [amountStr, setAmountStr] = useState(
     customer && customer.outstandingBalance > 0 ? String(customer.outstandingBalance) : ''
   );
   const [upiId, setUpiId] = useState(user?.upiId || '');
+  const [standeeTheme, setStandeeTheme] = useState<'indigo' | 'bharat' | 'emerald' | 'minimal'>('indigo');
   const [gatewayOrderId, setGatewayOrderId] = useState('');
   const [activeGateway, setActiveGateway] = useState<'upi' | 'cashfree' | 'razorpay'>('upi');
   const [loading, setLoading] = useState(false);
+
+  const collectionHistory = useMemo(
+    () =>
+      transactions
+        .filter(t => isOnlineCollectionTxn(t))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 8),
+    [transactions]
+  );
 
   const amt = parseFloat(amountStr) || 0;
   const upiUri = useMemo(() => {
@@ -199,18 +211,52 @@ export default function CollectPaymentScreen() {
         </View>
 
         {activeGateway === 'upi' && (
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <Text style={{ fontSize: 12, fontWeight: '800', color: colors.foreground }}>Shop Standee Theme</Text>
+            <View style={styles.tabRow}>
+              {(['indigo', 'bharat', 'emerald', 'minimal'] as const).map(th => (
+                <Pressable
+                  key={th}
+                  onPress={() => setStandeeTheme(th)}
+                  style={[styles.tabBtn, { backgroundColor: standeeTheme === th ? colors.primary : colors.cardMuted }]}
+                >
+                  <Text style={[styles.tabText, { color: standeeTheme === th ? '#FFFFFF' : colors.foreground, fontSize: 10 }]}>
+                    {th.toUpperCase()}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.foreground }]}
               placeholder="Merchant UPI ID (e.g. shop@okicici)"
+              placeholderTextColor={colors.mutedText}
               value={upiId}
               onChangeText={setUpiId}
               autoCapitalize="none"
             />
             {upiUri ? (
-              <View style={styles.qrWrap}>
-                <QRCode value={upiUri} size={190} />
-                <Text style={styles.qrHint}>Scan with GPay / PhonePe / Paytm</Text>
+              <View
+                style={[
+                  styles.qrWrap,
+                  {
+                    backgroundColor:
+                      standeeTheme === 'indigo'
+                        ? '#EEF2FF'
+                        : standeeTheme === 'bharat'
+                          ? '#FFF7ED'
+                          : standeeTheme === 'emerald'
+                            ? '#ECFDF5'
+                            : '#FFFFFF',
+                    borderRadius: 18,
+                    padding: 16,
+                  },
+                ]}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '900', color: '#0F172A' }}>
+                  {user?.businessName || 'SmartKhata'}
+                </Text>
+                <QRCode value={upiUri} size={185} />
+                <Text style={styles.qrHint}>Scan with GPay / PhonePe / Paytm • {upiId}</Text>
                 <Pressable onPress={handleOpenUpiApp} style={styles.upiBtn}>
                   <ExternalLink size={15} color="#FFFFFF" />
                   <Text style={styles.upiBtnText}>Pay via UPI App</Text>
@@ -221,6 +267,25 @@ export default function CollectPaymentScreen() {
             )}
           </View>
         )}
+
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <Text style={{ fontSize: 14, fontWeight: '800', color: colors.foreground }}>
+            Recent Collection History ({collectionHistory.length})
+          </Text>
+          {collectionHistory.length === 0 ? (
+            <Text style={{ fontSize: 12, color: colors.mutedText }}>No online collections recorded yet.</Text>
+          ) : (
+            collectionHistory.map(txn => (
+              <View key={txn.id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: 1, borderTopColor: colors.divider }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.foreground }}>{txn.customerName || 'Collection'}</Text>
+                  <Text style={{ fontSize: 11, color: colors.mutedText }}>{new Date(txn.date).toLocaleDateString('en-IN')}</Text>
+                </View>
+                <Text style={{ fontSize: 13, fontWeight: '900', color: colors.emerald }}>{formatINR(txn.amount)}</Text>
+              </View>
+            ))
+          )}
+        </View>
 
         {(activeGateway === 'cashfree' || activeGateway === 'razorpay') && (
           <View style={styles.card}>
